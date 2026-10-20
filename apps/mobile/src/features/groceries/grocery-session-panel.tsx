@@ -1,156 +1,228 @@
-// HOUP-80: native port of apps/web/src/app/groceries/grocery-session-panel.tsx
-// — trimmed to tracking on/off, the running total (tap-to-override), got/
-// unpriced counts, and stop-tracking/done-shopping.
+// HOUP-80/HOUP-226: today's shop, native twin of
+// apps/web/src/app/groceries/grocery-session-panel.tsx.
 //
-// HOUP-226: adds the receipt path web already had — capture (camera/library/
-// PDF, via index.tsx's picker), OCR scan (`parseReceiptFile` → receipt_total_
-// cents + retailer + applyReceiptLearning), a total-source label, a Pencil
-// edit affordance alongside the existing tap-to-edit, and an attached/error
-// status sub-line with tap-to-retry. Reads `session` directly (was a
-// separate `receiptName` prop) to compute the source label the same way web
-// does. Hearth v2 (H2/H4): every state is a neutral rounded-3xl card (web
-// matches); no green borders or fills. Add item keeps the screen's one accent
-// fill, so Track and Done shopping are neutral outline buttons, and Stop
-// tracking is an X icon (as on web) so the action row fits at 390px.
-//
-// The "Track today's shop?" ask no longer sits in the list pushing the page
-// down: it floats above the tab bar as an accent popup (TrackShopPrompt, its
-// own layer so its fill doesn't spend the content's H5 accent budget, Guy's
-// call), and once skipped the way back is a small text link beside Reset
-// bought (TrackShopLink) instead of a full-width pill.
+// The whole trip lives in floating layers above the tab bar, never in the
+// list: TrackShopPrompt asks (accent, #393), then once tracking is on
+// ShopTrackingPill holds the running total (tap to override), Receipt and
+// Done, however far the list scrolls. Done opens FinishShopSheet: scan the
+// receipt and finish in one move (reads the total, learns prices), or a
+// photo, or no receipt (Guy, 2026-10-20). Once skipped, the way back is
+// "Track shop" in the header's More menu and the This trip summary.
 import * as React from 'react';
 import { Pressable, View } from 'react-native';
 import Animated, { FadeInDown, FadeOutDown } from 'react-native-reanimated';
-import { Camera, Check, Loader2, Pencil, Receipt, ScanLine, X } from 'lucide-react-native';
-import { Text, Button, Card, Input, haptics } from '@homeup/ui';
+import { Camera, Check, Loader2, Receipt } from 'lucide-react-native';
+import { BottomSheet, Text, Button, Input, cn, haptics } from '@homeup/ui';
 import { effectiveSessionTotal, formatMoney, MOTION_DURATIONS_MS, useModules, type GrocerySession } from '@homeup/core';
 
-interface GrocerySessionPanelProps {
+/** Where the trip's total came from, for its caption. */
+function totalSource(session: GrocerySession): string {
+  return session.override_total_cents != null ? 'manual total' : session.receipt_total_cents != null ? 'from receipt' : 'estimated';
+}
+
+/** The trip's total; tapping it swaps in an input to override it (empty clears
+ *  the override). H1: never display weight in the pill (the screen's lede is
+ *  the only Hero); T3: money stays out of mono, tabular figures align it. */
+function EditableTotal({
+  session,
+  caption,
+  onOverrideTotal,
+  size = 'body',
+}: {
+  session: GrocerySession;
+  caption: string;
+  onOverrideTotal: (cents: number | null) => void;
+  size?: 'body' | 'display';
+}) {
+  const [editing, setEditing] = React.useState(false);
+  const [draft, setDraft] = React.useState('');
+  const total = effectiveSessionTotal(session);
+
+  const commit = () => {
+    const parsed = parseFloat(draft);
+    onOverrideTotal(draft.trim() === '' || Number.isNaN(parsed) ? null : Math.round(parsed * 100));
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <View className="min-w-0 flex-1 flex-row items-center gap-2">
+        <Input
+          autoFocus
+          keyboardType="decimal-pad"
+          value={draft}
+          onChangeText={setDraft}
+          onSubmitEditing={commit}
+          onBlur={commit}
+          className="flex-1"
+          placeholder="0.00"
+          accessibilityLabel="Trip total"
+        />
+        <Button size="icon-sm" variant="outline" onPress={commit} accessibilityLabel="Save total">
+          <Check size={16} className="text-primary" />
+        </Button>
+      </View>
+    );
+  }
+
+  return (
+    <Pressable
+      onPress={() => {
+        setDraft(String(total / 100));
+        setEditing(true);
+      }}
+      accessibilityRole="button"
+      accessibilityLabel={`${formatMoney(total)}, ${caption}. Change total`}
+      className={cn('min-h-11 min-w-0 flex-1 justify-center', size === 'display' && 'gap-0.5')}
+    >
+      <Text
+        numberOfLines={1}
+        className={size === 'display' ? 'text-display text-foreground' : 'text-sm font-semibold text-foreground'}
+        style={{ fontVariant: ['tabular-nums'] }}
+      >
+        {formatMoney(total)}
+      </Text>
+      <Text numberOfLines={1} className="text-caption text-muted-foreground" style={{ fontVariant: ['tabular-nums'] }}>
+        {caption}
+      </Text>
+    </Pressable>
+  );
+}
+
+interface ShopTrackingPillProps {
+  session: GrocerySession;
+  boughtCount: number;
+  /** Distance from the screen's bottom edge (same spot as TrackShopPrompt). */
+  bottom: number;
+  onOverrideTotal: (cents: number | null) => void;
+  onReceipt: () => void;
+  receiptBusy: boolean;
+  receiptError: string | null;
+  onDone: () => void;
+}
+
+/** While a shop is tracked: a floating pill in the Track ask's spot, so the
+ *  total, the receipt and Done stay under the thumb however far the list
+ *  scrolls (Guy, 2026-10-20). A neutral popover, not the ask's accent: it's a
+ *  standing tool, not a question. Done opens FinishShopSheet. */
+export function ShopTrackingPill({ session, boughtCount, bottom, onOverrideTotal, onReceipt, receiptBusy, receiptError, onDone }: ShopTrackingPillProps) {
+  const source = totalSource(session);
+  const caption = `${source === 'estimated' ? 'in cart' : source} · ${boughtCount} got`;
+  return (
+    <Animated.View
+      entering={FadeInDown.duration(MOTION_DURATIONS_MS.slow)}
+      exiting={FadeOutDown.duration(MOTION_DURATIONS_MS.exit)}
+      pointerEvents="box-none"
+      className="absolute inset-x-4 z-40 items-center"
+      style={{ bottom }}
+    >
+      <View className="w-full max-w-md gap-1 rounded-2xl border border-border bg-popover py-2 pl-4 pr-2 shadow-lg">
+        <View className="flex-row items-center gap-2">
+          <EditableTotal session={session} caption={caption} onOverrideTotal={onOverrideTotal} />
+          <Button size="sm" variant="outline" onPress={onReceipt} disabled={receiptBusy} accessibilityLabel={session.receipt_path ? 'Replace receipt' : 'Add receipt'}>
+            {receiptBusy ? <Loader2 size={14} className="animate-spin text-foreground" /> : <Camera size={14} className="text-foreground" />}
+            <Text className="text-sm font-medium text-foreground">Receipt</Text>
+          </Button>
+          <Pressable
+            onPress={() => {
+              haptics.select();
+              onDone();
+            }}
+            accessibilityRole="button"
+            className="min-h-11 shrink-0 justify-center rounded-xl bg-foreground px-4 active:opacity-80"
+          >
+            <Text className="text-sm font-semibold text-background">Done</Text>
+          </Pressable>
+        </View>
+        {receiptError ? (
+          <Pressable onPress={onReceipt} accessibilityRole="button" className="pb-1">
+            <Text className="text-caption text-destructive" numberOfLines={1}>
+              {receiptError}
+            </Text>
+          </Pressable>
+        ) : null}
+      </View>
+    </Animated.View>
+  );
+}
+
+export type FinishReceiptSource = 'camera' | 'library' | null;
+
+interface FinishShopSheetProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   session: GrocerySession | null;
-  summedCents: number;
   boughtCount: number;
   unpricedCount: number;
   onOverrideTotal: (cents: number | null) => void;
+  /** Reads the receipt (when a source is given) and finishes the trip. */
+  onFinish: (source: FinishReceiptSource) => void;
   onStopTracking: () => void;
-  onDoneShopping: () => void;
-  onAddReceipt: () => void;
-  onScanReceipt: () => void;
-  receiptBusy?: boolean;
-  scanning?: boolean;
-  receiptError?: string | null;
+  busy: boolean;
+  error: string | null;
 }
 
-export function GrocerySessionPanel({
+/** Done's sheet: the trip's total (tap to override), then one move to scan the
+ *  receipt and finish, with a photo or no receipt as the quieter choices. The
+ *  sheet is its own layer, so its primary takes the accent (H5). */
+export function FinishShopSheet({
+  open,
+  onOpenChange,
   session,
-  summedCents,
   boughtCount,
   unpricedCount,
   onOverrideTotal,
+  onFinish,
   onStopTracking,
-  onDoneShopping,
-  onAddReceipt,
-  onScanReceipt,
-  receiptBusy,
-  scanning,
-  receiptError,
-}: GrocerySessionPanelProps) {
-  const [editingTotal, setEditingTotal] = React.useState(false);
-  const [totalDraft, setTotalDraft] = React.useState('');
-
-  // The prompt floats over the screen (TrackShopPrompt) and the skipped state
-  // is a small link (TrackShopLink); this card is the active session only.
-  if (!session || session.tracking !== 'on') return null;
-
-  const total = effectiveSessionTotal(session);
-  const source = session.override_total_cents != null ? 'manual total' : session.receipt_total_cents != null ? 'from receipt' : 'estimated';
-
-  const commit = () => {
-    onOverrideTotal(totalDraft.trim() === '' ? null : Math.round(parseFloat(totalDraft) * 100));
-    setEditingTotal(false);
-  };
-
-  const startEditing = () => {
-    setTotalDraft(String(total / 100));
-    setEditingTotal(true);
-  };
-
+  busy,
+  error,
+}: FinishShopSheetProps) {
+  const modules = useModules();
+  const toCosts = modules.feature('costs.from-groceries');
+  const caption = session
+    ? [totalSource(session), `${boughtCount} got`, unpricedCount > 0 ? `${unpricedCount} unpriced` : null].filter(Boolean).join(' · ')
+    : '';
   return (
-    <Card className="gap-2 rounded-3xl px-4 py-3">
-      <View className="flex-row items-center justify-between gap-2">
-        {editingTotal ? (
-          <View className="flex-1 flex-row items-center gap-2">
-            <Input
-              autoFocus
-              keyboardType="decimal-pad"
-              value={totalDraft}
-              onChangeText={setTotalDraft}
-              onSubmitEditing={commit}
-              onBlur={commit}
-              className="flex-1"
-              placeholder="0.00"
-            />
-            <Button size="icon-sm" variant="outline" onPress={commit} accessibilityLabel="Save total">
-              <Check size={16} className="text-primary" />
+    <BottomSheet open={open} onOpenChange={onOpenChange}>
+      {session && (
+        <View className="gap-4 px-5 pb-6 pt-1">
+          <View className="gap-1">
+            <Text className="text-title text-foreground">Finish today's shop</Text>
+            <EditableTotal session={session} caption={caption} onOverrideTotal={onOverrideTotal} size="display" />
+          </View>
+          <Pressable
+            onPress={() => {
+              haptics.commit();
+              onFinish('camera');
+            }}
+            disabled={busy}
+            accessibilityRole="button"
+            className={cn('min-h-14 flex-row items-center gap-3 rounded-2xl bg-primary px-4 active:opacity-80', busy && 'opacity-60')}
+          >
+            {busy ? <Loader2 size={20} className="animate-spin text-primary-foreground" /> : <Camera size={20} className="text-primary-foreground" />}
+            <View className="flex-1">
+              <Text className="text-[15px] font-semibold text-primary-foreground">{busy ? 'Reading receipt…' : 'Scan receipt and finish'}</Text>
+              <Text className="text-caption text-primary-foreground/80">Reads the real total and learns prices</Text>
+            </View>
+          </Pressable>
+          <View className="flex-row gap-2">
+            <Button size="sm" variant="outline" className="h-12 flex-1" disabled={busy} onPress={() => onFinish('library')}>
+              Pick a photo
+            </Button>
+            <Button size="sm" variant="outline" className="h-12 flex-1" disabled={busy} onPress={() => onFinish(null)}>
+              Finish without
             </Button>
           </View>
-        ) : (
-          <Pressable onPress={startEditing} className="flex-1 flex-row items-baseline gap-2">
-            {/* H1: the screen lede is the only display-weight element — this
-                running total steps down to body weight. T3: money stays out
-                of mono; tabular figures do the aligning. */}
-            <Text className="text-sm font-semibold text-foreground" style={{ fontVariant: ['tabular-nums'] }}>
-              {formatMoney(total)}
-            </Text>
-            <Text className="text-caption text-muted-foreground">{source}</Text>
-          </Pressable>
-        )}
-        <Text className="shrink-0 text-caption text-muted-foreground" style={{ fontVariant: ['tabular-nums'] }}>
-          {boughtCount} got
-          {unpricedCount > 0 ? ` · ${unpricedCount} unpriced` : ''}
-        </Text>
-      </View>
-      {/* Actions right-aligned on their own row; the receipt status line
-          sits under them at full width so it never truncates to nothing. */}
-      <View className="flex-row items-center justify-end gap-1">
-        {!editingTotal && (
-          <Button size="icon-sm" variant="ghost" onPress={startEditing} accessibilityLabel="Override total">
-            <Pencil size={14} className="text-muted-foreground" />
-          </Button>
-        )}
-        <Button
-          size="icon-sm"
-          variant="ghost"
-          onPress={onAddReceipt}
-          disabled={receiptBusy}
-          accessibilityLabel={session.receipt_path ? 'Replace receipt' : 'Add receipt'}
-        >
-          {receiptBusy ? <Loader2 size={14} className="animate-spin text-foreground" /> : <Camera size={14} className={session.receipt_path ? 'text-foreground' : 'text-muted-foreground'} />}
-        </Button>
-        {session.receipt_path && (
-          <Button size="icon-sm" variant="ghost" onPress={onScanReceipt} disabled={scanning} accessibilityLabel="Scan receipt">
-            {scanning ? <Loader2 size={14} className="animate-spin text-foreground" /> : <ScanLine size={14} className="text-foreground" />}
-          </Button>
-        )}
-        <Button size="icon-sm" variant="ghost" onPress={onStopTracking} accessibilityLabel="Stop tracking today">
-          <X size={16} className="text-muted-foreground" />
-        </Button>
-        <Button size="sm" variant="outline" onPress={onDoneShopping} className="ml-1">
-          Done shopping
-        </Button>
-      </View>
-      {receiptError ? (
-        <Pressable onPress={onAddReceipt} accessibilityRole="button">
-          <Text className="text-caption text-destructive" numberOfLines={1}>
-            {receiptError}
-          </Text>
-        </Pressable>
-      ) : session.receipt_path ? (
-        <Text className="text-caption text-muted-foreground" numberOfLines={1}>
-          {session.receipt_name ?? 'Receipt'} attached
-          {session.receipt_total_cents == null ? ' · tap scan to read total' : ''}
-        </Text>
-      ) : null}
-    </Card>
+          {error ? <Text className="text-center text-caption text-destructive">{error}</Text> : null}
+          <View className="flex-row items-center justify-between">
+            <Text className="text-caption text-muted-foreground">{toCosts ? 'The trip adds to Costs either way' : 'Bought items move to Have it'}</Text>
+            <Button size="sm" variant="ghost" disabled={busy} onPress={onStopTracking}>
+              Stop tracking
+            </Button>
+          </View>
+        </View>
+      )}
+    </BottomSheet>
   );
 }
 
@@ -215,25 +287,5 @@ export function TrackShopPrompt({ boughtCount, summedCents, bottom, onStartTrack
         </Pressable>
       </View>
     </Animated.View>
-  );
-}
-
-/** The quiet way back after "Not today" (or stopping): a small text link that
- *  sits beside Reset bought rather than a full-width pill. */
-export function TrackShopLink({ onPress }: { onPress: () => void }) {
-  return (
-    <Pressable
-      onPress={() => {
-        haptics.select();
-        onPress();
-      }}
-      accessibilityRole="button"
-      accessibilityLabel="Track today's shop"
-      hitSlop={6}
-      className="flex-row items-center gap-1.5 rounded-full px-2 py-1"
-    >
-      <Receipt size={12} className="text-muted-foreground" />
-      <Text className="text-xs text-muted-foreground">Track shop</Text>
-    </Pressable>
   );
 }

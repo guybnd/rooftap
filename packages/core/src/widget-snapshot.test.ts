@@ -7,6 +7,8 @@ import {
   widgetFeedGroups,
   widgetRowWhen,
   widgetTodayProgress,
+  widgetUndoTarget,
+  WIDGET_UNDO_WINDOW_MS,
   readWidgetModuleFlags,
   widgetHeroVisibility,
   widgetModuleFlags,
@@ -406,5 +408,38 @@ describe('the Upcoming feed (Hearth v2 widget)', () => {
       ['event', false],
       ['task', true],
     ]);
+  });
+});
+
+describe('widgetUndoTarget', () => {
+  const base: WidgetSummary = { openTodoCount: 0, toBuyCount: 0, doneTodayCount: 1, budget: null, bills: [], weather: null };
+  const now = new Date('2026-07-31T09:00:00.000Z');
+  const ticked = (at: string, done = true): WidgetSummary => ({ ...base, lastTick: { id: 't1', title: 'Take out bins', done, at } });
+  const rows = (done: boolean) => buildWidgetSnapshotItems(
+    buildHeroItems({
+      tasks: [task({ done, completed_at: done ? '2026-07-31T08:59:00' : null })],
+      appointments: [],
+      apartments: [],
+      today: TODAY,
+      householdVisible: true,
+      searchVisible: false,
+      viewerId: ME,
+      range: 'upcoming',
+    }),
+    ME,
+  );
+
+  it('offers the task the widget just ticked', () => {
+    expect(widgetUndoTarget(ticked('2026-07-31T08:59:00.000Z'), rows(true), now)?.id).toBe('t1');
+  });
+
+  it('drops it once the window has passed', () => {
+    const at = new Date(now.getTime() - WIDGET_UNDO_WINDOW_MS - 1).toISOString();
+    expect(widgetUndoTarget(ticked(at), rows(true), now)).toBeNull();
+  });
+
+  it('drops it when the task has changed since, or there was no tick', () => {
+    expect(widgetUndoTarget(ticked('2026-07-31T08:59:00.000Z'), rows(false), now)).toBeNull();
+    expect(widgetUndoTarget(base, rows(true), now)).toBeNull();
   });
 });

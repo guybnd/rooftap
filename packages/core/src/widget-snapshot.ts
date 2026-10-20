@@ -104,6 +104,37 @@ export interface WidgetSummary {
   documentsOn?: boolean;
   /** v4: how far ahead the feed reaches (upcomingWindowDays), so a tick from the widget rebuilds the same window. */
   upcomingDays?: number;
+  /** The last tick made from the widget itself, for its Undo line. The app's own sync leaves it out. */
+  lastTick?: WidgetLastTick | null;
+}
+
+export interface WidgetLastTick {
+  id: string;
+  title: string;
+  /** The state the tick left the task in. */
+  done: boolean;
+  /** ISO time of the tick. */
+  at: string;
+}
+
+/** How long the widget offers Undo for its own last tick. */
+export const WIDGET_UNDO_WINDOW_MS = 10 * 60 * 1000;
+
+/**
+ * The row the widget's Undo line reverses: the task its last tick changed,
+ * still in the feed in the state the tick left it, within the undo window.
+ */
+export function widgetUndoTarget(
+  summary: WidgetSummary,
+  items: WidgetTaskSnapshotItem[],
+  now: Date = new Date(),
+): WidgetTaskSnapshotItem | null {
+  const tick = summary.lastTick;
+  if (!tick) return null;
+  const age = now.getTime() - Date.parse(tick.at);
+  if (!(age >= 0 && age <= WIDGET_UNDO_WINDOW_MS)) return null;
+  const item = items.find((i) => i.id === tick.id);
+  return item && item.toggleable && item.done === tick.done ? item : null;
 }
 
 export interface WidgetModuleFlags {

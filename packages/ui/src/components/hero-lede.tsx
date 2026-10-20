@@ -23,6 +23,11 @@ export interface HeroLedeProps extends ViewProps {
   meter?: { done: number; total: number };
   /** Status tone for the value; status hues stay text (H2). */
   tone?: 'neutral' | 'success' | 'warning' | 'danger';
+  /** 'inline' stacks the label and caption in a column beside the number, so
+   *  a busy section screen's lede is one row (Groceries). */
+  layout?: 'stacked' | 'inline';
+  /** Inline layout only: the screen's actions, at the row's far end. */
+  trailing?: React.ReactNode;
 }
 
 const TONE_CLASS: Record<NonNullable<HeroLedeProps['tone']>, string> = {
@@ -32,7 +37,36 @@ const TONE_CLASS: Record<NonNullable<HeroLedeProps['tone']>, string> = {
   danger: 'text-destructive',
 };
 
-export function HeroLede({ value, label, caption, size = 'section', meter, tone = 'neutral', className, ...props }: HeroLedeProps) {
+export function HeroLede({ value, label, caption, size = 'section', meter, tone = 'neutral', layout = 'stacked', trailing, className, ...props }: HeroLedeProps) {
+  if (layout === 'inline') {
+    return (
+      <View className={cn('gap-2', className)} {...props}>
+        <View className="flex-row items-center gap-2.5">
+          <Text
+            accessibilityRole="header"
+            className={cn(size === 'home' ? 'text-hero' : 'text-hero-section', TONE_CLASS[tone])}
+            style={{ fontVariant: ['tabular-nums'] }}
+          >
+            {value}
+          </Text>
+          <View className="min-w-0 flex-1 gap-0.5">
+            {label != null && (
+              <Text numberOfLines={1} className="text-title text-muted-foreground">
+                {label}
+              </Text>
+            )}
+            {caption != null && (
+              <Text numberOfLines={1} className="text-caption text-muted-foreground">
+                {caption}
+              </Text>
+            )}
+          </View>
+          {trailing}
+        </View>
+        {meter && <SegmentMeter done={meter.done} total={meter.total} />}
+      </View>
+    );
+  }
   return (
     <View className={cn('gap-2', className)} {...props}>
       <View className="flex-row flex-wrap items-end gap-x-2.5">

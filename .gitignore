@@ -46,9 +46,11 @@ supabase/.temp/
 # .github was ignored wholesale to keep Copilot/AI tool config out of the repo,
 # which also silently blocked CI workflows from ever being committed. Ignore the
 # directory's *contents* rather than the directory itself (git cannot re-include
-# a path whose parent dir is excluded), then re-admit workflows.
+# a path whose parent dir is excluded), then re-admit workflows and the
+# local actions they use.
 .github/*
 !.github/workflows/
+!.github/actions/
 
 # OS
 .DS_Store

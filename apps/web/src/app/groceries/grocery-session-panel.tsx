@@ -1,282 +1,330 @@
 'use client';
 
-import { useRef, useState } from 'react';
-import type { GrocerySession, GroceryItem } from '@homeup/core';
-import { formatMoney, useModules, currencySymbol } from '@homeup/core';
-import {
-  ensureSession,
-  updateSession,
-  applyReceiptLearning,
-  receiptSignedUrl,
-  effectiveSessionTotal,
-} from '@homeup/core';
-import { uploadReceipt } from '@/lib/grocery-sessions';
-import { Receipt, X, Camera, Check, ScanLine, Pencil, Loader2 } from 'lucide-react';
-import { createClient } from '@/lib/supabase/client';
-import { parseReceiptFile } from '@/lib/grocery-receipt-parse';
+// HOUP-80/HOUP-226: today's shop, web twin of
+// apps/mobile/src/features/groceries/grocery-session-panel.tsx.
+//
+// The whole trip lives in floating layers above the tab bar, never in the
+// list: TrackShopPrompt asks (accent), then once tracking is on
+// ShopTrackingPill holds the running total (tap to override), Receipt and
+// Done, however far the list scrolls. Done opens FinishShopSheet: scan the
+// receipt and finish in one move (reads the total, learns prices), or a
+// photo, or no receipt (Guy, 2026-10-20). Once skipped, the way back is
+// "Track shop" in the head's More menu and the This trip card. The page owns
+// the receipt picker and the finish flow (it owns Done shopping's undo).
 
-interface Props {
-  groupId: string;
-  session: GrocerySession | null;
-  summedCents: number;
-  boughtCount: number;
-  unpricedCount: number;
-  items: GroceryItem[];
-  onChange: (session: GrocerySession | null) => void;
-  onItemsChanged: () => void;
-  /** Hide the floating ask (e.g. while Select's bulk bar is up). */
-  hidePrompt?: boolean;
+import { useRef, useState } from 'react';
+import type { GrocerySession } from '@homeup/core';
+import { formatMoney, useModules, currencySymbol, ensureSession, updateSession } from '@homeup/core';
+import { Receipt, Camera, Check, Loader2 } from 'lucide-react';
+import { createClient } from '@/lib/supabase/client';
+import { BottomSheet } from '@/components/ui/bottom-sheet';
+import { cn } from '@/lib/utils';
+
+// The floating layers' one spot: clears the phone tab bar and its raised
+// capture button (the bar is in-flow), bottom-4 on desktop. The ask and the
+// pill never show together, so they share it.
+const FLOAT_SPOT =
+  'fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] md:bottom-4 left-1/2 z-40 w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2';
+// MO: the floating layers rise in at slow, like a sheet arriving.
+const FLOAT_ENTER = 'animate-in fade-in slide-in-from-bottom-2 duration-[var(--motion-slow)]';
+
+/** Where the trip's total came from, for its caption. */
+function totalSource(session: GrocerySession): string {
+  return session.override_total_cents != null ? 'manual total' : session.receipt_total_cents != null ? 'from receipt' : 'estimated';
 }
 
-export function GrocerySessionPanel({
-  groupId,
-  session,
-  summedCents,
-  boughtCount,
-  unpricedCount,
-  items,
-  onChange,
-  onItemsChanged,
-  hidePrompt,
-}: Props) {
-  const [busy, setBusy] = useState(false);
-  const [overriding, setOverriding] = useState(false);
-  const [overrideVal, setOverrideVal] = useState('');
-  const [scanning, setScanning] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const fileRef = useRef<File | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const supabase = createClient();
-  const modules = useModules();
-  // Modules: the trip only lands in Costs when costs and groceries are both on (module-features.ts).
-  const toCosts = modules.feature('costs.from-groceries');
+/** The trip's total; tapping it swaps in an input to override it (Enter or
+ *  blur commits, empty clears the override, Escape backs out). H1: body
+ *  weight in the pill, the Display step in the sheet (the screen's lede is
+ *  the only Hero); T3: money stays out of mono, tabular figures align it. */
+function EditableTotal({
+  total,
+  caption,
+  onOverrideTotal,
+  size = 'body',
+}: {
+  total: number;
+  caption: string;
+  onOverrideTotal: (cents: number | null) => void;
+  size?: 'body' | 'display';
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  // Enter commits and unmounts the input; a trailing blur must not commit twice.
+  const doneRef = useRef(false);
 
-  // ── No decision yet, but items are in the cart → floating ask ─────────────
-  // Floats above the tab bar in the accent colour (its own layer, so it
-  // doesn't spend the content's H5 accent budget, Guy's call) instead of a
-  // card that pushes the list down. Steps aside while Select's bulk bar
-  // owns the bottom edge.
-  if (boughtCount > 0 && session === null) {
-    if (hidePrompt) return null;
+  const commit = () => {
+    if (doneRef.current) return;
+    doneRef.current = true;
+    const parsed = parseFloat(draft);
+    onOverrideTotal(draft.trim() === '' || Number.isNaN(parsed) || parsed < 0 ? null : Math.round(parsed * 100));
+    setEditing(false);
+  };
+  const cancel = () => { doneRef.current = true; setEditing(false); };
+
+  if (editing) {
     return (
-      <div
-        role="alert"
-        className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] md:bottom-4 left-1/2 z-40 flex w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 items-center gap-3 rounded-2xl bg-primary py-2.5 pl-4 pr-2 text-primary-foreground shadow-xl shadow-black/40 animate-in fade-in slide-in-from-bottom-2 duration-[var(--motion-slow)]"
-      >
-        <Receipt className="h-5 w-5 flex-shrink-0" />
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold">Track today&apos;s shop?</p>
-          <p className="truncate text-xs tabular-nums text-primary-foreground/80">
-            {boughtCount} in cart · ~{formatMoney(summedCents)}{toCosts ? ' · adds to Costs' : ''}
-          </p>
-        </div>
+      <div className="flex min-h-[44px] min-w-0 flex-1 items-center gap-1">
+        <span className="text-sm text-muted-foreground">{currencySymbol()}</span>
+        <input
+          type="number"
+          inputMode="decimal"
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') cancel(); }}
+          onBlur={commit}
+          placeholder="0.00"
+          aria-label="Trip total"
+          className="h-11 w-28 min-w-0 rounded-lg border border-border bg-input px-2 text-base font-semibold tabular-nums text-foreground focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+        />
+        {/* M2: 44px. mousedown keeps focus so the tap commits once, here. */}
         <button
-          disabled={busy}
-          onClick={async () => { setBusy(true); onChange(await ensureSession(supabase, groupId, 'skipped', summedCents)); setBusy(false); }}
-          className="min-h-[44px] flex-shrink-0 rounded-xl px-2.5 text-sm text-primary-foreground/80 hover:bg-primary-foreground/10 hover:text-primary-foreground disabled:opacity-50"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={commit}
+          aria-label="Save total"
+          className="grid h-11 w-11 flex-shrink-0 place-items-center rounded-full text-primary transition-colors hover:bg-foreground/10"
         >
-          Not today
-        </button>
-        <button
-          disabled={busy}
-          onClick={async () => { setBusy(true); onChange(await ensureSession(supabase, groupId, 'on', summedCents)); setBusy(false); }}
-          className="min-h-[44px] flex-shrink-0 rounded-xl bg-primary-foreground px-4 text-sm font-semibold text-primary hover:opacity-90 disabled:opacity-50"
-        >
-          Track
+          <Check className="h-4 w-4" />
         </button>
       </div>
     );
   }
 
-  // Skipped / dismissed for today: the way back is TrackShopLink, a small
-  // link the page puts beside Reset bought.
-  if (session?.tracking !== 'on') return null;
-
-  // ── Active session ──────────────────────────────────────────────────────────
-  const effective = effectiveSessionTotal({ ...session, summed_total_cents: summedCents });
-  const source =
-    session.override_total_cents != null ? 'manual total'
-    : session.receipt_total_cents != null ? 'from receipt'
-    : 'estimated';
-
-  const saveOverride = async () => {
-    const dollars = parseFloat(overrideVal);
-    const cents = isNaN(dollars) || dollars < 0 ? null : Math.round(dollars * 100);
-    setOverriding(false);
-    onChange(await updateSession(supabase, session.id, { override_total_cents: cents }));
-  };
-
-  const onPickFile = async (file: File) => {
-    fileRef.current = file;
-    setUploadError(null);
-    setBusy(true);
-    try {
-      const up = await uploadReceipt(supabase, groupId, session.session_date, file);
-      if (up) onChange(await updateSession(supabase, session.id, { receipt_path: up.path, receipt_name: up.name }));
-      else setUploadError('Receipt upload failed. Tap to try again.');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const scan = async () => {
-    setScanning(true);
-    try {
-      let file = fileRef.current;
-      if (!file && session.receipt_path) {
-        const url = await receiptSignedUrl(supabase, session.receipt_path);
-        if (url) {
-          const blob = await (await fetch(url)).blob();
-          file = new File([blob], session.receipt_name ?? 'receipt', { type: blob.type });
-        }
-      }
-      if (!file) return;
-      const parsed = await parseReceiptFile(file);
-      if (!parsed) return;
-      const patch: Partial<GrocerySession> = {};
-      if (parsed.total != null) patch.receipt_total_cents = Math.round(parsed.total * 100);
-      if (parsed.retailer) patch.retailer = parsed.retailer;
-      if (Object.keys(patch).length) onChange(await updateSession(supabase, session.id, patch));
-      await applyReceiptLearning(supabase, groupId, parsed, items);
-      onItemsChanged();
-    } finally {
-      setScanning(false);
-    }
-  };
-
-  const iconBtn =
-    'h-9 w-9 grid place-items-center rounded-full text-muted-foreground hover:bg-foreground/10 transition-colors disabled:opacity-50 flex-shrink-0';
-
-  // Compact, single-row bar that sticks to the top of the list while scrolling.
   return (
-    <div className="sticky top-0 z-30 -mx-4 md:-mx-6 px-4 md:px-6 pt-1 pb-2 bg-background/70 backdrop-blur-md">
-      <div className="flex items-center gap-2.5 rounded-3xl border border-border/60 bg-card/90 backdrop-blur-xl px-3.5 py-2 shadow-[var(--card-shadow)]">
-        <Receipt className="h-5 w-5 text-muted-foreground flex-shrink-0" />
-        <span className="hidden sm:inline text-sm font-medium text-foreground flex-shrink-0">Today&apos;s shop</span>
-
-        {/* Total + source */}
-        {overriding ? (
-          <div className="flex items-center gap-1 min-w-0">
-            <span className="text-muted-foreground text-sm">{currencySymbol()}</span>
-            <input
-              type="number"
-              inputMode="decimal"
-              autoFocus
-              value={overrideVal}
-              onChange={(e) => setOverrideVal(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') void saveOverride(); if (e.key === 'Escape') setOverriding(false); }}
-              placeholder="0.00"
-              className="w-20 bg-input border border-border rounded-lg px-2 py-1 text-foreground text-lg font-bold tabular-nums focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-            />
-            <button onClick={() => void saveOverride()} aria-label="Save total" className="text-primary hover:text-primary/80 p-1"><Check className="h-4 w-4" /></button>
-            <button onClick={() => setOverriding(false)} aria-label="Cancel" className="text-muted-foreground hover:text-foreground p-1"><X className="h-4 w-4" /></button>
-          </div>
-        ) : (
-          <button
-            onClick={() => { setOverrideVal(String(effective / 100)); setOverriding(true); }}
-            title="Tap to override the total"
-            className="flex items-baseline gap-2 min-w-0 group"
-          >
-            <span className="text-base font-semibold text-foreground tabular-nums leading-none">{formatMoney(effective)}</span>
-            <span className="hidden sm:inline text-[11px] text-muted-foreground group-hover:text-foreground">{source}</span>
-          </button>
+    <button
+      onClick={() => { doneRef.current = false; setDraft(String(total / 100)); setEditing(true); }}
+      title="Tap to change the total"
+      aria-label={`${formatMoney(total)}, ${caption}. Change total`}
+      className="flex min-h-[44px] min-w-0 flex-1 flex-col items-start justify-center text-left"
+    >
+      <span
+        className={cn(
+          'max-w-full truncate tabular-nums text-foreground',
+          size === 'display' ? 'font-heading text-2xl font-bold leading-tight tracking-[-0.02em]' : 'text-sm font-semibold leading-tight'
         )}
+      >
+        {formatMoney(total)}
+      </span>
+      <span className="w-full truncate text-xs tabular-nums text-muted-foreground">{caption}</span>
+    </button>
+  );
+}
 
-        {/* Got / unpriced */}
-        {!overriding && (
-          <span className="text-xs text-muted-foreground tabular-nums flex-shrink-0 whitespace-nowrap">
-            {boughtCount} got
-            {unpricedCount > 0 && <span className="text-warning"> · {unpricedCount} no&nbsp;price</span>}
-          </span>
-        )}
+/** Floating accent ask to track today's shop once something is in the cart
+ *  and no decision has been made yet. In the accent (its own layer, so it
+ *  doesn't spend the content's H5 accent budget, Guy's call) instead of a
+ *  card that pushes the list down. The page hides it while Select's bulk bar
+ *  owns the bottom edge, and while searching. */
+export function TrackShopPrompt({
+  groupId,
+  boughtCount,
+  summedCents,
+  onChange,
+}: {
+  groupId: string;
+  boughtCount: number;
+  summedCents: number;
+  onChange: (session: GrocerySession | null) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const supabase = createClient();
+  const modules = useModules();
+  // Modules: the trip only lands in Costs when costs and groceries are both on (module-features.ts).
+  const toCosts = modules.feature('costs.from-groceries');
 
-        {/* Actions */}
-        <div className="ml-auto flex items-center gap-0.5 flex-shrink-0">
-          {!overriding && (
-            <button
-              onClick={() => { setOverrideVal(String(effective / 100)); setOverriding(true); }}
-              title="Override total"
-              aria-label="Override total"
-              className={iconBtn}
-            >
-              <Pencil className="h-4 w-4" />
-            </button>
-          )}
-          <button
-            disabled={busy}
-            onClick={() => inputRef.current?.click()}
-            title={session.receipt_path ? 'Replace receipt' : 'Add receipt'}
-            aria-label={session.receipt_path ? 'Replace receipt' : 'Add receipt'}
-            className={iconBtn + (session.receipt_path ? ' text-foreground' : '')}
-          >
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
-          </button>
-          <input
-            ref={inputRef}
-            type="file"
-            accept="image/*,application/pdf"
-            capture="environment"
-            className="hidden"
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) void onPickFile(f); e.target.value = ''; }}
-          />
-          {session.receipt_path && (
-            <button
-              disabled={scanning}
-              onClick={() => void scan()}
-              title={scanning ? 'Scanning…' : 'Scan receipt'}
-              aria-label={scanning ? 'Scanning receipt' : 'Scan receipt'}
-              className={iconBtn + ' text-foreground ' + (scanning ? 'animate-pulse' : '')}
-            >
-              <ScanLine className="h-4 w-4" />
-            </button>
-          )}
-          <button
-            onClick={async () => { onChange(await updateSession(supabase, session.id, { tracking: 'skipped' })); }}
-            title="Stop tracking today"
-            aria-label="Stop tracking today"
-            className={iconBtn}
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
+  return (
+    <div
+      role="alert"
+      className={cn(FLOAT_SPOT, FLOAT_ENTER, 'flex items-center gap-3 rounded-2xl bg-primary py-2.5 pl-4 pr-2 text-primary-foreground shadow-xl shadow-black/40')}
+    >
+      <Receipt className="h-5 w-5 flex-shrink-0" />
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-semibold">Track today&apos;s shop?</p>
+        <p className="truncate text-xs tabular-nums text-primary-foreground/80">
+          {boughtCount} in cart · ~{formatMoney(summedCents)}{toCosts ? ' · adds to Costs' : ''}
+        </p>
       </div>
+      <button
+        disabled={busy}
+        onClick={async () => { setBusy(true); onChange(await ensureSession(supabase, groupId, 'skipped', summedCents)); setBusy(false); }}
+        className="min-h-[44px] flex-shrink-0 rounded-xl px-2.5 text-sm text-primary-foreground/80 hover:bg-primary-foreground/10 hover:text-primary-foreground disabled:opacity-50"
+      >
+        Not today
+      </button>
+      <button
+        disabled={busy}
+        onClick={async () => { setBusy(true); onChange(await ensureSession(supabase, groupId, 'on', summedCents)); setBusy(false); }}
+        className="min-h-[44px] flex-shrink-0 rounded-xl bg-primary-foreground px-4 text-sm font-semibold text-primary hover:opacity-90 disabled:opacity-50"
+      >
+        Track
+      </button>
+    </div>
+  );
+}
 
-      {/* Confirmation / status sub-line — uploading, attached, or error */}
-      {(busy || uploadError || session.receipt_path) && (
-        <div className="mt-1 px-2 text-[11px] leading-tight">
-          {busy ? (
-            <span className="flex items-center gap-1.5 text-muted-foreground">
-              <Loader2 className="h-3 w-3 animate-spin" /> Uploading receipt…
-            </span>
-          ) : uploadError ? (
-            <button onClick={() => inputRef.current?.click()} className="text-destructive hover:text-destructive/80">
-              {uploadError}
-            </button>
-          ) : session.receipt_path ? (
-            <span className="flex items-center gap-1.5 text-muted-foreground min-w-0">
-              <Receipt className="h-3 w-3 flex-shrink-0" />
-              <span className="truncate text-foreground/80">{session.receipt_name ?? 'Receipt'} attached</span>
-              {session.receipt_total_cents == null && (
-                <span className="text-muted-foreground flex-shrink-0 whitespace-nowrap">· tap scan to read total</span>
-              )}
-            </span>
-          ) : null}
-        </div>
+/** While a shop is tracked: a floating pill in the Track ask's spot, so the
+ *  total, the receipt and Done stay under the thumb however far the list
+ *  scrolls (Guy, 2026-10-20). A neutral popover, not the ask's accent: it's
+ *  a standing tool, not a question. Done opens FinishShopSheet. */
+export function ShopTrackingPill({
+  session,
+  total,
+  boughtCount,
+  onOverrideTotal,
+  onReceipt,
+  receiptBusy,
+  receiptError,
+  onDone,
+}: {
+  session: GrocerySession;
+  /** The trip's effective total (override, receipt, else the live cart sum). */
+  total: number;
+  boughtCount: number;
+  onOverrideTotal: (cents: number | null) => void;
+  onReceipt: () => void;
+  receiptBusy: boolean;
+  receiptError: string | null;
+  onDone: () => void;
+}) {
+  const source = totalSource(session);
+  const caption = `${source === 'estimated' ? 'in cart' : source} · ${boughtCount} got`;
+  return (
+    <div className={cn(FLOAT_SPOT, FLOAT_ENTER, 'rounded-2xl border border-border bg-popover py-1.5 pl-4 pr-2 text-popover-foreground shadow-xl shadow-black/40')}>
+      <div className="flex items-center gap-2">
+        <EditableTotal total={total} caption={caption} onOverrideTotal={onOverrideTotal} />
+        <button
+          disabled={receiptBusy}
+          onClick={onReceipt}
+          aria-label={session.receipt_path ? 'Replace receipt' : 'Add receipt'}
+          className="inline-flex min-h-[44px] flex-shrink-0 items-center gap-1.5 rounded-xl border border-border px-3 text-sm font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-50"
+        >
+          {receiptBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Camera className="h-3.5 w-3.5" />}
+          Receipt
+        </button>
+        <button
+          onClick={onDone}
+          className="min-h-[44px] flex-shrink-0 rounded-xl bg-foreground px-4 text-sm font-semibold text-background transition-opacity hover:opacity-90"
+        >
+          Done
+        </button>
+      </div>
+      {receiptError && (
+        <button onClick={onReceipt} className="block w-full truncate pb-1 text-left text-xs text-destructive hover:text-destructive/80">
+          {receiptError}
+        </button>
       )}
     </div>
   );
 }
 
-/** The quiet way back after "Not today" (or stopping): a small text link
- *  that sits beside Reset bought rather than a full-width pill. */
-export function TrackShopLink({ session, onChange }: { session: GrocerySession; onChange: (session: GrocerySession | null) => void }) {
+/** Done's sheet: the trip's total (tap to override), then one move to scan
+ *  the receipt and finish, with a photo or no receipt as the quieter choices.
+ *  The sheet is its own layer, so its primary takes the accent (H5). */
+export function FinishShopSheet({
+  open,
+  onOpenChange,
+  session,
+  total,
+  boughtCount,
+  unpricedCount,
+  onOverrideTotal,
+  onScan,
+  onPickPhoto,
+  onFinishWithout,
+  onStopTracking,
+  busy,
+  error,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  session: GrocerySession | null;
+  total: number;
+  boughtCount: number;
+  unpricedCount: number;
+  onOverrideTotal: (cents: number | null) => void;
+  /** Picks a receipt (camera first on phones), reads it, then finishes. */
+  onScan: () => void;
+  /** The same, from a photo or PDF already on the device. */
+  onPickPhoto: () => void;
+  onFinishWithout: () => void;
+  onStopTracking: () => void;
+  busy: boolean;
+  error: string | null;
+}) {
+  const modules = useModules();
+  const toCosts = modules.feature('costs.from-groceries');
+  const caption = session
+    ? [totalSource(session), `${boughtCount} got`, unpricedCount > 0 ? `${unpricedCount} unpriced` : null].filter(Boolean).join(' · ')
+    : '';
+  const outline =
+    'min-h-12 flex-1 rounded-xl border border-border text-sm font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-50';
+  return (
+    <BottomSheet
+      open={open}
+      onOpenChange={onOpenChange}
+      overlayClassName="bg-black/40"
+      className="max-h-[88dvh] overflow-y-auto rounded-t-2xl border-t border-border bg-popover px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] text-popover-foreground shadow-2xl shadow-black/50 sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:w-full sm:max-w-md sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:border sm:pt-4"
+      handleClassName="sm:hidden"
+      popupProps={{ 'aria-label': "Finish today's shop" }}
+    >
+      {session && (
+        <div className="space-y-4 pt-1">
+          <div className="space-y-1">
+            <p className="font-heading text-base font-semibold text-foreground">Finish today&apos;s shop</p>
+            <EditableTotal total={total} caption={caption} onOverrideTotal={onOverrideTotal} size="display" />
+          </div>
+          <button
+            disabled={busy}
+            onClick={onScan}
+            className="flex min-h-14 w-full items-center gap-3 rounded-2xl bg-primary px-4 py-2 text-left text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
+          >
+            {busy ? <Loader2 className="h-5 w-5 flex-shrink-0 animate-spin" /> : <Camera className="h-5 w-5 flex-shrink-0" />}
+            <span className="min-w-0 flex-1">
+              <span className="block text-[15px] font-semibold">{busy ? 'Reading receipt…' : 'Scan receipt and finish'}</span>
+              <span className="block text-xs text-primary-foreground/80">Reads the real total and learns prices</span>
+            </span>
+          </button>
+          <div className="flex gap-2">
+            <button disabled={busy} onClick={onPickPhoto} className={outline}>Pick a photo</button>
+            <button disabled={busy} onClick={onFinishWithout} className={outline}>Finish without</button>
+          </div>
+          {error && <p className="text-center text-xs text-destructive">{error}</p>}
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs text-muted-foreground">{toCosts ? 'The trip adds to Costs either way' : 'Bought items move to Have it'}</p>
+            <button
+              disabled={busy}
+              onClick={onStopTracking}
+              className="min-h-[44px] flex-shrink-0 rounded-xl px-3 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+            >
+              Stop tracking
+            </button>
+          </div>
+        </div>
+      )}
+    </BottomSheet>
+  );
+}
+
+/** The quiet way back after "Not today" (or stopping): a small pill in the
+ *  list's "This trip" card (`className` restyles it there); the head's More
+ *  menu offers the same verb. */
+export function TrackShopLink({
+  session,
+  onChange,
+  className = 'inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50',
+}: {
+  session: GrocerySession;
+  onChange: (session: GrocerySession | null) => void;
+  className?: string;
+}) {
   const [busy, setBusy] = useState(false);
   const supabase = createClient();
   return (
     <button
       disabled={busy}
       onClick={async () => { setBusy(true); onChange(await updateSession(supabase, session.id, { tracking: 'on' })); setBusy(false); }}
-      className="inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+      className={className}
     >
       <Receipt className="h-3 w-3" />
       Track shop

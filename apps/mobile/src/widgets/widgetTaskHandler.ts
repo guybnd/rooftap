@@ -291,6 +291,9 @@ async function handleToggleTask(payload: ToggleTaskPayload, props: WidgetTaskHan
       openTodoCount: progress.left,
       doneTodayCount: progress.done,
       weather: recomputeWeatherStale(guard.snapshot.summary.weather),
+      // The widget's Undo line names what this tap changed, so a tap that
+      // lands on the wrong row is visible and one tap away from reversed.
+      lastTick: { id: row.id, title: row.title, done: targetDone, at: new Date().toISOString() },
     },
   };
   writeWidgetSnapshot(nextSnapshot.items, nextSnapshot.groceries, nextSnapshot.summary);

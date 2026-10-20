@@ -219,7 +219,8 @@ export function AppSidebar({ children }: { children: React.ReactNode }) {
     return () => document.removeEventListener("keydown", handleKey);
   }, [open]);
 
-  const isAuthPage = pathname === "/login" || pathname === "/callback" || segment === "landing";
+  const isAuthPage =
+    pathname === "/login" || pathname === "/callback" || segment === "landing" || pathname.startsWith("/oauth/");
   if (isAuthPage) return <>{children}</>;
 
   const isActive = (href: string) => {

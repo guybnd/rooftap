@@ -61,6 +61,7 @@ const cases: [string, Parameters<typeof tasksWidgetRepresentation>[0]][] = [
   ['an empty feed with no weather or budget', { items: [], groceries: [], summary: { ...summary, weather: null, budget: null } }],
   ['everything done', { items: [row({ done: true })], groceries: [], summary }],
   ['a short widget', { items: [row({}), row({ id: 'task-2' }), row({ id: 'task-3' })], groceries: [], summary, height: 220 }],
+  ['an Undo line after a tick from the widget', { items: [row({ done: true })], groceries: [], summary: { ...summary, lastTick: { id: 'task-1', title: 'Take out the bins', done: true, at: new Date().toISOString() } } }],
   ['tasks and groceries off', { items: [], groceries: [], summary: { ...summary, tasksOn: false, groceriesOn: false, costsOn: false, weather: null } }],
 ];
 
@@ -69,6 +70,31 @@ describe('TasksWidget tree', () => {
     const { light, dark } = tasksWidgetRepresentation(props) as { light: React.JSX.Element; dark: React.JSX.Element };
     expect(() => buildWidgetTree(light)).not.toThrow();
     expect(() => buildWidgetTree(dark)).not.toThrow();
+  });
+});
+
+describe('a task row', () => {
+  it('opens the task, and only its tick circle finishes it', () => {
+    const json = JSON.stringify(
+      buildWidgetTree((tasksWidgetRepresentation({ items: [row({})], groceries: [], summary }) as { light: React.JSX.Element }).light),
+    );
+    expect(json).toContain('mobile://tasks?focus=task-1');
+    expect(json.match(/"clickAction":"TOGGLE_TASK"/g)).toHaveLength(1);
+    expect(json).toContain('Finish Take out the bins');
+  });
+});
+
+describe('the Undo line', () => {
+  const ticked = (at: string) => ({ ...summary, lastTick: { id: 'task-1', title: 'Take out the bins', done: true, at } });
+  const tree = (s: WidgetSummary) =>
+    JSON.stringify(buildWidgetTree((tasksWidgetRepresentation({ items: [row({ done: true })], groceries: [], summary: s }) as { light: React.JSX.Element }).light));
+  it('names the task a widget tick just finished, with a tap that reverses it', () => {
+    const json = tree(ticked(new Date().toISOString()));
+    expect(json).toContain('Finished Take out the bins');
+    expect(json).toContain('"clickAction":"TOGGLE_TASK"');
+  });
+  it('is gone once the undo window has passed', () => {
+    expect(tree(ticked('2000-01-01T00:00:00.000Z'))).not.toContain('Finished Take out the bins');
   });
 });
 

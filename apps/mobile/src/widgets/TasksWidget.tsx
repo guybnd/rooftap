@@ -19,6 +19,7 @@ import {
   widgetRowWhen,
   widgetSections,
   widgetTodayProgress,
+  widgetUndoTarget,
   SECTION_GLOW_OPACITY,
   type ColorScheme,
   type WidgetGrocerySnapshotItem,
@@ -233,22 +234,92 @@ function DayHeader(props: { label: string; earlier: boolean; first: boolean; pal
   );
 }
 
+/** A tick's payload: the row's id and the state the widget drew it in (widgetTaskHandler's stale-render guard). */
+function toggleTaskData(item: WidgetTaskSnapshotItem) {
+  return {
+    id: item.id,
+    snapshotVersion: WIDGET_SNAPSHOT_VERSION,
+    snapshotDone: item.done,
+    snapshotSourceUpdatedAt: item.sourceUpdatedAt,
+  };
+}
+
+/** After a tick from the widget: which task it changed, and a tap to reverse it. */
+function UndoLine(props: { item: WidgetTaskSnapshotItem; palette: Palette }) {
+  const { item, palette } = props;
+  return (
+    <FlexWidget
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        width: 'match_parent',
+        backgroundColor: palette.card,
+        borderRadius: 14,
+        paddingHorizontal: 12,
+        paddingVertical: 7,
+        marginTop: 6,
+      }}
+      clickAction="TOGGLE_TASK"
+      clickActionData={toggleTaskData(item)}
+      accessibilityLabel={`${item.done ? 'Finished' : 'Reopened'} ${item.title}, tap to undo`}
+    >
+      <FlexWidget style={{ flex: 1 }}>
+        <TextWidget
+          text={`${item.done ? 'Finished' : 'Reopened'} ${item.title}`}
+          truncate="END"
+          maxLines={1}
+          style={{ fontSize: 12.5, color: palette.foreground }}
+        />
+      </FlexWidget>
+      <TextWidget text="Undo" style={{ fontSize: 12.5, fontWeight: '700', color: palette.primary, marginLeft: 10 }} />
+    </FlexWidget>
+  );
+}
+
+/**
+ * The row's tick: a ring that finishes the task, a filled check that reopens
+ * it. The ring carries the identity mark (6, States): coral is yours, a
+ * dashed amber seat nobody's.
+ */
+function TickCircle(props: { item: WidgetTaskSnapshotItem; palette: Palette }) {
+  const { item, palette } = props;
+  return (
+    <FlexWidget
+      style={{ paddingLeft: 10, paddingRight: 2, paddingVertical: 4 }}
+      clickAction="TOGGLE_TASK"
+      clickActionData={toggleTaskData(item)}
+      accessibilityLabel={item.done ? `Reopen ${item.title}` : `Finish ${item.title}`}
+    >
+      {item.done ? (
+        <FlexWidget
+          style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: palette.success, alignItems: 'center', justifyContent: 'center' }}
+        >
+          <SvgWidget svg={glyphSvg('check', palette.primaryForeground, 14)} style={{ width: 14, height: 14 }} />
+        </FlexWidget>
+      ) : (
+        <FlexWidget
+          style={{
+            width: 24,
+            height: 24,
+            borderRadius: 12,
+            borderWidth: 2,
+            borderStyle: item.assigned ? 'solid' : 'dashed',
+            borderColor: item.assignedToMe ? palette.primary : item.assigned ? palette.muted : palette.warning,
+          }}
+        />
+      )}
+    </FlexWidget>
+  );
+}
+
 function FeedRow(props: { item: WidgetTaskSnapshotItem; today: string; first: boolean; last: boolean; palette: Palette }) {
   const { item, today, first, last, palette } = props;
   const when = widgetRowWhen(item, today);
   const whenText = when ? (when.kind === 'overdue' ? when.text : formatTime12h(when.time)) : null;
   const meta = item.done ? 'Done' : whenText ? `${whenText} · ${item.sourceLabel}` : item.sourceLabel;
-  const click = item.toggleable
-    ? {
-        clickAction: 'TOGGLE_TASK',
-        clickActionData: {
-          id: item.id,
-          snapshotVersion: WIDGET_SNAPSHOT_VERSION,
-          snapshotDone: item.done,
-          snapshotSourceUpdatedAt: item.sourceUpdatedAt,
-        },
-      }
-    : { clickAction: 'OPEN_URI', clickActionData: { uri: openUri(item.openPath) } };
+  // The row opens the item (a task opens focused in Tasks); only the tick
+  // circle finishes a task, so a tick is a deliberate tap on its own target.
+  const uri = openUri(item.openPath ?? (item.toggleable ? `/tasks?focus=${encodeURIComponent(item.id)}` : null));
 
   return (
     <FlexWidget
@@ -267,8 +338,9 @@ function FeedRow(props: { item: WidgetTaskSnapshotItem; today: string; first: bo
         borderTopWidth: first ? 0 : 1,
         borderTopColor: palette.border,
       }}
-      {...click}
-      accessibilityLabel={item.toggleable ? `${item.title}, ${item.done ? 'done, tap to undo' : 'tap to finish'}` : item.title}
+      clickAction="OPEN_URI"
+      clickActionData={{ uri }}
+      accessibilityLabel={item.title}
     >
       <Tile section={item.section} glyph={rowGlyph(item)} size={32} palette={palette} />
       <FlexWidget style={{ flex: 1, flexDirection: 'column', marginLeft: 10 }}>
@@ -285,20 +357,7 @@ function FeedRow(props: { item: WidgetTaskSnapshotItem; today: string; first: bo
           style={{ fontSize: 12, color: when?.kind === 'overdue' && !item.done ? palette.destructive : palette.muted, marginTop: 1 }}
         />
       </FlexWidget>
-      {/* The trailing identity mark: a coral ring is yours, a dashed amber seat nobody's (6, States). */}
-      {item.toggleable && !item.done && (
-        <FlexWidget
-          style={{
-            width: 12,
-            height: 12,
-            borderRadius: 6,
-            marginLeft: 8,
-            borderWidth: 1.5,
-            borderStyle: item.assigned ? 'solid' : 'dashed',
-            borderColor: item.assignedToMe ? palette.primary : item.assigned ? palette.border : palette.warning,
-          }}
-        />
-      )}
+      {item.toggleable && <TickCircle item={item} palette={palette} />}
     </FlexWidget>
   );
 }
@@ -426,8 +485,9 @@ export function TasksWidget(props: TasksWidgetProps) {
   const openCount = items.filter((i) => !i.done).length;
   const showLede = sections.taskCounts || !!summary.weather;
   const showSpaces = sections.toBuyCount || !!budget;
-  // The feed gets what's left of the widget after the padding, lede, heading and Spaces row.
-  const chromeDp = 26 + (showLede ? 62 : 0) + 42 + 6 + (showSpaces ? 42 : 0);
+  const undo = sections.tasks ? widgetUndoTarget(summary, items) : null;
+  // The feed gets what's left of the widget after the padding, lede, heading, Undo line and Spaces row.
+  const chromeDp = 26 + (showLede ? 62 : 0) + 42 + 6 + (undo ? 38 : 0) + (showSpaces ? 42 : 0);
   const feedBudgetDp = props.height ? props.height - chromeDp : FALLBACK_FEED_DP;
 
   return (
@@ -451,6 +511,7 @@ export function TasksWidget(props: TasksWidgetProps) {
       )}
 
       {sections.tasks && <FeedHeading count={openCount} canAdd={sections.tasks === 'tasks'} palette={palette} />}
+      {undo && <UndoLine item={undo} palette={palette} />}
       {sections.tasks &&
         (items.length === 0 ? (
           <FlexWidget style={{ flex: 1, width: 'match_parent', marginTop: 8 }}>

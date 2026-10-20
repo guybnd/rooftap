@@ -49,30 +49,34 @@ import {
   ChevronDown,
   Trash2,
   X,
-  ShoppingBag,
   ArrowRightLeft,
   GripVertical,
   BookOpen,
   WalletCards,
   LayoutList,
-  PackageCheck,
+  MoreHorizontal,
+  SlidersHorizontal,
+  Search,
+  ArrowUpDown,
+  Receipt,
+  RotateCcw,
 } from 'lucide-react';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { GroceryItemCard, GroceryItemCardStandalone } from './grocery-item-card';
 import { ListGroup } from '@/components/ui/list-item';
-import { SegmentedControl } from '@/components/ui/segmented-control';
-import { PulseTile } from '@/components/ui/pulse-tile';
 import { GroceryItemModal } from './grocery-item-modal';
 import { SectionSearchBar } from '@/components/section-search-bar';
 import { useFuzzySearch } from '@/hooks/use-fuzzy-search';
-import { PopMenu, MenuItem, MenuLabel } from '../setup/pop-menu';
+import { PopMenu, MenuDivider, MenuItem, MenuLabel } from '../setup/pop-menu';
 import { memberLabel } from '../setup/member-label';
 import { getRegionProvider, groceryItems$, loyaltyCards$, sortLoyaltyCards, type LoyaltyCard, useReconnectSync, useStoreHelpers, useStoreLoaded, createPendingActionTracker, usePendingIds, createUndoBatchTracker } from '@homeup/core';
 import { fetchItemLibrary, buildLibraryMap, resolveItemDefaults, learnItemLibrary, type LibraryOverride } from '@homeup/core';
-import { GrocerySessionPanel, TrackShopLink } from './grocery-session-panel';
+import { TrackShopPrompt, ShopTrackingPill, FinishShopSheet, TrackShopLink } from './grocery-session-panel';
+import { uploadReceipt } from '@/lib/grocery-sessions';
+import { parseReceiptFile } from '@/lib/grocery-receipt-parse';
 import { RewardsCardsSheet } from './rewards-cards-sheet';
-import { fetchTodaySession, isBoughtToday, syncSession, todayStr, closeSession, updateSession as updateGrocerySession, getEnabledModules, isFeatureEnabled } from '@homeup/core';
+import { fetchTodaySession, isBoughtToday, syncSession, todayStr, closeSession, updateSession as updateGrocerySession, effectiveSessionTotal, applyReceiptLearning, getEnabledModules, isFeatureEnabled } from '@homeup/core';
 import { useGroupTableRealtime } from '@/lib/hooks/use-group-table-realtime';
 import { ReAddSuggestions } from './re-add-suggestions';
 import { GrocerySearchAdd } from './grocery-search-add';
@@ -82,6 +86,10 @@ import { useGroceryUndo } from './use-grocery-undo';
 import { GroceryGlyph } from '@/components/grocery-glyph';
 
 const SHOPPING_TOOLTIP_KEY = 'homeup_shopping_tooltip_dismissed';
+
+// "This trip" card verbs: small secondary pills, neutral (H5), 44px tall (M2).
+const TRIP_PILL_CLASS =
+  'inline-flex min-h-[44px] items-center gap-1.5 rounded-full bg-muted px-4 text-xs font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-50';
 const AISLE_ORDER_KEY = 'homeup_grocery_aisle_order';
 
 function loadAisleOrder(): string[] | null {
@@ -200,6 +208,14 @@ export default function GroceriesPage() {
   const [library, setLibrary] = useState<LibraryOverride[]>([]);
   const [session, setSession] = useState<GrocerySession | null>(null);
   const sessionSyncRef = useRef<string>('');
+  // Today's shop floating layers: the pill's receipt read and the finish sheet.
+  const [receiptBusy, setReceiptBusy] = useState(false);
+  const [receiptError, setReceiptError] = useState<string | null>(null);
+  const [finishOpen, setFinishOpen] = useState(false);
+  const [finishing, setFinishing] = useState(false);
+  const receiptInputRef = useRef<HTMLInputElement>(null);
+  // What the picked receipt is for: the pill's Receipt, or the sheet's finish.
+  const receiptIntentRef = useRef<'add' | 'finish'>('add');
   // Set whenever a realtime echo arrives, so the session-sync effect can tell a
   // remote-driven run from a local one and avoid a multi-device sync ping-pong.
   const remoteUpdateRef = useRef(false);
@@ -222,6 +238,9 @@ export default function GroceriesPage() {
   const [aisleOrder, setAisleOrder] = useState<string[]>(AISLE_ORDER as string[]);
   const [collapsedAisles, setCollapsedAisles] = useState<Set<string>>(new Set());
   const [selectMode, setSelectMode] = useState(false);
+  // Reorder aisles (More menu, By aisle only): aisles fold to their headers
+  // and the drag grip shows at every width, phones included.
+  const [reorderMode, setReorderMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBulkSaving, setIsBulkSaving] = useState(false);
 
@@ -338,6 +357,37 @@ export default function GroceriesPage() {
     const dismissed = localStorage.getItem(SHOPPING_TOOLTIP_KEY);
     if (!dismissed) setShowShoppingTooltip(true);
   }, []);
+
+  // ── Collapse on scroll ─────────────────────────────────────────────────────
+  // Once the compact head (lede row + search row) has scrolled out of view, a
+  // slim sticky bar takes over its verbs. An IntersectionObserver on the head,
+  // not a per-frame scroll listener; root is the viewport, and IO clips by the
+  // route region's own scroller, so it works under the sidebar and the phone
+  // top bar alike. A callback ref, because the head mounts after loading.
+  const router = useRouter();
+  const [headEl, setHeadEl] = useState<HTMLDivElement | null>(null);
+  const [headGone, setHeadGone] = useState(false);
+  const searchWrapRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!headEl || typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver(([entry]) => {
+      // Only "scrolled past" counts; a head below the fold is not collapsed.
+      setHeadGone(!entry.isIntersecting && entry.boundingClientRect.top < (entry.rootBounds?.top ?? 0) + 1);
+    });
+    io.observe(headEl);
+    return () => io.disconnect();
+  }, [headEl]);
+
+  // Reorder is a By-aisle mode; leaving for One list ends it.
+  useEffect(() => { if (sortMode === 'flat') setReorderMode(false); }, [sortMode]);
+
+  // The bar's Search: back to the head, with the search box focused. Focus
+  // first (inside the tap, so a phone raises its keyboard), then glide.
+  const jumpToSearch = () => {
+    searchWrapRef.current?.querySelector('input')?.focus({ preventScroll: true });
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    headEl?.scrollIntoView({ block: 'start', behavior: reduce ? 'auto' : 'smooth' });
+  };
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -635,6 +685,8 @@ export default function GroceriesPage() {
     });
 
   const exitSelectMode = () => { setSelectMode(false); setSelectedIds(new Set()); };
+  const enterSelectMode = () => { setReorderMode(false); setSelectMode(true); };
+  const enterReorderMode = () => { exitSelectMode(); setReorderMode(true); };
 
   const bulkUpdate = async (payload: Partial<GroceryItem>) => {
     const ids = [...selectedIds];
@@ -668,15 +720,16 @@ export default function GroceriesPage() {
   // Finalize today's shop (FLUX-1559): freeze the session first (so its Costs
   // line survives — see the sync effect's closed_at early-return above), then
   // flip every item bought today to "Have it". Committed immediately; the 5s
-  // undo toast reverses both halves.
-  const doneShopping = async () => {
+  // undo toast reverses both halves. The finish sheet passes the session it
+  // just read and synced, since `session` state lags its own chained writes.
+  const doneShopping = async (sessionArg?: GrocerySession) => {
     if (!group?.id) return;
     const todayBought = items.filter((i) => isBoughtToday(i));
     if (!todayBought.length) return;
     void flushPending();
     const now = new Date().toISOString();
     const snapshot = todayBought.map((i) => ({ id: i.id, last_purchased_at: i.last_purchased_at }));
-    const activeSession = session;
+    const activeSession = sessionArg ?? session;
     // Only this call's own close should be reversed on undo — a session closed
     // by an earlier action must stay closed.
     const didClose = !!(activeSession && activeSession.tracking === 'on' && !activeSession.closed_at);
@@ -703,6 +756,107 @@ export default function GroceriesPage() {
       void commit();
     }, 5000);
     pendingRef.current = { commit, undo, timer };
+  };
+
+  // ── Today's shop: receipt and finish (HOUP-226, mobile twin in
+  // apps/mobile/src/app/(tabs)/groceries/index.tsx) ──────────────────────────
+  // One hidden file input serves both layers. `camera` asks phones for the
+  // camera straight away; without it the browser offers photos and files.
+  const pickReceipt = (intent: 'add' | 'finish', camera: boolean) => {
+    const input = receiptInputRef.current;
+    if (!input) return;
+    receiptIntentRef.current = intent;
+    if (camera) input.setAttribute('capture', 'environment');
+    else input.removeAttribute('capture');
+    input.click();
+  };
+
+  // Upload a picked receipt onto the trip, then read it (OCR via
+  // /api/parse-receipt -> receipt_total_cents + retailer; applyReceiptLearning
+  // writes learned prices to grocery_items). Returns the updated session, or
+  // null with `receiptError` set. Takes the session explicitly: the finish
+  // flow chains writes faster than `session` state updates.
+  const attachAndReadReceipt = async (file: File, base: GrocerySession): Promise<GrocerySession | null> => {
+    if (!group?.id) return null;
+    const supabase = createClient();
+    setReceiptBusy(true);
+    setReceiptError(null);
+    try {
+      const up = await uploadReceipt(supabase, group.id, base.session_date, file);
+      if (!up) {
+        setReceiptError('Receipt upload failed. Tap to try again.');
+        return null;
+      }
+      let updated = (await updateGrocerySession(supabase, base.id, { receipt_path: up.path, receipt_name: up.name })) ?? base;
+      onSessionChange(updated);
+      const parsed = await parseReceiptFile(file);
+      if (!parsed) {
+        setReceiptError("Couldn't read the receipt. Tap to try again.");
+        return null;
+      }
+      const patch: Partial<GrocerySession> = {};
+      if (parsed.total != null) patch.receipt_total_cents = Math.round(parsed.total * 100);
+      if (parsed.retailer) patch.retailer = parsed.retailer;
+      if (Object.keys(patch).length) updated = (await updateGrocerySession(supabase, updated.id, patch)) ?? updated;
+      onSessionChange(updated);
+      await applyReceiptLearning(supabase, group.id, parsed, items);
+      return updated;
+    } catch (err) {
+      console.error('receipt attach failed:', err);
+      setReceiptError('Receipt upload failed. Tap to try again.');
+      return null;
+    } finally {
+      setReceiptBusy(false);
+    }
+  };
+
+  // The finish sheet: optionally read a receipt, bring the Costs line up to
+  // the trip's effective total (receipt or override), then Done shopping. A
+  // failed read keeps the sheet open with its error.
+  const finishShop = async (file: File | null) => {
+    if (!session || !group?.id || receiptBusy || finishing) return;
+    setFinishing(true);
+    try {
+      let current: GrocerySession = session;
+      if (file) {
+        const read = await attachAndReadReceipt(file, session);
+        if (!read) return;
+        current = read;
+      }
+      try {
+        // Modules: the trip's cost line needs costs and groceries (module-features.ts).
+        current = await syncSession(createClient(), current, group.id, sessionSum, isFeatureEnabled('costs.from-groceries', getEnabledModules()));
+        setSession(current);
+      } catch (err) {
+        console.error('grocery session sync failed:', err);
+      }
+      setFinishOpen(false);
+      await doneShopping(current);
+      // Learned prices (and the closed session) come back with the refetch.
+      if (file) void fetchItems();
+    } finally {
+      setFinishing(false);
+    }
+  };
+
+  const onReceiptPicked = async (file: File) => {
+    if (receiptIntentRef.current === 'finish') {
+      await finishShop(file);
+      return;
+    }
+    if (!session) return;
+    if (await attachAndReadReceipt(file, session)) void fetchItems();
+  };
+
+  const overrideTotal = async (cents: number | null) => {
+    if (!session) return;
+    onSessionChange((await updateGrocerySession(createClient(), session.id, { override_total_cents: cents })) ?? session);
+  };
+
+  const stopTracking = async () => {
+    if (!session) return;
+    setFinishOpen(false);
+    onSessionChange((await updateGrocerySession(createClient(), session.id, { tracking: 'skipped' })) ?? session);
   };
 
   // ── Quick-add per aisle ──────────────────────────────────────────────────────
@@ -859,9 +1013,68 @@ export default function GroceriesPage() {
   const sessionSum = boughtToday.reduce((s, i) => s + (i.last_price ?? effectivePriceCents(i) ?? 0), 0);
   const sessionUnpriced = boughtToday.filter((i) => (i.last_price ?? effectivePriceCents(i)) == null).length;
 
-  // Aisle headers stick below the session bar when it's active, else to the very top.
+  // Today's shop floats (ShopTrackingPill) and the collapsed bar carries the
+  // cart total, so aisle headers stick to the very top, or just under the
+  // collapsed bar (56px: py-1.5 around 44px targets) while it shows.
   const sessionBarActive = session?.tracking === 'on';
-  const aisleStickyTop = sessionBarActive ? 'top-[52px]' : 'top-0';
+  const aisleStickyTop = headGone ? 'top-14' : 'top-0';
+  // Reorder only means something in By aisle.
+  const reordering = reorderMode && sortMode === 'aisle';
+
+  // Lede caption fragments (H6): what's left beyond the to-buy count. The
+  // estimate moved to the "This trip" card at the end of the list.
+  const heroCaption = (() => {
+    if (items.length === 0) return 'Your list is empty';
+    const fragments = [
+      needed === 0 ? 'All bought' : null,
+      haveCount > 0 ? `${haveCount} have` : null,
+      boughtToday.length > 0 ? `${boughtToday.length} got today` : null,
+    ].filter(Boolean);
+    return fragments.length ? fragments.join(' · ') : undefined;
+  })();
+  const cartCents = sessionBarActive && session
+    ? effectiveSessionTotal({ ...session, summed_total_cents: sessionSum })
+    : null;
+  const onSessionChange = (s: GrocerySession | null) => { sessionSyncRef.current = ''; setSession(s); };
+  // Purchasing session (to Costs when costs.from-groceries is on): the
+  // floating ask until decided, then the shop pill in the same spot. Both
+  // step aside while searching and while Select's bulk bar owns the bottom
+  // edge; the pill also yields to Reorder.
+  const showTrackPrompt = !searching && !selectMode && session === null && boughtToday.length > 0;
+  const showShopPill = !searching && !selectMode && !reordering && session?.tracking === 'on' && !session.closed_at;
+  const shopTotal = cartCents ?? sessionSum;
+  const openAdd = () => { setEditingItem(undefined); setDefaultAisle('other'); setIsModalOpen(true); };
+
+  // View menu (search row and collapsed bar): By aisle / One list and Only
+  // needed, moved out of the old control row. The HOUP-317 coupling stays in
+  // handleSortModeChange; the dot says Only needed is on (H2: a small dose).
+  const viewMenu = (
+    <PopMenu
+      align="right"
+      width="w-56"
+      triggerLabel={hideNonNeeded ? 'View options, Only needed is on' : 'View options'}
+      triggerClassName="relative grid h-11 w-11 flex-shrink-0 place-items-center rounded-lg border border-border bg-muted text-foreground transition-colors hover:bg-accent"
+      trigger={
+        <>
+          <SlidersHorizontal className="h-4 w-4" />
+          {hideNonNeeded && <span aria-hidden className="absolute right-2 top-2 h-2 w-2 rounded-full bg-primary" />}
+        </>
+      }
+    >
+      {(close) => (
+        <>
+          <MenuLabel>View</MenuLabel>
+          <MenuItem active={sortMode === 'aisle'} onClick={() => { handleSortModeChange('aisle'); close(); }}>By aisle</MenuItem>
+          <MenuItem active={sortMode === 'flat'} onClick={() => { handleSortModeChange('flat'); close(); }}>One list</MenuItem>
+          <MenuDivider />
+          <MenuItem active={hideNonNeeded} onClick={() => setHideNonNeeded((v) => !v)}>Only needed</MenuItem>
+        </>
+      )}
+    </PopMenu>
+  );
+
+  const iconButtonClass =
+    'grid h-11 w-11 flex-shrink-0 place-items-center rounded-lg border border-border bg-muted text-foreground transition-colors hover:bg-accent';
 
   // Group items by aisle (over the searched subset so non-matching items and
   // their now-empty aisles drop out).
@@ -908,106 +1121,157 @@ export default function GroceriesPage() {
   ];
 
   return (
-    <div className="space-y-5 p-4 md:p-6 max-w-3xl mx-auto pb-28">
-      {/* Lede (Hearth 5 / FLUX-278): one lede — H1/H6. Hearth v2 (Pulse):
-          the to-buy count is a Hero number, mirrors mobile's grammar. The
-          estimate lives in the pulse strip's Est total tile, not here (H1). */}
-      <div className="flex items-end justify-between gap-4 flex-wrap">
-        <HeroLede
-          value={needed}
-          label="to buy"
-          caption={(() => {
-            if (items.length === 0) return 'Your list is empty';
-            const fragments = [
-              needed === 0 ? 'All bought' : null,
-              haveCount > 0 ? `${haveCount} have` : null,
-              boughtToday.length > 0 ? `${boughtToday.length} got today` : null,
-            ].filter(Boolean);
-            return fragments.length ? fragments.join(' · ') : undefined;
-          })()}
-        />
-        {/* H5: Add item is the screen's one accent fill; every other head
-            action is neutral. Select and Library drop to icons on phones so
-            the row fits on one line at 390px (M2: 44px targets). */}
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Done shopping (FLUX-1559): finalizes today's shop — freezes the
-              session, then flips every got-it item to have-it. Today-scoped
-              (AC1). */}
-          {boughtToday.length > 0 && (
-            <button
-              onClick={() => void doneShopping()}
-              className="flex h-11 items-center gap-1.5 whitespace-nowrap rounded-lg border border-border bg-muted px-3 text-sm font-medium text-foreground hover:bg-accent transition-colors"
-            >
-              <PackageCheck className="hidden h-4 w-4 sm:block" />
-              Done shopping
-            </button>
+    // The floating ask or pill reserves room so it never covers the list's end.
+    <div className={cn('space-y-5 p-4 md:p-6 max-w-3xl mx-auto', showTrackPrompt || showShopPill ? 'pb-44' : 'pb-28')}>
+      {/* Collapsed bar: a zero-height sticky anchor (so it never shifts the
+          page or re-trips the observer) holding a slim bar that slides in
+          once the head has scrolled away. MO: transform + opacity only, base
+          swift-out in and fast ease-in out; reduced motion collapses the
+          tokens to 0ms. Full-bleed like the page's other sticky rows. */}
+      <div className="sticky top-0 z-30 -mx-4 h-0 md:-mx-6">
+        <div
+          inert={!headGone}
+          aria-hidden={!headGone}
+          className={cn(
+            'absolute inset-x-0 top-0 flex items-center gap-2 border-b border-border/50 bg-background/90 px-4 py-1.5 backdrop-blur-md transition-[opacity,transform] md:px-6',
+            headGone
+              ? 'translate-y-0 opacity-100 duration-[var(--motion-base)] ease-[var(--motion-ease-out)]'
+              : 'pointer-events-none -translate-y-2 opacity-0 duration-[var(--motion-fast)] ease-[var(--motion-ease-in)]'
           )}
-
-          {items.length > 0 && (
-            <button
-              onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
-              aria-label={selectMode ? 'Done selecting' : 'Select items'}
-              aria-pressed={selectMode}
-              className={cn(
-                'flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-lg border px-3 text-sm transition-colors',
-                selectMode
-                  ? 'bg-primary/15 border-primary/40 text-primary'
-                  : 'bg-muted border-border text-foreground hover:bg-accent'
+        >
+          {/* T-scale has no in-betweens: the small number takes the Display
+              step (heading face, tabular), the label and caption beside it. */}
+          <p className="flex min-w-0 flex-1 items-center gap-2">
+            <span className="font-heading text-2xl font-bold leading-none tracking-[-0.02em] tabular-nums text-foreground">{needed}</span>
+            <span className="flex min-w-0 flex-col">
+              <span className="font-heading text-sm font-semibold leading-tight text-muted-foreground">to buy</span>
+              {(cartCents != null || heroCaption) && (
+                <span className="truncate text-xs tabular-nums text-muted-foreground">
+                  {cartCents != null ? `${formatMoney(cartCents)} in cart` : heroCaption}
+                </span>
               )}
-            >
-              <CheckSquare className="h-4 w-4" />
-              <span className={selectMode ? undefined : 'hidden sm:inline'}>{selectMode ? 'Done' : 'Select'}</span>
+            </span>
+          </p>
+          {items.length > 0 && (
+            <button onClick={jumpToSearch} aria-label="Search" title="Search" className={iconButtonClass}>
+              <Search className="h-4 w-4" />
             </button>
           )}
-
-          {/* Rewards cards: one tap to the checkout barcode (a household
-              with one card lands straight on it). */}
-          <button
-            onClick={() => setCardsOpen(true)}
-            aria-label="Rewards cards"
-            title="Rewards cards"
-            className="flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-lg border border-border bg-muted px-3 text-sm text-foreground hover:bg-accent transition-colors"
-          >
+          <button onClick={() => setCardsOpen(true)} aria-label="Rewards cards" title="Rewards cards" className={iconButtonClass}>
             <WalletCards className="h-4 w-4" />
-            <span className="hidden sm:inline">Cards</span>
           </button>
-
-          <Link
-            href="/groceries/shelf-life"
-            aria-label="Item library"
-            className="flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-lg border border-border bg-muted px-3 text-sm text-foreground hover:bg-accent transition-colors"
-            title="Item library"
-          >
-            <BookOpen className="h-4 w-4" />
-            <span className="hidden sm:inline">Library</span>
-          </Link>
-
+          {items.length > 0 && viewMenu}
+          {/* H5: the bar replaces the head, so its Add is the same one accent. */}
           <button
-            onClick={() => { setEditingItem(undefined); setDefaultAisle('other'); setIsModalOpen(true); }}
-            className="flex h-11 items-center gap-1.5 whitespace-nowrap rounded-lg bg-primary px-3.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+            onClick={openAdd}
+            aria-label="Add item"
+            title="Add item"
+            className="grid h-11 w-11 flex-shrink-0 place-items-center rounded-full bg-primary text-primary-foreground transition-colors hover:bg-primary/90"
           >
-            <Plus className="h-4 w-4" />
-            Add item
+            <Plus className="h-5 w-5" />
           </button>
         </div>
       </div>
 
-      {/* Search */}
-      {items.length > 0 && (
-        <SectionSearchBar
-          value={search}
-          onChange={setSearch}
-          onSubmit={() => void submitSearchAdd()}
-          placeholder="Search or add, e.g. 2 milk"
-          className="max-w-none"
+      {/* Compact head (Hearth §13.2 Hero lede, inline): the to-buy Hero number
+          with its label and caption stacked beside it, then the head verbs on
+          the same row. H5: "+ Add" is the screen's one accent fill; Rewards
+          cards stays a one-tap shortcut to the checkout barcode (Guy), and
+          the rarer verbs (Select, Reorder, Library, Track shop, Reset) live
+          behind More. M2: every target is 44px. */}
+      <div ref={setHeadEl} className="!mt-0 space-y-3">
+        <HeroLede
+          layout="inline"
+          value={needed}
+          label="to buy"
+          caption={heroCaption}
+          trailing={
+            <>
+              <button onClick={() => setCardsOpen(true)} aria-label="Rewards cards" title="Rewards cards" className={iconButtonClass}>
+                <WalletCards className="h-4 w-4" />
+              </button>
+              {/* A mode is never stuck behind a menu: while Select or Reorder
+                  is on, More yields to a visible Done. */}
+              {selectMode || reordering ? (
+                <button
+                  onClick={() => { exitSelectMode(); setReorderMode(false); }}
+                  className="flex h-11 flex-shrink-0 items-center whitespace-nowrap rounded-lg border border-primary/40 bg-primary/15 px-3 text-sm font-medium tabular-nums text-primary transition-colors hover:bg-primary/20"
+                >
+                  {selectMode && selectedIds.size > 0 ? `${selectedIds.size} selected` : 'Done'}
+                </button>
+              ) : (
+                <PopMenu
+                  align="right"
+                  width="w-56"
+                  triggerLabel="More"
+                  triggerClassName={iconButtonClass}
+                  trigger={<MoreHorizontal className="h-4 w-4" />}
+                >
+                  {(close) => (
+                    <>
+                      {items.length > 0 && (
+                        <MenuItem icon={<CheckSquare className="h-4 w-4" />} onClick={() => { enterSelectMode(); close(); }}>
+                          Select
+                        </MenuItem>
+                      )}
+                      {sortMode === 'aisle' && orderedAisles.length > 1 && (
+                        <MenuItem icon={<ArrowUpDown className="h-4 w-4" />} onClick={() => { enterReorderMode(); close(); }}>
+                          Reorder aisles
+                        </MenuItem>
+                      )}
+                      <MenuItem icon={<BookOpen className="h-4 w-4" />} onClick={() => { close(); router.push('/groceries/shelf-life'); }}>
+                        Item library
+                      </MenuItem>
+                      {/* The quiet way back after "Not today" or stopping. */}
+                      {session?.tracking === 'skipped' && (
+                        <MenuItem
+                          icon={<Receipt className="h-4 w-4" />}
+                          onClick={async () => { close(); onSessionChange(await updateGrocerySession(createClient(), session.id, { tracking: 'on' })); }}
+                        >
+                          Track shop
+                        </MenuItem>
+                      )}
+                      {bought > 0 && (
+                        <MenuItem icon={<RotateCcw className="h-4 w-4" />} onClick={() => { close(); void resetBought(); }}>
+                          Reset bought ({bought})
+                        </MenuItem>
+                      )}
+                    </>
+                  )}
+                </PopMenu>
+              )}
+              <button
+                onClick={openAdd}
+                className="flex h-11 flex-shrink-0 items-center gap-1 whitespace-nowrap rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+              >
+                <Plus className="h-4 w-4" />
+                Add
+              </button>
+            </>
+          }
         />
-      )}
 
-      {/* Re-add suggestions as compact chips (replaced both the Buy again
-          chips and the Suggest re-add rows). Steps aside while searching so
+        {/* Search row: the search box, then View (sort mode + Only needed). */}
+        {items.length > 0 && (
+          <div ref={searchWrapRef} className="flex items-center gap-2">
+            <SectionSearchBar
+              value={search}
+              onChange={setSearch}
+              onSubmit={() => void submitSearchAdd()}
+              placeholder="Search or add, e.g. 2 milk"
+              className="max-w-none"
+            />
+            {viewMenu}
+          </div>
+        )}
+      </div>
+
+      {/* Running low (re-add suggestions) as its own group, in the aisle
+          header grammar, ahead of the aisles. Steps aside while searching so
           the results sit directly under the search bar. */}
       {!searching && (
         <ReAddSuggestions
+          variant="group"
           runningLow={reAddSuggestions}
           onAdd={(item) => groceryUndo.needAgain(item)}
           onAddAll={() => groceryUndo.needAgain(reAddSuggestions)}
@@ -1015,58 +1279,6 @@ export default function GroceriesPage() {
           dismissAction={suggestDismiss.dismissAction}
           onDismiss={suggestDismiss.dismiss}
         />
-      )}
-
-      {/* Pulse strip (Hearth 5 / FLUX-278): need-soon (lead, per the parent's
-          resolved default) · unpriced · est total. Inset, no border (H4).
-          Need soon and Unpriced only show when they have something to say;
-          Est total always holds the strip. */}
-      {buyableItems.length > 0 && !searching && (
-        <div className="space-y-2">
-          <div className="flex gap-2">
-            {reAddSuggestions.length > 0 && (
-              <PulseTile className="flex-1" label="Need soon" value={reAddSuggestions.length} tone="warning" />
-            )}
-            {unpricedCount > 0 && (
-              <PulseTile className="flex-1" label="Unpriced" value={unpricedCount} tone="warning" />
-            )}
-            <PulseTile className="flex-1" label="Est total" value={formatMoney(totalEstimate)} />
-          </div>
-          {(bought > 0 || session?.tracking === 'skipped') && (
-            <div className="flex justify-end gap-1">
-              {/* After "Not today" the way back is this small link, not a
-                  full-width pill (the ask itself floats). */}
-              {session?.tracking === 'skipped' && (
-                <TrackShopLink session={session} onChange={(s) => { sessionSyncRef.current = ''; setSession(s); }} />
-              )}
-              {bought > 0 && (
-              <button
-                onClick={() => void resetBought()}
-                className="text-xs text-muted-foreground hover:text-foreground rounded-full px-2 py-1 hover:bg-muted transition-colors"
-              >
-                Reset bought ({bought})
-              </button>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Purchasing session (→ Costs when costs.from-groceries is on). This,
-          the pulse strip, re-add suggestions and list controls step aside
-          while searching so the results sit directly under the search bar. */}
-      {!searching && (
-      <GrocerySessionPanel
-        groupId={group.id}
-        session={session}
-        summedCents={sessionSum}
-        boughtCount={boughtToday.length}
-        unpricedCount={sessionUnpriced}
-        items={items}
-        onChange={(s) => { sessionSyncRef.current = ''; setSession(s); }}
-        onItemsChanged={() => { void fetchItems(); }}
-        hidePrompt={selectMode}
-      />
       )}
 
       {/* Empty state */}
@@ -1082,43 +1294,6 @@ export default function GroceriesPage() {
               Add starter staples
             </button>
           )}
-        </div>
-      )}
-
-
-      {/* Controls — "Only needed" (H5) lives here, right above the list it
-          scopes, instead of the top action cluster. HOUP-317: gate changed
-          from `orderedAisles.length > 0` to `items.length > 0` — orderedAisles
-          is itself "Only needed"-filtered, so One list with nothing needed
-          would otherwise lose this row and strand the user with no "Show all"
-          escape. This also fixes that same case for By aisle (the one
-          intended exception to "By aisle is unchanged"). */}
-      {/* The old "N to shop" count left this row: it restated the Hero's
-          to-buy number with a different value (H1). */}
-      {items.length > 0 && !searching && (
-        <div className="flex items-center justify-between gap-2">
-          <SegmentedControl
-            options={[{ value: 'aisle', label: 'By aisle' }, { value: 'flat', label: 'One list' }]}
-            value={sortMode}
-            onChange={handleSortModeChange}
-            ariaLabel="Groceries list view"
-            className="min-h-[44px] w-fit shrink-0 whitespace-nowrap"
-          />
-          {/* A toggle chip: the label stays put, the accent tint says it's on. */}
-          <button
-            onClick={() => setHideNonNeeded((v) => !v)}
-            title="Show only items still needed"
-            aria-pressed={hideNonNeeded}
-            className={cn(
-              'flex min-h-[44px] items-center gap-1.5 whitespace-nowrap rounded-lg border px-3 py-2 text-sm transition-colors',
-              hideNonNeeded
-                ? 'bg-primary/15 border-primary/40 text-primary'
-                : 'bg-muted border-border text-foreground hover:bg-accent'
-            )}
-          >
-            <ShoppingBag className="h-4 w-4" />
-            Only needed
-          </button>
         </div>
       )}
 
@@ -1241,11 +1416,16 @@ export default function GroceriesPage() {
                           aisleStickyTop
                         )}
                       >
+                        {/* The grip shows on wide screens always, and at every
+                            width in Reorder aisles (then at a 44px target, M2). */}
                         {!disabled && (
                           <span
                             {...attributes}
                             {...(listeners ?? {})}
-                            className="hidden sm:grid place-items-center text-muted-foreground/70 hover:text-muted-foreground cursor-grab active:cursor-grabbing flex-shrink-0 touch-none"
+                            className={cn(
+                              'place-items-center text-muted-foreground/70 hover:text-muted-foreground cursor-grab active:cursor-grabbing flex-shrink-0 touch-none',
+                              reordering ? 'grid -my-2 h-11 w-8 text-muted-foreground' : 'hidden sm:grid'
+                            )}
                             title="Drag to reorder aisle"
                           >
                             <GripVertical className="h-3.5 w-3.5" />
@@ -1285,7 +1465,9 @@ export default function GroceriesPage() {
                         </div>
                       </div>
 
-                      {!collapsed && (
+                      {/* Reorder aisles folds every aisle to its header so the
+                          drag is short; the saved collapse state is untouched. */}
+                      {!collapsed && !reordering && (
                         <div className="space-y-2">
                           {sortedItems.length > 0 ? (
                             <ListGroup>
@@ -1360,6 +1542,40 @@ export default function GroceriesPage() {
         </DndContext>
       )}
 
+      {/* This trip (end of the list): the estimate the old pulse strip's Est
+          total tile carried, as a card's Display lede (H1: never a second
+          Hero), its caption, then the trip's quiet verbs as secondary pills.
+          Hidden while searching and when there's nothing to buy. */}
+      {!searching && buyableItems.length > 0 && (
+        <section aria-label="This trip" className="rounded-3xl border border-border/60 bg-card p-4 shadow-[var(--card-shadow)]">
+          <p className="cap-inscription text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">This trip</p>
+          <p className="mt-1 font-heading text-2xl font-bold tracking-[-0.02em] tabular-nums text-foreground">~{formatMoney(totalEstimate)}</p>
+          <p className="text-xs tabular-nums text-muted-foreground">
+            estimated for {buyableItems.length} item{buyableItems.length === 1 ? '' : 's'}
+            {unpricedCount > 0 && <span className="text-warning"> · {unpricedCount} unpriced</span>}
+          </p>
+          {(session?.tracking === 'skipped' || bought > 0 || (!sessionBarActive && boughtToday.length > 0)) && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {/* Done shopping lives on the shop pill while tracking; with
+                  no tracked shop it stays reachable here (FLUX-1559). */}
+              {!sessionBarActive && boughtToday.length > 0 && (
+                <button onClick={() => void doneShopping()} className={TRIP_PILL_CLASS}>
+                  Done shopping
+                </button>
+              )}
+              {session?.tracking === 'skipped' && (
+                <TrackShopLink session={session} onChange={onSessionChange} className={TRIP_PILL_CLASS} />
+              )}
+              {bought > 0 && (
+                <button onClick={() => void resetBought()} className={TRIP_PILL_CLASS}>
+                  Reset bought ({bought})
+                </button>
+              )}
+            </div>
+          )}
+        </section>
+      )}
+
       {/* Search add options — under the matches (or alone when nothing matched). */}
       {items.length > 0 && searching && (
         <GrocerySearchAdd
@@ -1378,7 +1594,7 @@ export default function GroceriesPage() {
           coupling hides this incidentally on entry, but "Only needed" stays
           live inside One list (AC 5), so turning it off there would
           otherwise bring this back under a list showing no aisles. */}
-      {!hideNonNeeded && !searching && !selectMode && sortMode === 'aisle' && (
+      {!hideNonNeeded && !searching && !selectMode && !reordering && sortMode === 'aisle' && (
         <div>
           {showAddAisle ? (
             <div className="space-y-3 rounded-3xl border border-border/60 bg-card p-4 shadow-[var(--card-shadow)]">
@@ -1514,6 +1730,47 @@ export default function GroceriesPage() {
           </button>
         </div>
       )}
+
+      {showTrackPrompt && (
+        <TrackShopPrompt groupId={group.id} boughtCount={boughtToday.length} summedCents={sessionSum} onChange={onSessionChange} />
+      )}
+
+      {showShopPill && session && (
+        <ShopTrackingPill
+          session={session}
+          total={shopTotal}
+          boughtCount={boughtToday.length}
+          onOverrideTotal={(cents) => void overrideTotal(cents)}
+          onReceipt={() => pickReceipt('add', true)}
+          receiptBusy={receiptBusy}
+          receiptError={receiptError}
+          onDone={() => { setReceiptError(null); setFinishOpen(true); }}
+        />
+      )}
+
+      <FinishShopSheet
+        open={finishOpen}
+        onOpenChange={setFinishOpen}
+        session={session}
+        total={shopTotal}
+        boughtCount={boughtToday.length}
+        unpricedCount={sessionUnpriced}
+        onOverrideTotal={(cents) => void overrideTotal(cents)}
+        onScan={() => pickReceipt('finish', true)}
+        onPickPhoto={() => pickReceipt('finish', false)}
+        onFinishWithout={() => void finishShop(null)}
+        onStopTracking={() => void stopTracking()}
+        busy={receiptBusy || finishing}
+        error={receiptError}
+      />
+
+      <input
+        ref={receiptInputRef}
+        type="file"
+        accept="image/*,application/pdf"
+        className="hidden"
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) void onReceiptPicked(f); e.target.value = ''; }}
+      />
 
       {/* Undo toast */}
       {toast && (

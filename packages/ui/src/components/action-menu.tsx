@@ -7,6 +7,7 @@
 import * as React from 'react';
 import { Modal, Pressable, Text, useWindowDimensions, View } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { Check } from 'lucide-react-native';
 import { cn } from '../lib/cn';
 import { select } from '../lib/haptics';
 import { useThemeMaterial } from '../theme/theme-provider';
@@ -22,6 +23,8 @@ export interface ActionMenuItem {
   key: string;
   label: string;
   Icon?: React.ComponentType<{ size?: number; className?: string }>;
+  /** A toggle or one-of choice: a coral check marks it when true. */
+  checked?: boolean;
   onPress: () => void;
 }
 
@@ -77,6 +80,7 @@ export function ActionMenu({ anchor, onClose, items }: ActionMenuProps) {
           <Pressable
             key={item.key}
             accessibilityRole="menuitem"
+            accessibilityState={item.checked != null ? { checked: item.checked } : undefined}
             onPress={() => {
               select();
               item.onPress();
@@ -85,7 +89,8 @@ export function ActionMenu({ anchor, onClose, items }: ActionMenuProps) {
             className={cn('flex-row items-center gap-2.5 px-3.5 active:bg-muted', index > 0 && 'border-t border-border/60')}
           >
             {item.Icon && <item.Icon size={16} className="text-muted-foreground" />}
-            <Text className="text-body text-foreground">{item.label}</Text>
+            <Text className="flex-1 text-body text-foreground">{item.label}</Text>
+            {item.checked && <Check size={16} className="text-primary" />}
           </Pressable>
         ))}
       </Animated.View>

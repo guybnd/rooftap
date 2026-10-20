@@ -13,6 +13,7 @@ vi.mock("@/lib/supabase/admin", () => ({
         return builder;
       },
       single: async () => ({ data: null, error: null }),
+      maybeSingle: async () => ({ data: null, error: null }),
     };
     return { from: () => builder };
   },
@@ -41,6 +42,18 @@ describe("MCP route auth gate (auth rejection matrix)", () => {
 
   it("401s for a well-formed but unknown Bearer token", async () => {
     const res = await POST(request({ authorization: "Bearer houp_pat_doesnotexist" }));
+    expect(res.status).toBe(401);
+  });
+
+  it("points sign-in capable clients at OAuth discovery on the 401", async () => {
+    const res = await POST(request());
+    expect(res.headers.get("www-authenticate")).toBe(
+      `Bearer resource_metadata="http://localhost/.well-known/oauth-protected-resource"`,
+    );
+  });
+
+  it("401s for an unknown sign-in access token", async () => {
+    const res = await POST(request({ authorization: "Bearer rt_oat_doesnotexist" }));
     expect(res.status).toBe(401);
   });
 

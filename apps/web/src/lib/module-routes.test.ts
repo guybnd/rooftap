@@ -40,6 +40,9 @@ const EXPECTED: Record<string, string | null> = {
   welcome: null,
   callback: null,
   "calendar-callback": null,
+  // MCP sign-in: OAuth discovery and the consent page (lib/mcp-oauth.ts)
+  ".well-known": null,
+  oauth: null,
 };
 
 const APP_DIR = fileURLToPath(new URL("../app", import.meta.url));

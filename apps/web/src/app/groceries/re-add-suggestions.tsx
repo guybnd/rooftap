@@ -6,6 +6,10 @@
 // adds it back (the caller shows the Undo pill). Holding (with the shared
 // hold fill and haptic) or right-clicking a chip opens Snooze / Stop
 // suggesting; Full review (next to Show more) expands the full rows (emoji, days, Add / Snooze / X).
+// `variant="group"` is the Groceries page's "Running low" group: a header
+// row in the aisle-header grammar (Hearth §6 Group header: micro label +
+// count, text verbs on the right) with the chips wrapping under it. The Home
+// widget keeps the default look.
 // Mirrors apps/mobile/src/features/groceries/re-add-suggestions.tsx.
 
 import { useEffect, useState } from 'react';
@@ -39,9 +43,16 @@ interface ReAddSuggestionsProps {
   onDismiss: (item: SuggestReAddItem, action: GroceryDismissAction) => void;
   /** Chips shown before "Show N more"; the Home card passes a smaller cap. */
   cap?: number;
+  /** "group": the Groceries list's "Running low" group header. Default: the
+   *  standalone block the Home card uses. */
+  variant?: 'default' | 'group';
 }
 
-export function ReAddSuggestions({ runningLow, onAdd, onAddAll, onSnooze, dismissAction, onDismiss, cap = RE_ADD_CHIP_CAP }: ReAddSuggestionsProps) {
+// M2: the group header's text verbs whisper visually but keep a 44px hit.
+const GROUP_VERB_CLASS =
+  'min-h-[44px] rounded-lg px-2 text-xs font-medium text-primary hover:bg-primary/10 transition-colors';
+
+export function ReAddSuggestions({ runningLow, onAdd, onAddAll, onSnooze, dismissAction, onDismiss, cap = RE_ADD_CHIP_CAP, variant = 'default' }: ReAddSuggestionsProps) {
   const [reviewing, setReviewing] = useState(false);
   const [showAllLow, setShowAllLow] = useState(false);
   useEffect(() => {
@@ -54,6 +65,67 @@ export function ReAddSuggestions({ runningLow, onAdd, onAddAll, onSnooze, dismis
   const hiddenLow = showAllLow ? 0 : Math.max(0, runningLow.length - cap);
   const visibleLow = hiddenLow > 0 ? runningLow.slice(0, cap) : runningLow;
 
+  // A bulk add gets a confirm on top of the Undo pill (Guy, 2026-10-18).
+  const confirmAddAll = () => {
+    if (confirm(`Add all ${runningLow.length} suggestions to the list?`)) onAddAll();
+  };
+
+  const body = reviewing ? (
+    <SuggestReAddSection
+      bare
+      items={runningLow}
+      onAdd={onAdd}
+      onSnooze={onSnooze}
+      dismissAction={dismissAction}
+      onDismiss={onDismiss}
+    />
+  ) : (
+    <div className="flex flex-wrap gap-2">
+      {visibleLow.map((item) => (
+        <RunningLowChip
+          key={item.id}
+          item={item}
+          onAdd={() => onAdd(item)}
+          onSnooze={(untilISO) => onSnooze(item, untilISO)}
+          dismissAction={dismissAction}
+          onDismiss={(action) => onDismiss(item, action)}
+          tall={variant === 'group'}
+        />
+      ))}
+      {variant === 'group' && runningLow.length > cap && (
+        <button onClick={() => setShowAllLow((v) => !v)} className={GROUP_VERB_CLASS}>
+          {hiddenLow > 0 ? `Show ${hiddenLow} more` : 'Show fewer'}
+        </button>
+      )}
+    </div>
+  );
+
+  if (variant === 'group') {
+    return (
+      <section aria-label="Running low" className="space-y-1.5">
+        {/* Same row as an aisle header (Hearth §6 Group header); no card
+            around the chips, they sit on the ground like an aisle's list (H4). */}
+        <div className="flex items-center gap-2 px-1">
+          <span className="cap-inscription text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+            Running low
+          </span>
+          <span className="text-xs tabular-nums text-muted-foreground/70">{runningLow.length}</span>
+          <div className="-my-2 ml-auto flex items-center">
+            {runningLow.length >= 2 && (
+              <button onClick={confirmAddAll} className={GROUP_VERB_CLASS}>
+                Add all
+              </button>
+            )}
+            <button onClick={() => setReviewing((v) => !v)} aria-expanded={reviewing} className={GROUP_VERB_CLASS}>
+              {reviewing ? 'Done' : 'Review'}
+            </button>
+          </div>
+        </div>
+        {body}
+      </section>
+    );
+  }
+
   return (
     <div className="space-y-2">
       <div className="flex min-h-[36px] items-center gap-2 px-1">
@@ -62,10 +134,7 @@ export function ReAddSuggestions({ runningLow, onAdd, onAddAll, onSnooze, dismis
         </p>
         {runningLow.length >= 2 && (
           <button
-            onClick={() => {
-              // A bulk add gets a confirm on top of the Undo pill (Guy, 2026-10-18).
-              if (confirm(`Add all ${runningLow.length} suggestions to the list?`)) onAddAll();
-            }}
+            onClick={confirmAddAll}
             className="min-h-[36px] rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-primary hover:bg-primary/10 transition-colors"
           >
             Add all {runningLow.length}
@@ -73,29 +142,7 @@ export function ReAddSuggestions({ runningLow, onAdd, onAddAll, onSnooze, dismis
         )}
       </div>
 
-      {reviewing ? (
-        <SuggestReAddSection
-          bare
-          items={runningLow}
-          onAdd={onAdd}
-          onSnooze={onSnooze}
-          dismissAction={dismissAction}
-          onDismiss={onDismiss}
-        />
-      ) : (
-        <div className="flex flex-wrap gap-2">
-          {visibleLow.map((item) => (
-            <RunningLowChip
-              key={item.id}
-              item={item}
-              onAdd={() => onAdd(item)}
-              onSnooze={(untilISO) => onSnooze(item, untilISO)}
-              dismissAction={dismissAction}
-              onDismiss={(action) => onDismiss(item, action)}
-            />
-          ))}
-        </div>
-      )}
+      {body}
 
       {/* Footer: more chips, or the full rows with every control. */}
       <div className="flex flex-wrap gap-2 px-1">
@@ -119,12 +166,15 @@ function RunningLowChip({
   onSnooze,
   dismissAction,
   onDismiss,
+  tall,
 }: {
   item: SuggestReAddItem;
   onAdd: () => void;
   onSnooze: (untilISO: string) => void;
   dismissAction: GroceryDismissAction | null;
   onDismiss: (action: GroceryDismissAction) => void;
+  /** M2: the Groceries group's chips take the full 44px target. */
+  tall?: boolean;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const { handlers, consumeClick, progress } = useLongPress(() => setMenuOpen(true), true, {
@@ -141,7 +191,7 @@ function RunningLowChip({
       align="left"
       width="w-60"
       triggerLabel={`Need ${item.name} again, ${item.daysOverdue} days past shelf life. Hold for more.`}
-      triggerClassName={CHIP_CLASS}
+      triggerClassName={tall ? CHIP_CLASS.replace('min-h-[36px]', 'min-h-[44px]') : CHIP_CLASS}
       onTriggerClick={() => {
         if (consumeClick()) return;
         onAdd();

@@ -15,5 +15,9 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    // Tests that `await import()` a route or environment.ts pay the cold
+    // transform of its whole dependency chain on first import, which passed
+    // 5s on the self-hosted Windows runner. Same reasoning as apps/mobile.
+    testTimeout: 15000,
   },
 });

@@ -11,10 +11,20 @@
 import * as React from 'react';
 import { View } from 'react-native';
 import { Server } from 'lucide-react-native';
-import { Text } from '@homeup/ui';
+import {
+  Button,
+  ListItem,
+  ListItemContent,
+  ListItemMeta,
+  ListItemTitle,
+  ListItemTrailing,
+  Text,
+  haptics,
+} from '@homeup/ui';
 import { useDataCache } from '@/lib/data-cache';
+import { getStoredServer } from '@/lib/server-config';
 import { getCurrentSupabaseClient } from '@/lib/supabase-client';
-import { MCP_TOOLS, mcpToolsForModules, useModules, type McpToolMeta } from '@homeup/core';
+import { MCP_TOOLS, mcpToolsForModules, timeAgo, useModules, type McpToolMeta } from '@homeup/core';
 import {
   SavingHint,
   SettingsCheckbox,
@@ -173,7 +183,108 @@ export function McpSettings() {
         )}
       </View>
 
+      <ConnectedApps />
+
       <SavingHint show={saving} />
     </SettingsPanel>
+  );
+}
+
+interface Connection {
+  id: string;
+  clientName: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+}
+
+// Same session-bearer pattern as pat-settings.tsx's patRequest.
+async function connectionsRequest(method: 'GET' | 'DELETE', id?: string): Promise<{ res: Response; origin: string }> {
+  const server = await getStoredServer();
+  if (!server) throw new Error('No server configured.');
+  const {
+    data: { session },
+  } = await getCurrentSupabaseClient().auth.getSession();
+  if (!session) throw new Error('Not signed in.');
+  const query = id ? `?id=${encodeURIComponent(id)}` : '';
+  const res = await fetch(`${server.origin}/api/oauth/connections${query}`, {
+    method,
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  });
+  return { res, origin: server.origin };
+}
+
+// Port of web's ConnectedApps (components/mcp-settings.tsx): apps connected
+// by signing in to Rooftap, with the address to give them.
+function ConnectedApps() {
+  const [connections, setConnections] = React.useState<Connection[] | null>(null);
+  const [origin, setOrigin] = React.useState('');
+  const [error, setError] = React.useState<string | null>(null);
+
+  const load = React.useCallback(async () => {
+    try {
+      const { res, origin: serverOrigin } = await connectionsRequest('GET');
+      setOrigin(serverOrigin);
+      if (!res.ok) throw new Error(`Server responded ${res.status}`);
+      setConnections((await res.json()).connections);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not load connected apps.');
+    }
+  }, []);
+
+  React.useEffect(() => {
+    load();
+  }, [load]);
+
+  const disconnect = React.useCallback(
+    async (id: string) => {
+      setError(null);
+      try {
+        const { res } = await connectionsRequest('DELETE', id);
+        if (!res.ok) throw new Error();
+        haptics.warn();
+      } catch {
+        setError('Could not disconnect that app.');
+      }
+      await load();
+    },
+    [load]
+  );
+
+  return (
+    <View className="gap-2">
+      <SettingsLabel>Connected apps</SettingsLabel>
+      <Text className="px-1 text-caption text-muted-foreground">
+        Apps like Claude can connect by signing in. Add this address as a custom connector:{' '}
+        <Text selectable className="font-mono text-caption text-foreground">
+          {origin}/api/mcp
+        </Text>
+      </Text>
+      {connections && connections.length > 0 && (
+        <SettingsInset>
+          {connections.map((c) => (
+            <ListItem key={c.id}>
+              <ListItemContent>
+                <ListItemTitle>{c.clientName}</ListItemTitle>
+                <ListItemMeta>
+                  {/* H6: one middle dot per line. */}
+                  <Text numberOfLines={1} className="text-caption text-muted-foreground">
+                    Connected {timeAgo(c.createdAt)}
+                    {' · '}
+                    {c.lastUsedAt ? `last used ${timeAgo(c.lastUsedAt)}` : 'never used'}
+                  </Text>
+                </ListItemMeta>
+              </ListItemContent>
+              <ListItemTrailing className="mt-0">
+                {/* E4: destructive is danger text, no fill. */}
+                <Button size="sm" variant="ghost" onPress={() => disconnect(c.id)} textClassName="text-destructive">
+                  Disconnect
+                </Button>
+              </ListItemTrailing>
+            </ListItem>
+          ))}
+        </SettingsInset>
+      )}
+      {error && <Text className="px-1 text-caption text-destructive">{error}</Text>}
+    </View>
   );
 }

@@ -40,6 +40,11 @@ export async function middleware(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/api/setup/status") ||
     request.nextUrl.pathname.startsWith("/api/setup/first-user") ||
     request.nextUrl.pathname.startsWith("/api/mcp") ||
+    // MCP sign-in (lib/mcp-oauth.ts): discovery, app registration and token
+    // exchange are called by the connecting app, never with a session.
+    request.nextUrl.pathname.startsWith("/.well-known/oauth-") ||
+    request.nextUrl.pathname.startsWith("/api/oauth/register") ||
+    request.nextUrl.pathname.startsWith("/api/oauth/token") ||
     // HOUP-69: the native app's server picker calls this before it has any
     // session — must stay unauthenticated.
     request.nextUrl.pathname.startsWith("/api/public-config");
@@ -75,6 +80,11 @@ export async function middleware(request: NextRequest) {
     }
     const url = request.nextUrl.clone();
     url.pathname = "/login";
+    // MCP sign-in consent comes back to itself after login.
+    if (request.nextUrl.pathname.startsWith("/oauth/")) {
+      url.search = "";
+      url.searchParams.set("next", request.nextUrl.pathname + request.nextUrl.search);
+    }
     return NextResponse.redirect(url);
   }
 

@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/client";
 import { normalizeIdentifier } from '@homeup/core';
+import { safeNextPath, NEXT_PATH_COOKIE } from "@/lib/next-path";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useState, useEffect, Suspense } from "react";
 
@@ -9,6 +10,8 @@ function LoginContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const error = searchParams.get("error");
+  // Where to go after signing in (MCP sign-in consent sends people here).
+  const next = safeNextPath(searchParams.get("next"));
   const [showDevLogin, setShowDevLogin] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -45,7 +48,7 @@ function LoginContent() {
         setAuthError(signInError.message);
         return;
       }
-      router.push("/");
+      router.push(next);
     } catch {
       setAuthError("Network error");
     } finally {
@@ -55,6 +58,9 @@ function LoginContent() {
 
   async function signInWithGoogle() {
     const supabase = createClient();
+    // /callback reads this back; a query string on redirectTo would have to be
+    // in Supabase's allowed redirect list.
+    if (next !== "/") document.cookie = `${NEXT_PATH_COOKIE}=${encodeURIComponent(next)}; path=/; max-age=600; samesite=lax`;
     await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {

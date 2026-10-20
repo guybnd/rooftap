@@ -1,5 +1,46 @@
+diff --git a/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidget.java b/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidget.java
+index a7079f9..1c0c02d 100644
+--- a/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidget.java
++++ b/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidget.java
+@@ -170,15 +170,28 @@ public class RNWidget {
+         rootWidget.offsetDescendantRectToMyCoords(clickableWidget, offsetViewBounds);
+         RemoteViews clickableRemoteView = new RemoteViews(appContext.getPackageName(), R.layout.rn_widget_clickable);
+ 
+-        clickableRemoteView.setViewPadding(
+-            R.id.rn_widget_clickable_positioner,
+-            offsetViewBounds.left,
+-            offsetViewBounds.top,
+-            RNWidgetUtil.dpToPx(appContext, RNWidgetUtil.getWidgetWidth(appContext, widgetId)) - offsetViewBounds.right,
+-            0
+-        );
++        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
++            // HomeUp patch: place the tap area in dp, resolved by the launcher, not in this
++            // app's pixels. A launcher that lays the widget out at another density (the phone's
++            // Display size setting) stretches the picture to its box (fitXY), and pixel offsets
++            // left the tap areas short of the rows they belong to.
++            float density = appContext.getResources().getDisplayMetrics().density;
++            int widthPx = RNWidgetUtil.dpToPx(appContext, RNWidgetUtil.getWidgetWidth(appContext, widgetId));
++            clickableRemoteView.setViewLayoutMargin(R.id.rn_widget_clickable_area, RemoteViews.MARGIN_LEFT, offsetViewBounds.left / density, TypedValue.COMPLEX_UNIT_DIP);
++            clickableRemoteView.setViewLayoutMargin(R.id.rn_widget_clickable_area, RemoteViews.MARGIN_TOP, offsetViewBounds.top / density, TypedValue.COMPLEX_UNIT_DIP);
++            clickableRemoteView.setViewLayoutMargin(R.id.rn_widget_clickable_area, RemoteViews.MARGIN_RIGHT, (widthPx - offsetViewBounds.right) / density, TypedValue.COMPLEX_UNIT_DIP);
++            clickableRemoteView.setViewLayoutHeight(R.id.rn_widget_clickable_area, offsetViewBounds.height() / density, TypedValue.COMPLEX_UNIT_DIP);
++        } else {
++            clickableRemoteView.setViewPadding(
++                R.id.rn_widget_clickable_positioner,
++                offsetViewBounds.left,
++                offsetViewBounds.top,
++                RNWidgetUtil.dpToPx(appContext, RNWidgetUtil.getWidgetWidth(appContext, widgetId)) - offsetViewBounds.right,
++                0
++            );
+ 
+-        clickableRemoteView.setInt(R.id.rn_widget_clickable_area, "setMinimumHeight", offsetViewBounds.height());
++            clickableRemoteView.setInt(R.id.rn_widget_clickable_area, "setMinimumHeight", offsetViewBounds.height());
++        }
+ 
+         // The clickable overlay draws its own ripple, so match it to the view's radius when supported
+         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && clickableView.getBorderRadius() > 0f) {
 diff --git a/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidgetUtil.java b/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidgetUtil.java
-index a057c09..451b983 100644
+index a057c09..8e88ef9 100644
 --- a/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidgetUtil.java
 +++ b/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidgetUtil.java
 @@ -6,7 +6,11 @@ import android.appwidget.AppWidgetManager;
@@ -81,3 +122,47 @@ index a057c09..451b983 100644
      private static int getWidgetSizeInDp(Context context, int widgetId, String key) {
          return AppWidgetManager.getInstance(context).getAppWidgetOptions(widgetId).getInt(key, 0);
      }
+diff --git a/node_modules/react-native-android-widget/android/src/main/res/layout-night/rn_widget.xml b/node_modules/react-native-android-widget/android/src/main/res/layout-night/rn_widget.xml
+index e00a8c1..599756e 100644
+--- a/node_modules/react-native-android-widget/android/src/main/res/layout-night/rn_widget.xml
++++ b/node_modules/react-native-android-widget/android/src/main/res/layout-night/rn_widget.xml
+@@ -8,7 +8,7 @@
+         android:layout_width="match_parent"
+         android:layout_height="match_parent"
+         android:background="@android:color/transparent"
+-        android:scaleType="matrix"
++        android:scaleType="fitXY"
+         android:visibility="gone" />
+ 
+     <ImageView
+@@ -16,7 +16,7 @@
+         android:layout_width="match_parent"
+         android:layout_height="match_parent"
+         android:background="@android:color/transparent"
+-        android:scaleType="matrix"
++        android:scaleType="fitXY"
+         android:visibility="visible" />
+ 
+     <FrameLayout
+diff --git a/node_modules/react-native-android-widget/android/src/main/res/layout/rn_widget.xml b/node_modules/react-native-android-widget/android/src/main/res/layout/rn_widget.xml
+index 870d18b..c2b7aea 100644
+--- a/node_modules/react-native-android-widget/android/src/main/res/layout/rn_widget.xml
++++ b/node_modules/react-native-android-widget/android/src/main/res/layout/rn_widget.xml
+@@ -8,7 +8,7 @@
+         android:layout_width="match_parent"
+         android:layout_height="match_parent"
+         android:background="@android:color/transparent"
+-        android:scaleType="matrix"
++        android:scaleType="fitXY"
+         android:visibility="visible" />
+ 
+     <ImageView
+@@ -16,7 +16,7 @@
+         android:layout_width="match_parent"
+         android:layout_height="match_parent"
+         android:background="@android:color/transparent"
+-        android:scaleType="matrix"
++        android:scaleType="fitXY"
+         android:visibility="gone" />
+ 
+     <FrameLayout

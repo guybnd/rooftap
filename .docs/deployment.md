@@ -36,6 +36,34 @@ Three things start independently the instant a PR merges to `main`:
    without a commit, dispatch the CI workflow on `main`. It uses the same
    `SUPABASE_ACCESS_TOKEN` secret as `migrate`.
 
+## Where CI runs
+
+The private repo's workflows (`ci.yml`, `expo-doctor.yml`, `public-mirror.yml`,
+`release.yml`) run on self-hosted Windows runners on Guy's PC
+(`runs-on: [self-hosted, windows, homeup]`), not GitHub-hosted ones, so CI
+isn't capped by the private repo's Actions minutes. `scripts/setup-ci-runner.ps1`
+(elevated PowerShell) installs two of them as Windows services under
+`E:ctions-runner`; two so `migrate` never queues behind a `check` job. Their
+`.env` puts Git Bash ahead of WSL's `bash`, adds `jq`, and turns off
+`core.autocrlf`. If the PC is off, jobs wait in the queue until it's back,
+and GitHub cancels anything still queued after 24 hours.
+
+**Fallback when the PC is down:** every `runs-on` reads the repo variable
+`CI_RUNS_ON` and defaults to the self-hosted label when it's unset.
+
+```bash
+gh variable set CI_RUNS_ON --body '"ubuntu-latest"'   # GitHub-hosted
+gh variable delete CI_RUNS_ON                        # back to the PC
+```
+
+Re-run anything that was queued after flipping it. GitHub-hosted runs use
+Actions minutes again, so this only helps while the account has some left.
+
+`port-public-pr.yml` stays on GitHub-hosted runners because it handles
+patches from the public repo, and so does everything the public repo runs
+(`.public-mirror/overlay/.github/workflows/`): never point those at a
+self-hosted runner.
+
 ## Two secrets this job needs
 
 `migrate` requires two repository secrets, both set on 2026-10-18. To

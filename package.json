@@ -19,7 +19,7 @@
     "smoke": "turbo run smoke --filter=web",
     "check": "turbo run typecheck test lint",
     "check:web": "turbo run typecheck test smoke --filter=web",
-    "postinstall": "patch-package"
+    "postinstall": "patch-package || node -e \"process.exit(process.env.VERCEL ? 0 : 1)\""
   },
   "devDependencies": {
     "patch-package": "^8.0.1",

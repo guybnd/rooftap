@@ -8,6 +8,7 @@ import { totalForPeriod, monthlyAmount, CATEGORY_META } from '@homeup/core';
 import { MCP_TOOLS, MCP_TOOL_BY_NAME } from "@/lib/mcp-tools";
 import { getMcpSettings, toolAllowed, type McpSettings } from "@/lib/mcp-settings";
 import { getEnabledModules, moduleNotFound } from "@/lib/server-modules";
+import { checkOAuthRateLimit, isOAuthAccessToken, resolveOAuthUser, wwwAuthenticate } from "@/lib/mcp-oauth";
 import type { HouseholdTask, GroupEvent, CostItem, CostCategory, CostCadence, EventCategory, GroceryItem } from '@homeup/core';
 
 const COST_CATEGORIES = Object.keys(CATEGORY_META) as [CostCategory, ...CostCategory[]];
@@ -33,10 +34,12 @@ const GROCERY_STATUSES: [GroceryItem["status"], ...GroceryItem["status"][]] = ["
 
 // Generic, non-enumerating 401 body — identical for missing/malformed/unknown/revoked auth,
 // so an external caller can never tell which of those cases they hit.
-function unauthorized() {
+// The www-authenticate header points sign-in capable clients (Claude and
+// other MCP apps) at the OAuth discovery document (lib/mcp-oauth.ts).
+function unauthorized(req: Request) {
   return new Response(JSON.stringify({ error: "Unauthorized" }), {
     status: 401,
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", "www-authenticate": wwwAuthenticate(new URL(req.url).origin) },
   });
 }
 
@@ -130,6 +133,41 @@ async function findVisibleGroceryItem(
     .eq("deleted", false);
   return visibleGroceryItems((data ?? []) as GroceryItem[], userId)[0] ?? null;
 }
+
+// Read tools answer with the fields everyday questions need unless the agent
+// asks for the full row: a household's whole list in every column runs to
+// tens of thousands of characters. Basic keeps the id so the agent can still
+// edit, and leaves out empty fields.
+//   Tasks: what's due or overdue, what's mine, what repeats, what got done.
+//   Events: what's on when and where.
+//   Groceries: what we need, what we have, what's expiring, what it costs,
+//   when we last bought it.
+const DETAIL = z
+  .enum(["basic", "full"])
+  .optional()
+  .describe(
+    "basic (default) answers everyday questions; a field missing from a basic row is empty. full adds bookkeeping fields (reminders, recipe links, price history, timestamps)."
+  );
+
+function basic<T extends object>(row: T, keys: readonly (keyof T)[]): Partial<T> {
+  return Object.fromEntries(keys.filter((k) => row[k] != null).map((k) => [k, row[k]])) as Partial<T>;
+}
+
+const TASK_BASIC = ["id", "title", "due_date", "due_time", "done", "completed_at", "priority", "notes", "recurrence_days"] as const;
+const EVENT_BASIC = ["id", "title", "category", "starts_at", "ends_at", "is_all_day", "location", "notes"] as const;
+const GROCERY_BASIC = [
+  "id",
+  "name",
+  "quantity",
+  "unit",
+  "aisle",
+  "status",
+  "notes",
+  "is_essential",
+  "expiry_date",
+  "price_cents",
+  "last_purchased_at",
+] as const;
 
 function buildServer(
   admin: ReturnType<typeof createAdminClient>,
@@ -287,16 +325,23 @@ function buildServer(
 
   register(
     "get_tasks",
-    { description: "Household to-dos visible to the authenticated user." },
-    async () => {
+    {
+      description:
+        "Household to-dos visible to the authenticated user. Pass done false for what's still open. Each task says whether it's assigned to you.",
+      inputSchema: { done: z.boolean().optional(), detail: DETAIL },
+    },
+    async ({ done, detail }) => {
       if (!groupId) return { content: [{ type: "text", text: JSON.stringify([]) }] };
       const { data } = await admin
         .from("household_tasks")
         .select("*")
         .eq("group_id", groupId)
         .eq("deleted", false);
-      const tasks = visibleTasks((data ?? []) as HouseholdTask[], userId).filter((t) => isTaskOwnerEnabled(t, enabled));
-      return { content: [{ type: "text", text: JSON.stringify(tasks) }] };
+      const tasks = visibleTasks((data ?? []) as HouseholdTask[], userId)
+        .filter((t) => isTaskOwnerEnabled(t, enabled))
+        .filter((t) => done === undefined || t.done === done);
+      const shaped = detail === "full" ? tasks : tasks.map((t) => ({ ...basic(t, TASK_BASIC), assigned_to_me: t.assigned_to === userId }));
+      return { content: [{ type: "text", text: JSON.stringify(shaped) }] };
     }
   );
 
@@ -414,9 +459,9 @@ function buildServer(
     "get_upcoming_calendar_events",
     {
       description: "Upcoming native Rooftap calendar events visible to the authenticated user (excludes the Google Calendar overlay).",
-      inputSchema: { days: z.number().int().positive().max(90).optional() },
+      inputSchema: { days: z.number().int().positive().max(90).optional(), detail: DETAIL },
     },
-    async ({ days }) => {
+    async ({ days, detail }) => {
       if (!groupId) return { content: [{ type: "text", text: JSON.stringify([]) }] };
       const now = new Date();
       const until = new Date(now.getTime() + (days ?? 30) * 24 * 60 * 60 * 1000);
@@ -428,7 +473,8 @@ function buildServer(
         .gte("starts_at", now.toISOString())
         .lte("starts_at", until.toISOString());
       const events = visibleEvents((data ?? []) as GroupEvent[], userId);
-      return { content: [{ type: "text", text: JSON.stringify(events) }] };
+      const shaped = detail === "full" ? events : events.map((e) => basic(e, EVENT_BASIC));
+      return { content: [{ type: "text", text: JSON.stringify(shaped) }] };
     }
   );
 
@@ -528,15 +574,25 @@ function buildServer(
 
   register(
     "get_grocery_items",
-    { description: "Household grocery list items visible to the authenticated user." },
-    async () => {
+    {
+      description:
+        "Household grocery list items visible to the authenticated user. Pass status 'needed' for the shopping list; 'have' is the pantry stock, which is usually most of the list.",
+      inputSchema: {
+        status: z.enum(["needed", "have", "bought"]).optional(),
+        detail: DETAIL,
+      },
+    },
+    async ({ status, detail }) => {
       if (!groupId) return { content: [{ type: "text", text: JSON.stringify([]) }] };
       const { data } = await admin
         .from("grocery_items")
         .select("*")
         .eq("group_id", groupId)
         .eq("deleted", false);
-      const items = visibleGroceryItems((data ?? []) as GroceryItem[], userId);
+      const visible = visibleGroceryItems((data ?? []) as GroceryItem[], userId).filter(
+        (i) => !status || i.status === status
+      );
+      const items = detail === "full" ? visible : visible.map((i) => basic(i, GROCERY_BASIC));
       return { content: [{ type: "text", text: JSON.stringify(items) }] };
     }
   );
@@ -704,9 +760,20 @@ function rateLimited() {
 
 async function handleMcp(req: Request): Promise<Response> {
   const admin = createAdminClient();
-  const identity = await resolvePatUser(admin, req.headers.get("authorization"));
-  if (!identity) return unauthorized();
-  if (!(await checkPatRateLimit(admin, identity.patId))) return rateLimited();
+  // A bot API key, or an access token from MCP sign-in.
+  const authHeader = req.headers.get("authorization");
+  let identity: { userId: string };
+  if (isOAuthAccessToken(authHeader)) {
+    const oauth = await resolveOAuthUser(admin, authHeader);
+    if (!oauth) return unauthorized(req);
+    if (!(await checkOAuthRateLimit(admin, oauth.tokenId))) return rateLimited();
+    identity = oauth;
+  } else {
+    const pat = await resolvePatUser(admin, authHeader);
+    if (!pat) return unauthorized(req);
+    if (!(await checkPatRateLimit(admin, pat.patId))) return rateLimited();
+    identity = pat;
+  }
 
   const groupId = await resolveGroupId(admin, identity.userId);
   // MCP is a module (.docs/modules.md): while it's off the endpoint doesn't exist.

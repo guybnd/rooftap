@@ -105,7 +105,8 @@ export async function resolvePatUser(admin: SupabaseClient, authHeader: string |
   if (!row || row.revoked_at != null) return null;
   if (isPatExpired(patExpiresAt(row))) return null;
 
-  void admin.from("personal_access_tokens").update({ last_used_at: new Date().toISOString() }).eq("id", row.id);
+  // Builders are lazy: an un-awaited update never reaches the database.
+  await admin.from("personal_access_tokens").update({ last_used_at: new Date().toISOString() }).eq("id", row.id);
 
   return { userId: row.user_id, patId: row.id };
 }

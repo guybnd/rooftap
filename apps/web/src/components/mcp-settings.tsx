@@ -12,6 +12,9 @@ import {
   SettingsSwitchRow,
 } from "@/components/settings-panel";
 import { Server } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ListItem, ListItemContent, ListItemMeta, ListItemTitle, ListItemTrailing } from "@/components/ui/list-item";
+import { timeAgo } from "@homeup/core";
 import { useModules } from "@homeup/core";
 import { MCP_TOOLS, mcpToolsForModules, type McpToolMeta } from "@/lib/mcp-tools";
 
@@ -140,8 +143,89 @@ export function McpSettings() {
         )}
       </div>
 
+      <ConnectedApps />
+
       <SavingHint show={saving} />
     </SettingsPanel>
+  );
+}
+
+interface Connection {
+  id: string;
+  clientName: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+}
+
+// Apps connected by signing in to Rooftap (MCP sign-in, lib/mcp-oauth.ts),
+// with the address to give them. The bot API key panel covers key-based agents.
+function ConnectedApps() {
+  const [connections, setConnections] = useState<Connection[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [origin, setOrigin] = useState("");
+
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch("/api/oauth/connections");
+      if (!res.ok) throw new Error(`Server responded ${res.status}`);
+      setConnections((await res.json()).connections);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not load connected apps.");
+    }
+  }, []);
+
+  useEffect(() => {
+    setOrigin(window.location.origin);
+    load();
+  }, [load]);
+
+  const disconnect = useCallback(
+    async (id: string) => {
+      setError(null);
+      const res = await fetch(`/api/oauth/connections?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+      if (!res.ok) setError("Could not disconnect that app.");
+      await load();
+    },
+    [load]
+  );
+
+  return (
+    <div className="space-y-1.5">
+      <SettingsLabel>Connected apps</SettingsLabel>
+      <p className="px-1 text-xs text-muted-foreground">
+        Apps like Claude can connect by signing in. Add this address as a custom connector:{" "}
+        <code className="font-mono text-foreground">{origin}/api/mcp</code>
+      </p>
+      {connections && connections.length > 0 && (
+        <SettingsInset>
+          {connections.map((c) => (
+            <ListItem key={c.id}>
+              <ListItemContent>
+                <ListItemTitle>{c.clientName}</ListItemTitle>
+                {/* H6: one middle dot per line. */}
+                <ListItemMeta>
+                  Connected {timeAgo(c.createdAt)}
+                  {" · "}
+                  {c.lastUsedAt ? `last used ${timeAgo(c.lastUsedAt)}` : "never used"}
+                </ListItemMeta>
+              </ListItemContent>
+              <ListItemTrailing>
+                {/* E4: destructive is danger text, no fill. */}
+                <Button
+                  onClick={() => disconnect(c.id)}
+                  size="sm"
+                  variant="ghost"
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                >
+                  Disconnect
+                </Button>
+              </ListItemTrailing>
+            </ListItem>
+          ))}
+        </SettingsInset>
+      )}
+      {error && <p className="px-1 text-xs text-destructive">{error}</p>}
+    </div>
   );
 }
 

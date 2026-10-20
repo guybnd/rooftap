@@ -2,6 +2,9 @@
 // A surface leads with one huge number (`.text-hero` on Home,
 // `.text-hero-section` on a section page) and says what it counts beside it:
 // "3 of 7 left today", "12 to buy". At most one per surface.
+// `layout="inline"` is the compact head (Groceries redesign): the label and
+// caption stack in a column beside the number instead of under it, and
+// `trailing` (the screen's head actions) sits on the right of the same row.
 import { type ReactNode } from "react";
 import { meterSegments } from "@homeup/core";
 import { cn } from "@/lib/utils";
@@ -20,6 +23,8 @@ export function HeroLede({
   size = "section",
   meter,
   tone = "neutral",
+  layout = "stacked",
+  trailing,
   className,
 }: {
   value: ReactNode;
@@ -31,8 +36,32 @@ export function HeroLede({
   /** H3: the lede's own segmented meter. */
   meter?: { done: number; total: number };
   tone?: keyof typeof TONE_CLASS;
+  /** "inline": label over caption beside the number, one row. Default "stacked". */
+  layout?: "stacked" | "inline";
+  /** Inline only: the head's actions, right-aligned on the lede's row. */
+  trailing?: ReactNode;
   className?: string;
 }) {
+  if (layout === "inline") {
+    // One grid row: number | label over caption | actions. The h1 is
+    // `display: contents` so it still names the screen (number + label) while
+    // its two children land in their own grid cells beside the caption.
+    return (
+      <div className={cn("grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3", className)}>
+        <h1 className="contents">
+          <span className={cn("row-span-2 self-center", size === "home" ? "text-hero" : "text-hero-section", TONE_CLASS[tone])}>{value}</span>
+          {label != null && (
+            <span className={cn("col-start-2 truncate font-heading text-base font-semibold leading-tight text-muted-foreground", caption == null && "row-span-2")}>
+              {label}
+            </span>
+          )}
+        </h1>
+        {caption != null && <p className="col-start-2 line-clamp-2 text-xs text-muted-foreground">{caption}</p>}
+        {trailing != null && <div className="col-start-3 row-span-2 row-start-1 flex items-center gap-2">{trailing}</div>}
+        {meter && <SegmentMeter className="col-span-3 mt-2" done={meter.done} total={meter.total} />}
+      </div>
+    );
+  }
   return (
     <div className={cn("flex flex-col gap-2", className)}>
       <h1 className="flex flex-wrap items-baseline gap-x-2.5">

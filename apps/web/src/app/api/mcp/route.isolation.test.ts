@@ -12,12 +12,12 @@ const GROUP_ID = "group-a";
 const OTHER_GROUP_ID = "group-b";
 
 const TASKS = [
-  { id: "t-visible", group_id: GROUP_ID, assigned_to: null, private: false, deleted: false, title: "Visible task" },
+  { id: "t-visible", group_id: GROUP_ID, assigned_to: null, private: false, deleted: false, title: "Visible task", done: false },
   { id: "t-deleted", group_id: GROUP_ID, assigned_to: null, private: false, deleted: true, title: "Deleted task" },
   { id: "t-private-other", group_id: GROUP_ID, assigned_to: OTHER_USER_ID, private: true, deleted: false, title: "Private task (not mine)" },
   { id: "t-cross-group", group_id: OTHER_GROUP_ID, assigned_to: null, private: false, deleted: false, title: "Other household's task" },
   // A bill reminder belongs to Costs (.docs/modules.md): it goes when Costs is off.
-  { id: "t-bill", group_id: GROUP_ID, assigned_to: null, private: false, deleted: false, title: "Pay rent", template_key: reminderKey("cost", "c-visible", "contract") },
+  { id: "t-bill", group_id: GROUP_ID, assigned_to: null, private: false, deleted: false, title: "Pay rent", done: true, template_key: reminderKey("cost", "c-visible", "contract") },
 ];
 
 // The household's module switches; every module is on unless a test turns one off.
@@ -144,6 +144,30 @@ describe("MCP tool handlers — cross-household isolation and visibility (assemb
   it("get_grocery_items returns only the in-group, non-deleted, visible-to-me item", async () => {
     const items = await callTool("get_grocery_items");
     expect(items.map((i: { id: string }) => i.id)).toEqual(["g-visible"]);
+  });
+
+  it("read tools answer basic rows by default and full rows on request", async () => {
+    const [task] = await callTool("get_tasks");
+    // Unset fields drop out of the JSON, so check the basic shape by exclusion.
+    expect(Object.keys(task)).not.toContain("group_id");
+    const [fullTask] = await callTool("get_tasks", { detail: "full" });
+    expect(fullTask.group_id).toBe(GROUP_ID);
+    const [item] = await callTool("get_grocery_items");
+    expect(Object.keys(item)).not.toContain("group_id");
+    const [fullItem] = await callTool("get_grocery_items", { detail: "full" });
+    expect(fullItem.group_id).toBe(GROUP_ID);
+  });
+
+  it("get_tasks filters by done", async () => {
+    expect((await callTool("get_tasks", { done: false })).map((t: { id: string }) => t.id)).toEqual(["t-visible"]);
+    expect((await callTool("get_tasks", { done: true })).map((t: { id: string }) => t.id)).toEqual(["t-bill"]);
+  });
+
+  it("get_grocery_items filters by status", async () => {
+    const [item] = await callTool("get_grocery_items");
+    const other = item.status === "needed" ? "have" : "needed";
+    expect(await callTool("get_grocery_items", { status: item.status })).toHaveLength(1);
+    expect(await callTool("get_grocery_items", { status: other })).toEqual([]);
   });
 });
 

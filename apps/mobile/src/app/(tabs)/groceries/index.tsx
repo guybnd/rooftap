@@ -31,7 +31,7 @@
 // controls, session panel, suggest-re-add, and add-custom-aisle control are
 // shared between both branches via `GroceriesListHeader`/`GroceriesAddAisleFooter`.
 import * as React from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FlashList, type ListRenderItem } from '@shopify/flash-list';
 // HOUP-318: per-group quick-add rows sit anywhere in the list, so the FlashList
@@ -42,8 +42,40 @@ import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import * as FileSystem from 'expo-file-system/legacy';
 import { decode } from 'base64-arraybuffer';
 import * as SecureStore from 'expo-secure-store';
-import { BookOpen, ChevronDown, ChevronRight, Plus, ShoppingBag, Trash2, WalletCards, X } from 'lucide-react-native';
-import { Text, Button, Card, cn, GroceryGlyph, haptics, HeroLede, Input, PulseTile, ReorderableList, ScreenBackground, SectionSearchBar, SegmentedControl, toast } from '@homeup/ui';
+import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+import {
+  ArrowUpDown,
+  BookOpen,
+  ChevronDown,
+  ChevronRight,
+  MoreHorizontal,
+  Plus,
+  Receipt,
+  RotateCcw,
+  Search,
+  SlidersHorizontal,
+  SquareCheck,
+  Trash2,
+  WalletCards,
+  X,
+} from 'lucide-react-native';
+import {
+  Text,
+  ActionMenu,
+  type ActionMenuAnchor,
+  type ActionMenuItem,
+  Button,
+  Card,
+  cn,
+  GroceryGlyph,
+  haptics,
+  HeroLede,
+  Input,
+  ReorderableList,
+  ScreenBackground,
+  SectionSearchBar,
+  toast,
+} from '@homeup/ui';
 import {
   AISLE_ORDER,
   CUSTOM_AISLE_COLOR_KEYS,
@@ -66,12 +98,12 @@ import {
   ensureSession,
   updateSession,
   closeSession,
+  effectiveSessionTotal,
   syncSession,
   getEnabledModules,
   isFeatureEnabled,
   fetchTodaySession,
   uploadReceipt,
-  receiptSignedUrl,
   applyReceiptLearning,
   formatMoney,
   groceryItems$,
@@ -104,7 +136,7 @@ import { isFlagParamSet } from '@/lib/route-params';
 import { useGroceryAux } from '@/features/groceries/use-grocery-aux';
 import { GroceryItemCard } from '@/features/groceries/grocery-item-card';
 import { GroceryItemFormSheet } from '@/features/groceries/grocery-item-form-sheet';
-import { GrocerySessionPanel, TrackShopLink, TrackShopPrompt } from '@/features/groceries/grocery-session-panel';
+import { FinishShopSheet, ShopTrackingPill, TrackShopPrompt, type FinishReceiptSource } from '@/features/groceries/grocery-session-panel';
 import { parseReceiptFile } from '@/features/groceries/grocery-receipt-parse';
 import { pickFromCamera, pickFromLibrary, pickFromFiles, type PickedFile } from '@/components/documents/capture-flow';
 import { ReAddSuggestions } from '@/features/groceries/re-add-suggestions';
@@ -177,256 +209,162 @@ function groceryRowSpacing(prev: GroceryRow | undefined, current: GroceryRow): s
 interface GroceriesListHeaderProps {
   itemsCount: number;
   neededCount: number;
-  haveCount: number;
-  boughtCount: number;
-  boughtStatusCount: number;
-  onResetBought: () => void;
-  estTotal: number;
+  caption: string | undefined;
   staplesAvailable: boolean;
   onSeedStaples: () => void;
-  reorderMode: boolean;
-  onToggleReorderMode: () => void;
-  selectMode: boolean;
-  selectedCount: number;
-  onToggleSelectMode: () => void;
-  onOpenLibrary: () => void;
+  modeActive: boolean;
+  onExitMode: () => void;
+  onOpenMore: (anchor: ActionMenuAnchor) => void;
+  onOpenView: (anchor: ActionMenuAnchor) => void;
+  viewFiltered: boolean;
   onOpenCards: () => void;
   onAddItem: () => void;
+  onHeadLayout: (bottom: number) => void;
   search: string;
   onSearchChange: (value: string) => void;
   onSearchSubmit: () => void;
-  suggestNeedSoonCount: number;
-  pulseUnpricedCount: number;
-  session: GrocerySession | null;
-  sessionSummedCents: number;
-  sessionBoughtCount: number;
-  sessionUnpricedCount: number;
-  onStartTracking: () => void;
-  onOverrideTotal: (cents: number | null) => void;
-  onStopTracking: () => void;
-  onDoneShopping: () => void;
-  onAddReceipt: () => void;
-  onScanReceipt: () => void;
-  receiptBusy: boolean;
-  scanning: boolean;
-  receiptError: string | null;
   suggestions: SuggestReAddItem[];
   onSuggestAdd: (item: SuggestReAddItem) => void;
   onSuggestSnooze: (item: SuggestReAddItem, untilISO: string) => void;
   suggestDismissAction: GroceryDismissAction | null;
   onSuggestDismiss: (item: SuggestReAddItem, action: GroceryDismissAction) => void;
   onSuggestAddAll: () => void;
-  hideNonNeeded: boolean;
-  onToggleHideNonNeeded: () => void;
-  sortMode: GrocerySortMode;
-  onSortModeChange: (mode: GrocerySortMode) => void;
 }
 
-/** HOUP-207: the groceries lede, top controls, search, pulse strip, session panel,
- * suggest-re-add, and the "needed only" chip — hoisted into `FlashList`'s
- * `ListHeaderComponent` (and reused verbatim atop the reorder-mode `ScrollView`)
- * so it scrolls with content in both modes. Passed as a memoized element (never
- * an inline closure) so the search bar and session panel's inputs never remount
- * mid-type. */
+/** An outline icon button that opens an ActionMenu under itself. `dot` marks
+ *  a non-default state behind it (a filter that's on). */
+function MenuIconButton({
+  label,
+  onOpen,
+  dot,
+  children,
+}: {
+  label: string;
+  onOpen: (anchor: ActionMenuAnchor) => void;
+  dot?: boolean;
+  children: React.ReactNode;
+}) {
+  const ref = React.useRef<View>(null);
+  return (
+    <View ref={ref} collapsable={false}>
+      <Button
+        size="icon-sm"
+        variant="outline"
+        accessibilityLabel={label}
+        onPress={() => ref.current?.measureInWindow((x, y, width, height) => onOpen({ x, y, width, height }))}
+      >
+        {children}
+      </Button>
+      {dot && <View pointerEvents="none" className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-primary" />}
+    </View>
+  );
+}
+
+/** HOUP-207: the groceries lede, search, and Running low group —
+ * hoisted into `FlashList`'s `ListHeaderComponent` (and reused verbatim atop
+ * the reorder-mode `ScrollView`) so it scrolls with content in both modes.
+ * Passed as a memoized element (never an inline closure) so the search bar's
+ * input never remounts mid-type.
+ *
+ * Compact header (Guy, 2026-10-20): the lede is one row with the actions
+ * beside it (Rewards cards stays one tap away, everything else sits in More),
+ * the list view options are a menu beside search, re-add suggestions read as
+ * the list's first group, and the estimate moved to the This trip summary at
+ * the end of the list. Once this block scrolls away the collapsed bar takes
+ * over (GroceriesCollapsedBar). */
 function GroceriesListHeader({
   itemsCount,
   neededCount,
-  haveCount,
-  boughtCount,
-  boughtStatusCount,
-  onResetBought,
-  estTotal,
+  caption,
   staplesAvailable,
   onSeedStaples,
-  reorderMode,
-  onToggleReorderMode,
-  selectMode,
-  selectedCount,
-  onToggleSelectMode,
-  onOpenLibrary,
+  modeActive,
+  onExitMode,
+  onOpenMore,
+  onOpenView,
+  viewFiltered,
   onOpenCards,
   onAddItem,
+  onHeadLayout,
   search,
   onSearchChange,
   onSearchSubmit,
-  suggestNeedSoonCount,
-  pulseUnpricedCount,
-  session,
-  sessionSummedCents,
-  sessionBoughtCount,
-  sessionUnpricedCount,
-  onStartTracking,
-  onOverrideTotal,
-  onStopTracking,
-  onDoneShopping,
-  onAddReceipt,
-  onScanReceipt,
-  receiptBusy,
-  scanning,
-  receiptError,
   suggestions,
   onSuggestAdd,
   onSuggestSnooze,
   suggestDismissAction,
   onSuggestDismiss,
   onSuggestAddAll,
-  hideNonNeeded,
-  onToggleHideNonNeeded,
-  sortMode,
-  onSortModeChange,
 }: GroceriesListHeaderProps) {
   return (
-    <View className="gap-4 pb-4">
-      {/* Lede (Hearth H1/H6): value-first, mirrors web page.tsx's grammar.
-          Hearth v2 (Pulse): the to-buy count is a Hero number; the actions
-          sit on the label row above it. */}
-      {/* H5: Add is the screen's one accent fill; Library drops to an icon
-          (web does the same on phones) so the row fits at 390px. */}
-      <View className="flex-row items-center justify-between gap-3">
-        <Text numberOfLines={1} className="shrink text-micro-label uppercase text-muted-foreground">Groceries</Text>
+    <View className="gap-3 pb-4">
+      <View className="gap-3" onLayout={(e) => onHeadLayout(e.nativeEvent.layout.y + e.nativeEvent.layout.height)}>
+        {/* Lede (Hearth H1/H6): value-first, mirrors web page.tsx's grammar.
+            H5: Add is the screen's one accent fill. */}
+        <HeroLede
+          layout="inline"
+          value={neededCount}
+          label="to buy"
+          caption={caption}
+          trailing={
+            <View className="flex-row items-center gap-2">
+              {/* Rewards cards: one tap to the checkout barcode (a household
+                  with one card lands straight on it). */}
+              <Button size="icon-sm" variant="outline" onPress={onOpenCards} accessibilityLabel="Rewards cards">
+                <WalletCards size={16} className="text-foreground" />
+              </Button>
+              {/* Select and Reorder live in More; while one is on, Done takes
+                  More's place so the mode is never stuck behind a menu. */}
+              {modeActive ? (
+                <Button size="sm" variant="outline" onPress={onExitMode}>
+                  Done
+                </Button>
+              ) : (
+                <MenuIconButton label="More" onOpen={onOpenMore}>
+                  <MoreHorizontal size={16} className="text-foreground" />
+                </MenuIconButton>
+              )}
+              <Button size="sm" onPress={onAddItem}>
+                <Plus size={14} className="text-primary-foreground" />
+                <Text className="text-sm font-medium text-primary-foreground">Add</Text>
+              </Button>
+            </View>
+          }
+        />
+
         <View className="flex-row items-center gap-2">
-          {/* Rewards cards: one tap to the checkout barcode (a household
-              with one card lands straight on it). */}
-          <Button size="icon-sm" variant="outline" onPress={onOpenCards} accessibilityLabel="Rewards cards">
-            <WalletCards size={16} className="text-foreground" />
-          </Button>
-          <Button size="icon-sm" variant="outline" onPress={onOpenLibrary} accessibilityLabel="Item library">
-            <BookOpen size={16} className="text-foreground" />
-          </Button>
-          {/* HOUP-317: Reorder is aisle-only — One list has no drag/sort_order. */}
-          {!selectMode && sortMode === 'aisle' && (
-            <Button size="sm" variant={reorderMode ? 'default' : 'outline'} onPress={onToggleReorderMode}>
-              {reorderMode ? 'Done' : 'Reorder'}
-            </Button>
-          )}
-          {!reorderMode && (
-            <Button size="sm" variant={selectMode ? 'default' : 'outline'} onPress={onToggleSelectMode}>
-              {selectMode ? `${selectedCount} selected` : 'Select'}
-            </Button>
-          )}
-          <Button size="sm" onPress={onAddItem}>
-            <Plus size={14} className="text-primary-foreground" />
-            <Text className="text-sm font-medium text-primary-foreground">Add</Text>
-          </Button>
+          <SectionSearchBar
+            value={search}
+            onChange={onSearchChange}
+            onSubmit={onSearchSubmit}
+            placeholder="Search or add, e.g. 2 milk"
+            className="flex-1"
+          />
+          {/* HOUP-317's By aisle / One list and "Only needed", folded into one
+              menu; the dot says "Only needed" is on (it hides rows). */}
+          <MenuIconButton label="List view options" onOpen={onOpenView} dot={viewFiltered}>
+            <SlidersHorizontal size={16} className="text-foreground" />
+          </MenuIconButton>
         </View>
       </View>
-      <HeroLede
-        value={neededCount}
-        label="to buy"
-        caption={(() => {
-          if (itemsCount === 0) return 'Your list is empty';
-          // The estimate lives in the Est total pulse tile below (H1).
-          const fragments = [
-            neededCount === 0 ? 'All bought' : null,
-            haveCount > 0 ? `${haveCount} have` : null,
-            boughtCount > 0 ? `${boughtCount} got today` : null,
-          ].filter(Boolean);
-          return fragments.length ? fragments.join(' · ') : undefined;
-        })()}
-      />
-
-      <SectionSearchBar
-        value={search}
-        onChange={onSearchChange}
-        onSubmit={onSearchSubmit}
-        placeholder="Search or add, e.g. 2 milk"
-      />
-
-      {/* Re-add suggestions as compact chips (replaced both the Buy again
-          chips and the "Might be running low" rows). Steps aside while
-          searching so the results sit directly under the search bar. */}
-      {!search.trim() && (
-        <ReAddSuggestions
-          runningLow={suggestions}
-          onAdd={onSuggestAdd}
-          onAddAll={onSuggestAddAll}
-          onSnooze={onSuggestSnooze}
-          dismissAction={suggestDismissAction}
-          onDismiss={onSuggestDismiss}
-        />
-      )}
 
       {/* While searching, the results sit directly under the search bar: the
-          pulse strip, session panel, re-add suggestions and list controls
-          step aside until the query is cleared. */}
+          Running low group and the empty state step aside until the query
+          is cleared. The trip itself floats (ShopTrackingPill). */}
       {!search.trim() && (
         <>
-          {/* Need soon and Unpriced only show when they have something to
-              say; Est total always holds the strip (web parity). */}
-          <View className="flex-row gap-2">
-            {suggestNeedSoonCount > 0 && (
-              <PulseTile label="Need soon" value={suggestNeedSoonCount} className="flex-1" tone="warning" />
-            )}
-            {pulseUnpricedCount > 0 && (
-              <PulseTile label="Unpriced" value={pulseUnpricedCount} className="flex-1" tone="warning" />
-            )}
-            <PulseTile label="Est total" value={formatMoney(estTotal)} className="flex-1" />
-          </View>
-
-          {/* Reset bought (web page.tsx:908-917): relegated to a small secondary
-              link, gated behind a confirm — easy to fat-finger next to Done
-              shopping, and unlike Done shopping it has no undo affordance. */}
-          {/* After "Not today" the way back is a small link on this line, not
-              a full-width pill (the ask itself floats, TrackShopPrompt). */}
-          {(boughtStatusCount > 0 || session?.tracking === 'skipped') && (
-            <View className="flex-row items-center justify-end gap-1">
-              {session?.tracking === 'skipped' && <TrackShopLink onPress={onStartTracking} />}
-              {boughtStatusCount > 0 && (
-                <Pressable onPress={onResetBought} className="rounded-full px-2 py-1">
-                  <Text className="text-xs text-muted-foreground">Reset bought ({boughtStatusCount})</Text>
-                </Pressable>
-              )}
-            </View>
-          )}
-
-          <GrocerySessionPanel
-            session={session}
-            summedCents={sessionSummedCents}
-            boughtCount={sessionBoughtCount}
-            unpricedCount={sessionUnpricedCount}
-            onOverrideTotal={onOverrideTotal}
-            onStopTracking={onStopTracking}
-            onDoneShopping={onDoneShopping}
-            onAddReceipt={onAddReceipt}
-            onScanReceipt={onScanReceipt}
-            receiptBusy={receiptBusy}
-            scanning={scanning}
-            receiptError={receiptError}
+          {/* Re-add suggestions as compact chips under a "Running low" group
+              head (replaced both the Buy again chips and the "Might be
+              running low" rows). */}
+          <ReAddSuggestions
+            variant="group"
+            runningLow={suggestions}
+            onAdd={onSuggestAdd}
+            onAddAll={onSuggestAddAll}
+            onSnooze={onSuggestSnooze}
+            dismissAction={suggestDismissAction}
+            onDismiss={onSuggestDismiss}
           />
-
-          {/* HOUP-317: By aisle / One list, sharing a line with the "Only
-              needed" toggle chip (fitContent — precedent: tasks/index.tsx's
-              All/Mine + Date/Person pair). The chip's old "N to shop" count
-              restated the Hero number, so it left (H1); the label stays put
-              and the accent tint says it's on (web parity). */}
-          <View className="flex-row items-center justify-between gap-2">
-            <SegmentedControl
-              options={[{ value: 'aisle', label: 'By aisle' }, { value: 'flat', label: 'One list' }]}
-              value={sortMode}
-              onChange={onSortModeChange}
-              accessibilityLabel="Groceries list view"
-              fitContent
-            />
-            {/* M2: 44px-tall tinted chip (matches tasks/index.tsx's Completed
-                filter chip). */}
-            <Pressable
-              onPress={() => {
-                haptics.select();
-                onToggleHideNonNeeded();
-              }}
-              accessibilityRole="button"
-              accessibilityState={{ selected: hideNonNeeded }}
-              className={cn(
-                'h-11 flex-row items-center gap-2 self-start rounded-full border px-3.5',
-                hideNonNeeded ? 'border-primary/30 bg-primary/15' : 'border-border bg-muted'
-              )}
-            >
-              <ShoppingBag size={14} className={hideNonNeeded ? 'text-primary' : 'text-muted-foreground'} />
-              <Text numberOfLines={1} className={cn('text-sm font-medium', hideNonNeeded ? 'text-primary' : 'text-foreground')}>
-                Only needed
-              </Text>
-            </Pressable>
-          </View>
 
           {itemsCount === 0 ? (
             <Card className="items-center gap-3 rounded-3xl px-4 py-8">
@@ -449,6 +387,105 @@ function GroceriesListHeader({
         </>
       )}
     </View>
+  );
+}
+
+interface GroceriesTripSummaryProps {
+  estTotal: number;
+  buyableCount: number;
+  unpricedCount: number;
+  showTrack: boolean;
+  onTrack: () => void;
+  boughtStatusCount: number;
+  onResetBought: () => void;
+}
+
+/** "This trip": the estimate (was the Est total pulse tile) and the trip's
+ *  quiet actions, at the end of the list where you land after the last aisle
+ *  (Guy, 2026-10-20). Reset bought stays behind its confirm. */
+function GroceriesTripSummary({ estTotal, buyableCount, unpricedCount, showTrack, onTrack, boughtStatusCount, onResetBought }: GroceriesTripSummaryProps) {
+  return (
+    <Card className="mt-6 gap-2.5 rounded-3xl px-4 py-3.5">
+      <Text className="text-micro-label uppercase text-muted-foreground">This trip</Text>
+      <View className="flex-row flex-wrap items-baseline gap-x-2">
+        <Text className="text-display text-foreground" style={{ fontVariant: ['tabular-nums'] }}>
+          ~{formatMoney(estTotal)}
+        </Text>
+        <Text className="text-caption text-muted-foreground" style={{ fontVariant: ['tabular-nums'] }}>
+          estimated for {buyableCount} {buyableCount === 1 ? 'item' : 'items'}
+          {unpricedCount > 0 ? ` · ${unpricedCount} unpriced` : ''}
+        </Text>
+      </View>
+      {(showTrack || boughtStatusCount > 0) && (
+        <View className="flex-row flex-wrap gap-2">
+          {showTrack && (
+            <Button size="sm" variant="outline" onPress={onTrack}>
+              <Receipt size={14} className="text-foreground" />
+              <Text className="text-sm font-medium text-foreground">Track shop</Text>
+            </Button>
+          )}
+          {boughtStatusCount > 0 && (
+            <Button size="sm" variant="outline" onPress={onResetBought}>
+              <RotateCcw size={14} className="text-foreground" />
+              <Text className="text-sm font-medium text-foreground">Reset bought ({boughtStatusCount})</Text>
+            </Button>
+          )}
+        </View>
+      )}
+    </Card>
+  );
+}
+
+interface GroceriesCollapsedBarProps {
+  topInset: number;
+  neededCount: number;
+  caption: string | undefined;
+  viewFiltered: boolean;
+  onSearch: () => void;
+  onOpenCards: () => void;
+  onOpenView: (anchor: ActionMenuAnchor) => void;
+  onAddItem: () => void;
+}
+
+/** The slim bar that takes over once the lede has scrolled away, so the list
+ *  gets the screen while you shop: the count, then search (back to the top),
+ *  Rewards cards, view options and Add. */
+function GroceriesCollapsedBar({ topInset, neededCount, caption, viewFiltered, onSearch, onOpenCards, onOpenView, onAddItem }: GroceriesCollapsedBarProps) {
+  return (
+    <Animated.View
+      entering={FadeIn.duration(MOTION_DURATIONS_MS.fast)}
+      exiting={FadeOut.duration(MOTION_DURATIONS_MS.fast)}
+      className="absolute inset-x-0 top-0 z-30 border-b border-border bg-background/95"
+      style={{ paddingTop: topInset }}
+    >
+      <View className="h-16 flex-row items-center gap-2 px-4">
+        <Text accessibilityRole="header" className="text-display text-foreground" style={{ fontVariant: ['tabular-nums'] }}>
+          {neededCount}
+        </Text>
+        <View className="min-w-0 flex-1">
+          <Text numberOfLines={1} className="text-title text-muted-foreground">
+            to buy
+          </Text>
+          {caption != null && (
+            <Text numberOfLines={1} className="text-caption text-muted-foreground">
+              {caption}
+            </Text>
+          )}
+        </View>
+        <Button size="icon-sm" variant="outline" onPress={onSearch} accessibilityLabel="Search or add">
+          <Search size={16} className="text-foreground" />
+        </Button>
+        <Button size="icon-sm" variant="outline" onPress={onOpenCards} accessibilityLabel="Rewards cards">
+          <WalletCards size={16} className="text-foreground" />
+        </Button>
+        <MenuIconButton label="List view options" onOpen={onOpenView} dot={viewFiltered}>
+          <SlidersHorizontal size={16} className="text-foreground" />
+        </MenuIconButton>
+        <Button size="icon-sm" onPress={onAddItem} accessibilityLabel="Add item" className="rounded-full">
+          <Plus size={16} className="text-primary-foreground" />
+        </Button>
+      </View>
+    </Animated.View>
   );
 }
 
@@ -633,6 +670,23 @@ export default function GroceriesSectionScreen() {
   // HOUP-175 (HOUP-95 deferral): drag-to-reorder within an aisle, mutually
   // exclusive with Select mode — mirrors HOUP-129's Setup reorder toggle.
   const [reorderMode, setReorderMode] = React.useState(false);
+  // Compact header menus (More, List view options), anchored to their buttons.
+  const [moreAnchor, setMoreAnchor] = React.useState<ActionMenuAnchor | null>(null);
+  const [viewAnchor, setViewAnchor] = React.useState<ActionMenuAnchor | null>(null);
+  // Collapse on scroll: once the lede + search block has scrolled off, the
+  // slim GroceriesCollapsedBar takes over. `headBottomRef` is that block's
+  // bottom inside the list header; state flips only when the side changes.
+  const listRef = React.useRef<React.ElementRef<typeof FlashList<GroceryRow>>>(null);
+  const headBottomRef = React.useRef(0);
+  const [collapsed, setCollapsed] = React.useState(false);
+  const collapsedRef = React.useRef(false);
+  const onListScroll = React.useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const next = headBottomRef.current > 0 && e.nativeEvent.contentOffset.y > headBottomRef.current;
+    if (next !== collapsedRef.current) {
+      collapsedRef.current = next;
+      setCollapsed(next);
+    }
+  }, []);
   const [bulkSheetOpen, setBulkSheetOpen] = React.useState(false);
   const [bulkAssignOpen, setBulkAssignOpen] = React.useState(false);
 
@@ -650,13 +704,9 @@ export default function GroceriesSectionScreen() {
   const [newAisleColor, setNewAisleColor] = React.useState<string>(CUSTOM_AISLE_COLOR_KEYS[0]);
   const [quickAddDrafts, setQuickAddDrafts] = React.useState<Record<string, string>>({});
   const [receiptBusy, setReceiptBusy] = React.useState(false);
-  const [scanning, setScanning] = React.useState(false);
   const [receiptError, setReceiptError] = React.useState<string | null>(null);
-  // HOUP-226: the just-picked receipt's bytes, kept as a data URL so a scan
-  // right after capture doesn't need to re-download the file it just
-  // uploaded. Cleared on screen remount (mirrors web's in-memory `fileRef`,
-  // same limitation) — handleScanReceipt falls back to receiptSignedUrl.
-  const pickedReceiptDataRef = React.useRef<{ dataUrl: string; mimeType: string | null } | null>(null);
+  // The finish sheet (Done on the shop pill).
+  const [finishOpen, setFinishOpen] = React.useState(false);
 
   // HOUP-225: hydrate collapsed-aisle state once on mount — was in-memory
   // only, resetting every time the screen remounted (mirrors web page.tsx's
@@ -1524,14 +1574,14 @@ export default function GroceriesSectionScreen() {
   // committed immediately, with a 5s undo toast that restores BOTH halves
   // (item statuses back to Got it, and the session reopened if this call
   // closed it).
-  const handleDoneShopping = async () => {
-    if (!session) return;
+  const handleDoneShopping = async (sessionArg?: GrocerySession) => {
+    const activeSession = sessionArg ?? session;
+    if (!activeSession) return;
     const supabase = getCurrentSupabaseClient();
     const today = todayStr();
     const todayBought = items.filter((i) => isBoughtToday(i, today));
     if (!todayBought.length) return;
     const snapshot = todayBought.map((i) => ({ id: i.id, last_purchased_at: i.last_purchased_at }));
-    const activeSession = session;
     const didClose = activeSession.tracking === 'on' && !activeSession.closed_at;
     if (didClose) {
       const closed = await closeSession(supabase, activeSession.id);
@@ -1577,13 +1627,17 @@ export default function GroceriesSectionScreen() {
       ]);
     });
 
-  const handleAddReceipt = async () => {
-    if (!session || !group || receiptBusy) return;
-    const source = await pickReceiptSource();
-    if (!source) return;
+  // Upload a picked receipt onto the trip, then read it (OCR via
+  // /api/parse-receipt -> receipt_total_cents + retailer; applyReceiptLearning
+  // writes learned prices straight to grocery_items, and groceryItems$'s own
+  // realtime subscription reflects them back). Returns the updated session,
+  // or null with `receiptError` set. Pass the session explicitly: the finish
+  // flow chains calls faster than `session` state updates.
+  const attachAndReadReceipt = async (source: 'camera' | 'library' | 'files', base: GrocerySession): Promise<GrocerySession | null> => {
+    if (!group) return null;
     const result =
       source === 'camera' ? await pickFromCamera() : source === 'library' ? await pickFromLibrary() : await pickFromFiles();
-    if (result.permissionDenied || !result.files.length) return;
+    if (result.permissionDenied || !result.files.length) return null;
     const picked: PickedFile = result.files[0];
     setReceiptBusy(true);
     setReceiptError(null);
@@ -1598,120 +1652,141 @@ export default function GroceriesSectionScreen() {
         sizeBytes: body.byteLength,
       };
       const supabase = getCurrentSupabaseClient();
-      const up = await uploadReceipt(supabase, group.id, session.session_date, input);
+      const up = await uploadReceipt(supabase, group.id, base.session_date, input);
       if (!up) {
         setReceiptError('Receipt upload failed. Tap to try again.');
-        return;
+        return null;
       }
-      let updated = (await updateSession(supabase, session.id, { receipt_path: up.path, receipt_name: up.name })) ?? session;
-      const today = todayStr();
-      const summed = items
-        .filter((i) => isBoughtToday(i, today))
-        .reduce((sum, i) => sum + (i.last_price ?? i.price_cents ?? priceFor(i.name) ?? 0), 0);
-      // Modules: the trip's cost line needs costs and groceries (module-features.ts).
-      updated = await syncSession(supabase, updated, group.id, summed, isFeatureEnabled('costs.from-groceries', getEnabledModules()));
+      let updated = (await updateSession(supabase, base.id, { receipt_path: up.path, receipt_name: up.name })) ?? base;
+      setSession(updated);
+      const parsed = await parseReceiptFile(`data:${mimeType};base64,${base64}`, mimeType);
+      if (!parsed) {
+        setReceiptError("Couldn't read the receipt. Tap to try again.");
+        setCachedSession(group.id, todayStr(), updated);
+        return null;
+      }
+      const patch: Partial<GrocerySession> = {};
+      if (parsed.total != null) patch.receipt_total_cents = Math.round(parsed.total * 100);
+      if (parsed.retailer) patch.retailer = parsed.retailer;
+      if (Object.keys(patch).length) updated = (await updateSession(supabase, updated.id, patch)) ?? updated;
       setSession(updated);
       setCachedSession(group.id, todayStr(), updated);
-      pickedReceiptDataRef.current = { dataUrl: `data:${mimeType};base64,${base64}`, mimeType };
+      await applyReceiptLearning(supabase, group.id, parsed, items);
+      return updated;
     } catch {
       setReceiptError('Receipt upload failed. Tap to try again.');
+      return null;
     } finally {
       setReceiptBusy(false);
     }
   };
 
-  // OCR scan (HOUP-226, was HOUP-216's deferred native half): parses the
-  // attached receipt via /api/parse-receipt -> receipt_total_cents + retailer,
-  // then applyReceiptLearning writes learned prices straight to grocery_items;
-  // groceryItems$'s own realtime subscription (unlike web's manual
-  // onItemsChanged refetch) is what reflects those writes back into `items`,
-  // so no explicit refetch call is needed here.
-  const handleScanReceipt = async () => {
-    if (!session?.receipt_path || !group || scanning) return;
-    setScanning(true);
-    setReceiptError(null);
+  // The pill's Receipt: pick a source, attach and read it, keep shopping.
+  const handleAddReceipt = async () => {
+    if (!session || receiptBusy) return;
+    const source = await pickReceiptSource();
+    if (!source) return;
+    await attachAndReadReceipt(source, session);
+  };
+
+  // The finish sheet: optionally read a receipt, bring the Costs line up to
+  // the trip's effective total (receipt or override), then Done shopping.
+  const handleFinish = async (source: FinishReceiptSource) => {
+    if (!session || !group || receiptBusy) return;
+    let current: GrocerySession | null = session;
+    if (source) {
+      current = await attachAndReadReceipt(source, session);
+      if (!current) return;
+    }
     try {
       const supabase = getCurrentSupabaseClient();
-      let picked = pickedReceiptDataRef.current;
-      if (!picked) {
-        const url = await receiptSignedUrl(supabase, session.receipt_path);
-        if (!url) {
-          setReceiptError('Could not load receipt. Tap to retry.');
-          return;
-        }
-        const dest = `${FileSystem.cacheDirectory}grocery-receipt-scan-${Date.now()}`;
-        const { uri } = await FileSystem.downloadAsync(url, dest);
-        const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
-        const mimeType = session.receipt_name?.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg';
-        picked = { dataUrl: `data:${mimeType};base64,${base64}`, mimeType };
-      }
-      const parsed = await parseReceiptFile(picked.dataUrl, picked.mimeType);
-      if (!parsed) {
-        setReceiptError('Scan failed. Tap to retry.');
-        return;
-      }
-      const patch: Partial<GrocerySession> = {};
-      if (parsed.total != null) patch.receipt_total_cents = Math.round(parsed.total * 100);
-      if (parsed.retailer) patch.retailer = parsed.retailer;
-      let updated = session;
-      if (Object.keys(patch).length) updated = (await updateSession(supabase, session.id, patch)) ?? session;
-      setSession(updated);
-      setCachedSession(group.id, todayStr(), updated);
-      await applyReceiptLearning(supabase, group.id, parsed, items);
-    } finally {
-      setScanning(false);
+      // Modules: the trip's cost line needs costs and groceries (module-features.ts).
+      current = await syncSession(supabase, current, group.id, sessionSummedCents, isFeatureEnabled('costs.from-groceries', getEnabledModules()));
+    } catch (err) {
+      console.error('grocery session sync failed:', err);
     }
+    setFinishOpen(false);
+    await handleDoneShopping(current);
   };
+
+  // Lede caption fragments (the estimate lives in the This trip summary).
+  const ledeCaption = (() => {
+    if (items.length === 0) return 'Your list is empty';
+    const fragments = [
+      neededCount === 0 ? 'All bought' : null,
+      haveCount > 0 ? `${haveCount} have` : null,
+      boughtCount > 0 ? `${boughtCount} got today` : null,
+    ].filter(Boolean);
+    return fragments.length ? fragments.join(' · ') : undefined;
+  })();
+  // While a shop is tracked the collapsed bar shows the running total instead.
+  const collapsedCaption = session?.tracking === 'on' ? `${formatMoney(effectiveSessionTotal(session))} in cart` : ledeCaption;
+
+  const closeMenus = () => {
+    setMoreAnchor(null);
+    setViewAnchor(null);
+  };
+  const moreItems: ActionMenuItem[] = [
+    { key: 'select', label: 'Select', Icon: SquareCheck, onPress: () => (closeMenus(), setSelectMode(true)) },
+    // HOUP-317: Reorder is aisle-only — One list has no drag/sort_order.
+    ...(sortMode === 'aisle'
+      ? [{ key: 'reorder', label: 'Reorder', Icon: ArrowUpDown, onPress: () => (closeMenus(), setReorderMode(true)) }]
+      : []),
+    { key: 'library', label: 'Item library', Icon: BookOpen, onPress: () => (closeMenus(), router.push('/groceries/shelf-life' as Href)) },
+    ...(session?.tracking === 'skipped'
+      ? [{ key: 'track', label: 'Track shop', Icon: Receipt, onPress: () => (closeMenus(), void handleStartTracking()) }]
+      : []),
+    ...(boughtStatusCount > 0
+      ? [{ key: 'reset', label: `Reset bought (${boughtStatusCount})`, Icon: RotateCcw, onPress: () => (closeMenus(), resetBought()) }]
+      : []),
+  ];
+  const viewItems: ActionMenuItem[] = [
+    { key: 'aisle', label: 'By aisle', checked: sortMode === 'aisle', onPress: () => (closeMenus(), handleSortModeChange('aisle')) },
+    { key: 'flat', label: 'One list', checked: sortMode === 'flat', onPress: () => (closeMenus(), handleSortModeChange('flat')) },
+    { key: 'needed', label: 'Only needed', checked: hideNonNeeded, onPress: () => (closeMenus(), setHideNonNeeded((v) => !v)) },
+  ];
 
   const listHeaderElement = (
     <GroceriesListHeader
       itemsCount={items.length}
       neededCount={neededCount}
-      haveCount={haveCount}
-      boughtCount={boughtCount}
-      boughtStatusCount={boughtStatusCount}
-      onResetBought={resetBought}
-      estTotal={estTotal}
+      caption={ledeCaption}
       staplesAvailable={getRegionProvider(group.region).groceryStaples.length > 0}
       onSeedStaples={seedStaples}
-      reorderMode={reorderMode}
-      onToggleReorderMode={() => setReorderMode((v) => !v)}
-      selectMode={selectMode}
-      selectedCount={selectedIds.size}
-      onToggleSelectMode={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
-      onOpenLibrary={() => router.push('/groceries/shelf-life' as Href)}
+      modeActive={selectMode || reorderMode}
+      onExitMode={() => (selectMode ? exitSelectMode() : setReorderMode(false))}
+      onOpenMore={setMoreAnchor}
+      onOpenView={setViewAnchor}
+      viewFiltered={hideNonNeeded}
       onOpenCards={() => setCardsOpen(true)}
       onAddItem={() => openAdd()}
+      onHeadLayout={(bottom) => {
+        headBottomRef.current = bottom;
+      }}
       search={search}
       onSearchChange={setSearch}
       onSearchSubmit={submitSearchAdd}
       onSuggestAdd={groceryUndo.needAgain}
-      suggestNeedSoonCount={suggestions.length}
-      pulseUnpricedCount={pulseUnpricedCount}
-      session={session}
-      sessionSummedCents={sessionSummedCents}
-      sessionBoughtCount={boughtCount}
-      sessionUnpricedCount={unpricedCount}
-      onStartTracking={handleStartTracking}
-      onOverrideTotal={handleOverrideTotal}
-      onStopTracking={handleStopTracking}
-      onDoneShopping={handleDoneShopping}
-      onAddReceipt={handleAddReceipt}
-      onScanReceipt={handleScanReceipt}
-      receiptBusy={receiptBusy}
-      scanning={scanning}
-      receiptError={receiptError}
       suggestions={suggestions}
       onSuggestSnooze={groceryUndo.snooze}
       suggestDismissAction={suggestDismiss.dismissAction}
       onSuggestDismiss={suggestDismiss.dismiss}
       onSuggestAddAll={() => groceryUndo.needAgain(suggestions)}
-      hideNonNeeded={hideNonNeeded}
-      onToggleHideNonNeeded={() => setHideNonNeeded((v) => !v)}
-      sortMode={sortMode}
-      onSortModeChange={handleSortModeChange}
     />
   );
+
+  const tripSummaryElement =
+    items.length > 0 ? (
+      <GroceriesTripSummary
+        estTotal={estTotal}
+        buyableCount={buyableItems.length}
+        unpricedCount={pulseUnpricedCount}
+        showTrack={session?.tracking === 'skipped'}
+        onTrack={() => void handleStartTracking()}
+        boughtStatusCount={boughtStatusCount}
+        onResetBought={resetBought}
+      />
+    ) : null;
 
   const addAisleFooterElement = (
     <GroceriesAddAisleFooter
@@ -1754,7 +1829,10 @@ export default function GroceriesSectionScreen() {
   const showTrackPrompt = session === null && boughtCount > 0 && !reorderMode && !selectMode && !searching;
   // Clears the capture button's raised lip above the in-flow tab bar.
   const trackPromptBottom = 32;
-  const listPaddingBottom = insets.bottom + 96 + (showTrackPrompt ? 72 : 0);
+  // Once tracking, the shop pill takes the prompt's spot (same hiding rules).
+  const showShopPill =
+    session?.tracking === 'on' && !session.closed_at && !reorderMode && !selectMode && !searching;
+  const listPaddingBottom = insets.bottom + 96 + (showTrackPrompt || showShopPill ? 72 : 0);
 
   return (
     <ScreenBackground>
@@ -1831,12 +1909,67 @@ export default function GroceriesSectionScreen() {
           renderItem={renderItem}
           ListHeaderComponent={listHeaderElement}
           // HOUP-317: aisle-management chrome hidden in One list.
-          ListFooterComponent={searchAddElement ?? (sortMode === 'flat' ? undefined : addAisleFooterElement)}
+          ListFooterComponent={
+            searchAddElement ?? (
+              <>
+                {tripSummaryElement}
+                {sortMode === 'flat' ? null : addAisleFooterElement}
+              </>
+            )
+          }
           keyboardShouldPersistTaps="handled"
           renderScrollComponent={KeyboardAwareScrollView}
+          ref={listRef}
+          onScroll={onListScroll}
+          scrollEventThrottle={16}
           contentContainerStyle={{ paddingHorizontal: 16, paddingTop: insets.top + 16, paddingBottom: listPaddingBottom }}
         />
       )}
+
+      {collapsed && !reorderMode && (
+        <GroceriesCollapsedBar
+          topInset={insets.top}
+          neededCount={neededCount}
+          caption={collapsedCaption}
+          viewFiltered={hideNonNeeded}
+          onSearch={() => listRef.current?.scrollToOffset({ offset: 0, animated: true })}
+          onOpenCards={() => setCardsOpen(true)}
+          onOpenView={setViewAnchor}
+          onAddItem={() => openAdd()}
+        />
+      )}
+
+      <ActionMenu anchor={moreAnchor} onClose={() => setMoreAnchor(null)} items={moreItems} />
+      <ActionMenu anchor={viewAnchor} onClose={() => setViewAnchor(null)} items={viewItems} />
+
+      {showShopPill && session && (
+        <ShopTrackingPill
+          session={session}
+          boughtCount={boughtCount}
+          bottom={trackPromptBottom}
+          onOverrideTotal={handleOverrideTotal}
+          onReceipt={() => void handleAddReceipt()}
+          receiptBusy={receiptBusy}
+          receiptError={receiptError}
+          onDone={() => setFinishOpen(true)}
+        />
+      )}
+
+      <FinishShopSheet
+        open={finishOpen}
+        onOpenChange={setFinishOpen}
+        session={session}
+        boughtCount={boughtCount}
+        unpricedCount={unpricedCount}
+        onOverrideTotal={handleOverrideTotal}
+        onFinish={(source) => void handleFinish(source)}
+        onStopTracking={() => {
+          setFinishOpen(false);
+          void handleStopTracking();
+        }}
+        busy={receiptBusy}
+        error={receiptError}
+      />
 
       {showTrackPrompt && (
         <TrackShopPrompt

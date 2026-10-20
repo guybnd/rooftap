@@ -31,9 +31,22 @@ interface ReAddSuggestionsProps {
   onDismiss: (item: SuggestReAddItem, action: GroceryDismissAction) => void;
   /** Chips shown before "Show N more"; the Home card passes a smaller cap. */
   cap?: number;
+  /** 'group' (Groceries screen) heads the chips like an aisle: "Running low n"
+   *  with Add all and Review as text buttons on that line, so the block reads
+   *  as the list's first group instead of three rows of chrome. */
+  variant?: 'default' | 'group';
 }
 
-export function ReAddSuggestions({ runningLow, onAdd, onAddAll, onSnooze, dismissAction, onDismiss, cap = RE_ADD_CHIP_CAP }: ReAddSuggestionsProps) {
+export function ReAddSuggestions({
+  runningLow,
+  onAdd,
+  onAddAll,
+  onSnooze,
+  dismissAction,
+  onDismiss,
+  cap = RE_ADD_CHIP_CAP,
+  variant = 'default',
+}: ReAddSuggestionsProps) {
   const [reviewing, setReviewing] = React.useState(false);
   const [showAllLow, setShowAllLow] = React.useState(false);
   const [menuTarget, setMenuTarget] = React.useState<SuggestReAddItem | null>(null);
@@ -48,32 +61,52 @@ export function ReAddSuggestions({ runningLow, onAdd, onAddAll, onSnooze, dismis
   const visibleLow = hiddenLow > 0 ? runningLow.slice(0, cap) : runningLow;
   const dismissChoices = dismissAction ? [dismissAction] : GROCERY_DISMISS_ACTIONS;
   const closeMenu = () => setMenuTarget(null);
+  // A bulk add gets a confirm on top of the Undo pill (Guy, 2026-10-18).
+  const confirmAddAll = () =>
+    Alert.alert(`Add all ${runningLow.length} suggestions?`, 'They move back to Needed on your list.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Add all', onPress: onAddAll },
+    ]);
 
   return (
     <View className="gap-2">
-      <View className="min-h-9 flex-row items-center gap-2 px-1">
-        <Text className="flex-1 text-[10.5px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
-          Re-add suggestions{' '}
-          <Text className="text-[10.5px] text-muted-foreground" style={{ fontVariant: ['tabular-nums'] }}>
+      {variant === 'group' ? (
+        <View className="min-h-9 flex-row items-center gap-1.5 px-1">
+          <Text className="text-[10.5px] font-medium uppercase tracking-[0.1em] text-foreground">Running low</Text>
+          <Text className="text-xs text-muted-foreground/70" style={{ fontVariant: ['tabular-nums'] }}>
             {runningLow.length}
           </Text>
-        </Text>
-        {runningLow.length >= 2 && (
-          <Button
-            size="sm"
-            variant="outline"
-            onPress={() =>
-              // A bulk add gets a confirm on top of the Undo pill (Guy, 2026-10-18).
-              Alert.alert(`Add all ${runningLow.length} suggestions?`, 'They move back to Needed on your list.', [
-                { text: 'Cancel', style: 'cancel' },
-                { text: 'Add all', onPress: onAddAll },
-              ])
-            }
+          <View className="flex-1" />
+          {runningLow.length >= 2 && (
+            <Pressable onPress={confirmAddAll} accessibilityRole="button" hitSlop={8} className="min-h-9 justify-center px-1.5">
+              <Text className="text-sm font-medium text-primary">Add all</Text>
+            </Pressable>
+          )}
+          <Pressable
+            onPress={() => setReviewing((v) => !v)}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: reviewing }}
+            hitSlop={8}
+            className="min-h-9 justify-center px-1.5"
           >
-            Add all {runningLow.length}
-          </Button>
-        )}
-      </View>
+            <Text className="text-sm font-medium text-primary">{reviewing ? 'Done' : 'Review'}</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <View className="min-h-9 flex-row items-center gap-2 px-1">
+          <Text className="flex-1 text-[10.5px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
+            Re-add suggestions{' '}
+            <Text className="text-[10.5px] text-muted-foreground" style={{ fontVariant: ['tabular-nums'] }}>
+              {runningLow.length}
+            </Text>
+          </Text>
+          {runningLow.length >= 2 && (
+            <Button size="sm" variant="outline" onPress={confirmAddAll}>
+              Add all {runningLow.length}
+            </Button>
+          )}
+        </View>
+      )}
 
       {reviewing ? (
         <SuggestReAddSection
@@ -92,17 +125,22 @@ export function ReAddSuggestions({ runningLow, onAdd, onAddAll, onSnooze, dismis
         </View>
       )}
 
-      {/* Footer: more chips, or the full rows with every control. */}
-      <View className="flex-row flex-wrap gap-2">
-        {!reviewing && runningLow.length > cap && (
-          <Button size="sm" variant="ghost" onPress={() => setShowAllLow((v) => !v)}>
-            {hiddenLow > 0 ? `Show ${hiddenLow} more` : 'Show fewer'}
-          </Button>
-        )}
-        <Button size="sm" variant="ghost" onPress={() => setReviewing((v) => !v)} accessibilityState={{ expanded: reviewing }}>
-          {reviewing ? 'Compact view' : 'Full review'}
-        </Button>
-      </View>
+      {/* Footer: more chips, or the full rows with every control (the group
+          variant carries Review on its header line instead). */}
+      {(variant !== 'group' || (!reviewing && runningLow.length > cap)) && (
+        <View className="flex-row flex-wrap gap-2">
+          {!reviewing && runningLow.length > cap && (
+            <Button size="sm" variant="ghost" onPress={() => setShowAllLow((v) => !v)}>
+              {hiddenLow > 0 ? `Show ${hiddenLow} more` : 'Show fewer'}
+            </Button>
+          )}
+          {variant !== 'group' && (
+            <Button size="sm" variant="ghost" onPress={() => setReviewing((v) => !v)} accessibilityState={{ expanded: reviewing }}>
+              {reviewing ? 'Compact view' : 'Full review'}
+            </Button>
+          )}
+        </View>
+      )}
 
       <BottomSheet open={!!menuTarget} onOpenChange={(open) => !open && closeMenu()} className="pb-2">
         {menuTarget && (
