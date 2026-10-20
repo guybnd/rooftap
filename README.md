@@ -27,7 +27,7 @@ The full guide covers HTTPS for the phone app, backups, upgrades and recovering 
 
 ## Phone app
 
-Use the Rooftap app from the store and point it at your server. Android release builds only talk to HTTPS servers, so put your server behind the bundled Caddy profile or Tailscale first (see "Mobile access" in the self-hosting guide).
+Use the Rooftap app from the store and point it at your server. Android release builds only talk to HTTPS servers. The easiest way with nothing to install on the phone and no open ports is the bundled Tailscale Funnel or Cloudflare Tunnel profile; a public domain with the Caddy profile works too (see "Mobile access" in the self-hosting guide).
 
 ## Web app (PWA)
 

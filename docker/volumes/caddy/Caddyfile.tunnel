@@ -1,0 +1,31 @@
+# Plain-HTTP origin for the tunnel profiles (`tailscale-funnel`,
+# `cloudflare-tunnel`; see .docs/self-hosting.md "Mobile access"). The tunnel
+# terminates HTTPS and forwards here, so the phone needs nothing but a browser
+# or the store app. Same path split as the Caddyfile next to this one:
+# Supabase's API paths to Kong, everything else to the web app.
+#
+# Loopback only: nothing but the tunnel on this host should reach it. The
+# Funnel serve config (docker/volumes/tailscale/serve.json) points at 8088 too.
+
+{
+	# The https profile's Caddy may run alongside; only one can own :2019.
+	admin off
+	auto_https off
+	servers {
+		# Keep the tunnel's X-Forwarded-Proto: https, so auth and the web app
+		# see the public scheme rather than this hop's plain HTTP.
+		trusted_proxies static 127.0.0.1/32 ::1/128
+	}
+}
+
+# Any Host: the tunnel forwards the public hostname, not 127.0.0.1.
+http://:8088 {
+	bind 127.0.0.1
+	@supabase path /auth/v1/* /rest/v1/* /realtime/v1/* /storage/v1/* /functions/v1/*
+	handle @supabase {
+		reverse_proxy localhost:{$KONG_HTTP_PORT:8000}
+	}
+	handle {
+		reverse_proxy localhost:{$APP_PORT:3000}
+	}
+}

@@ -312,10 +312,64 @@ to be true for a phone to use it:
   for auth, data, realtime and storage. Left unset it falls back to
   `http://localhost:8000`, which on a phone is the phone itself.
 
-The compose file ships an optional Caddy front door (the `https` profile) that
-solves both: one hostname, a real certificate, Supabase's API paths
-(`/auth/v1`, `/rest/v1`, `/realtime/v1`, `/storage/v1`, `/functions/v1`)
-routed to Kong and everything else to the web app.
+The compose file ships three optional ways to solve both: one hostname, a
+real certificate, Supabase's API paths (`/auth/v1`, `/rest/v1`,
+`/realtime/v1`, `/storage/v1`, `/functions/v1`) routed to Kong and everything
+else to the web app.
+
+| Option | Profile | Needs | Phone needs |
+|---|---|---|---|
+| Tailscale Funnel | `tailscale-funnel` | a free Tailscale account | nothing |
+| Cloudflare Tunnel | `cloudflare-tunnel` | a domain on Cloudflare | nothing |
+| Public domain | `https` | a domain, ports 80 and 443 open | nothing |
+| Private Tailscale | `https` | a Tailscale account | the Tailscale app |
+
+The two tunnels open no ports on your router. The tunnel runs on the server,
+takes care of HTTPS, and forwards to a small plain-HTTP Caddy on
+`127.0.0.1:8088` (`docker/volumes/caddy/Caddyfile.tunnel`). Both put your
+server on the public internet: the login page protects it, and registration
+closes once the owner account exists.
+
+### With Tailscale Funnel (no domain, no open ports)
+
+1. In the [Tailscale admin console](https://login.tailscale.com/admin), turn
+   on HTTPS certificates (DNS page) and make sure your access controls allow
+   Funnel (new tailnets do by default; otherwise add the `funnel` node
+   attribute).
+2. Create an auth key (Settings, Keys). In `.env`:
+
+   ```bash
+   TS_AUTHKEY=tskey-auth-...
+   TS_HOSTNAME=rooftap
+   SUPABASE_PUBLIC_URL=https://rooftap.<tailnet>.ts.net
+   SITE_URL=https://rooftap.<tailnet>.ts.net
+   ```
+
+   `<tailnet>` is your tailnet's DNS name from the DNS page.
+3. `docker compose --profile tailscale-funnel up -d`. This adds its own
+   Tailscale node named `rooftap`, separate from any Tailscale already
+   running on the host. The auth key is only used on first start; the node
+   is kept in the `tailscale-state` volume.
+
+In the app, choose "my own server" and enter `https://rooftap.<tailnet>.ts.net`.
+
+### With Cloudflare Tunnel (your domain, no open ports)
+
+1. In the Cloudflare dashboard (Zero Trust, Networks, Tunnels), create a
+   tunnel of type Cloudflared and copy its token.
+2. Add a public hostname to the tunnel, for example `rooftap.example.com`,
+   with service type `HTTP` and URL `127.0.0.1:8088`.
+3. In `.env`:
+
+   ```bash
+   CLOUDFLARE_TUNNEL_TOKEN=eyJ...
+   SUPABASE_PUBLIC_URL=https://rooftap.example.com
+   SITE_URL=https://rooftap.example.com
+   ```
+
+4. `docker compose --profile cloudflare-tunnel up -d`.
+
+In the app, choose "my own server" and enter `https://rooftap.example.com`.
 
 ### With a public domain
 
@@ -331,7 +385,7 @@ Then `docker compose --profile https up -d`. Caddy gets a Let's Encrypt
 certificate on first start. In the app, choose "my own server" and enter
 `https://homeup.example.com`.
 
-### With Tailscale (no open ports)
+### With Tailscale, private to your tailnet
 
 Turn on HTTPS certificates for your tailnet (admin console, DNS page), then:
 
@@ -343,7 +397,8 @@ SITE_URL=https://<machine>.<tailnet>.ts.net
 
 Uncomment the `tailscaled.sock` volume on the `caddy` service so Caddy can
 fetch the `*.ts.net` certificate from the local Tailscale daemon, then
-`docker compose --profile https up -d`. The phone needs Tailscale running.
+`docker compose --profile https up -d`. Every phone needs the Tailscale app
+running; use Funnel above if you'd rather it didn't.
 
 ### Installing the web app (PWA)
 
@@ -384,6 +439,11 @@ later.
 
   That run used the web app on the host (`next start`), not the `app`
   container. Let's Encrypt, Tailscale and a real phone were not tested.
+- **Tunnel profiles, what was tested:** the tunnel origin's Caddyfile was run
+  against stub upstreams: API paths reached Kong, everything else the app,
+  any public Host was accepted, and the tunnel's `X-Forwarded-Proto: https`
+  was passed through. The Funnel and Cloudflare connectors themselves were
+  not run.
 - **The web UI from other devices** also needs `NEXT_PUBLIC_SUPABASE_URL` set
   to the same `https://` origin, followed by a rebuild
   (`./scripts/self-host-init.sh -d --build`). It's baked into the web bundle

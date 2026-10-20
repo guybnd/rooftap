@@ -366,8 +366,63 @@ services:
       # Uncomment when HOMEUP_DOMAIN is a ts.net name.
       # - /var/run/tailscale/tailscaled.sock:/var/run/tailscale/tailscaled.sock
 
+  # Tunnel profiles: HTTPS for the phone with no open ports and nothing to
+  # install on the phone. The tunnel runs here and forwards to tunnel-origin,
+  # a loopback-only plain-HTTP Caddy with the same path split as `caddy`.
+  #   docker compose --profile tailscale-funnel up -d    (TS_AUTHKEY in .env)
+  #   docker compose --profile cloudflare-tunnel up -d   (CLOUDFLARE_TUNNEL_TOKEN)
+  # See .docs/self-hosting.md "Mobile access".
+  tunnel-origin:
+    image: caddy:2.10.2
+    profiles: ["tailscale-funnel", "cloudflare-tunnel"]
+    restart: unless-stopped
+    depends_on:
+      - kong
+      - app
+    network_mode: host
+    environment:
+      KONG_HTTP_PORT: ${KONG_HTTP_PORT:-8000}
+      APP_PORT: ${APP_PORT:-3000}
+    volumes:
+      - ./docker/volumes/caddy/Caddyfile.tunnel:/etc/caddy/Caddyfile:ro
+
+  # Tailscale Funnel: publishes https://<TS_HOSTNAME>.<tailnet>.ts.net on the
+  # internet. Its own userspace node, so it works whether or not the host also
+  # runs Tailscale.
+  tailscale:
+    image: tailscale/tailscale:v1.102.5
+    profiles: ["tailscale-funnel"]
+    restart: unless-stopped
+    depends_on:
+      - tunnel-origin
+    network_mode: host
+    environment:
+      TS_AUTHKEY: ${TS_AUTHKEY:-}
+      TS_HOSTNAME: ${TS_HOSTNAME:-rooftap}
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_USERSPACE: "true"
+      TS_SERVE_CONFIG: /config/serve.json
+    volumes:
+      - ./docker/volumes/tailscale/serve.json:/config/serve.json:ro
+      - tailscale-state:/var/lib/tailscale
+
+  # Cloudflare Tunnel: the public hostname and its target
+  # (http://127.0.0.1:8088) are set in the Cloudflare dashboard; the token
+  # ties this connector to that tunnel.
+  cloudflared:
+    image: cloudflare/cloudflared:2026.9.3
+    profiles: ["cloudflare-tunnel"]
+    restart: unless-stopped
+    depends_on:
+      - tunnel-origin
+    network_mode: host
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    command: ["tunnel", "--no-autoupdate", "run"]
+
 volumes:
   db-data:
   db-config:
   caddy-data:
+  tailscale-state:
   storage-data:
