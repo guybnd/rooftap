@@ -42,6 +42,7 @@ export * from './components/snooze-undercard';
 export * from './components/reorderable-list';
 export * from './components/editable-text';
 export * from './components/drag-number-field';
+export * from './components/popover-number-field';
 export * from './components/assignee-picker';
 export * from './components/scroll-field';
 export * from './components/date-scroll-field';

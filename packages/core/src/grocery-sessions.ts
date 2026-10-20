@@ -49,11 +49,14 @@ export async function ensureSession(
   tracking: 'on' | 'skipped',
   summedCents: number
 ): Promise<GrocerySession | null> {
-  const { data: { user } } = await supabase.auth.getUser();
+  // getSession reads the stored session; getUser was an extra auth round trip
+  // in front of the upsert, on the Track tap's critical path. created_by is
+  // attribution only (RLS checks the group, not this field).
+  const { data: { session } } = await supabase.auth.getSession();
   const { data, error } = await supabase
     .from('grocery_sessions')
     .upsert(
-      { group_id: groupId, session_date: todayStr(), tracking, summed_total_cents: summedCents, created_by: user?.id },
+      { group_id: groupId, session_date: todayStr(), tracking, summed_total_cents: summedCents, created_by: session?.user.id },
       { onConflict: 'group_id,session_date' }
     )
     .select()

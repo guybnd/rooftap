@@ -7,7 +7,7 @@
 //
 // HOUP-224: long-press now opens the row's overflow menu (`GroceryItemQuickMenu`)
 // instead of jumping straight to the edit sheet — mirrors task-row.tsx's
-// TaskQuickMenu wiring. Qty/price are now row-level chips (tap = exact-value
+// TaskQuickMenu wiring. Qty is a row-level chip (tap = exact-value
 // entry, drag = adjust) via `@homeup/ui`'s `DragNumberField` — the same
 // primitive the edit sheet already uses for the identical tap+drag contract,
 // reused here rather than hand-rolling a second native gesture implementation
@@ -15,6 +15,10 @@
 // port 1:1 anyway). Archive/Delete are now distinct actions (see
 // apps/mobile/src/app/(tabs)/groceries/index.tsx's handleArchive/handleRequestDelete)
 // instead of the old single always-learns-to-library `onEdit`-triggered delete.
+//
+// The price no longer drags on the row (it changed by accident, Guy
+// 2026-10-20): tapping it opens `PopoverNumberField`'s small editor beside
+// it, which types or drags the value and commits when tapped away from.
 import * as React from 'react';
 import { Pressable, View } from 'react-native';
 import { useRouter, type Href } from 'expo-router';
@@ -23,6 +27,7 @@ import {
   Text,
   BottomSheet,
   DragNumberField,
+  PopoverNumberField,
   EditableText,
   ListItem,
   ListItemLeading,
@@ -167,13 +172,10 @@ export function GroceryItemCard({
     [item, effectivePriceCents, onPatch]
   );
 
-  // Price chip commit — the store write is immediate/optimistic (matches
-  // every other onPatch call on this row); the "teach the shared library"
-  // network write is debounced so a drag's continuous stream of onChange
-  // calls doesn't fire one upsert per tick (web's own useDragNumber only
-  // learns once, on pointer-up — this reproduces that "on settle" contract
-  // without a matching signal from DragNumberField, which has no distinct
-  // drag-end callback).
+  // Price commit — the store write is immediate/optimistic (matches every
+  // other onPatch call on this row). The popover commits once, on close; the
+  // "teach the shared library" write stays debounced so a quick re-edit
+  // doesn't fire two upserts.
   const priceLearnTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   React.useEffect(() => () => {
     if (priceLearnTimer.current) clearTimeout(priceLearnTimer.current);
@@ -396,19 +398,20 @@ export function GroceryItemCard({
         )}
         {showAisleDot && <View className={cn('h-2 w-2 rounded-full', dot)} />}
         {effectivePriceCents != null && (
-          <DragNumberField
+          <PopoverNumberField
             value={effectivePriceCents / 100}
             onChange={handlePriceChange}
             step={0.5}
             min={0}
             precision={2}
             prefix={hasExplicitPrice ? currencySymbol() : `~${currencySymbol()}`}
-            hideIcon
-            accessibilityLabel="Price: tap to edit, drag up or down to adjust"
+            inputPrefix={currencySymbol()}
+            label={hasExplicitPrice ? `Price of ${item.name}` : `Price of ${item.name} (estimated)`}
+            accessibilityLabel="Price: tap to change"
             // H2: a price is data, not state; muted like web's row.
             textClassName="text-muted-foreground"
             className={cn(
-              CHIP_CLASS,
+              'px-0.5',
               // Estimated (library-fallback) price reads visually lighter
               // than a real explicit price, so the two are distinguishable
               // at a glance.

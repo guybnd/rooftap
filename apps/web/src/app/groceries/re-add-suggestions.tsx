@@ -102,12 +102,12 @@ export function ReAddSuggestions({ runningLow, onAdd, onAddAll, onSnooze, dismis
 
   if (variant === 'group') {
     return (
-      <section aria-label="Running low" className="space-y-1.5">
+      <section aria-label="Might be running low" className="space-y-1.5">
         {/* Same row as an aisle header (Hearth §6 Group header); no card
             around the chips, they sit on the ground like an aisle's list (H4). */}
         <div className="flex items-center gap-2 px-1">
           <span className="cap-inscription text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-            Running low
+            Might be running low
           </span>
           <span className="text-xs tabular-nums text-muted-foreground/70">{runningLow.length}</span>
           <div className="-my-2 ml-auto flex items-center">

@@ -644,6 +644,12 @@ export default function GroceriesSectionScreen() {
   whyRender('groceries:aux', { customAisles, library, libMap, priceFor, refreshAux });
 
   const [session, setSession] = React.useState<GrocerySession | null>(null);
+  // False until today's session is known (cache or fetch): before then a null
+  // session only means "not read yet", and the Track ask flashed up and away.
+  const [sessionKnown, setSessionKnown] = React.useState(false);
+  // The Track ask's answer while its save is in flight: the ask hides (and the
+  // pill shows, for Track) on the tap, not after the round trip.
+  const [pendingTracking, setPendingTracking] = React.useState<'on' | 'skipped' | null>(null);
   const sessionSyncRef = React.useRef<string>('');
   // Timestamp (ms) of the last grocery_items/grocery_sessions realtime echo,
   // 0 = none yet. A bounded TTL, not a consume-once flag (see the sync
@@ -783,13 +789,17 @@ export default function GroceriesSectionScreen() {
     const fetchVersion = startSessionFetch(sessionFetchVersionRef);
     const today = todayStr();
     const cached = getCachedSession(group.id, today);
-    if (cached !== undefined) setSession(cached);
+    if (cached !== undefined) {
+      setSession(cached);
+      setSessionKnown(true);
+    }
     (async () => {
       const supabase = getCurrentSupabaseClient();
       const s = await fetchTodaySession(supabase, group.id);
       perfMark('groceries:effect:sessionFetch:resolved');
       if (!cancelled && isFreshSessionFetch(sessionFetchVersionRef, fetchVersion)) {
         setSession(s);
+        setSessionKnown(true);
         setCachedSession(group.id, today, s);
       }
     })();
@@ -1547,27 +1557,47 @@ export default function GroceriesSectionScreen() {
     return <NoGroupScreen />;
   }
 
-  const handleStartTracking = async () => {
-    const supabase = getCurrentSupabaseClient();
-    const s = await ensureSession(supabase, group.id, 'on', 0);
-    setSession(s);
+  // Track / Not today answer on the tap: pendingTracking hides the ask (and
+  // shows the pill for Track) while the session saves, and a second tap in
+  // that window is ignored. The save carries today's running sum so the
+  // session-cost sync has nothing left to write straight after.
+  const setTracking = async (tracking: 'on' | 'skipped') => {
+    if (pendingTracking) return;
+    setPendingTracking(tracking);
+    try {
+      const supabase = getCurrentSupabaseClient();
+      const s = await ensureSession(supabase, group.id, tracking, sessionSummedCents);
+      if (s) {
+        setSession(s);
+        setCachedSession(group.id, todayStr(), s);
+      } else {
+        toast.error(tracking === 'on' ? "Couldn't start tracking, try again" : "Couldn't save that, try again");
+      }
+    } finally {
+      setPendingTracking(null);
+    }
   };
-  const handleSkipTracking = async () => {
-    const supabase = getCurrentSupabaseClient();
-    const s = await ensureSession(supabase, group.id, 'skipped', 0);
-    setSession(s);
-  };
+  const handleStartTracking = () => setTracking('on');
+  const handleSkipTracking = () => setTracking('skipped');
+  // Optimistic: the pill shows the new total on commit; the saved row (or the
+  // old one, if the save fails) replaces it when the write returns.
   const handleOverrideTotal = async (cents: number | null) => {
     if (!session) return;
+    const before = session;
+    setSession({ ...session, override_total_cents: cents });
     const supabase = getCurrentSupabaseClient();
     const s = await updateSession(supabase, session.id, { override_total_cents: cents });
-    setSession(s);
+    setSession(s ?? before);
+    if (!s) toast.error("Couldn't change the total, try again");
   };
   const handleStopTracking = async () => {
     if (!session) return;
+    const before = session;
+    setSession({ ...session, tracking: 'skipped' });
     const supabase = getCurrentSupabaseClient();
     const s = await updateSession(supabase, session.id, { tracking: 'skipped' });
-    setSession(s);
+    setSession(s ?? before);
+    if (!s) toast.error("Couldn't stop tracking, try again");
   };
   // Done shopping (web page.tsx:560-598): freezes the session first (so its
   // Costs line survives), then flips every item bought today to Have it —
@@ -1826,12 +1856,37 @@ export default function GroceriesSectionScreen() {
 
   // The track-today ask floats over the list (never pushes it down) while
   // nothing else owns the bottom edge: Select's bulk bar, Reorder, search.
-  const showTrackPrompt = session === null && boughtCount > 0 && !reorderMode && !selectMode && !searching;
+  const showTrackPrompt =
+    sessionKnown && session === null && pendingTracking === null && boughtCount > 0 && !reorderMode && !selectMode && !searching;
   // Clears the capture button's raised lip above the in-flow tab bar.
   const trackPromptBottom = 32;
   // Once tracking, the shop pill takes the prompt's spot (same hiding rules).
-  const showShopPill =
-    session?.tracking === 'on' && !session.closed_at && !reorderMode && !selectMode && !searching;
+  const trackingOn = (session?.tracking === 'on' && !session.closed_at) || pendingTracking === 'on';
+  const showShopPill = trackingOn && !reorderMode && !selectMode && !searching;
+  // While Track's save is in flight the pill reads from a stand-in session
+  // carrying today's running sum (display only, never written).
+  const pillSession: GrocerySession | null =
+    session?.tracking === 'on' && !session.closed_at
+      ? session
+      : pendingTracking === 'on'
+        ? {
+            id: '',
+            group_id: group.id,
+            session_date: todayStr(),
+            summed_total_cents: sessionSummedCents,
+            override_total_cents: null,
+            receipt_total_cents: null,
+            retailer: null,
+            receipt_path: null,
+            receipt_name: null,
+            tracking: 'on',
+            cost_item_id: null,
+            closed_at: null,
+            created_by: null,
+            created_at: '',
+            updated_at: '',
+          }
+        : null;
   const listPaddingBottom = insets.bottom + 96 + (showTrackPrompt || showShopPill ? 72 : 0);
 
   return (
@@ -1942,9 +1997,10 @@ export default function GroceriesSectionScreen() {
       <ActionMenu anchor={moreAnchor} onClose={() => setMoreAnchor(null)} items={moreItems} />
       <ActionMenu anchor={viewAnchor} onClose={() => setViewAnchor(null)} items={viewItems} />
 
-      {showShopPill && session && (
+      {showShopPill && pillSession && (
         <ShopTrackingPill
-          session={session}
+          session={pillSession}
+          pending={pillSession !== session}
           boughtCount={boughtCount}
           bottom={trackPromptBottom}
           onOverrideTotal={handleOverrideTotal}

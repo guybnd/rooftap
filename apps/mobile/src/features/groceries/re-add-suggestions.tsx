@@ -72,7 +72,7 @@ export function ReAddSuggestions({
     <View className="gap-2">
       {variant === 'group' ? (
         <View className="min-h-9 flex-row items-center gap-1.5 px-1">
-          <Text className="text-[10.5px] font-medium uppercase tracking-[0.1em] text-foreground">Running low</Text>
+          <Text className="text-[10.5px] font-medium uppercase tracking-[0.1em] text-foreground">Might be running low</Text>
           <Text className="text-xs text-muted-foreground/70" style={{ fontVariant: ['tabular-nums'] }}>
             {runningLow.length}
           </Text>

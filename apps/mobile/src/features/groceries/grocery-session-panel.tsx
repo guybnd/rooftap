@@ -99,19 +99,22 @@ interface ShopTrackingPillProps {
   receiptBusy: boolean;
   receiptError: string | null;
   onDone: () => void;
+  /** Tracking was just tapped and today's session is still being saved: the
+   *  pill shows straight away, with Receipt and Done waiting for the save. */
+  pending?: boolean;
 }
 
 /** While a shop is tracked: a floating pill in the Track ask's spot, so the
  *  total, the receipt and Done stay under the thumb however far the list
  *  scrolls (Guy, 2026-10-20). A neutral popover, not the ask's accent: it's a
  *  standing tool, not a question. Done opens FinishShopSheet. */
-export function ShopTrackingPill({ session, boughtCount, bottom, onOverrideTotal, onReceipt, receiptBusy, receiptError, onDone }: ShopTrackingPillProps) {
+export function ShopTrackingPill({ session, boughtCount, bottom, onOverrideTotal, onReceipt, receiptBusy, receiptError, onDone, pending = false }: ShopTrackingPillProps) {
   const source = totalSource(session);
   const caption = `${source === 'estimated' ? 'in cart' : source} · ${boughtCount} got`;
   return (
     <Animated.View
-      entering={FadeInDown.duration(MOTION_DURATIONS_MS.slow)}
-      exiting={FadeOutDown.duration(MOTION_DURATIONS_MS.exit)}
+      entering={FadeInDown.duration(MOTION_DURATIONS_MS.base)}
+      exiting={FadeOutDown.duration(MOTION_DURATIONS_MS.fast)}
       pointerEvents="box-none"
       className="absolute inset-x-4 z-40 items-center"
       style={{ bottom }}
@@ -119,7 +122,7 @@ export function ShopTrackingPill({ session, boughtCount, bottom, onOverrideTotal
       <View className="w-full max-w-md gap-1 rounded-2xl border border-border bg-popover py-2 pl-4 pr-2 shadow-lg">
         <View className="flex-row items-center gap-2">
           <EditableTotal session={session} caption={caption} onOverrideTotal={onOverrideTotal} />
-          <Button size="sm" variant="outline" onPress={onReceipt} disabled={receiptBusy} accessibilityLabel={session.receipt_path ? 'Replace receipt' : 'Add receipt'}>
+          <Button size="sm" variant="outline" onPress={onReceipt} disabled={receiptBusy || pending} accessibilityLabel={session.receipt_path ? 'Replace receipt' : 'Add receipt'}>
             {receiptBusy ? <Loader2 size={14} className="animate-spin text-foreground" /> : <Camera size={14} className="text-foreground" />}
             <Text className="text-sm font-medium text-foreground">Receipt</Text>
           </Button>
@@ -128,8 +131,9 @@ export function ShopTrackingPill({ session, boughtCount, bottom, onOverrideTotal
               haptics.select();
               onDone();
             }}
+            disabled={pending}
             accessibilityRole="button"
-            className="min-h-11 shrink-0 justify-center rounded-xl bg-foreground px-4 active:opacity-80"
+            className={cn('min-h-11 shrink-0 justify-center rounded-xl bg-foreground px-4 active:opacity-80', pending && 'opacity-60')}
           >
             <Text className="text-sm font-semibold text-background">Done</Text>
           </Pressable>
@@ -237,7 +241,9 @@ interface TrackShopPromptProps {
 
 /** Floating accent popup that asks to track today's shop once something is in
  *  the cart and no decision has been made yet. Rendered by the screen as an
- *  overlay, so it never moves the list. */
+ *  overlay, so it never moves the list. Both buttons answer at once: the
+ *  screen hides the ask (and shows the pill for Track) before the session is
+ *  saved, never after the round trip. */
 export function TrackShopPrompt({ boughtCount, summedCents, bottom, onStartTracking, onSkipTracking }: TrackShopPromptProps) {
   const modules = useModules();
   // Modules: the trip only lands in Costs when costs and groceries are both on (module-features.ts).
@@ -245,8 +251,8 @@ export function TrackShopPrompt({ boughtCount, summedCents, bottom, onStartTrack
 
   return (
     <Animated.View
-      entering={FadeInDown.duration(MOTION_DURATIONS_MS.slow)}
-      exiting={FadeOutDown.duration(MOTION_DURATIONS_MS.exit)}
+      entering={FadeInDown.duration(MOTION_DURATIONS_MS.base)}
+      exiting={FadeOutDown.duration(MOTION_DURATIONS_MS.fast)}
       pointerEvents="box-none"
       className="absolute inset-x-4 z-40 items-center"
       style={{ bottom }}
@@ -270,8 +276,9 @@ export function TrackShopPrompt({ boughtCount, summedCents, bottom, onStartTrack
             haptics.select();
             onSkipTracking();
           }}
+          hitSlop={4}
           accessibilityRole="button"
-          className="min-h-11 shrink-0 justify-center rounded-xl px-2.5"
+          className="min-h-11 shrink-0 justify-center rounded-xl px-2.5 active:opacity-60"
         >
           <Text className="text-sm text-primary-foreground/80">Not today</Text>
         </Pressable>
@@ -280,6 +287,7 @@ export function TrackShopPrompt({ boughtCount, summedCents, bottom, onStartTrack
             haptics.commit();
             onStartTracking();
           }}
+          hitSlop={4}
           accessibilityRole="button"
           className="min-h-11 shrink-0 justify-center rounded-xl bg-primary-foreground px-4 active:opacity-80"
         >
