@@ -29,6 +29,10 @@ The full guide covers HTTPS for the phone app, backups, upgrades and recovering 
 
 Use the Rooftap app from the store and point it at your server. Android release builds only talk to HTTPS servers, so put your server behind the bundled Caddy profile or Tailscale first (see "Mobile access" in the self-hosting guide).
 
+## Web app (PWA)
+
+The web app installs like an app on Android, iPhone, iPad and desktop: open your server in the browser and choose **Install app** (Chrome, Edge) or **Add to Home Screen** (Safari). It opens in its own window and keeps working offline. Browsers only install over HTTPS, so set up the same HTTPS front door as for the phone app, then point `NEXT_PUBLIC_SUPABASE_URL` at that `https://` address and rebuild. Step by step: "Installing the web app (PWA)" in the self-hosting guide.
+
 ## What's in the stack
 
 `docker-compose.yml` runs Postgres, Supabase's auth, REST, realtime, storage and edge-function services behind a Kong gateway, plus the Rooftap web app (Next.js). The server needs outbound internet access for public services such as Open-Meteo weather and OpenStreetMap's Overpass API.

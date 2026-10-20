@@ -345,6 +345,33 @@ Uncomment the `tailscaled.sock` volume on the `caddy` service so Caddy can
 fetch the `*.ts.net` certificate from the local Tailscale daemon, then
 `docker compose --profile https up -d`. The phone needs Tailscale running.
 
+### Installing the web app (PWA)
+
+The `app` image is a production build, so it ships the web app manifest and
+the offline service worker. Any browser that supports installable web apps can
+add Rooftap to the home screen or desktop, where it opens in its own window,
+keeps working offline from its cache, and shows up as a share target for
+photos, PDFs and calendar files on Android.
+
+Browsers only install a web app (and only run its service worker) on HTTPS.
+`http://localhost:3000` counts as secure on the server itself, but every other
+device needs the HTTPS setup above:
+
+1. Bring up the `https` profile with a public domain or Tailscale name.
+2. Set `NEXT_PUBLIC_SUPABASE_URL` to that same `https://` origin and rebuild
+   with `./scripts/self-host-init.sh -d --build` (see the notes below). An
+   `http://` value is blocked as mixed content inside the installed app.
+3. Open `https://<your domain>` and install it:
+   - **Android (Chrome, Edge, Samsung Internet):** menu, then **Install app**
+     or **Add to Home screen**.
+   - **iPhone and iPad (Safari):** Share, then **Add to Home Screen**.
+   - **Desktop (Chrome, Edge):** the install icon at the right of the address
+     bar. Firefox on desktop doesn't install web apps.
+
+Browser push notifications are optional and need VAPID keys (see
+`.env.example`). On iPhone they only work from the installed app, iOS 16.4 or
+later.
+
 ### Notes
 
 - **What was tested:** the compose stack ran with `HOMEUP_DOMAIN=localhost`
