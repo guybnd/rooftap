@@ -11,10 +11,51 @@ export const APARTMENT_PHOTO_BUCKET = 'apartment-photos';
 
 type UploadBody = Parameters<ReturnType<SupabaseClient['storage']['from']>['upload']>[1];
 
-/** Public URL for a photo. Legacy rows store a full http(s) URL instead of a bucket path. */
-export function apartmentPhotoUrl(supabase: SupabaseClient, photo: Pick<Photo, 'storage_path'>): string {
-  if (photo.storage_path.startsWith('http')) return photo.storage_path;
-  return supabase.storage.from(APARTMENT_PHOTO_BUCKET).getPublicUrl(photo.storage_path).data.publicUrl;
+/**
+ * How long a photo's signed URL stays valid. Long enough that a gallery left
+ * open keeps loading; each list call signs afresh.
+ */
+export const APARTMENT_PHOTO_URL_TTL_SECONDS = 60 * 60;
+
+const BUCKET_URL_PATTERN = new RegExp(`/storage/v1/object/(?:public|sign)/${APARTMENT_PHOTO_BUCKET}/([^?#]+)`);
+
+/**
+ * The bucket path behind a photo row, or null when the photo lives elsewhere
+ * (a listing site's image URL). Some rows hold one of this bucket's own URLs
+ * rather than a path (parse-listing's PDF extracts: public URLs before, signed
+ * ones since); those map back to the path so they get signed afresh.
+ */
+export function apartmentPhotoPath(storagePath: string): string | null {
+  if (!storagePath.startsWith('http')) return storagePath;
+  const match = BUCKET_URL_PATTERN.exec(storagePath);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+/**
+ * Viewable URLs for photos, in the same order. Files in the bucket get signed
+ * URLs, so they keep opening once the bucket is private; other URLs pass
+ * through. A file that fails to sign falls back to its public URL, which works
+ * only while the bucket is still public.
+ */
+export async function apartmentPhotoUrls(
+  supabase: SupabaseClient,
+  photos: Pick<Photo, 'storage_path'>[],
+): Promise<string[]> {
+  const bucket = supabase.storage.from(APARTMENT_PHOTO_BUCKET);
+  const paths = photos.map((photo) => apartmentPhotoPath(photo.storage_path));
+  const toSign = [...new Set(paths.filter((path): path is string => path !== null))];
+  const signed = new Map<string, string>();
+  if (toSign.length > 0) {
+    const { data } = await bucket.createSignedUrls(toSign, APARTMENT_PHOTO_URL_TTL_SECONDS);
+    for (const row of data ?? []) {
+      if (row.path && row.signedUrl && !row.error) signed.set(row.path, row.signedUrl);
+    }
+  }
+  return photos.map((photo, i) => {
+    const path = paths[i];
+    if (path === null) return photo.storage_path;
+    return signed.get(path) ?? bucket.getPublicUrl(path).data.publicUrl;
+  });
 }
 
 /** An apartment's photos, main photo first then oldest first, with their URLs keyed by photo id. */
@@ -30,8 +71,11 @@ export async function listApartmentPhotos(
     .order('created_at', { ascending: true });
   if (!data) return null;
   const photos = data as Photo[];
+  const list = await apartmentPhotoUrls(supabase, photos);
   const urls: Record<string, string> = {};
-  for (const photo of photos) urls[photo.id] = apartmentPhotoUrl(supabase, photo);
+  photos.forEach((photo, i) => {
+    urls[photo.id] = list[i];
+  });
   return { photos, urls };
 }
 

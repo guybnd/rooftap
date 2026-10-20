@@ -74,6 +74,7 @@ import {
 import { Text, Button, Card, Input, cn, haptics } from '@homeup/ui';
 import {
   apartmentComments$,
+  apartmentPhotoUrls,
   apartments$,
   appointments$,
   formatRelativeDay,
@@ -219,12 +220,8 @@ export function ApartmentCard({
 
       if (cancelled || !data || data.length === 0) return;
 
-      const urls = data.map((photo) => {
-        if (photo.storage_path.startsWith('http')) return photo.storage_path as string;
-        const { data: urlData } = supabase.storage.from('apartment-photos').getPublicUrl(photo.storage_path);
-        return urlData.publicUrl;
-      });
-      setPhotoUrls(urls);
+      const urls = await apartmentPhotoUrls(supabase, data);
+      if (!cancelled) setPhotoUrls(urls);
     })();
     return () => {
       cancelled = true;

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { apartmentPhotoUrl, uploadApartmentPhoto } from './photos';
+import { apartmentPhotoPath, apartmentPhotoUrls, uploadApartmentPhoto } from './photos';
 
 function fakeSupabase(uploadError: unknown = null) {
   const upload = vi.fn(() => Promise.resolve({ error: uploadError }));
@@ -17,11 +17,52 @@ function fakeSupabase(uploadError: unknown = null) {
   return { client: client as unknown as SupabaseClient, upload, insert };
 }
 
-describe('apartmentPhotoUrl', () => {
-  it('passes legacy absolute URLs through and resolves bucket paths', () => {
-    const { client } = fakeSupabase();
-    expect(apartmentPhotoUrl(client, { storage_path: 'https://old/x.jpg' })).toBe('https://old/x.jpg');
-    expect(apartmentPhotoUrl(client, { storage_path: 'u/a/x.jpg' })).toBe('https://cdn/u/a/x.jpg');
+describe('apartmentPhotoPath', () => {
+  it('keeps bucket paths, maps this bucket\'s own URLs back to paths, and leaves other URLs alone', () => {
+    expect(apartmentPhotoPath('u/a/x.jpg')).toBe('u/a/x.jpg');
+    expect(apartmentPhotoPath('https://s.example/storage/v1/object/public/apartment-photos/pdf-extracts/1.jpg')).toBe('pdf-extracts/1.jpg');
+    expect(apartmentPhotoPath('https://s.example/storage/v1/object/sign/apartment-photos/pdf-extracts/2.jpg?token=abc')).toBe('pdf-extracts/2.jpg');
+    expect(apartmentPhotoPath('https://s.example/storage/v1/object/public/documents/x.pdf')).toBeNull();
+    expect(apartmentPhotoPath('https://listing.example/img/x.jpg')).toBeNull();
+  });
+});
+
+describe('apartmentPhotoUrls', () => {
+  function signingClient(signed: { path: string; signedUrl: string; error: string | null }[]) {
+    const createSignedUrls = vi.fn(async () => ({ data: signed, error: null }));
+    const client = {
+      storage: {
+        from: () => ({
+          createSignedUrls,
+          getPublicUrl: (path: string) => ({ data: { publicUrl: `https://cdn/${path}` } }),
+        }),
+      },
+    } as unknown as SupabaseClient;
+    return { client, createSignedUrls };
+  }
+
+  it('signs bucket files once each, in order, and passes external URLs through', async () => {
+    const { client, createSignedUrls } = signingClient([
+      { path: 'u/a/x.jpg', signedUrl: 'https://signed/x', error: null },
+      { path: 'pdf-extracts/1.jpg', signedUrl: 'https://signed/1', error: null },
+    ]);
+    const urls = await apartmentPhotoUrls(client, [
+      { storage_path: 'https://listing.example/a.jpg' },
+      { storage_path: 'u/a/x.jpg' },
+      { storage_path: 'https://s/storage/v1/object/public/apartment-photos/pdf-extracts/1.jpg' },
+      { storage_path: 'u/a/x.jpg' },
+    ]);
+    expect(urls).toEqual(['https://listing.example/a.jpg', 'https://signed/x', 'https://signed/1', 'https://signed/x']);
+    expect(createSignedUrls).toHaveBeenCalledTimes(1);
+    expect(createSignedUrls).toHaveBeenCalledWith(['u/a/x.jpg', 'pdf-extracts/1.jpg'], 3600);
+  });
+
+  it('falls back to the public URL when a file fails to sign, and skips signing when nothing needs it', async () => {
+    const { client, createSignedUrls } = signingClient([{ path: 'u/a/x.jpg', signedUrl: '', error: 'Object not found' }]);
+    expect(await apartmentPhotoUrls(client, [{ storage_path: 'u/a/x.jpg' }])).toEqual(['https://cdn/u/a/x.jpg']);
+    createSignedUrls.mockClear();
+    expect(await apartmentPhotoUrls(client, [{ storage_path: 'https://listing.example/a.jpg' }])).toEqual(['https://listing.example/a.jpg']);
+    expect(createSignedUrls).not.toHaveBeenCalled();
   });
 });
 

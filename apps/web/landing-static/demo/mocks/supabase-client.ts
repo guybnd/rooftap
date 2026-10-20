@@ -17,6 +17,7 @@ function samplePage(path: string): string {
 const storage = {
   from: () => ({
     createSignedUrl: async (path: string) => ({ data: { signedUrl: samplePage(path) }, error: null }),
+    createSignedUrls: async () => ({ data: [], error: null }),
     getPublicUrl: () => ({ data: { publicUrl: "" } }),
     download: async (path: string) => ({ data: await (await fetch(samplePage(path))).blob(), error: null }),
     upload: async (path: string) => ({ data: { path }, error: null }),

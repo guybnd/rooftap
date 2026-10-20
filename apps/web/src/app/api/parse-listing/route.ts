@@ -5,6 +5,7 @@ import { resolveServerKey } from "@/lib/admin-config";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerSupabase } from "@/lib/supabase/server";
 import { requireModules } from "@/lib/server-modules";
+import { APARTMENT_PHOTO_URL_TTL_SECONDS } from "@homeup/core";
 
 export const maxDuration = 60;
 
@@ -136,10 +137,13 @@ export async function POST(request: Request) {
                 .from("apartment-photos")
                 .upload(path, buf, { contentType: "image/jpeg" });
               if (!error) {
-                const { data: urlData } = supabase.storage
+                // Signed, not public, so previews keep working once the
+                // bucket is private. Saved rows map back to the path
+                // (core apartmentPhotoPath) and are re-signed on display.
+                const { data: urlData } = await supabase.storage
                   .from("apartment-photos")
-                  .getPublicUrl(path);
-                uploadedUrls.push(urlData.publicUrl);
+                  .createSignedUrl(path, APARTMENT_PHOTO_URL_TTL_SECONDS);
+                if (urlData) uploadedUrls.push(urlData.signedUrl);
               }
             }
             if (uploadedUrls.length > 0) {

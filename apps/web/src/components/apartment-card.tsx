@@ -13,7 +13,7 @@ import { MiniMapPreview } from "@/components/mini-map-preview";
 import { useDataCache } from "@/lib/data-cache";
 import { AppointmentModal } from "@/components/appointment-modal";
 import { cn } from "@/lib/utils";
-import { formatRelativeDay, formatMoney, appointments$, apartments$, apartmentComments$, useReconnectSync, useStoreHelpers } from '@homeup/core';
+import { apartmentPhotoUrls, formatRelativeDay, formatMoney, appointments$, apartments$, apartmentComments$, useReconnectSync, useStoreHelpers } from '@homeup/core';
 import { toast } from "sonner";
 import type { Agent, ApartmentWithScore, Appointment } from '@homeup/core';
 
@@ -129,17 +129,7 @@ export function ApartmentCard({ apartment, agent, agents: linkedAgents, commentC
 
       if (!data || data.length === 0) return;
 
-      const urls = data.map((photo) => {
-        if (photo.storage_path.startsWith("http")) {
-          return photo.storage_path;
-        }
-        const { data: urlData } = supabase.storage
-          .from("apartment-photos")
-          .getPublicUrl(photo.storage_path);
-        return urlData.publicUrl;
-      });
-
-      setPhotoUrls(urls);
+      setPhotoUrls(await apartmentPhotoUrls(supabase, data));
     }
     loadPhotos();
   }, [apartment.id]);
