@@ -8,6 +8,8 @@ Add a line under **Unreleased** for each change people would notice. Credit outs
 
 ## Unreleased
 
+- Self-hosted upgrades back up the database before applying new migrations, and a failed migration is rolled back instead of left half done. `scripts/restore-backup.sh` undoes an upgrade.
+- The app hides features a self-hosted server is too old for, and Settings > Modules says what updating the server would add.
 - The home-screen widget draws at the launcher's exact size. Needs the next APK.
 - Hold a tab to choose its slot in the tab bar. More lists every section.
 - Recipes no longer crash on a cached recipe that has no name.

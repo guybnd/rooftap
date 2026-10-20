@@ -36,6 +36,7 @@ export * from './sections';
 export * from './modules';
 export * from './modules-store';
 export * from './module-features';
+export * from './server-features';
 export * from './task-modules';
 export * from './mcp-tools';
 export * from './store-modules';

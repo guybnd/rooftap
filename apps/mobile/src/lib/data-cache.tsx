@@ -18,6 +18,7 @@ import {
   fetchGroupData,
   getModulesSnapshot,
   setAvailableModules,
+  setServerSchema,
   setModuleRows,
   setHouseholdCurrency,
   householdCurrency,
@@ -96,6 +97,7 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
     // Safe during render: nothing below this provider has subscribed yet.
     setModuleRows(snap?.groupModules ?? null);
     setAvailableModules(snap?.availableModules ?? null);
+    setServerSchema(snap?.serverSchema);
     setHouseholdCurrency(householdCurrency(snap?.group));
     return snap;
   });
@@ -145,13 +147,23 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
     if (snapshot?.availableModules === undefined && server.config.modules !== undefined) {
       setAvailableModules(server.config.modules ?? null);
     }
+    // Same for the server's schema: the stored config answered, so a missing
+    // version means a server that predates versions (core server-features.ts).
+    if (snapshot?.serverSchema === undefined) setServerSchema(server.config.schemaVersion ?? null);
     // Refresh the offered modules in the background, never blocking the
     // household fetch below; a failure keeps the cached list.
     fetchPublicConfig(server.origin)
       .then((config) => {
         setAvailableModules(config.modules ?? null);
+        setServerSchema(config.schemaVersion ?? null);
         const cached = readDataCacheSnapshot();
-        if (cached) writeDataCacheSnapshot({ ...cached, availableModules: config.modules ?? null });
+        if (cached) {
+          writeDataCacheSnapshot({
+            ...cached,
+            availableModules: config.modules ?? null,
+            serverSchema: config.schemaVersion ?? null,
+          });
+        }
       })
       .catch(() => {});
     // Cache-first, like web's DataCacheProvider: a returning user's snapshot
@@ -225,6 +237,7 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
       currentUserId: result.currentUserId,
       groupModules: getModulesSnapshot().rows,
       availableModules: getModulesSnapshot().available,
+      serverSchema: getModulesSnapshot().schema,
     });
   }, [router, snapshot]);
 

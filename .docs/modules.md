@@ -250,3 +250,14 @@ After step 9, a household that switches a module off sees no trace of it anywher
 
 - Should members be able to propose a module change for the owner to approve, or is owner-only enough? (Default: owner-only.)
 - Should the hub suggest switching a module on when it would help (for example "Track this bill? Turn on Costs")? (Default: no suggestions in Phase 1.)
+
+## 12. Servers older than the app
+
+The store app follows `main` through OTA updates, but a self-hosted server only changes when its owner pulls and rebuilds. So the app can be newer than its server and call a table or route that server doesn't have.
+
+- `/api/public-config` reports `schemaVersion`: the newest file in `supabase/migrations/` the server was built from (`apps/web/next.config.ts` bakes it in). Servers from before this field count as the 1.0.0 baseline (`SCHEMA_BASELINE`).
+- `packages/core/src/server-features.ts` lists every app feature newer than the baseline with the migration it needs. Surfaces gate on `useModules().server(id)`. A whole new module sets `minSchema` on its `ModuleDef` instead, and drops out of `offered` exactly like a module the server doesn't offer, so section 7's rules apply unchanged.
+- Settings > Modules shows one line naming what updating the server would add (`useModules().serverUpdateAdds`).
+- Until the app has heard from the server, everything counts as supported, so the official server never flashes features away on a cold start.
+- `apps/web/src/lib/server-features.test.ts` fails if a minimum names a migration that doesn't exist.
+

@@ -81,3 +81,6 @@ apps/web/landing-static/dist/
 apps/web/landing-static/dist-ssr/
 apps/web/landing-static/demo/dist/
 r2-copy-report-*.json
+
+# self-host pre-migration backups (scripts/apply-migrations.sh)
+backups/

@@ -82,7 +82,7 @@ describe("parseModuleList", () => {
 describe("availableModules", () => {
   it("keeps registry order", () => {
     expect(availableModules(["search", "household"]).map((m) => m.id)).toEqual(["household", "search"]);
-    expect(availableModules(null)).toBe(MODULES);
+    expect(availableModules(null)).toEqual(MODULES);
   });
 });
 

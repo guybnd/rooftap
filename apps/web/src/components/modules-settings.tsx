@@ -21,7 +21,7 @@ import {
   ListItemTitle,
   ListItemTrailing,
 } from "@/components/ui/list-item";
-import { dependantsOf, saveModuleSwitch, useModules, type ModuleId } from "@homeup/core";
+import { dependantsOf, saveModuleSwitch, serverUpdateNote, useModules, type ModuleId } from "@homeup/core";
 
 export function ModulesSettings() {
   const { group, isGroupOwner, currentUserId, groupMembers, memberProfiles } = useDataCache();
@@ -86,6 +86,11 @@ export function ModulesSettings() {
           );
         })}
       </ListGroup>
+      {modules.serverUpdateAdds.length > 0 && (
+        <p className="px-1 text-xs text-muted-foreground">
+          {serverUpdateNote(modules.serverUpdateAdds)}
+        </p>
+      )}
     </SettingsPanel>
   );
 }

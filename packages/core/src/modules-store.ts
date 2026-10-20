@@ -21,26 +21,30 @@ import {
   type ModuleId,
 } from './modules';
 import { isFeatureEnabled, type ModuleFeatureId } from './module-features';
+import { missingServerFeatures, serverSupports, type ServerFeatureDef, type ServerFeatureId, type ServerSchema } from './server-features';
 
 interface ModulesState {
   /** null = unknown (not loaded yet, or the table is missing): every offered module counts as on. */
   rows: GroupModuleRow[] | null;
   /** Modules the server offers; null = all. */
   available: string[] | null;
+  /** The server's schema (server-features.ts); undefined = not known yet. */
+  schema: ServerSchema;
+  /** `available` minus modules newer than the server's schema, in registry order. */
+  offered: ModuleDef[];
   enabled: ReadonlySet<ModuleId>;
 }
 
-function compute(rows: GroupModuleRow[] | null, available: string[] | null): ModulesState {
-  const enabled =
-    rows === null
-      ? new Set(availableModules(available).map((m) => m.id))
-      : resolveEnabledModules({ available, rows });
-  return { rows, available, enabled };
+function compute(rows: GroupModuleRow[] | null, available: string[] | null, schema: ServerSchema): ModulesState {
+  const offered = availableModules(available, schema);
+  const offeredIds = offered.map((m) => m.id);
+  const enabled = rows === null ? new Set(offeredIds) : resolveEnabledModules({ available: offeredIds, rows });
+  return { rows, available, schema, offered, enabled };
 }
 
 // The server render (web SSR) never knows the household, so it shows every
 // module; useSyncExternalStore swaps in the client state right after hydration.
-const UNKNOWN_STATE: ModulesState = compute(null, null);
+const UNKNOWN_STATE: ModulesState = compute(null, null, undefined);
 
 let state: ModulesState = UNKNOWN_STATE;
 const listeners = new Set<() => void>();
@@ -56,13 +60,23 @@ function subscribe(listener: () => void): () => void {
 
 /** Replace the household's switches. null = unknown (keeps every offered module on). */
 export function setModuleRows(rows: GroupModuleRow[] | null): void {
-  state = compute(rows, state.available);
+  state = compute(rows, state.available, state.schema);
   emit();
 }
 
 /** Replace the list of modules the server offers. null = all. */
 export function setAvailableModules(available: string[] | null): void {
-  state = compute(state.rows, available);
+  state = compute(state.rows, available, state.schema);
+  emit();
+}
+
+/**
+ * Record the server's schema from /api/public-config (`schemaVersion ?? null`
+ * for a server that answered; null means it predates versioning). undefined
+ * = not known yet.
+ */
+export function setServerSchema(schema: ServerSchema): void {
+  state = compute(state.rows, state.available, schema);
   emit();
 }
 
@@ -119,7 +133,7 @@ export async function saveModuleChoices(
   userId: string | null,
 ): Promise<string | null> {
   const previous = state.rows;
-  const writes = availableModules(state.available).map((m) => ({
+  const writes = state.offered.map((m) => ({
     group_id: groupId,
     module_id: m.id,
     enabled: chosen.has(m.id),
@@ -138,8 +152,12 @@ export async function saveModuleChoices(
   return null;
 }
 
-export function getModulesSnapshot(): { rows: GroupModuleRow[] | null; available: string[] | null } {
-  return { rows: state.rows, available: state.available };
+export function getModulesSnapshot(): {
+  rows: GroupModuleRow[] | null;
+  available: string[] | null;
+  schema: ServerSchema;
+} {
+  return { rows: state.rows, available: state.available, schema: state.schema };
 }
 
 /**
@@ -171,6 +189,10 @@ export interface UseModules {
   offered: ModuleDef[];
   /** False until the household's switches have loaded at least once. */
   known: boolean;
+  /** A feature that needs a newer server (server-features.ts): this server has it. */
+  server: (id: ServerFeatureId) => boolean;
+  /** What updating this self-hosted server would add; empty when it is current. */
+  serverUpdateAdds: ServerFeatureDef[];
 }
 
 export function useModules(): UseModules {
@@ -182,8 +204,15 @@ export function useModules(): UseModules {
       isSectionEnabled: (sectionId: string) => isSectionEnabled(sectionId, s.enabled),
       both: (a: ModuleId, b: ModuleId) => s.enabled.has(a) && s.enabled.has(b),
       feature: (id: ModuleFeatureId) => isFeatureEnabled(id, s.enabled),
-      offered: availableModules(s.available),
+      offered: s.offered,
       known: s.rows !== null,
+      server: (id: ServerFeatureId) => serverSupports(id, s.schema),
+      serverUpdateAdds: [
+        ...availableModules(s.available, undefined)
+          .filter((m) => m.minSchema && !s.offered.includes(m))
+          .map((m) => ({ minSchema: m.minSchema as string, label: m.label })),
+        ...missingServerFeatures(s.schema),
+      ],
     }),
     [s]
   );
@@ -215,11 +244,14 @@ export function useModulePicker(input: { isOwner: boolean; pendingInvitations: n
   const s = useSyncExternalStore(subscribe, () => state, () => UNKNOWN_STATE);
   const [picked, setPicked] = useState<ReadonlySet<ModuleId> | null>(null);
   const [dismissed, setDismissed] = useState(false);
-  const defaults = useMemo(() => resolveEnabledModules({ available: s.available, rows: [] }), [s.available]);
+  const defaults = useMemo(
+    () => resolveEnabledModules({ available: s.offered.map((m) => m.id), rows: [] }),
+    [s.offered]
+  );
   const chosen = picked ?? defaults;
   return {
     open: !dismissed && needsModulePicker({ rows: s.rows, ...input }),
-    offered: availableModules(s.available),
+    offered: s.offered,
     chosen,
     defaults,
     lockedBy: (id) => dependantsOf(id, chosen),

@@ -86,8 +86,13 @@ services:
       # URL, not operator-tunable, hence hardcoded rather than an .env var.
       SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
       SEED_PROJECT_URL: http://kong:8000
+      # Pre-upgrade backup into ./backups whenever new migrations are about to
+      # run on an install that already has data (see apply-migrations.sh).
+      MIGRATE_BACKUP: ${MIGRATE_BACKUP:-on}
+      MIGRATE_BACKUP_KEEP: ${MIGRATE_BACKUP_KEEP:-5}
     volumes:
       - ./supabase/migrations:/migrations:ro
+      - ./backups:/backups
       - ./scripts/apply-migrations.sh:/apply-migrations.sh:ro
     entrypoint: ["bash", "/apply-migrations.sh"]
     restart: "no"

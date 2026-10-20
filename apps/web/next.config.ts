@@ -2,7 +2,23 @@ import withSerwistInit from "@serwist/next";
 import withBundleAnalyzer from "@next/bundle-analyzer";
 import type { NextConfig } from "next";
 import { createHash } from "node:crypto";
+import fs from "node:fs";
 import path from "node:path";
+
+// The newest migration this build ships with, served by /api/public-config so
+// the store app can tell how old a self-hosted server is
+// (packages/core/src/server-features.ts). Migration names start with a UTC
+// timestamp, so the last one sorted is the newest. Empty if the folder isn't
+// there, which the route reports as no version.
+function newestMigration(): string {
+  try {
+    const dir = path.join(__dirname, "../../supabase/migrations");
+    const files = fs.readdirSync(dir).filter((f) => f.endsWith(".sql")).sort();
+    return files.length ? files[files.length - 1].slice(0, -".sql".length) : "";
+  } catch {
+    return "";
+  }
+}
 
 // FLUX-1546: `/~offline`'s HTML is server-rendered App Router output, which
 // @serwist/next's manifest scan excludes (only the public/ dir is globbed;
@@ -48,6 +64,9 @@ const nextConfig: NextConfig = {
   // Self-hosting (FLUX-1561): produces .next/standalone + .next/static, which
   // the Dockerfile copies into the runner stage instead of shipping node_modules.
   output: "standalone",
+  env: {
+    HOMEUP_SCHEMA_VERSION: newestMigration(),
+  },
   // HOUP-66: workspace packages ship raw .ts (no build step) — Next only
   // transpiles workspace packages named here.
   transpilePackages: ["@homeup/core", "@homeup/ui"],

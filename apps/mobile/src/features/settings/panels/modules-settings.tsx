@@ -16,7 +16,7 @@ import {
   Switch,
   toast,
 } from '@homeup/ui';
-import { dependantsOf, saveModuleSwitch, useModules, type ModuleId } from '@homeup/core';
+import { dependantsOf, saveModuleSwitch, serverUpdateNote, useModules, type ModuleId } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
 import { getCurrentSupabaseClient } from '@/lib/supabase-client';
 import { sectionIcons } from '@/lib/section-icons';
@@ -90,6 +90,9 @@ export function ModulesSettings() {
           );
         })}
       </SettingsInset>
+      {modules.serverUpdateAdds.length > 0 && (
+        <Text className="px-1 text-caption text-muted-foreground">{serverUpdateNote(modules.serverUpdateAdds)}</Text>
+      )}
     </SettingsPanel>
   );
 }

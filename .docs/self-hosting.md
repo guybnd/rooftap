@@ -440,6 +440,34 @@ web app stays on the old code. New migrations apply automatically on `up`
 (the `migrate` service tracks what has run), and edge functions are a bind
 mount, so they pick up the new code when `edge-runtime` restarts.
 
+Before applying new migrations to an install that already has data, the
+`migrate` service saves a backup of the database to
+`backups/pre-migrate-<UTC time>.dump` in the repo folder and keeps the newest
+five (`MIGRATE_BACKUP_KEEP` in `.env` changes that, `MIGRATE_BACKUP=off` turns
+it off). If the backup fails, nothing is migrated and `migrate` exits with an
+error; `docker compose logs migrate` says why. Each migration runs in one
+transaction together with the row that records it, so a migration that fails
+is rolled back completely: fix the cause (or pull the fix) and run the upgrade
+again, and it retries from a clean slate.
+
+The phone app updates itself as soon as we ship, so it can be newer than
+your server. It asks the server which version it runs and hides features that
+need a newer one; Settings > Modules lists what updating would add.
+
+To undo an upgrade, check out the version you were running and restore the
+backup taken just before it:
+
+```bash
+git checkout <the version you came from>
+./scripts/restore-backup.sh backups/pre-migrate-<time>.dump
+```
+
+The script checks that the checkout matches the backup, asks you to confirm,
+then deletes the database volume, rebuilds the schema from that version's
+migrations and loads the backup's rows (app data, accounts and file records).
+Uploaded files, `.env` and the other volumes are left alone. Anything written
+after the backup was taken is lost.
+
 ## Upgrading stack images
 
 The Supabase service images (`auth`, `rest`, `realtime`, `storage`, `kong`,

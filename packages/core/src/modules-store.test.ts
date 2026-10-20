@@ -17,6 +17,7 @@ import {
   saveModuleSwitch,
   setAvailableModules,
   setModuleRows,
+  setServerSchema,
   useModulePicker,
   useModules,
 } from './modules-store';
@@ -286,5 +287,38 @@ describe('useModulePicker', () => {
     });
     expect(result.current.open).toBe(true);
     expect(result.current.chosen.has('groceries')).toBe(true);
+  });
+});
+
+describe('server schema', () => {
+  it('hides a feature the server is too old for, and lists it as what updating adds', () => {
+    const { result } = renderHook(() => useModules());
+    expect(result.current.server('mcp.connected-apps')).toBe(true);
+    expect(result.current.serverUpdateAdds).toEqual([]);
+
+    act(() => setServerSchema(null));
+    expect(result.current.server('mcp.connected-apps')).toBe(false);
+    expect(result.current.serverUpdateAdds.map((f) => f.label)).toEqual(['connecting AI assistants by signing in']);
+
+    act(() => setServerSchema('20261020050000_mcp_oauth'));
+    expect(result.current.server('mcp.connected-apps')).toBe(true);
+    expect(getModulesSnapshot().schema).toBe('20261020050000_mcp_oauth');
+  });
+
+  it('drops a module newer than the server from the offered list, like one the server does not offer', () => {
+    const mcp = MODULES.find((m) => m.id === 'mcp')!;
+    mcp.minSchema = '20991231000000_future';
+    try {
+      const { result } = renderHook(() => useModules());
+      act(() => setModuleRows([row('mcp', true)]));
+      expect(result.current.isEnabled('mcp')).toBe(true);
+
+      act(() => setServerSchema('20261020050000_mcp_oauth'));
+      expect(result.current.isEnabled('mcp')).toBe(false);
+      expect(result.current.offered.some((m) => m.id === 'mcp')).toBe(false);
+      expect(result.current.serverUpdateAdds.map((f) => f.label)).toEqual(['AI assistants (MCP)']);
+    } finally {
+      delete mcp.minSchema;
+    }
   });
 });

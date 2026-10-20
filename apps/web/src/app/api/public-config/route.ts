@@ -34,9 +34,13 @@ export async function GET() {
   // SUPABASE_PUBLIC_URL, so a prebuilt self-host image can be reconfigured.
   // null = every module.
   const modules = parseModuleList(process.env.HOMEUP_MODULES);
+  // The newest migration this build shipped with (baked in by next.config.ts),
+  // so the store app can hide features this server is too old for
+  // (packages/core/src/server-features.ts).
+  const schemaVersion = process.env.HOMEUP_SCHEMA_VERSION || null;
 
   return NextResponse.json(
-    { supabaseUrl, supabaseAnonKey, modules },
+    { supabaseUrl, supabaseAnonKey, modules, schemaVersion },
     {
       headers: {
         ...CORS_HEADERS,

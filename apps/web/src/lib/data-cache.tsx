@@ -4,7 +4,7 @@ import { createContext, useContext, useCallback, useEffect, useLayoutEffect, use
 import { createClient } from "@/lib/supabase/client";
 import { putAll, getAll, setMeta, getMeta, STORES } from "@/lib/offline-store";
 import { readDataCacheSnapshot, writeDataCacheSnapshot } from "@/lib/legend/data-cache-snapshot";
-import { fetchGroupData, getModulesSnapshot, householdCurrency, isPublicConfig, setAvailableModules, setHouseholdCurrency, setModuleRows } from "@homeup/core";
+import { fetchGroupData, getModulesSnapshot, householdCurrency, isPublicConfig, setAvailableModules, setHouseholdCurrency, setModuleRows, setServerSchema } from "@homeup/core";
 import type { ApartmentPreliminaryScore, UserSettings, Group, GroupMember, GroupInvitation } from '@homeup/core';
 
 // FLUX-150 slice 8: DataCacheProvider is now a slim group/identity provider.
@@ -41,6 +41,7 @@ if (typeof window !== "undefined") {
   const snap = readDataCacheSnapshot();
   setModuleRows(snap?.groupModules ?? null);
   setAvailableModules(snap?.availableModules ?? null);
+  setServerSchema(snap?.serverSchema);
   setHouseholdCurrency(householdCurrency(snap?.group));
 }
 
@@ -54,8 +55,11 @@ async function refreshAvailableModules(): Promise<void> {
     const json: unknown = await res.json();
     if (!isPublicConfig(json)) return;
     setAvailableModules(json.modules ?? null);
+    setServerSchema(json.schemaVersion ?? null);
     const cached = readDataCacheSnapshot();
-    if (cached) writeDataCacheSnapshot({ ...cached, availableModules: json.modules ?? null });
+    if (cached) {
+      writeDataCacheSnapshot({ ...cached, availableModules: json.modules ?? null, serverSchema: json.schemaVersion ?? null });
+    }
   } catch {
     // Offline or unreachable: keep the cached list.
   }
@@ -257,6 +261,7 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
       currentUserId: result.currentUserId,
       groupModules: getModulesSnapshot().rows,
       availableModules: getModulesSnapshot().available,
+      serverSchema: getModulesSnapshot().schema,
     });
 
     // Persist to IndexedDB for offline access.

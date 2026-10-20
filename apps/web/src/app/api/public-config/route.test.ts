@@ -9,6 +9,7 @@ function resetEnv() {
   delete process.env.NEXT_PUBLIC_SUPABASE_URL;
   delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   delete process.env.HOMEUP_MODULES;
+  delete process.env.HOMEUP_SCHEMA_VERSION;
 }
 
 describe("GET /api/public-config", () => {
@@ -29,6 +30,7 @@ describe("GET /api/public-config", () => {
       supabaseUrl: "https://gateway.example.com",
       supabaseAnonKey: "anon-key",
       modules: null,
+      schemaVersion: null,
     });
   });
 
@@ -44,6 +46,7 @@ describe("GET /api/public-config", () => {
       supabaseUrl: "https://official.example.com",
       supabaseAnonKey: "anon-key",
       modules: null,
+      schemaVersion: null,
     });
   });
 
@@ -59,7 +62,19 @@ describe("GET /api/public-config", () => {
     expect(json.modules).toEqual(["household", "calendar"]);
   });
 
-  it("returns exactly { supabaseUrl, supabaseAnonKey, modules } — no service-role or other env leaks", async () => {
+  it("reports the schema version this build shipped with", async () => {
+    resetEnv();
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://official.example.com";
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "anon-key";
+    process.env.HOMEUP_SCHEMA_VERSION = "20261020050000_mcp_oauth";
+
+    const res = await GET();
+    const json = await res.json();
+
+    expect(json.schemaVersion).toBe("20261020050000_mcp_oauth");
+  });
+
+  it("returns exactly { supabaseUrl, supabaseAnonKey, modules, schemaVersion } — no service-role or other env leaks", async () => {
     resetEnv();
     process.env.NEXT_PUBLIC_SUPABASE_URL = "https://official.example.com";
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "anon-key";
@@ -69,7 +84,7 @@ describe("GET /api/public-config", () => {
     const res = await GET();
     const json = await res.json();
 
-    expect(Object.keys(json).sort()).toEqual(["modules", "supabaseAnonKey", "supabaseUrl"]);
+    expect(Object.keys(json).sort()).toEqual(["modules", "schemaVersion", "supabaseAnonKey", "supabaseUrl"]);
     expect(JSON.stringify(json)).not.toContain("service-role-secret");
     expect(JSON.stringify(json)).not.toContain("hunter2");
   });

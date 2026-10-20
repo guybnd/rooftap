@@ -11,6 +11,8 @@
 // Google Calendar and MCP are integrations with no section of their own.
 // Home (the hub) and Profile (Settings) are platform, not modules.
 
+import { schemaAtLeast, type ServerSchema } from './server-features';
+
 export type ModuleId =
   | 'household'
   | 'calendar'
@@ -37,6 +39,11 @@ export interface ModuleDef {
   requires?: ModuleId[];
   /** Soft dependencies: cross-module features appear only when both are on. */
   enhances?: ModuleId[];
+  /**
+   * For a module added after 1.0.0: the migration it needs. A self-hosted
+   * server built before it doesn't offer the module (server-features.ts).
+   */
+  minSchema?: string;
 }
 
 export const MODULES: ModuleDef[] = [
@@ -203,11 +210,13 @@ export function resolveEnabledModules(input: {
   return on;
 }
 
-/** Modules the server offers, in registry order. */
-export function availableModules(available: readonly string[] | null | undefined): ModuleDef[] {
-  if (!available) return MODULES;
-  const set = new Set(available);
-  return MODULES.filter((m) => set.has(m.id));
+/**
+ * Modules the server offers, in registry order: its HOMEUP_MODULES list
+ * (null = all), minus modules newer than its schema.
+ */
+export function availableModules(available: readonly string[] | null | undefined, schema?: ServerSchema): ModuleDef[] {
+  const set = available ? new Set(available) : null;
+  return MODULES.filter((m) => (!set || set.has(m.id)) && (!m.minSchema || schemaAtLeast(schema, m.minSchema)));
 }
 
 /**

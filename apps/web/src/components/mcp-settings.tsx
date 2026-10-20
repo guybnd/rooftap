@@ -143,7 +143,8 @@ export function McpSettings() {
         )}
       </div>
 
-      <ConnectedApps />
+      {/* Needs a server with MCP sign-in (core server-features.ts). */}
+      {modules.server("mcp.connected-apps") && <ConnectedApps />}
 
       <SavingHint show={saving} />
     </SettingsPanel>

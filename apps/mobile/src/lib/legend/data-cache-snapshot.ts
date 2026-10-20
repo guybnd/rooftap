@@ -16,6 +16,9 @@ interface DataCacheSnapshot {
   // existed lack them, which reads as "unknown" (every module on).
   groupModules?: GroupModuleRow[] | null;
   availableModules?: string[] | null;
+  // The server's schema (core server-features.ts). Absent = not known yet;
+  // null = the server predates schema versions.
+  serverSchema?: string | null;
 }
 
 export function writeDataCacheSnapshot(data: DataCacheSnapshot): void {

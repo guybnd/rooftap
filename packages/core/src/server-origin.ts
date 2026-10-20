@@ -6,6 +6,11 @@ export interface PublicConfig {
    * null or absent = every module; absent on servers older than modules.
    */
   modules?: string[] | null;
+  /**
+   * The newest migration this server was built from (server-features.ts).
+   * Absent on servers older than this field, which count as the 1.0.0 baseline.
+   */
+  schemaVersion?: string | null;
 }
 
 // HOUP-69: response-shape guard for GET /api/public-config — the native
