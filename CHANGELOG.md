@@ -8,6 +8,8 @@ Add a line under **Unreleased** for each change people would notice. Credit outs
 
 ## Unreleased
 
+- Apartment photos are private: only the uploader's households can open them, through short-lived links.
+- Self-hosting: Tailscale Funnel and Cloudflare Tunnel profiles give the server HTTPS for the phone app and the PWA with no open ports and nothing to install on the phone.
 - Self-hosted upgrades back up the database before applying new migrations, and a failed migration is rolled back instead of left half done. `scripts/restore-backup.sh` undoes an upgrade.
 - The app hides features a self-hosted server is too old for, and Settings > Modules says what updating the server would add.
 - The home-screen widget draws at the launcher's exact size. Needs the next APK.

@@ -282,7 +282,10 @@ export function GroceryItemCard({
 
   const row = (
     <ListItem
-      onPress={reorderMode ? undefined : () => (selectMode ? onToggleSelect?.(item.id) : onEdit(item))}
+      // A plain tap on the row does nothing (Guy, 2026-10-20: it opened the
+      // edit sheet by accident); hold opens the quick menu, whose Edit opens
+      // the sheet. The name and price keep their own tap targets.
+      onPress={selectMode ? () => onToggleSelect?.(item.id) : undefined}
       // Normal mode's long-press now goes through SwipeActions' onLongPress
       // below; select/reorder mode bypasses SwipeActions entirely (no Pan to
       // conflict with), so selectMode keeps a direct ListItem.onLongPress.
@@ -334,9 +337,8 @@ export function GroceryItemCard({
           ) : (
             // HOUP-187: tap-to-rename inline via EditableText — mirrors
             // web's hand-rolled name input/span (grocery-item-card.tsx), just
-            // via the shared primitive. The row's own onPress (below) still
-            // opens the edit sheet; EditableText's nested Pressable claims
-            // the touch first when tapped directly on the name.
+            // via the shared primitive. EditableText's nested Pressable
+            // claims the touch when tapped directly on the name.
             <EditableText
               value={item.name}
               onCommit={(v) => {
