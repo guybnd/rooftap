@@ -24,6 +24,8 @@ interface Props {
   items: GroceryItem[];
   onChange: (session: GrocerySession | null) => void;
   onItemsChanged: () => void;
+  /** Hide the floating ask (e.g. while Select's bulk bar is up). */
+  hidePrompt?: boolean;
 }
 
 export function GrocerySessionPanel({
@@ -35,6 +37,7 @@ export function GrocerySessionPanel({
   items,
   onChange,
   onItemsChanged,
+  hidePrompt,
 }: Props) {
   const [busy, setBusy] = useState(false);
   const [overriding, setOverriding] = useState(false);
@@ -48,54 +51,45 @@ export function GrocerySessionPanel({
   // Modules: the trip only lands in Costs when costs and groceries are both on (module-features.ts).
   const toCosts = modules.feature('costs.from-groceries');
 
-  // ── No decision yet, but items are in the cart → prompt to track ────────────
+  // ── No decision yet, but items are in the cart → floating ask ─────────────
+  // Floats above the tab bar in the accent colour (its own layer, so it
+  // doesn't spend the content's H5 accent budget, Guy's call) instead of a
+  // card that pushes the list down. Steps aside while Select's bulk bar
+  // owns the bottom edge.
   if (boughtCount > 0 && session === null) {
+    if (hidePrompt) return null;
     return (
-      // Hearth v2 (H2/H4): a neutral card; Add item keeps the screen's one
-      // accent fill, so Track is a neutral button.
-      <div className="flex flex-wrap items-center gap-3 rounded-3xl border border-border/60 bg-card p-4 shadow-[var(--card-shadow)]">
-        <Receipt className="h-5 w-5 flex-shrink-0 text-muted-foreground" />
-        <div className="min-w-[12rem] flex-1">
-          <p className="text-sm font-medium text-foreground">Track today&apos;s shop?</p>
-          <p className="text-xs tabular-nums text-muted-foreground">{boughtCount} in cart · ~{formatMoney(summedCents)} so far</p>
-          {toCosts && <p className="text-xs text-muted-foreground">Adds to Costs as a grocery purchase</p>}
+      <div
+        role="alert"
+        className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] md:bottom-4 left-1/2 z-40 flex w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 items-center gap-3 rounded-2xl bg-primary py-2.5 pl-4 pr-2 text-primary-foreground shadow-xl shadow-black/40 animate-in fade-in slide-in-from-bottom-2 duration-[var(--motion-slow)]"
+      >
+        <Receipt className="h-5 w-5 flex-shrink-0" />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold">Track today&apos;s shop?</p>
+          <p className="truncate text-xs tabular-nums text-primary-foreground/80">
+            {boughtCount} in cart · ~{formatMoney(summedCents)}{toCosts ? ' · adds to Costs' : ''}
+          </p>
         </div>
-        <div className="ml-auto flex flex-shrink-0 gap-2">
-          <button
-            disabled={busy}
-            onClick={async () => { setBusy(true); onChange(await ensureSession(supabase, groupId, 'skipped', summedCents)); setBusy(false); }}
-            className="min-h-[44px] rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
-          >
-            Not today
-          </button>
-          <button
-            disabled={busy}
-            onClick={async () => { setBusy(true); onChange(await ensureSession(supabase, groupId, 'on', summedCents)); setBusy(false); }}
-            className="min-h-[44px] rounded-lg border border-border bg-muted px-4 py-2 text-sm font-medium text-foreground hover:bg-accent disabled:opacity-50"
-          >
-            Track
-          </button>
-        </div>
+        <button
+          disabled={busy}
+          onClick={async () => { setBusy(true); onChange(await ensureSession(supabase, groupId, 'skipped', summedCents)); setBusy(false); }}
+          className="min-h-[44px] flex-shrink-0 rounded-xl px-2.5 text-sm text-primary-foreground/80 hover:bg-primary-foreground/10 hover:text-primary-foreground disabled:opacity-50"
+        >
+          Not today
+        </button>
+        <button
+          disabled={busy}
+          onClick={async () => { setBusy(true); onChange(await ensureSession(supabase, groupId, 'on', summedCents)); setBusy(false); }}
+          className="min-h-[44px] flex-shrink-0 rounded-xl bg-primary-foreground px-4 text-sm font-semibold text-primary hover:opacity-90 disabled:opacity-50"
+        >
+          Track
+        </button>
       </div>
     );
   }
 
-  // ── Skipped / dismissed for today → always offer to bring it back ────────────
-  // (No boughtCount gate: the bar can be dismissed with 0 got, so the resume
-  // affordance must persist regardless, otherwise it's gone for the day.)
-  if (session?.tracking === 'skipped') {
-    return (
-      <button
-        disabled={busy}
-        onClick={async () => { setBusy(true); onChange(await updateSession(supabase, session.id, { tracking: 'on' })); setBusy(false); }}
-        className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-border bg-muted px-4 py-2 text-sm text-foreground hover:bg-accent transition-colors disabled:opacity-50"
-      >
-        <Receipt className="h-4 w-4 text-muted-foreground" />
-        Track today&apos;s shop{summedCents > 0 ? ` · ~${formatMoney(summedCents)}` : ''}
-      </button>
-    );
-  }
-
+  // Skipped / dismissed for today: the way back is TrackShopLink, a small
+  // link the page puts beside Reset bought.
   if (session?.tracking !== 'on') return null;
 
   // ── Active session ──────────────────────────────────────────────────────────
@@ -270,5 +264,22 @@ export function GrocerySessionPanel({
         </div>
       )}
     </div>
+  );
+}
+
+/** The quiet way back after "Not today" (or stopping): a small text link
+ *  that sits beside Reset bought rather than a full-width pill. */
+export function TrackShopLink({ session, onChange }: { session: GrocerySession; onChange: (session: GrocerySession | null) => void }) {
+  const [busy, setBusy] = useState(false);
+  const supabase = createClient();
+  return (
+    <button
+      disabled={busy}
+      onClick={async () => { setBusy(true); onChange(await updateSession(supabase, session.id, { tracking: 'on' })); setBusy(false); }}
+      className="inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+    >
+      <Receipt className="h-3 w-3" />
+      Track shop
+    </button>
   );
 }

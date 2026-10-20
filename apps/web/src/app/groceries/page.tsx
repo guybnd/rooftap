@@ -70,7 +70,7 @@ import { PopMenu, MenuItem, MenuLabel } from '../setup/pop-menu';
 import { memberLabel } from '../setup/member-label';
 import { getRegionProvider, groceryItems$, loyaltyCards$, sortLoyaltyCards, type LoyaltyCard, useReconnectSync, useStoreHelpers, useStoreLoaded, createPendingActionTracker, usePendingIds, createUndoBatchTracker } from '@homeup/core';
 import { fetchItemLibrary, buildLibraryMap, resolveItemDefaults, learnItemLibrary, type LibraryOverride } from '@homeup/core';
-import { GrocerySessionPanel } from './grocery-session-panel';
+import { GrocerySessionPanel, TrackShopLink } from './grocery-session-panel';
 import { RewardsCardsSheet } from './rewards-cards-sheet';
 import { fetchTodaySession, isBoughtToday, syncSession, todayStr, closeSession, updateSession as updateGrocerySession, getEnabledModules, isFeatureEnabled } from '@homeup/core';
 import { useGroupTableRealtime } from '@/lib/hooks/use-group-table-realtime';
@@ -1032,14 +1032,21 @@ export default function GroceriesPage() {
             )}
             <PulseTile className="flex-1" label="Est total" value={formatMoney(totalEstimate)} />
           </div>
-          {bought > 0 && (
-            <div className="flex justify-end">
+          {(bought > 0 || session?.tracking === 'skipped') && (
+            <div className="flex justify-end gap-1">
+              {/* After "Not today" the way back is this small link, not a
+                  full-width pill (the ask itself floats). */}
+              {session?.tracking === 'skipped' && (
+                <TrackShopLink session={session} onChange={(s) => { sessionSyncRef.current = ''; setSession(s); }} />
+              )}
+              {bought > 0 && (
               <button
                 onClick={() => void resetBought()}
                 className="text-xs text-muted-foreground hover:text-foreground rounded-full px-2 py-1 hover:bg-muted transition-colors"
               >
                 Reset bought ({bought})
               </button>
+              )}
             </div>
           )}
         </div>
@@ -1058,6 +1065,7 @@ export default function GroceriesPage() {
         items={items}
         onChange={(s) => { sessionSyncRef.current = ''; setSession(s); }}
         onItemsChanged={() => { void fetchItems(); }}
+        hidePrompt={selectMode}
       />
       )}
 

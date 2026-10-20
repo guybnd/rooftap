@@ -104,7 +104,7 @@ import { isFlagParamSet } from '@/lib/route-params';
 import { useGroceryAux } from '@/features/groceries/use-grocery-aux';
 import { GroceryItemCard } from '@/features/groceries/grocery-item-card';
 import { GroceryItemFormSheet } from '@/features/groceries/grocery-item-form-sheet';
-import { GrocerySessionPanel } from '@/features/groceries/grocery-session-panel';
+import { GrocerySessionPanel, TrackShopLink, TrackShopPrompt } from '@/features/groceries/grocery-session-panel';
 import { parseReceiptFile } from '@/features/groceries/grocery-receipt-parse';
 import { pickFromCamera, pickFromLibrary, pickFromFiles, type PickedFile } from '@/components/documents/capture-flow';
 import { ReAddSuggestions } from '@/features/groceries/re-add-suggestions';
@@ -202,7 +202,6 @@ interface GroceriesListHeaderProps {
   sessionBoughtCount: number;
   sessionUnpricedCount: number;
   onStartTracking: () => void;
-  onSkipTracking: () => void;
   onOverrideTotal: (cents: number | null) => void;
   onStopTracking: () => void;
   onDoneShopping: () => void;
@@ -257,7 +256,6 @@ function GroceriesListHeader({
   sessionBoughtCount,
   sessionUnpricedCount,
   onStartTracking,
-  onSkipTracking,
   onOverrideTotal,
   onStopTracking,
   onDoneShopping,
@@ -368,10 +366,17 @@ function GroceriesListHeader({
           {/* Reset bought (web page.tsx:908-917): relegated to a small secondary
               link, gated behind a confirm — easy to fat-finger next to Done
               shopping, and unlike Done shopping it has no undo affordance. */}
-          {boughtStatusCount > 0 && (
-            <Pressable onPress={onResetBought} className="self-end rounded-full px-2 py-1">
-              <Text className="text-xs text-muted-foreground">Reset bought ({boughtStatusCount})</Text>
-            </Pressable>
+          {/* After "Not today" the way back is a small link on this line, not
+              a full-width pill (the ask itself floats, TrackShopPrompt). */}
+          {(boughtStatusCount > 0 || session?.tracking === 'skipped') && (
+            <View className="flex-row items-center justify-end gap-1">
+              {session?.tracking === 'skipped' && <TrackShopLink onPress={onStartTracking} />}
+              {boughtStatusCount > 0 && (
+                <Pressable onPress={onResetBought} className="rounded-full px-2 py-1">
+                  <Text className="text-xs text-muted-foreground">Reset bought ({boughtStatusCount})</Text>
+                </Pressable>
+              )}
+            </View>
           )}
 
           <GrocerySessionPanel
@@ -379,8 +384,6 @@ function GroceriesListHeader({
             summedCents={sessionSummedCents}
             boughtCount={sessionBoughtCount}
             unpricedCount={sessionUnpricedCount}
-            onStartTracking={onStartTracking}
-            onSkipTracking={onSkipTracking}
             onOverrideTotal={onOverrideTotal}
             onStopTracking={onStopTracking}
             onDoneShopping={onDoneShopping}
@@ -1690,7 +1693,6 @@ export default function GroceriesSectionScreen() {
       sessionBoughtCount={boughtCount}
       sessionUnpricedCount={unpricedCount}
       onStartTracking={handleStartTracking}
-      onSkipTracking={handleSkipTracking}
       onOverrideTotal={handleOverrideTotal}
       onStopTracking={handleStopTracking}
       onDoneShopping={handleDoneShopping}
@@ -1747,12 +1749,19 @@ export default function GroceriesSectionScreen() {
     />
   ) : null;
 
+  // The track-today ask floats over the list (never pushes it down) while
+  // nothing else owns the bottom edge: Select's bulk bar, Reorder, search.
+  const showTrackPrompt = session === null && boughtCount > 0 && !reorderMode && !selectMode && !searching;
+  // Clears the capture button's raised lip above the in-flow tab bar.
+  const trackPromptBottom = 32;
+  const listPaddingBottom = insets.bottom + 96 + (showTrackPrompt ? 72 : 0);
+
   return (
     <ScreenBackground>
       {reorderMode ? (
         <ScrollView
           className="flex-1"
-          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: insets.top + 16, paddingBottom: insets.bottom + 96 }}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: insets.top + 16, paddingBottom: listPaddingBottom }}
           keyboardShouldPersistTaps="handled"
         >
           {listHeaderElement}
@@ -1825,7 +1834,17 @@ export default function GroceriesSectionScreen() {
           ListFooterComponent={searchAddElement ?? (sortMode === 'flat' ? undefined : addAisleFooterElement)}
           keyboardShouldPersistTaps="handled"
           renderScrollComponent={KeyboardAwareScrollView}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: insets.top + 16, paddingBottom: insets.bottom + 96 }}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: insets.top + 16, paddingBottom: listPaddingBottom }}
+        />
+      )}
+
+      {showTrackPrompt && (
+        <TrackShopPrompt
+          boughtCount={boughtCount}
+          summedCents={sessionSummedCents}
+          bottom={trackPromptBottom}
+          onStartTracking={handleStartTracking}
+          onSkipTracking={handleSkipTracking}
         />
       )}
 
