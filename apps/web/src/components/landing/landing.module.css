@@ -1,0 +1,1642 @@
+/* Landing page (Hearth v2, Ember). Reads the app's own theme tokens, so it
+   follows the device scheme or a pinned theme like every other surface.
+   Coral (--primary) is only on things you can press; section hues only on
+   tiles and glows (H2). */
+
+.page {
+  --gutter: max(20px, env(safe-area-inset-left, 0px));
+  --measure: 1180px;
+  min-height: 100svh;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  overflow-x: clip;
+}
+/* Body copy one step lighter than the app's muted grey: on a dark page the
+   app's grey is too faint for paragraphs (WCAG AA at 16px). Doubled class to
+   win over the theme's own attribute selector on the same element. */
+.page.page {
+  --muted-foreground: color-mix(in oklab, var(--foreground) 76%, var(--background));
+}
+
+.wrap {
+  max-width: var(--measure);
+  margin: 0 auto;
+  padding-left: var(--gutter);
+  padding-right: max(20px, env(safe-area-inset-right, 0px));
+}
+
+.eyebrow {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+.display {
+  font-family: var(--font-heading), system-ui, sans-serif;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 0.98;
+  text-wrap: balance;
+}
+
+/* ---------- top bar ---------- */
+.nav {
+  position: fixed;
+  z-index: 20;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding-top: max(10px, env(safe-area-inset-top, 0px));
+  padding-bottom: 10px;
+  background: color-mix(in oklab, var(--background) 78%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-bottom: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
+}
+.navInner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.wordmark {
+  color: var(--foreground);
+  font-family: var(--font-heading), system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 22px;
+  letter-spacing: -0.04em;
+}
+.navLinks {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 20px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 15px;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  transition: transform var(--motion-fast, 150ms) ease;
+}
+.button:active {
+  transform: scale(0.97);
+}
+.button:focus-visible,
+.ghost:focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 3px;
+}
+.ghost {
+  display: inline-flex;
+  align-items: center;
+  height: 44px;
+  padding: 0 16px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--foreground);
+  background: var(--secondary);
+}
+.ctaRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+  pointer-events: auto;
+}
+
+/* ---------- story stages ---------- */
+/* A tall run scrolls a sticky stage: the phone shows the real app screen of
+   each step, the caption and the card change with it, and the light layer
+   behind (three.js) draws the room's hue and the streams between them. */
+.run {
+  position: relative;
+}
+.stage {
+  position: sticky;
+  top: 0;
+  height: 100svh;
+  overflow: hidden;
+  isolation: isolate;
+  background: var(--background);
+}
+.stage::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  top: -25%;
+  left: 50%;
+  transform: translateX(-30%);
+  width: min(100vw, 1000px);
+  aspect-ratio: 1;
+  /* The section's glow, warmed toward Ember coral so no hue reads muddy. */
+  background: radial-gradient(closest-side, color-mix(in oklab, var(--hue-glow) 65%, var(--primary) 35%), transparent);
+  opacity: calc(var(--glow-opacity) * 0.7);
+  pointer-events: none;
+  transition: background 600ms ease;
+}
+.stageGl::before {
+  opacity: 0;
+}
+.stageCanvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  z-index: 1;
+  pointer-events: none;
+}
+.stageInner {
+  position: relative;
+  z-index: 2;
+  height: 100%;
+  max-width: var(--measure);
+  margin: 0 auto;
+  padding-left: var(--gutter);
+  padding-right: max(20px, env(safe-area-inset-right, 0px));
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  grid-template-areas: "caption phone";
+  align-items: center;
+  gap: clamp(24px, 4vw, 56px);
+}
+
+/* Captions: stacked, one shown. */
+.captions {
+  grid-area: caption;
+  position: relative;
+  display: grid;
+  pointer-events: none;
+}
+.caption {
+  grid-area: 1 / 1;
+  display: grid;
+  gap: 12px;
+  align-content: center;
+  max-width: 480px;
+  opacity: 0;
+  transform: translateY(16px);
+  transition:
+    opacity 420ms ease,
+    transform 420ms ease;
+}
+.captionOn {
+  opacity: 1;
+  transform: none;
+}
+.captionOn {
+  pointer-events: auto;
+}
+.captionTitle {
+  font-size: clamp(34px, 4.6vw, 58px);
+}
+.heroTitle {
+  font-size: clamp(44px, 5.4vw, 72px);
+  letter-spacing: -0.045em;
+  line-height: 0.92;
+}
+.captionBody {
+  font-size: 17px;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+  max-width: 44ch;
+}
+/* Features: numbered rows. One that plays or points at the phone is a
+   button; the one playing is lit, and a line runs from it to the phone. */
+/* The list hangs left by the row's padding and border, so the numbers line
+   up with the title and a lit row's fill grows outward, never moving text. */
+.features {
+  display: grid;
+  gap: 4px;
+  margin: 6px 0 0 -11px;
+  list-style: none;
+  padding: 0;
+  font-size: 16.5px;
+  line-height: 1.45;
+  color: var(--muted-foreground);
+}
+.feature {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: 8px;
+  width: 100%;
+  padding: 7px 12px 7px 10px;
+  border-radius: 14px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  transition:
+    background 200ms ease,
+    border-color 200ms ease;
+}
+.featureIdx {
+  padding-top: 3px;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  color: var(--hue-glyph);
+}
+.featurePlay {
+  cursor: pointer;
+}
+.featurePlay:hover,
+.featurePlay:focus-visible {
+  background: color-mix(in oklab, var(--hue-tile) 70%, transparent);
+  outline: none;
+}
+.featureOn,
+.featurePlay.featureOn:hover {
+  background: var(--hue-tile);
+  border-color: color-mix(in oklab, var(--hue-glyph) 45%, transparent);
+  color: var(--foreground);
+}
+.features b {
+  color: var(--foreground);
+  font-weight: 650;
+}
+.badge {
+  display: inline-flex;
+  justify-self: start;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--hue-tile);
+  color: var(--hue-glyph);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 11.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+/* The phones: photographs of the app in thin shells. Two when a step shows
+   cause and effect; a new story's phones flip in after the colour moved. */
+.phones {
+  grid-area: phone;
+  justify-self: center;
+  display: flex;
+  align-items: center;
+  gap: clamp(16px, 2vw, 32px);
+  animation: flipIn 720ms cubic-bezier(0.2, 0.8, 0.2, 1) 160ms both;
+}
+@keyframes flipIn {
+  from {
+    opacity: 0;
+    transform: perspective(1600px) rotateY(-70deg) translateX(40px);
+  }
+  to {
+    opacity: 1;
+    transform: perspective(1600px) rotateY(0) translateX(0);
+  }
+}
+.phone {
+  /* As tall as the stage allows, so the app's own text stays readable. */
+  --phone-w: min(360px, 24vw, calc((100svh - 150px) * 0.462));
+  position: relative;
+  width: var(--phone-w);
+  aspect-ratio: 390 / 844;
+  border-radius: calc(var(--phone-w) * 0.14);
+  padding: calc(var(--phone-w) * 0.022);
+  background: linear-gradient(160deg, #2a2730, #121016 60%, #26232c);
+  box-shadow:
+    0 40px 80px -30px rgba(0, 0, 0, 0.7),
+    0 0 0 1px rgba(255, 255, 255, 0.08) inset,
+    0 0 0 1px rgba(0, 0, 0, 0.6);
+  flex: none;
+}
+.phonesTwo .phone {
+  --phone-w: min(320px, 21vw, calc((100svh - 150px) * 0.462));
+}
+.phoneScreen {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: calc(var(--phone-w) * 0.12);
+  overflow: hidden;
+  background: #121016;
+  container-type: inline-size;
+}
+.frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 420ms ease;
+}
+.frameOn {
+  opacity: 1;
+}
+.drawn {
+  display: grid;
+  font-size: 3.6cqw;
+}
+
+/* The finger: a tap pulses, a swipe slides. */
+.finger {
+  position: absolute;
+  z-index: 3;
+  width: 11cqw;
+  height: 11cqw;
+  margin: -5.5cqw 0 0 -5.5cqw;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.45);
+  box-shadow:
+    0 0 0 1.5px rgba(255, 255, 255, 0.8),
+    0 4px 14px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}
+.fingerTap {
+  animation: tap 900ms ease-out forwards;
+}
+@keyframes tap {
+  0% {
+    opacity: 0;
+    transform: scale(1.6);
+  }
+  25% {
+    opacity: 1;
+    transform: scale(0.85);
+  }
+  55% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.4);
+  }
+}
+.fingerSwipe {
+  animation: swipe 1100ms cubic-bezier(0.3, 0.7, 0.3, 1) forwards;
+}
+@keyframes swipe {
+  0% {
+    opacity: 0;
+    transform: translateX(0) scale(1.3);
+  }
+  20% {
+    opacity: 1;
+    transform: translateX(0) scale(0.9);
+  }
+  75% {
+    opacity: 1;
+    transform: translateX(var(--dx)) scale(0.9);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(var(--dx)) scale(1.2);
+  }
+}
+/* The highlight: a ring around the row another room just wrote. */
+.highlight {
+  position: absolute;
+  z-index: 2;
+  border-radius: 4cqw;
+  box-shadow:
+    0 0 0 2px var(--hue-glyph),
+    0 0 24px 2px var(--hue-glow);
+  animation: ringIn 560ms cubic-bezier(0.2, 0.9, 0.2, 1.2) both;
+  pointer-events: none;
+}
+@keyframes ringIn {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+}
+
+/* The section this stage is in, at the top the whole time. */
+.stageLabel {
+  position: absolute;
+  z-index: 3;
+  top: 76px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 12px 0 6px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--background) 72%, transparent);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(10px);
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.stageLabel .tileSm {
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+}
+.stageLabel .tileSm svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* The lines from a feature to its spot on the phone. */
+.lines {
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+.line {
+  fill: none;
+  stroke: var(--hue-glyph);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  opacity: 0.3;
+  transition: opacity 200ms ease;
+}
+.lineOn {
+  opacity: 1;
+  stroke-width: 2;
+  filter: drop-shadow(0 0 6px var(--hue-glow));
+}
+.lineLive {
+  animation: lineIn 400ms ease both;
+}
+@keyframes lineIn {
+  from {
+    opacity: 0;
+  }
+}
+
+/* A spot a feature points at: ringed faintly the whole time, lit in its turn. */
+.pin {
+  position: absolute;
+  z-index: 2;
+  border-radius: 4cqw;
+  box-shadow: 0 0 0 1.5px color-mix(in oklab, var(--hue-glyph) 45%, transparent);
+  transition:
+    box-shadow 220ms ease,
+    opacity 220ms ease;
+  pointer-events: none;
+}
+.pinOn {
+  box-shadow:
+    0 0 0 2px var(--hue-glyph),
+    0 0 24px 2px var(--hue-glow);
+}
+
+/* Step dots: buttons that scroll to their step. The hit area is 28px; the dot is drawn inside it. */
+.steps {
+  position: absolute;
+  z-index: 4;
+  right: max(20px, env(safe-area-inset-right, 0px));
+  bottom: max(20px, env(safe-area-inset-bottom, 0px));
+  display: flex;
+  gap: 2px;
+  margin: 0;
+  padding: 4px 6px;
+  list-style: none;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--background) 72%, transparent);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(10px);
+}
+.stepDot {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.stepDot::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 5px;
+  background: color-mix(in oklab, var(--foreground) 40%, transparent);
+  transition:
+    width 300ms ease,
+    background 300ms ease;
+}
+.stepDot:hover::before {
+  background: var(--foreground);
+}
+.stepDot:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+  border-radius: 999px;
+}
+.stepDotOn::before {
+  width: 22px;
+  background: var(--hue-glyph);
+}
+
+@media (max-width: 899px) {
+  /* Phone: the screens on top, the caption under them. */
+  .stageInner {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "phone"
+      "caption";
+    grid-template-rows: 60svh 40svh;
+    align-items: stretch;
+    gap: 0;
+    padding: 0;
+  }
+  .phones {
+    align-self: center;
+    padding-top: max(112px, calc(env(safe-area-inset-top, 0px) + 104px));
+    gap: 10px;
+  }
+  .phone {
+    --phone-w: min(54vw, calc((60svh - 124px) * 0.462));
+  }
+  .phonesTwo .phone {
+    --phone-w: min(44vw, calc((60svh - 124px) * 0.462));
+  }
+  .captions {
+    align-content: start;
+    padding: 14px var(--gutter) max(24px, env(safe-area-inset-bottom, 0px));
+    overflow: hidden;
+  }
+  .caption {
+    max-width: none;
+    gap: 8px;
+    align-content: start;
+  }
+  .heroTitle {
+    font-size: clamp(32px, 8.6vw, 46px);
+  }
+  .captionTitle {
+    font-size: clamp(24px, 6.4vw, 34px);
+  }
+  .features {
+    font-size: 14.5px;
+    gap: 2px;
+    margin-left: -9px;
+  }
+  .feature {
+    padding: 5px 8px;
+    gap: 6px;
+    grid-template-columns: 20px minmax(0, 1fr);
+  }
+  .featureIdx {
+    font-size: 11.5px;
+  }
+  .stageLabel {
+    top: max(70px, calc(env(safe-area-inset-top, 0px) + 66px));
+    left: var(--gutter);
+    transform: none;
+    height: 32px;
+    font-size: 12px;
+    max-width: calc(100vw - 150px);
+  }
+  .stageLabel span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .navLinks .navLink {
+    display: none;
+  }
+  .steps {
+    bottom: auto;
+    top: max(68px, calc(env(safe-area-inset-top, 0px) + 64px));
+    padding: 2px 4px;
+  }
+  .stepDot {
+    width: 24px;
+    height: 24px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .caption,
+  .frame,
+  .stepDot {
+    transition: none;
+  }
+  .phones,
+  .highlight,
+  .lineLive {
+    animation: none;
+  }
+  .finger {
+    animation-duration: 1ms;
+  }
+}
+
+/* ---------- drawn screens ---------- */
+/* Sized in em under .drawn (1em = 14px on a 390pt phone), so they scale with the phone. */
+.tile {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  background: var(--hue-tile);
+  color: var(--hue-glyph);
+}
+.tileSm {
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+}
+.drawn .tile {
+  width: 3em;
+  height: 3em;
+  border-radius: 1em;
+}
+.drawn .tileSm {
+  width: 2.15em;
+  height: 2.15em;
+  border-radius: 0.7em;
+}
+.drawn .tile svg {
+  width: 1.3em;
+  height: 1.3em;
+}
+.topInset {
+  height: 2.4em;
+}
+
+/* The Android home screen. */
+.launcher {
+  background:
+    radial-gradient(120% 60% at 20% 0%, color-mix(in oklab, var(--primary) 30%, transparent), transparent 60%),
+    linear-gradient(180deg, #1a1620, #0e0c12);
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 1em;
+  padding-bottom: 1.4em;
+}
+.launcher .widget {
+  margin: 1.2em 1em 0;
+  align-self: start;
+}
+.dock {
+  display: flex;
+  justify-content: space-around;
+  padding: 0 1.4em;
+}
+.dockApp {
+  display: grid;
+  justify-items: center;
+  gap: 0.4em;
+  font-size: 0.75em;
+  color: var(--muted-foreground);
+}
+.dockApp i {
+  width: 3.9em;
+  height: 3.9em;
+  border-radius: 1.3em;
+  background: color-mix(in oklab, var(--card) 70%, white 10%);
+}
+.dockRooftap .tile {
+  width: 2.95em;
+  height: 2.95em;
+}
+
+/* The widget (design A): Home in miniature. */
+.widget {
+  display: grid;
+  gap: 0.15em;
+  padding: 1em 1em 0.85em;
+  border-radius: 1.7em;
+  background: linear-gradient(225deg, color-mix(in oklab, var(--background) 80%, var(--primary) 20%) 0%, var(--background) 55%);
+  box-shadow:
+    var(--card-shadow),
+    0 0 0 1px var(--border);
+  font-size: 0.93em;
+}
+.widgetHead {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.6em;
+}
+.widgetHero {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.45em;
+}
+.widgetHero b {
+  font-family: var(--font-heading), system-ui, sans-serif;
+  font-size: 3em;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+.widgetHero span {
+  font-weight: 600;
+  color: var(--muted-foreground);
+  padding-bottom: 0.3em;
+}
+.widgetWeather {
+  display: grid;
+  justify-items: end;
+  padding-bottom: 0.15em;
+}
+.widgetWeather b {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 1.35em;
+  font-weight: 500;
+}
+.widgetWeather span {
+  font-size: 0.85em;
+  color: var(--muted-foreground);
+}
+.widgetMeter {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.35em;
+  margin: 0.6em 0 0.9em;
+}
+.widgetMeter span {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--primary);
+}
+.widgetTitle {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  font-size: 1.2em;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.widgetTitle code {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.75em;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  flex: 1;
+}
+.widgetPlus {
+  display: grid;
+  place-items: center;
+  width: 1.6em;
+  height: 1.6em;
+  border-radius: 50%;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  font-size: 1em;
+  line-height: 1;
+}
+.widgetDay {
+  font-size: 0.72em;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+  padding: 0.8em 0.4em 0.4em;
+}
+.widgetGroup {
+  border-radius: 1.15em;
+  overflow: hidden;
+  background: var(--card);
+}
+.widgetRow {
+  display: grid;
+  grid-template-columns: 2.15em minmax(0, 1fr);
+  gap: 0.7em;
+  align-items: center;
+  padding: 0.5em 0.7em;
+}
+.widgetRow + .widgetRow {
+  border-top: 1px solid var(--border);
+}
+.widgetRowTitle {
+  display: block;
+  font-size: 0.93em;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.widgetRowMeta {
+  display: block;
+  font-size: 0.79em;
+  color: var(--muted-foreground);
+}
+.widgetChips {
+  display: flex;
+  gap: 0.6em;
+  margin-top: 0.75em;
+}
+.widgetChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0.3em 0.7em 0.3em 0.3em;
+  border-radius: 1em;
+  background: var(--card);
+  font-size: 0.9em;
+  font-weight: 600;
+}
+.widgetChip .tileSm {
+  width: 1.6em;
+  height: 1.6em;
+  border-radius: 0.5em;
+}
+
+/* A chat app. */
+.chatApp {
+  background: var(--background);
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+}
+.chatBar {
+  display: flex;
+  align-items: center;
+  gap: 0.8em;
+  padding: 0.6em 1.2em 0.9em;
+  border-bottom: 1px solid var(--border);
+}
+.chatBar b {
+  display: block;
+  font-size: 1.1em;
+}
+.chatBar small {
+  display: block;
+  font-size: 0.8em;
+  color: var(--muted-foreground);
+}
+.chatAvatar {
+  width: 2.6em;
+  height: 2.6em;
+  border-radius: 50%;
+  background: conic-gradient(from 200deg, var(--primary), #8b7cff, var(--primary));
+}
+.chat {
+  display: grid;
+  gap: 0.7em;
+  align-content: start;
+  padding: 1em 1em 0.5em;
+  overflow: hidden;
+}
+.chatLine {
+  display: grid;
+  gap: 0.4em;
+  max-width: 88%;
+}
+.chatYou {
+  justify-self: end;
+  justify-items: end;
+}
+.chatAssistant {
+  justify-self: start;
+}
+.bubble {
+  display: inline-block;
+  padding: 0.7em 1em;
+  border-radius: 1.4em;
+  font-size: 1em;
+  line-height: 1.4;
+  background: var(--card);
+  box-shadow: var(--card-shadow);
+}
+.chatYou .bubble {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border-bottom-right-radius: 0.4em;
+}
+.chatAssistant .bubble {
+  border-bottom-left-radius: 0.4em;
+}
+.chatTools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4em;
+}
+.chatTools code {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.72em;
+  padding: 0.25em 0.7em;
+  border-radius: 999px;
+  background: var(--muted);
+  color: var(--muted-foreground);
+}
+.typing {
+  display: inline-flex;
+  gap: 0.3em;
+  padding: 0.9em 1em;
+}
+.typing i {
+  width: 0.5em;
+  height: 0.5em;
+  border-radius: 50%;
+  background: var(--muted-foreground);
+  animation: typing 1s infinite;
+}
+.typing i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.typing i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes typing {
+  0%,
+  60%,
+  100% {
+    opacity: 0.35;
+  }
+  30% {
+    opacity: 1;
+  }
+}
+.chatInput {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0.6em 1em 1.4em;
+  padding: 0.7em 0.5em 0.7em 1.1em;
+  border-radius: 999px;
+  background: var(--muted);
+  color: var(--muted-foreground);
+}
+.chatInput i {
+  width: 2em;
+  height: 2em;
+  border-radius: 50%;
+  background: var(--primary);
+}
+
+/* A lock screen with a push. */
+.lock {
+  background:
+    radial-gradient(90% 50% at 70% 10%, color-mix(in oklab, var(--primary) 35%, transparent), transparent 70%),
+    linear-gradient(180deg, #17131c, #0d0b10);
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  gap: 1.4em;
+}
+.lockClock {
+  display: grid;
+  justify-items: center;
+  padding-top: 3em;
+}
+.lockClock span {
+  font-family: var(--font-heading), system-ui, sans-serif;
+  font-size: 5.4em;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+.lockClock small {
+  font-size: 1em;
+  color: var(--muted-foreground);
+  margin-top: 0.5em;
+}
+.lock .push {
+  margin: 0 1em;
+  align-self: start;
+}
+.push {
+  display: grid;
+  grid-template-columns: 2.15em minmax(0, 1fr);
+  grid-template-areas:
+    "icon head"
+    "icon title"
+    "icon body";
+  column-gap: 0.85em;
+  row-gap: 0.15em;
+  padding: 1em 1.15em;
+  border-radius: 1.6em;
+  background: color-mix(in oklab, var(--card) 82%, white 6%);
+  box-shadow: var(--card-shadow);
+}
+.pushIcon {
+  grid-area: icon;
+  align-self: start;
+}
+.pushHead {
+  grid-area: head;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6em;
+  font-size: 0.9em;
+  color: var(--muted-foreground);
+}
+.pushTitle {
+  grid-area: title;
+  font-weight: 600;
+  font-size: 1.05em;
+  line-height: 1.3;
+}
+.pushBody {
+  grid-area: body;
+  font-size: 1em;
+  line-height: 1.4;
+  color: var(--muted-foreground);
+}
+
+/* The camera over a cookbook page. */
+.camera {
+  position: relative;
+  background: radial-gradient(80% 60% at 50% 40%, #4a3e34, #1c1713 70%);
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+}
+.paper {
+  position: relative;
+  align-self: center;
+  justify-self: center;
+  width: 78%;
+  display: grid;
+  gap: 0.6em;
+  padding: 1.6em 1.6em 2.4em;
+  border-radius: 0.3em;
+  background: linear-gradient(170deg, #f4ecdc, #e8dfcb);
+  color: #3a3128;
+  box-shadow: 0 2em 3em -1.5em rgba(0, 0, 0, 0.8);
+  transform: rotate(-3deg);
+  font-family: Georgia, "Times New Roman", serif;
+}
+.paperTitle {
+  font-size: 1.7em;
+  font-weight: 700;
+}
+.paperLine {
+  font-size: 0.88em;
+  line-height: 1.45;
+  color: #5a5043;
+}
+.viewfinder {
+  position: absolute;
+  inset: 20% 6% 22%;
+  border: 2px solid rgba(255, 255, 255, 0.55);
+  border-radius: 1em;
+  mask: linear-gradient(#000, #000) padding-box, conic-gradient(from 0deg, #000 0 10%, transparent 10% 40%, #000 40% 60%, transparent 60% 90%, #000 90%) border-box;
+}
+.cameraBar {
+  display: grid;
+  place-items: center;
+  padding: 1.4em 0 2.4em;
+}
+.shutter {
+  width: 4.6em;
+  height: 4.6em;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 0.3em #1c1713, 0 0 0 0.5em #fff;
+}
+.cardStack {
+  display: grid;
+  gap: 10px;
+}
+
+/* ---------- plain sections ---------- */
+.section {
+  padding-block: 112px;
+}
+.sectionHead {
+  display: grid;
+  gap: 16px;
+  max-width: 760px;
+  margin-bottom: 48px;
+}
+.sectionTitle {
+  font-size: clamp(36px, 5.4vw, 64px);
+}
+.sectionLede {
+  font-size: 18px;
+  line-height: 1.55;
+  color: var(--muted-foreground);
+  max-width: 60ch;
+}
+
+.footer {
+  padding-block: 40px max(40px, env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--border);
+  font-size: 14px;
+  color: var(--muted-foreground);
+}
+.footerInner {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+}
+
+/* The app shell pins html/body to the viewport and scrolls inside panes
+   (globals.css). The landing page scrolls the window instead, which the
+   sticky stages and the scroll-driven scenes rely on. */
+:global(html):has(.page),
+:global(html):has(.page) :global(body) {
+  height: auto;
+  overflow: visible;
+}
+
+/* Top bar links. */
+.navLink {
+  display: inline-flex;
+  align-items: center;
+  height: 44px;
+  padding: 0 14px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--foreground);
+}
+.selfHostSection {
+  position: relative;
+  background: linear-gradient(180deg, var(--background), color-mix(in oklab, var(--background) 92%, var(--primary) 8%) 50%, var(--background));
+}
+
+/* ---------- hero ---------- */
+.hero {
+  position: relative;
+  padding-block: 112px 72px;
+  background: linear-gradient(180deg, var(--background), color-mix(in oklab, var(--background) 92%, var(--primary) 8%) 60%, var(--background));
+}
+.heroInner {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  gap: clamp(28px, 5vw, 72px);
+  align-items: center;
+}
+.heroText {
+  display: grid;
+  gap: 18px;
+  justify-items: start;
+}
+.heroText .ctaRow {
+  margin-top: 6px;
+}
+.heroFacts {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  color: var(--muted-foreground);
+}
+.heroPhone {
+  --phone-w: min(340px, 30vw, calc((100svh - 190px) * 0.462));
+  justify-self: center;
+}
+@media (max-width: 860px) {
+  .hero {
+    padding-block: 96px 56px;
+  }
+  .heroInner {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .heroPhone {
+    --phone-w: min(300px, 70vw);
+  }
+}
+
+/* ---------- self-hosting ---------- */
+.hostSteps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.hostStep {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-width: 0;
+  padding: 22px;
+  border-radius: 24px;
+  background: var(--card);
+  box-shadow: var(--card-shadow);
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+}
+.hostStepNum {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--secondary);
+  color: var(--foreground);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 14px;
+  font-weight: 500;
+}
+.hostStepTitle {
+  font-family: var(--font-heading), system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 22px;
+  letter-spacing: -0.02em;
+  color: var(--foreground);
+}
+.code {
+  margin: 4px 0 0;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--background);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--foreground);
+  /* Wraps instead of scrolling sideways on a phone. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.hostFacts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  gap: 0 32px;
+  margin-top: 40px;
+  border-top: 1px solid var(--border);
+}
+.hostFacts > div,
+.faq > div {
+  padding-block: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.hostFacts dt,
+.faq dt {
+  font-weight: 650;
+  color: var(--foreground);
+}
+.hostFacts dd,
+.faq dd {
+  margin: 4px 0 0;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+}
+@media (max-width: 860px) {
+  .hostSteps {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---------- every feature ---------- */
+.featureDetails summary {
+  cursor: pointer;
+  list-style: none;
+}
+.featureDetails summary::-webkit-details-marker {
+  display: none;
+}
+.featureDetails summary:focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 3px;
+}
+.featureDetails[open] summary {
+  margin-bottom: 28px;
+}
+.featureGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+  gap: 14px;
+}
+.featureGroup {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-width: 0;
+  padding: 20px;
+  border-radius: 22px;
+  background: var(--card);
+  box-shadow: var(--card-shadow);
+}
+.featureGroupHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.featureGroupHead h3 {
+  font-family: var(--font-heading), system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 19px;
+  letter-spacing: -0.01em;
+}
+.featureGroup ul {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.featureGroup li {
+  display: grid;
+  gap: 1px;
+  font-size: 14.5px;
+  line-height: 1.4;
+  color: var(--muted-foreground);
+}
+.featureGroup b {
+  font-size: 15.5px;
+  font-weight: 650;
+  color: var(--foreground);
+}
+
+/* ---------- FAQ ---------- */
+.faq {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr));
+  gap: 0 40px;
+  border-top: 1px solid var(--border);
+}
+
+/* ---------- footer ---------- */
+.footerBrand {
+  display: grid;
+  gap: 6px;
+  max-width: 40ch;
+}
+.footerBrand p {
+  color: var(--muted-foreground);
+}
+.footerLinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+  align-items: center;
+}
+.footerLinks a {
+  color: var(--foreground);
+  font-weight: 500;
+}
+.footerLinks a:hover {
+  color: var(--primary);
+}
+
+/* ---------- privacy ---------- */
+.legal {
+  padding-top: 140px;
+}
+.legalSection {
+  display: grid;
+  gap: 10px;
+  max-width: 68ch;
+  padding-block: 24px;
+  border-top: 1px solid var(--border);
+}
+.legalSection h2 {
+  font-family: var(--font-heading), system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 22px;
+  letter-spacing: -0.01em;
+}
+.legalSection p {
+  font-size: 16.5px;
+  line-height: 1.55;
+  color: var(--muted-foreground);
+}
+
+/* ---------- how the modules fit ---------- */
+.chains {
+  display: grid;
+  gap: 56px;
+}
+.chain {
+  display: grid;
+  gap: 18px;
+}
+.chainTitle {
+  font-family: var(--font-heading), system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 22px;
+  letter-spacing: -0.01em;
+}
+.chainLinks {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 32px minmax(0, 1fr) 32px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.chainArrow {
+  align-self: center;
+  justify-self: center;
+  margin-top: -64px;
+  color: var(--muted-foreground);
+}
+.chainLink {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+.crop {
+  position: relative;
+  overflow: hidden;
+  border-radius: 18px;
+  background: var(--card);
+  box-shadow: var(--card-shadow);
+}
+.crop img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.cropRing {
+  position: absolute;
+  border-radius: 14px;
+  box-shadow:
+    0 0 0 2px var(--hue-glyph),
+    0 0 24px 2px var(--hue-glow);
+}
+.chainText {
+  display: grid;
+  gap: 6px;
+}
+.chainModule {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 650;
+}
+.chainText p {
+  font-size: 15.5px;
+  line-height: 1.45;
+  color: var(--muted-foreground);
+}
+@media (max-width: 860px) {
+  .chainLinks {
+    grid-template-columns: minmax(0, 1fr);
+    max-width: 420px;
+  }
+  .chainArrow {
+    margin-top: 0;
+    transform: rotate(90deg);
+  }
+}
+
+/* ---------- comparison ---------- */
+.compareWrap {
+  overflow-x: auto;
+}
+.compare {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 16px;
+  line-height: 1.45;
+}
+.compare th,
+.compare td {
+  padding: 14px 16px 14px 0;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+.compare thead th {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+.compare tbody th {
+  font-weight: 650;
+  color: var(--foreground);
+  white-space: nowrap;
+}
+.compare td:nth-child(2) {
+  color: var(--muted-foreground);
+}
+@media (max-width: 640px) {
+  .compare thead {
+    display: none;
+  }
+  .compare tr {
+    display: grid;
+    gap: 2px;
+    padding-block: 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .compare th,
+  .compare td {
+    padding: 0;
+    border: 0;
+  }
+  .compare td:nth-child(2)::before {
+    content: "Usually: ";
+  }
+}
+
+/* ---------- assistant ---------- */
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 48px;
+  align-items: start;
+}
+.split .sectionHead {
+  margin-bottom: 0;
+}
+.ask {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border-radius: 26px;
+  background: var(--card);
+  box-shadow: var(--card-shadow);
+}
+.askLog {
+  display: grid;
+  gap: 0.7em;
+  align-content: end;
+  height: 340px;
+  overflow-y: auto;
+  padding: 4px;
+  font-size: 15.5px;
+}
+.askLog .bubble {
+  background: var(--muted);
+  box-shadow: none;
+}
+.askLog .chatYou .bubble {
+  background: var(--primary);
+}
+.askEmpty {
+  align-self: center;
+  justify-self: center;
+  color: var(--muted-foreground);
+}
+.askChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.askChip {
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--foreground);
+  font: inherit;
+  font-size: 14.5px;
+  cursor: pointer;
+}
+.askChip:hover {
+  border-color: var(--primary);
+}
+.askChip:focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 2px;
+}
+.askNote {
+  font-size: 13px;
+  color: var(--muted-foreground);
+}
+@media (max-width: 860px) {
+  .split {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 28px;
+  }
+  .askLog {
+    height: 300px;
+  }
+}
+
+/* ---------- live demo ---------- */
+.livePhone {
+  --phone-w: min(360px, 80vw, calc((100svh - 140px) * 0.462));
+  justify-self: center;
+}
+.liveFrame {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border: 0;
+  transform-origin: 0 0;
+  background: var(--background);
+}
+.livePoster {
+  display: block;
+  width: 100%;
+  height: auto;
+  filter: brightness(0.55);
+}
+.liveStart {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  white-space: nowrap;
+}

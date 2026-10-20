@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en" class="font-sans">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Privacy · Rooftap</title>
+    <meta name="description" content="What Rooftap stores, and which providers it calls." />
+    <meta name="theme-color" content="#121016" />
+    <link rel="icon" href="./icon.svg" />
+    <style>
+      html { --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif; --font-mono: "Geist Mono Variable", ui-monospace, monospace; --font-heading: "Bricolage Grotesque Variable", var(--font-sans); }
+    </style>
+    <script>
+      // The landing page is always presented in Ember Night.
+      document.documentElement.setAttribute("data-theme", "ember-night");
+      document.documentElement.classList.add("dark");
+    </script>
+  </head>
+  <body class="antialiased noise-overlay">
+    <div id="root"><!--app--></div>
+    <script type="module" src="./privacy.tsx"></script>
+  </body>
+</html>

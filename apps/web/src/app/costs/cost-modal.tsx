@@ -1,0 +1,311 @@
+'use client';
+
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createClient } from '@/lib/supabase/client';
+import type { CostItem, CostCadence, CostCategory } from '@homeup/core';
+import { CATEGORY_META, currencySymbol } from '@homeup/core';
+import { syncCostReminders, useModules } from '@homeup/core';
+import { todayISO } from '@/app/tasks/moving-tasks';
+import { ItemFormSheet, FormSection, FieldRow, DetailsDisclosure } from '@/components/ui/item-form-sheet';
+import { DragNumberField } from '@/components/ui/drag-number-field';
+import { SegmentedControl } from '@/components/ui/segmented-control';
+import { SearchablePicker, type PickerOption } from '@/components/ui/searchable-picker';
+import { Input } from '@/components/ui/input';
+import { CostDocuments } from '@/app/costs/cost-documents';
+import { sectionIconFor } from '@/lib/section-icons';
+import { CategoryGlyph } from './category-glyph';
+
+// Hearth v2 (E1): the sheet header wears the section's identity tile.
+const COSTS_SECTION = { id: 'costs', Icon: sectionIconFor('costs') };
+
+interface CostModalProps {
+  isOpen: boolean;
+  item?: CostItem;
+  groupId: string;
+  defaultCategory?: CostCategory;
+  /** Pre-fill the name for new costs (ignored when `item` is provided). */
+  defaultName?: string;
+  onClose: () => void;
+  onSave: (item: CostItem) => void;
+  /** When provided, a Delete button is shown (edit mode only). */
+  onDelete?: (itemId: string) => void;
+}
+
+const CATEGORY_ORDER = Object.keys(CATEGORY_META) as CostCategory[];
+const CADENCE_OPTIONS = [
+  { value: 'one_off' as const, label: 'One-off' },
+  { value: 'weekly' as const, label: 'Weekly' },
+  { value: 'fortnightly' as const, label: 'Fortnightly' },
+  { value: 'monthly' as const, label: 'Monthly' },
+  { value: 'quarterly' as const, label: 'Quarterly' },
+  { value: 'yearly' as const, label: 'Yearly' },
+];
+
+export function CostModal({ isOpen, item, groupId, defaultCategory, defaultName, onClose, onSave, onDelete }: CostModalProps) {
+  const buildInitialForm = useCallback(
+    () => ({
+      name: item?.name ?? defaultName ?? '',
+      // FLUX-182: new costs default to a one-off Purchase.
+      category: (item?.category ?? defaultCategory ?? 'purchase') as CostCategory,
+      amount: item ? item.amount / 100 : null,
+      cadence: (item?.cadence ?? 'one_off') as CostCadence,
+      is_estimate: item?.is_estimate ?? false,
+      provider: item?.provider ?? '',
+      start_date: item?.start_date ?? '',
+      end_date: item?.end_date ?? '',
+      discount_end_date: item?.discount_end_date ?? '',
+      notes: item?.notes ?? '',
+    }),
+    [item, defaultCategory, defaultName],
+  );
+  const [form, setForm] = useState(buildInitialForm);
+
+  // FLUX-186: instance is reused across opens (stable `key` for blank adds), so
+  // re-seed the form on every closed→open transition — otherwise adding a second
+  // cost pre-fills the one you just added.
+  const wasOpen = useRef(isOpen);
+  useEffect(() => {
+    if (isOpen && !wasOpen.current) setForm(buildInitialForm());
+    wasOpen.current = isOpen;
+  }, [isOpen, buildInitialForm]);
+
+  const categoryOptions = useMemo<PickerOption[]>(
+    () => CATEGORY_ORDER.map((c) => ({ value: c, primary: CATEGORY_META[c].label })),
+    []
+  );
+
+  // FLUX-182: the Contract group (provider + renewal/discount dates + reminders)
+  // is only meaningful for a recurring cost — hidden for a one-off.
+  const isRecurring = form.cadence !== 'one_off';
+
+  const modules = useModules();
+  // Modules: naming Tasks as where the reminder lands needs household and costs;
+  // the reminder itself is created either way (module-features.ts).
+  const reminderInTasks = modules.feature('tasks.from-cost');
+
+  const handleSubmit = () => {
+    if (!form.name.trim()) return;
+    const payload = {
+      name: form.name.trim(),
+      category: form.category,
+      amount: Math.round((form.amount ?? 0) * 100),
+      cadence: form.cadence,
+      is_estimate: form.is_estimate,
+      // FLUX-184: don't persist stale contract expiry dates when the cadence
+      // is one-off — the Contract group is hidden in that case, and leaving
+      // the old values in place would silently keep a renewal reminder alive
+      // for a cost that no longer recurs. Only the genuinely contract-only
+      // fields are cleared: `start_date` doubles as the occurrence date that
+      // anchors a one-off in the projection (and grocery-actual accounting),
+      // and `provider` is the retailer on grocery lines — both must survive
+      // the switch.
+      provider: form.provider.trim() || null,
+      // FLUX-1575: a brand-new cost with no explicit date defaults to today
+      // (the date it was actually added) instead of null — undated one-offs
+      // are invisible to the "This Month" filter and the chart/category
+      // projections. Editing an existing item still allows clearing the date.
+      start_date: form.start_date || (item?.id ? null : todayISO()),
+      end_date: isRecurring ? form.end_date || null : null,
+      discount_end_date: isRecurring ? form.discount_end_date || null : null,
+      notes: form.notes.trim() || null,
+      group_id: groupId,
+    };
+
+    // Offline-safe: build the row and hand it to onSave (→ writeRow), which
+    // writes to IndexedDB and syncs. No direct Supabase here, so it works
+    // offline. writeRow stamps created_by/timestamps for new rows.
+    const now = new Date().toISOString();
+    const saved: CostItem = item?.id
+      ? { ...item, ...payload }
+      : {
+          id: crypto.randomUUID(),
+          ...payload,
+          assigned_to: null,
+          linked_section: null,
+          sort_order: 0,
+          created_by: null,
+          created_at: now,
+          updated_at: now,
+          deleted: false,
+        };
+
+    onSave(saved);
+    onClose();
+
+    // Keep expiry reminders in the Tasks inbox in sync. Fire-and-forget and
+    // online-only — offline it throws (caught); a reminder usually reconciles
+    // on a later online edit, though an offline-missed *deletion* can slip
+    // through if a subsequent save no longer trips this guard. The core cost
+    // is already saved locally regardless.
+    // FLUX-184: also fire when the cost *previously* had expiry dates (e.g.
+    // switching to one-off just cleared them) — syncCostReminders deletes the
+    // stale reminder when a date is now null, but only if it actually runs.
+    if (saved.end_date || saved.discount_end_date || item?.end_date || item?.discount_end_date) {
+      void syncCostReminders(saved, createClient()).catch(() => {});
+    }
+  };
+
+  const handleDelete = () => {
+    if (!item?.id || !onDelete) return;
+    if (!confirm(`Delete "${item.name}"? This cannot be undone.`)) return;
+    onDelete(item.id);
+    onClose();
+  };
+
+  const detailsCount = isRecurring ? 5 : 1; // Provider, Contract start/end, Discount ends, Attachments
+
+  return (
+    <ItemFormSheet
+      section={COSTS_SECTION}
+      isOpen={isOpen}
+      onClose={onClose}
+      title={item ? 'Edit cost' : 'Add cost'}
+      previewContent={
+        item ? (
+          <>
+            <CategoryGlyph category={form.category} />
+            <span className="min-w-0 flex-1 truncate font-heading text-base font-semibold text-foreground">
+              {form.name || 'Edit cost'}
+            </span>
+            <span className="shrink-0 text-sm font-semibold tabular-nums text-foreground">
+              {form.is_estimate ? '≈' : ''}${(form.amount ?? 0).toFixed(2)}
+            </span>
+          </>
+        ) : undefined
+      }
+      onSubmit={handleSubmit}
+      canSubmit={!!form.name.trim()}
+      onDelete={item && onDelete ? handleDelete : undefined}
+    >
+      <FormSection>
+        <div className="grid grid-cols-[3fr_1fr] gap-3">
+          <FieldRow label="Name" htmlFor="cost-name" required>
+            <Input
+              id="cost-name"
+              autoFocus
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              placeholder="e.g., Electricity"
+            />
+          </FieldRow>
+          <FieldRow
+            label="Amount"
+            action={
+              <button
+                type="button"
+                role="switch"
+                aria-checked={form.is_estimate}
+                aria-label="Estimate"
+                onClick={() => setForm({ ...form, is_estimate: !form.is_estimate })}
+                className="text-xs font-medium text-muted-foreground hover:text-foreground"
+              >
+                {form.is_estimate ? '≈' : 'Exact'}
+              </button>
+            }
+          >
+            <DragNumberField
+              value={form.amount}
+              onChange={(amount) => setForm({ ...form, amount })}
+              step={1}
+              min={0}
+              precision={2}
+              prefix={currencySymbol()}
+              placeholder="0.00"
+              ariaLabel="Amount"
+            />
+          </FieldRow>
+        </div>
+
+        {/* Category then cadence, each a full row: six cadence segments in a
+            half-width column wrapped to three lines on a phone. */}
+        <div className="grid gap-3">
+          <FieldRow label="Category">
+            <SearchablePicker
+              options={categoryOptions}
+              value={form.category}
+              onChange={(category) => setForm({ ...form, category: category as CostCategory })}
+              placeholder="Category…"
+              searchPlaceholder="Search…"
+              ariaLabel="Category"
+            />
+          </FieldRow>
+          <FieldRow label="Cadence">
+            <SegmentedControl
+              options={CADENCE_OPTIONS}
+              value={form.cadence}
+              onChange={(cadence) => setForm({ ...form, cadence })}
+              wrap
+              size="sm"
+              ariaLabel="Cadence"
+            />
+          </FieldRow>
+        </div>
+
+        <FieldRow label="Notes">
+          <textarea
+            value={form.notes}
+            onChange={(e) => setForm({ ...form, notes: e.target.value })}
+            className="w-full rounded-lg border border-input bg-background px-2.5 py-2 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 placeholder:text-muted-foreground"
+            rows={2}
+            placeholder="Any details…"
+          />
+        </FieldRow>
+      </FormSection>
+
+      <DetailsDisclosure count={detailsCount}>
+        {isRecurring && (
+          <FormSection title="Contract">
+            <FieldRow label="Provider">
+              <Input
+                value={form.provider}
+                onChange={(e) => setForm({ ...form, provider: e.target.value })}
+                placeholder="e.g., AGL, Telstra"
+              />
+            </FieldRow>
+            <div className="grid grid-cols-2 gap-3">
+              <FieldRow label="Contract start">
+                <Input
+                  type="date"
+                  value={form.start_date}
+                  onChange={(e) => setForm({ ...form, start_date: e.target.value })}
+                />
+              </FieldRow>
+              <FieldRow label="Contract end">
+                <Input
+                  type="date"
+                  value={form.end_date}
+                  onChange={(e) => setForm({ ...form, end_date: e.target.value })}
+                />
+              </FieldRow>
+            </div>
+            <FieldRow
+              label="Discount / intro-rate ends"
+              hint={reminderInTasks ? 'A reminder will appear in Tasks before this date.' : "You'll get a reminder before this date."}
+            >
+              <Input
+                type="date"
+                value={form.discount_end_date}
+                onChange={(e) => setForm({ ...form, discount_end_date: e.target.value })}
+              />
+            </FieldRow>
+          </FormSection>
+        )}
+
+        {/* Attachments (bills / receipts / contracts). CostDocuments uploads
+            immediately keyed by a saved cost id, so it's only available in edit
+            mode; a new cost prompts the user to save first (FLUX-182). */}
+        <FormSection>
+          <FieldRow label="Attachments">
+            {item?.id ? (
+              <CostDocuments costItemId={item.id} groupId={groupId} />
+            ) : (
+              <p className="rounded-lg border border-dashed border-border bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground">
+                Save this cost first, then reopen it to attach a bill, receipt or contract.
+              </p>
+            )}
+          </FieldRow>
+        </FormSection>
+      </DetailsDisclosure>
+    </ItemFormSheet>
+  );
+}

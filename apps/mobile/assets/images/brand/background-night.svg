@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <!-- Flat Android adaptive-icon background layer, full bleed (the OS applies
+       its own launcher mask shape on top). Ember night "background" token. -->
+  <rect width="512" height="512" fill="#121016"/>
+</svg>

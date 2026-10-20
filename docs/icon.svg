@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <!-- Taupe circle background -->
+  <circle cx="256" cy="256" r="256" fill="#c4b39a"/>
+
+  <!-- House shape - terracotta orange -->
+  <!-- Roof (triangle/chevron) -->
+  <path d="M256 100 L400 210 L380 210 L380 400 L296 400 L296 280 L216 280 L216 400 L132 400 L132 210 L112 210 Z" fill="#c75d2e"/>
+
+  <!-- Inner house cutout (the "door" / H crossbar gap) -->
+  <rect x="216" y="280" width="80" height="120" fill="#c4b39a"/>
+
+  <!-- Window (small square in upper house area) -->
+  <rect x="232" y="180" width="48" height="48" fill="#c4b39a"/>
+  <!-- Window cross -->
+  <rect x="254" y="180" width="4" height="48" fill="#c75d2e"/>
+  <rect x="232" y="202" width="48" height="4" fill="#c75d2e"/>
+</svg>

@@ -1,0 +1,30 @@
+# Event Horizon ticket storage — never ships in the image
+.flux/
+.flux-store/
+.eh-worktrees/
+
+# VCS
+.git
+.gitignore
+
+# Dependencies (installed fresh in the deps stage)
+node_modules/
+
+# Build output (produced fresh in the builder stage)
+.next/
+out/
+
+# Env files — secrets. .env.example is a template, not a secret, so it stays.
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Editor/OS cruft
+.vscode/
+.idea/
+*.log
+npm-debug.log*
+
+# Docs (not needed at runtime)
+.docs/

@@ -1,0 +1,10 @@
+{
+  "name": "@homeup/config",
+  "version": "0.0.0",
+  "private": true,
+  "main": "eslint-preset.js",
+  "files": [
+    "tsconfig.base.json",
+    "eslint-preset.js"
+  ]
+}

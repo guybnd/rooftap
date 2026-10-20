@@ -1,0 +1,28 @@
+{
+  "extends": ["expo"],
+  "rules": {
+    // React Compiler rules (eslint-config-expo turns them on). The compiler
+    // is off (app.config.ts experiments.reactCompiler), so these flag code it
+    // would skip rather than bugs; the latest-ref and undo-presenter patterns
+    // they hit are intentional. Kept visible as warnings; set them back to
+    // "error" before turning the compiler on.
+    "react-hooks/set-state-in-effect": "warn",
+    "react-hooks/refs": "warn",
+    "react-hooks/purity": "warn",
+    "react-hooks/immutability": "warn",
+    "react-hooks/preserve-manual-memoization": "warn",
+    "react-hooks/set-state-in-render": "warn",
+    "react-hooks/static-components": "warn",
+    "react-hooks/use-memo": "warn",
+    "react-hooks/globals": "warn",
+    "react-hooks/incompatible-library": "warn",
+    "react-hooks/unsupported-syntax": "warn"
+  },
+  // Build-time Node scripts (babel plugin, config files).
+  "overrides": [
+    {
+      "files": ["*.js"],
+      "env": { "node": true }
+    }
+  ]
+}

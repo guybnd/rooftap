@@ -1,0 +1,109 @@
+import type { Metadata, Viewport } from "next";
+import "./globals.css";
+// HOUP-73: registers apps/web's StoreEnvironment (browser IndexedDB persist,
+// online/visibility detection) before any Legend-State store is used. Must
+// run on every route, including ~offline and share-target — import for its
+// side effect only, here, not per-route.
+import "@/lib/legend/environment";
+import { Geist, Geist_Mono, Bricolage_Grotesque, Cinzel } from "next/font/google";
+import { cn } from "@/lib/utils";
+import { LIGHT_THEME_IDS, SYSTEM_THEME_IDS, THEME_IDS, THEME_PREFERENCE_STORAGE_KEY } from "@homeup/core";
+import { AppSidebar } from "@/components/app-sidebar";
+import { ThemeProvider } from "@/components/theme-provider";
+import { ChunkReload } from "@/components/chunk-reload";
+import { PersistentStorage } from "@/components/persistent-storage";
+import { sectionHueCss } from "@/lib/section-hue-css";
+import { Toaster } from "sonner";
+
+const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
+const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono", display: "swap" });
+const bricolage = Bricolage_Grotesque({
+  subsets: ["latin"],
+  weight: ["600", "700", "800"],
+  variable: "--font-heading",
+  display: "swap",
+});
+// FLUX-1569: Axis Mundi's lapidary-capitals type role (wordmark, section
+// names, column/group headers only — never Display/Title/Body prose). Fixed
+// 600 weight ("never bold" per Hearth T1 deviation) and `preload: false` so
+// the file is only ever fetched when a `.cap-inscription` rule actually
+// matches under an `axis-mundi-*` theme — zero payload cost on the other 8.
+const cinzel = Cinzel({
+  subsets: ["latin"],
+  weight: "600",
+  variable: "--font-inscription",
+  display: "swap",
+  preload: false,
+});
+
+// Hearth v2: paints the right theme before first paint (no flash). Mirrors
+// ThemeProvider + @homeup/core's resolveThemePreference: a pinned theme id
+// wins, anything else ("system", unset, stale) follows the device scheme.
+const PINNABLE_THEMES = JSON.stringify(THEME_IDS);
+const LIGHT_THEMES = JSON.stringify(LIGHT_THEME_IDS);
+const THEME_BOOT_SCRIPT = `try{var p=localStorage.getItem(${JSON.stringify(THEME_PREFERENCE_STORAGE_KEY)}),ids=${PINNABLE_THEMES},light=${LIGHT_THEMES},t=ids.indexOf(p)>=0?p:(window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches?${JSON.stringify(SYSTEM_THEME_IDS.dark)}:${JSON.stringify(SYSTEM_THEME_IDS.light)});document.documentElement.setAttribute("data-theme",t);if(light.indexOf(t)<0)document.documentElement.classList.add("dark")}catch(e){}`;
+
+export const metadata: Metadata = {
+  title: "Rooftap",
+  description: "Welcome home. One calm app for the whole household.",
+  manifest: "/manifest.json",
+  icons: { icon: "/icon.svg" },
+};
+
+export const viewport: Viewport = {
+  // Hearth v2: browser chrome matches the Ember ground for each scheme.
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#F6F3EF" },
+    { media: "(prefers-color-scheme: dark)", color: "#121016" },
+  ],
+  // Let the browser reflow page content when the on-screen keyboard opens so
+  // `dvh` units and bottom-anchored sheets track the shrunken viewport
+  // (Chrome/Android). iOS Safari ignores this — the VisualViewport-based
+  // useKeyboardInset hook handles that platform.
+  interactiveWidget: "resizes-content",
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html
+      lang="en"
+      className={cn(
+        "font-sans",
+        geist.variable,
+        geistMono.variable,
+        bricolage.variable,
+        cinzel.variable
+      )}
+      suppressHydrationWarning
+    >
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: THEME_BOOT_SCRIPT,
+          }}
+        />
+        {/* Hearth v2: section identity hues as CSS variables (lib/section-hue-css.ts). */}
+        <style dangerouslySetInnerHTML={{ __html: sectionHueCss() }} />
+        {process.env.NODE_ENV !== "production" && (
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `if('serviceWorker'in navigator){navigator.serviceWorker.getRegistrations().then(function(r){r.forEach(function(sw){sw.unregister();});});caches.keys().then(function(k){k.forEach(function(c){caches.delete(c);});});}`,
+            }}
+          />
+        )}
+      </head>
+      <body className="antialiased noise-overlay">
+        <ChunkReload />
+        <PersistentStorage />
+        <ThemeProvider>
+          <AppSidebar>{children}</AppSidebar>
+          <Toaster theme="system" position="bottom-right" richColors />
+        </ThemeProvider>
+      </body>
+    </html>
+  );
+}

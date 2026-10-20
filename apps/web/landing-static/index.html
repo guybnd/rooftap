@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en" class="font-sans">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Rooftap · Your home, your server</title>
+    <meta name="description" content="One shared app for the tasks, groceries, costs, calendar, recipes, documents and checklists of a household. Web and Android. Free to self-host." />
+    <meta name="theme-color" content="#121016" />
+    <link rel="icon" href="./icon.svg" />
+    <link rel="canonical" href="%VITE_SITE_URL%" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Rooftap" />
+    <meta property="og:title" content="Rooftap · Your home, your server" />
+    <meta property="og:description" content="One shared app for the tasks, groceries, costs, calendar, recipes, documents and checklists of a household. Web and Android. Free to self-host." />
+    <meta property="og:url" content="%VITE_SITE_URL%" />
+    <meta property="og:image" content="%VITE_SITE_URL%landing/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Rooftap: Your home, your server. The Home and Groceries screens of the app." />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Rooftap · Your home, your server" />
+    <meta name="twitter:description" content="One shared app for the tasks, groceries, costs, calendar, recipes, documents and checklists of a household. Web and Android. Free to self-host." />
+    <meta name="twitter:image" content="%VITE_SITE_URL%landing/og.png" />
+    <style>
+      html { --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif; --font-mono: "Geist Mono Variable", ui-monospace, monospace; --font-heading: "Bricolage Grotesque Variable", var(--font-sans); }
+    </style>
+    <script>
+      // The landing page is always presented in Ember Night.
+      document.documentElement.setAttribute("data-theme", "ember-night");
+      document.documentElement.classList.add("dark");
+    </script>
+  </head>
+  <body class="antialiased noise-overlay">
+    <div id="root"><!--app--></div>
+    <script type="module" src="./main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,20 @@
+# HTTPS front door for the optional `https` compose profile (see
+# .docs/self-hosting.md "Mobile access"). One hostname serves both halves:
+# Supabase's API paths go to Kong, everything else to the web app, so the
+# phone needs a single URL and SUPABASE_PUBLIC_URL is that same origin.
+#
+# HOMEUP_DOMAIN decides where the certificate comes from:
+#   - a public domain pointing at this host: Let's Encrypt (ports 80/443 open)
+#   - a Tailscale name (<machine>.<tailnet>.ts.net): Caddy asks the local
+#     tailscaled for it (HTTPS certificates enabled in the tailnet)
+#   - localhost: Caddy's own local CA, for testing only
+
+{$HOMEUP_DOMAIN} {
+	@supabase path /auth/v1/* /rest/v1/* /realtime/v1/* /storage/v1/* /functions/v1/*
+	handle @supabase {
+		reverse_proxy localhost:{$KONG_HTTP_PORT:8000}
+	}
+	handle {
+		reverse_proxy localhost:{$APP_PORT:3000}
+	}
+}

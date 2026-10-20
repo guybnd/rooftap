@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "890027895512",
+    "project_id": "homeup-93874",
+    "storage_bucket": "homeup-93874.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:890027895512:android:4174f26de61c06987805ad",
+        "android_client_info": {
+          "package_name": "com.homeup.mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA4AB_rUpOsIFinBDUagxbpLB3887gNnjc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,26 @@
+{
+  "name": "homeup",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "npm@11.12.1",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev --filter=web",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "smoke": "turbo run smoke --filter=web",
+    "check": "turbo run typecheck test lint",
+    "check:web": "turbo run typecheck test smoke --filter=web"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.4"
+  }
+}

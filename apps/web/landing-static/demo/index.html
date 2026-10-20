@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en" class="font-sans">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Rooftap screen demo</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700;800&family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" />
+    <style>
+      html { --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif; --font-mono: "Geist Mono", ui-monospace, monospace; --font-heading: "Bricolage Grotesque", var(--font-sans); }
+      html, body { background: var(--background); }
+    </style>
+    <script>
+      // The theme is part of the scene: ?theme=ember-day for a day shot.
+      const theme = new URLSearchParams(location.search).get("theme") || "ember-night";
+      document.documentElement.setAttribute("data-theme", theme);
+      if (theme.endsWith("night")) document.documentElement.classList.add("dark");
+    </script>
+    <script type="module" src="./demo.tsx"></script>
+  </head>
+  <body class="antialiased noise-overlay">
+    <div id="root"></div>
+  </body>
+</html>

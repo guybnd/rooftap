@@ -1,0 +1,368 @@
+# Rooftap self-hosting stack (FLUX-1561).
+#
+# One command boots the app plus a trimmed self-hosted Supabase stack — no
+# cloud account, no external signup. See .docs/self-hosting.md for the full
+# operator guide.
+#
+# Usage: ./scripts/self-host-init.sh -d   (NOT `docker compose up` directly —
+# that script fixes up the persisted .env's JWT/anon/service-role keys first;
+# see its header comment for why that can't happen inside a compose service.)
+#
+# Trimmed vs. upstream supabase/supabase's reference compose (docker/docker-compose.yml):
+# dropped studio/dashboard, pg-meta, imgproxy (image transforms off), Logflare/
+# Vector analytics, and Supavisor (single-operator scale doesn't need a
+# pooler — `db` is reached directly). Image tags below are pinned to the
+# versions upstream ships as of this ticket.
+
+name: homeup
+
+services:
+  db:
+    image: supabase/postgres:17.6.1.136
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      # Loopback only: this is the postgres superuser. Nothing outside the host
+      # needs it (the app and Kong reach it over the compose network); set
+      # POSTGRES_BIND=0.0.0.0 only if you deliberately want LAN access.
+      - "${POSTGRES_BIND:-127.0.0.1}:${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_HOST: /var/run/postgresql
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: postgres
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXP: ${JWT_EXPIRY:-3600}
+    volumes:
+      # Persisted between restarts — this IS the operator's data (see AC:
+      # "second down && up reuses secrets and keeps existing data").
+      - db-data:/var/lib/postgresql/data
+      # pgsodium's root key lives here, and Vault decrypts the seeded
+      # project_url/service_role_key secrets with it. Without a volume a
+      # recreated container (image bump, `down` then `up`) generates a new key,
+      # the Vault secrets stop decrypting, and every push trigger and cron job
+      # fails silently. Same volume upstream supabase/docker uses.
+      - db-config:/etc/postgresql-custom
+      # Baseline init scripts, verbatim from upstream (see docker/volumes/db/*.sql
+      # headers) — run once, before our own app migrations (via `migrate`
+      # below), by the supabase/postgres image's docker-entrypoint-initdb.d.
+      - ./docker/volumes/db/realtime.sql:/docker-entrypoint-initdb.d/migrations/99-realtime.sql:ro
+      - ./docker/volumes/db/webhooks.sql:/docker-entrypoint-initdb.d/init-scripts/98-webhooks.sql:ro
+      - ./docker/volumes/db/roles.sql:/docker-entrypoint-initdb.d/init-scripts/99-roles.sql:ro
+      - ./docker/volumes/db/jwt.sql:/docker-entrypoint-initdb.d/init-scripts/97-jwt.sql:ro
+    command:
+      ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
+
+  # One-shot: applies every supabase/migrations/*.sql against `db`, tracked in
+  # supabase_migrations.schema_migrations so re-running on an existing volume
+  # is a no-op (scripts/apply-migrations.sh). This is Rooftap's own app
+  # migrations — separate from the baseline init scripts `db` runs above.
+  migrate:
+    # Debian-based (not -alpine) — apply-migrations.sh needs bash (shopt,
+    # bash arrays); Alpine's /bin/sh is busybox ash and has neither.
+    image: postgres:17
+    depends_on:
+      db:
+        condition: service_healthy
+      # `storage` self-migrates its own storage.* schema on startup, the same
+      # way `auth`/`realtime` self-migrate theirs. Our own
+      # 20260526000004_create_storage_bucket.sql migration inserts into
+      # storage.buckets, so it can't run until storage has created that
+      # table — hence waiting on storage here rather than the other way
+      # around (storage doesn't need OUR migrations to start).
+      storage:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGPORT: 5432
+      PGDATABASE: postgres
+      PGUSER: postgres
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      MIGRATIONS_DIR: /migrations
+      # Vault auto-seed (HOUP-309) — see scripts/apply-migrations.sh. In-network
+      # URL, not operator-tunable, hence hardcoded rather than an .env var.
+      SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+      SEED_PROJECT_URL: http://kong:8000
+    volumes:
+      - ./supabase/migrations:/migrations:ro
+      - ./scripts/apply-migrations.sh:/apply-migrations.sh:ro
+    entrypoint: ["bash", "/apply-migrations.sh"]
+    restart: "no"
+
+  auth:
+    image: supabase/gotrue:v2.189.0
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9999/health"]
+      timeout: 5s
+      interval: 5s
+      retries: 3
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: 9999
+      API_EXTERNAL_URL: ${SUPABASE_PUBLIC_URL:-http://localhost:8000}/auth/v1
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@db:5432/postgres
+      GOTRUE_SITE_URL: ${SITE_URL:-http://localhost:3000}
+      GOTRUE_URI_ALLOW_LIST: ${ADDITIONAL_REDIRECT_URLS:-}
+      # Locked after the first account exists by default — see .docs/self-hosting.md 'Auth' section.
+      # Set GOTRUE_DISABLE_SIGNUP=false in .env to reopen registration.
+      GOTRUE_DISABLE_SIGNUP: "${GOTRUE_DISABLE_SIGNUP:-true}"
+      # GoTrue's own default, if unset, is 6 characters. Raised because a
+      # self-hosted instance's login page is usually internet-facing.
+      GOTRUE_PASSWORD_MIN_LENGTH: "${GOTRUE_PASSWORD_MIN_LENGTH:-8}"
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_EXP: ${JWT_EXPIRY:-3600}
+      GOTRUE_JWT_SECRET: ${JWT_SECRET}
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+      # No SMTP configured for a zero-external-account install — accounts
+      # confirm immediately instead of waiting on a confirmation email an
+      # operator has no mail server to send. See .docs/self-hosting.md.
+      GOTRUE_MAILER_AUTOCONFIRM: "true"
+      GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED: "false"
+      GOTRUE_EXTERNAL_PHONE_ENABLED: "false"
+      # Google sign-in stays optional (FLUX-1561 Auth section) — uncomment to enable:
+      # GOTRUE_EXTERNAL_GOOGLE_ENABLED: "true"
+      # GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      # GOTRUE_EXTERNAL_GOOGLE_SECRET: ${GOOGLE_CLIENT_SECRET}
+      # GoTrue's own callback, not the app's; add it as an authorised redirect
+      # URI on the Google OAuth client.
+      # GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI: ${SUPABASE_PUBLIC_URL:-http://localhost:8000}/auth/v1/callback
+
+  rest:
+    image: postgrest/postgrest:v14.12
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      PGRST_DB_URI: postgres://authenticator:${POSTGRES_PASSWORD}@db:5432/postgres
+      # public only — Rooftap doesn't run pg_graphql, so graphql_public isn't
+      # created; listing it here would fail PostgREST's schema-cache load.
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      PGRST_DB_USE_LEGACY_GUCS: "false"
+
+  realtime:
+    # Name looks inconsistent but is required — Realtime parses its tenant id
+    # from this subdomain-shaped container name (matches upstream exactly).
+    container_name: realtime-dev.supabase-realtime
+    image: supabase/realtime:v2.102.3
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PORT: 4000
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: supabase_admin
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_NAME: postgres
+      DB_AFTER_CONNECT_QUERY: "SET search_path TO _realtime"
+      DB_ENC_KEY: ${REALTIME_DB_ENC_KEY:-supabaserealtime}
+      API_JWT_SECRET: ${JWT_SECRET}
+      METRICS_JWT_SECRET: ${JWT_SECRET}
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE}
+      ERL_AFLAGS: -proto_dist inet_tcp
+      DNS_NODES: "''"
+      RLIMIT_NOFILE: "10000"
+      APP_NAME: realtime
+      SEED_SELF_HOST: "true"
+      RUN_JANITOR: "true"
+
+  storage:
+    image: supabase/storage-api:v1.60.4
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      # 127.0.0.1, not localhost — storage-api only binds IPv4, but
+      # "localhost" resolves to ::1 first in this image and wget then fails
+      # with connection-refused before ever trying the IPv4 address.
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:5000/status"]
+      timeout: 5s
+      interval: 5s
+      retries: 5
+      start_period: 10s
+    environment:
+      ANON_KEY: ${ANON_KEY}
+      SERVICE_KEY: ${SERVICE_ROLE_KEY}
+      POSTGREST_URL: http://rest:3000
+      AUTH_JWT_SECRET: ${JWT_SECRET}
+      DATABASE_URL: postgres://supabase_storage_admin:${POSTGRES_PASSWORD}@db:5432/postgres
+      FILE_SIZE_LIMIT: "52428800"
+      STORAGE_BACKEND: file
+      FILE_STORAGE_BACKEND_PATH: /var/lib/storage
+      TENANT_ID: stub
+      REGION: stub
+      GLOBAL_S3_BUCKET: stub
+      # Off — no imgproxy container in this trimmed stack.
+      ENABLE_IMAGE_TRANSFORMATION: "false"
+    volumes:
+      - storage-data:/var/lib/storage
+
+  edge-runtime:
+    image: supabase/edge-runtime:v1.74.0
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      JWT_SECRET: ${JWT_SECRET}
+      SUPABASE_URL: http://kong:8000
+      SUPABASE_ANON_KEY: ${ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+      SUPABASE_DB_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/postgres
+      VERIFY_JWT: "false"
+      # Passed through to calendar-push/calendar-sync/notify-* at their own
+      # `supabase secrets set` equivalent — see supabase/functions/README.md.
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      # calendar-push appends a "View in Rooftap" link when this is set.
+      SITE_URL: ${SITE_URL:-}
+      # Hosted-Supabase parity only — leave unset here; see .env.example.
+      PUSH_NOTIFY_SECRET: ${PUSH_NOTIFY_SECRET:-}
+      # The modules this server offers, same value as the web app's, so
+      # notifications skip modules the server doesn't offer.
+      HOMEUP_MODULES: ${HOMEUP_MODULES:-}
+    command: ["start", "--main-service", "/home/deno/functions/main"]
+    volumes:
+      - ./supabase/functions:/home/deno/functions:ro
+
+  kong:
+    image: kong/kong:3.9.1
+    restart: unless-stopped
+    depends_on:
+      - auth
+      - rest
+      - realtime
+      - storage
+      - edge-runtime
+    ports:
+      - "${KONG_HTTP_PORT:-8000}:8000"
+    environment:
+      KONG_DATABASE: "off"
+      # /usr/local/kong/, not /home/kong/ — that's Kong's own install dir,
+      # writable by the non-root `kong` user the image runs as; /home/kong
+      # isn't (kong-entrypoint.sh writes the rendered config here at boot).
+      KONG_DECLARATIVE_CONFIG: /usr/local/kong/kong.yml
+      KONG_DNS_ORDER: LAST,A,CNAME
+      KONG_PLUGINS: request-transformer,cors,key-auth,acl,post-function
+      SUPABASE_ANON_KEY: ${ANON_KEY}
+      SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
+      # Left empty — Rooftap only issues legacy HS256 keys (kong-entrypoint.sh
+      # falls back to legacy-only Lua expressions when these are unset).
+      SUPABASE_PUBLISHABLE_KEY: ""
+      SUPABASE_SECRET_KEY: ""
+    volumes:
+      - ./docker/volumes/api/kong.yml:/home/kong/temp.yml:ro
+      - ./docker/volumes/api/kong-entrypoint.sh:/docker-entrypoint.sh:ro
+    entrypoint: ["sh", "/docker-entrypoint.sh"]
+
+  app:
+    build:
+      context: .
+      args:
+        # Build-time trap (FLUX-1561 Grounding): these inline into the JS
+        # bundle at `next build` and can't be changed without a rebuild.
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-http://localhost:8000}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${ANON_KEY}
+        NEXT_PUBLIC_MAPBOX_TOKEN: ${NEXT_PUBLIC_MAPBOX_TOKEN}
+        NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${NEXT_PUBLIC_VAPID_PUBLIC_KEY:-}
+    restart: unless-stopped
+    depends_on:
+      - kong
+    # Host networking (not bridge + ports:) is the Phase-1 answer to the
+    # NEXT_PUBLIC_SUPABASE_URL split-origin problem: that var is ONE value
+    # baked into both the server bundle (middleware.ts, API routes) and the
+    # client bundle. A bridge-network app container can reach Kong at
+    # `http://kong:8000` but the browser can't resolve that hostname; the
+    # browser needs `http://localhost:8000` but a bridge-network container's
+    # own "localhost" is itself, not the host. Host networking makes both
+    # "localhost" references resolve to the same place (the host loopback),
+    # which is correct because this is a single-operator, single-machine
+    # install — nothing here needs the app reachable from another host.
+    # Phase 2 (deferred, see ticket): a runtime NEXT_PUBLIC_* injection shim
+    # would let server/client use different origins and drop this constraint.
+    # Linux: works natively. Mac/Windows: requires Docker Desktop's "host
+    # networking" feature (Settings -> Resources -> Network) — see
+    # .docs/self-hosting.md.
+    network_mode: host
+    environment:
+      NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-http://localhost:8000}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${ANON_KEY}
+      # HOUP-69: runtime (non-inlined) var for GET /api/public-config, the
+      # native app's server-picker endpoint. Empty by default (falls back to
+      # NEXT_PUBLIC_SUPABASE_URL above); set this to an externally-reachable
+      # Supabase gateway URL for mobile access — see .docs/self-hosting.md
+      # "Mobile access".
+      SUPABASE_PUBLIC_URL: ${SUPABASE_PUBLIC_URL:-}
+      SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+      # Modules this server offers (comma-separated ids, empty = all). See
+      # .env.example and .docs/modules.md.
+      HOMEUP_MODULES: ${HOMEUP_MODULES:-}
+      PORT: ${APP_PORT:-3000}
+      # Dev/E2E escape hatch — leave unset on any internet-reachable instance.
+      # See .env.example.
+      ALLOW_AUTH_BYPASS: ${ALLOW_AUTH_BYPASS:-}
+      BYPASS_USERNAME: ${BYPASS_USERNAME:-}
+      BYPASS_PASSWORD: ${BYPASS_PASSWORD:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      SCRAPER_API_KEY: ${SCRAPER_API_KEY:-}
+      # Emails allowed to manage server-wide settings (the API keys panel).
+      # Unset = nobody; see .env.example.
+      SERVER_OPERATOR_EMAILS: ${SERVER_OPERATOR_EMAILS:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-}
+
+  # Optional HTTPS front door, needed for the phone app (Android refuses plain
+  # http:// to anything but localhost). Off unless you opt in:
+  #   HOMEUP_DOMAIN=homeup.example.com docker compose --profile https up -d
+  # Host networking, like `app`, so it reaches the app and Kong on localhost
+  # and binds 80/443 on the host. See docker/volumes/caddy/Caddyfile and
+  # .docs/self-hosting.md "Mobile access".
+  caddy:
+    image: caddy:2.10.2
+    profiles: ["https"]
+    restart: unless-stopped
+    depends_on:
+      - kong
+      - app
+    network_mode: host
+    environment:
+      HOMEUP_DOMAIN: ${HOMEUP_DOMAIN:-}
+      KONG_HTTP_PORT: ${KONG_HTTP_PORT:-8000}
+      APP_PORT: ${APP_PORT:-3000}
+    volumes:
+      - ./docker/volumes/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      # Tailscale names only: lets Caddy fetch the *.ts.net certificate.
+      # Uncomment when HOMEUP_DOMAIN is a ts.net name.
+      # - /var/run/tailscale/tailscaled.sock:/var/run/tailscale/tailscaled.sock
+
+volumes:
+  db-data:
+  db-config:
+  caddy-data:
+  storage-data:

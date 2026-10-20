@@ -1,0 +1,543 @@
+// HOUP-82: native cost row. SwipeActions (swipe left reveals delete) wraps a
+// ListItem — the same per-row combo apps/web/src/app/setup/setup-item-card.tsx
+// already uses. Deferred vs. the web CostCard (apps/web/src/app/costs/cost-card.tsx):
+// attachments/comments portals, who-pays avatar, the hold-menu quick-editors —
+// see index.tsx's follow-up note; those stay web-only for this pass.
+// HOUP-174: leading dot promoted to a 28px category-icon square, neutral since
+// Hearth v2 (mirrors
+// apps/mobile/src/app/(tabs)/home/index.tsx's `h-7 w-7` icon-square pattern) and the
+// meta date fragment ported from an absolute "2 Aug" to a relative label (H6),
+// mirroring apps/web/src/app/tasks/task-row.tsx's `dueMeta` grammar adapted for
+// a cost occurrence that can land in the past (one-off already happened /
+// added-at fallback) or the future (this month's still-upcoming recurring
+// occurrence). Select mode (HOUP-174) swaps the leading icon for a checkbox and
+// suppresses swipe, mirroring apps/mobile/src/features/groceries/grocery-item-card.tsx.
+// HOUP-218: Docs/Comments portal chips (PC1-6) + a single inline expand panel
+// (web's `expanded: 'docs' | 'comments' | null`), and a per-row who-pays
+// AssigneePicker + payer avatar in the trailing slot — ported from web's
+// cost-card.tsx. Suppressed in select mode (mirrors web's `leading` bulk
+// checkbox not changing the row's portal/assignee affordances, but native's
+// select mode already swaps the whole leading slot and disables swipe, so the
+// simplest-consistent choice is to hide the row's secondary content there too).
+import * as React from 'react';
+import { View } from 'react-native';
+import {
+  Banknote,
+  Check,
+  FileText,
+  MessageSquare,
+  MoreHorizontal,
+  Paperclip,
+  Pencil,
+  Repeat,
+  ShieldCheck,
+  ShoppingBag,
+  Ticket,
+  ShoppingCart,
+  Trash2,
+  Truck,
+  Wifi,
+  Zap,
+  type LucideIcon,
+} from 'lucide-react-native';
+import {
+  Text,
+  AssigneePicker,
+  BottomSheet,
+  DragNumberField,
+  EntityComments,
+  ListGroup,
+  ListItem,
+  ListItemBody,
+  ListItemLeading,
+  ListItemContent,
+  ListItemTitle,
+  ListItemMeta,
+  ListItemTrailing,
+  PortalChipRow,
+  SearchablePicker,
+  SegmentedControl,
+  SwipeActions,
+  cn,
+  haptics,
+  useHoldFill,
+  type PortalChipDef,
+  type PickerOption,
+} from '@homeup/ui';
+import {
+  CADENCE_LABEL,
+  CATEGORY_META,
+  daysBetweenISO,
+  formatMoney,
+  isOneOff,
+  listDocumentsForEntity,
+  nextOccurrence,
+  parseLocalDateOnly,
+  timeAgo,
+  toISODate,
+  todayISO,
+  syncCostReminders,
+  type StepBackResult,
+  useEntityCommentCount,
+  useModules,
+  type CostCategory,
+  type CostCadence,
+  type CostItem,
+  type GroupMember,
+  currencySymbol,
+} from '@homeup/core';
+import { getCurrentSupabaseClient } from '@/lib/supabase-client';
+import { CostDocuments } from './cost-documents';
+
+type MemberProfiles = Record<string, { email: string; name: string | null; avatar: string | null }>;
+
+interface CostRowProps {
+  item: CostItem;
+  groupId: string;
+  currentUserId: string | null;
+  groupMembers: GroupMember[];
+  memberProfiles: MemberProfiles;
+  onEdit: (item: CostItem) => void;
+  onDelete: (item: CostItem) => void;
+  onUpdate: (item: CostItem) => void;
+  onAssign: (id: string, userId: string) => void;
+  estimateStepBack?: StepBackResult;
+  selectMode?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (id: string) => void;
+}
+
+// HOUP-219: matches task/setup long-press timing (Hearth E1-E4/M3) and drives
+// the shared hold-fill overlay instead of an ad-hoc timer.
+const LONG_PRESS_MS = 500;
+const CADENCE_OPTIONS: CostCadence[] = ['weekly', 'fortnightly', 'monthly', 'quarterly', 'yearly', 'one_off'];
+const CATEGORY_OPTIONS = Object.keys(CATEGORY_META) as CostCategory[];
+const CADENCE_SEGMENTS = CADENCE_OPTIONS.map((c) => ({ value: c, label: CADENCE_LABEL[c] }));
+const CATEGORY_PICKER_OPTIONS: PickerOption[] = CATEGORY_OPTIONS.map((c) => ({ value: c, primary: CATEGORY_META[c].label }));
+
+// One lucide glyph per category, shown in a neutral chip (Hearth v2 H2): the
+// glyph names the category, so the chip needs no hue of its own. The old
+// per-category tints borrowed the status hues (amber, emerald, rose) as
+// decoration; category hues now live only in the chart, where they key a
+// series. Web mirrors this in apps/web/src/app/costs/category-glyph.tsx.
+const CATEGORY_ICON: Record<CostCategory, LucideIcon> = {
+  rent: Banknote,
+  utilities: Zap,
+  internet: Wifi,
+  insurance: ShieldCheck,
+  subscription: Repeat,
+  grocery_estimate: ShoppingCart,
+  moving: Truck,
+  purchase: ShoppingBag,
+  outing: Ticket,
+  other: MoreHorizontal,
+};
+
+export function CategoryChip({ category }: { category: CostCategory }) {
+  const Icon = CATEGORY_ICON[category] ?? MoreHorizontal;
+  return (
+    <View className="h-7 w-7 items-center justify-center rounded-[9px] bg-muted">
+      <Icon size={15} className="text-muted-foreground" />
+    </View>
+  );
+}
+
+// H6: a cost's date as a relative day, never "7 Oct" or raw ISO. Same grammar
+// as the task row's due label and web's costDateLabel (apps/web/src/app/costs/
+// cost-dates.ts): Today / Tomorrow / Yesterday, a short weekday inside the
+// coming week, then "Oct 25".
+function relativeOccurrenceLabel(d: Date): string {
+  const diff = daysBetweenISO(todayISO(), toISODate(d));
+  if (diff === 0) return 'Today';
+  if (diff === 1) return 'Tomorrow';
+  if (diff === -1) return 'Yesterday';
+  if (diff > 1 && diff < 7) return d.toLocaleDateString('en-US', { weekday: 'short' });
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+/** The row's status fragment for a contract or discount ending within 30 days (mirrors web). */
+function expiryFragment(item: CostItem): { text: string; overdue: boolean } | null {
+  const candidates: { kind: 'Contract' | 'Discount'; date: string }[] = [];
+  if (item.end_date) candidates.push({ kind: 'Contract', date: item.end_date });
+  if (item.discount_end_date) candidates.push({ kind: 'Discount', date: item.discount_end_date });
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => a.date.localeCompare(b.date));
+  const { kind, date } = candidates[0];
+  const days = daysBetweenISO(todayISO(), date);
+  if (days > 30) return null;
+  if (days < 0) return { text: `${kind} ended ${Math.abs(days)}d ago`, overdue: true };
+  if (days === 0) return { text: `${kind} ends today`, overdue: false };
+  return { text: `${kind} ends in ${days}d`, overdue: false };
+}
+
+export function CostRow({
+  item,
+  groupId,
+  currentUserId,
+  groupMembers,
+  memberProfiles,
+  onEdit,
+  onDelete,
+  onUpdate,
+  onAssign,
+  estimateStepBack,
+  selectMode,
+  selected,
+  onToggleSelect,
+}: CostRowProps) {
+
+  const [expanded, setExpanded] = React.useState<'docs' | 'comments' | null>(null);
+  const [quickSheetOpen, setQuickSheetOpen] = React.useState(false);
+  const [docCount, setDocCount] = React.useState<number | null>(null);
+  const holdFill = useHoldFill(LONG_PRESS_MS);
+  const modules = useModules();
+  // Modules: the Docs chip, Files row and docs panel need documents and costs (module-features.ts).
+  const docsLinked = modules.feature('documents.costs');
+  // A docs panel left open when Documents is switched off closes with it.
+  const panel = expanded === 'docs' && !docsLinked ? null : expanded;
+
+  const patch = React.useCallback(
+    (payload: Partial<CostItem>) => {
+      const updated = { ...item, ...payload } as CostItem;
+      onUpdate(updated);
+      if (updated.end_date || updated.discount_end_date || item.end_date || item.discount_end_date) {
+        try {
+          void syncCostReminders(updated, getCurrentSupabaseClient()).catch(() => {});
+        } catch {
+          // Client not bound yet; the local edit still went through.
+        }
+      }
+    },
+    [item, onUpdate]
+  );
+
+  // FLUX-109 parity: eagerly compute the attachment count so the collapsed
+  // chip shows it without expanding the panel.
+  React.useEffect(() => {
+    if (!docsLinked) return;
+    let cancelled = false;
+    (async () => {
+      const count = await listDocumentsForEntity(getCurrentSupabaseClient(), 'cost_item', item.id);
+      if (!cancelled) setDocCount(count.length);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [item.id, docsLinked]);
+
+  const commentCount = useEntityCommentCount(getCurrentSupabaseClient(), {
+    table: 'cost_item_comments',
+    fkColumn: 'cost_item_id',
+    entityId: item.id,
+  });
+
+  // Mirrors apps/web/src/app/costs/cost-card.tsx's dateLabel: a one-off shows
+  // its own start_date; a recurring cost shows this month's cadence-derived
+  // occurrence; falling back to "added {relative}" from created_at when there's
+  // no start_date (or an ended recurring cost's occurrence resolves to null).
+  // Both null-guarded — local-first inserts can lack a date.
+  const dateLabel = (() => {
+    if (item.start_date) {
+      const occurrence = isOneOff(item)
+        ? parseLocalDateOnly(item.start_date)
+        : nextOccurrence(item, new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+      if (occurrence) return relativeOccurrenceLabel(occurrence);
+    }
+    if (item.created_at) {
+      const rel = timeAgo(item.created_at);
+      if (rel) return `added ${rel}`;
+    }
+    return null;
+  })();
+  const expiry = expiryFragment(item);
+
+  // Portals (PC1-7): attachments + comments both "open in place" (neutral
+  // tone), rendered as the row's second content line via PortalChipRow —
+  // mirrors web's cost-card.tsx portalChips. A portal with nothing behind it
+  // yet prints nothing on the row (PC7): the hold sheet's Files and Comments
+  // rows are how the first one gets added.
+  const portalChips: PortalChipDef[] = [];
+  if (docsLinked && ((docCount != null && docCount > 0) || expanded === 'docs')) {
+    portalChips.push({
+      key: 'docs',
+      icon: <Paperclip size={12} className="text-muted-foreground" />,
+      label: docCount != null && docCount > 0 ? `${docCount} file${docCount === 1 ? '' : 's'}` : 'Files',
+      tone: 'neutral',
+      onOpen: () => setExpanded((cur) => (cur === 'docs' ? null : 'docs')),
+    });
+  }
+  if (commentCount.count > 0 || expanded === 'comments') {
+    portalChips.push({
+      key: 'comments',
+      icon: <MessageSquare size={12} className="text-muted-foreground" />,
+      label: commentCount.count > 0 ? `${commentCount.count} comment${commentCount.count === 1 ? '' : 's'}` : 'Comments',
+      tone: 'neutral',
+      onOpen: () => setExpanded((cur) => (cur === 'comments' ? null : 'comments')),
+    });
+  }
+
+  const row = (
+    <ListItem
+      expanded={!selectMode && !!panel}
+      holdProgress={!selectMode ? holdFill.progress : undefined}
+      onPress={() => (selectMode ? onToggleSelect?.(item.id) : onEdit(item))}
+    >
+      <ListItemLeading>
+        {selectMode ? (
+          <View
+            className={cn(
+              'h-5 w-5 items-center justify-center rounded-full border-2',
+              selected ? 'border-primary bg-primary' : 'border-border'
+            )}
+          >
+            {selected && <Check size={12} className="text-primary-foreground" />}
+          </View>
+        ) : (
+          <CategoryChip category={item.category} />
+        )}
+      </ListItemLeading>
+
+      <ListItemContent>
+        <ListItemTitle>
+          <Text numberOfLines={1} className="min-w-0 flex-1 font-medium text-foreground">
+            {item.name}
+          </Text>
+          {item.is_estimate && (
+            <Text
+              className={cn(
+                'shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase text-muted-foreground',
+                estimateStepBack && estimateStepBack.est > 0 && estimateStepBack.act >= estimateStepBack.est && 'bg-muted/50 text-muted-foreground/60'
+              )}
+            >
+              {estimateStepBack && estimateStepBack.est > 0 && estimateStepBack.act >= estimateStepBack.est
+                ? 'covered'
+                : estimateStepBack && estimateStepBack.act > 0
+                  ? `${formatMoney(estimateStepBack.remaining)} left`
+                  : 'est'}
+            </Text>
+          )}
+        </ListItemTitle>
+        {/* Meta (H6): at most two fragments. A contract or discount ending
+            within 30 days is the status fragment and takes the date's place. */}
+        {(expiry || dateLabel || item.provider) && (
+          <ListItemMeta>
+            {expiry ? (
+              <Text
+                className={cn('text-caption', expiry.overdue ? 'text-destructive' : 'text-warning')}
+                style={{ fontVariant: ['tabular-nums'] }}
+                numberOfLines={1}
+              >
+                {expiry.text}
+              </Text>
+            ) : dateLabel ? (
+              <Text className="text-caption text-muted-foreground" style={{ fontVariant: ['tabular-nums'] }}>
+                {dateLabel}
+              </Text>
+            ) : null}
+            {item.provider && (
+              <Text className="text-caption text-muted-foreground" numberOfLines={1}>
+                {item.provider}
+              </Text>
+            )}
+          </ListItemMeta>
+        )}
+
+        {!selectMode && portalChips.length > 0 && (
+          <PortalChipRow chips={portalChips} className="mt-1.5" overflowTitle="More" />
+        )}
+      </ListItemContent>
+
+      {/* Trailing: amount + cadence read as one value, the payer avatar as the
+          one identity (H2 — max two elements). */}
+      <ListItemTrailing className="gap-2">
+        {/* Amount over its cadence word: one stacked value, so the content
+            column keeps its width (mirrors web). */}
+        <View className="items-end">
+          <Text className="font-semibold text-foreground" style={{ fontVariant: ['tabular-nums'] }}>
+            {formatMoney(item.amount)}
+          </Text>
+          <Text className="text-caption text-muted-foreground">{CADENCE_LABEL[item.cadence]}</Text>
+        </View>
+        {!selectMode && (
+          <AssigneePicker
+            value={item.assigned_to}
+            groupMembers={groupMembers}
+            memberProfiles={memberProfiles}
+            currentUserId={currentUserId}
+            onChange={(userId) => onAssign(item.id, userId)}
+          />
+        )}
+      </ListItemTrailing>
+    </ListItem>
+  );
+
+  return (
+    <View>
+      {selectMode ? (
+        row
+      ) : (
+        <SwipeActions
+          onSwipeLeft={() => onDelete(item)}
+          longPressMs={LONG_PRESS_MS}
+          onLongPress={() => {
+            haptics.commit();
+            setQuickSheetOpen(true);
+          }}
+          onHoldStart={holdFill.start}
+          onHoldEnd={holdFill.stop}
+          left={{
+            bg: 'bg-destructive/15',
+            activeBg: 'bg-destructive',
+            icon: <Trash2 size={18} className="text-destructive" />,
+            label: 'Delete',
+          }}
+        >
+          {row}
+        </SwipeActions>
+      )}
+
+      {!selectMode && panel && (
+        <ListItemBody expanded={!!panel}>
+          {panel === 'docs' ? (
+            <CostDocuments costItemId={item.id} groupId={groupId} onCountChange={setDocCount} />
+          ) : (
+            <EntityComments
+              table="cost_item_comments"
+              fkColumn="cost_item_id"
+              entityId={item.id}
+              supabase={getCurrentSupabaseClient()}
+              currentUserId={currentUserId}
+              memberProfiles={memberProfiles}
+              onChanged={commentCount.refresh}
+            />
+          )}
+        </ListItemBody>
+      )}
+
+      <BottomSheet open={quickSheetOpen} onOpenChange={setQuickSheetOpen} className="max-h-[76%] pb-2">
+        <View className="gap-3 px-4 pb-3">
+          <View className="flex-row items-center gap-2 border-b border-border pb-3">
+            <CategoryChip category={item.category} />
+            <Text numberOfLines={1} className="min-w-0 flex-1 font-heading text-title font-semibold text-foreground">
+              {item.name}
+            </Text>
+            <Text className="text-sm font-semibold text-foreground" style={{ fontVariant: ['tabular-nums'] }}>
+              {formatMoney(item.amount)}
+            </Text>
+          </View>
+
+          <View className="gap-1.5">
+            <Text className="text-caption font-medium text-muted-foreground">Amount</Text>
+            <DragNumberField
+              value={item.amount / 100}
+              onChange={(value) => patch({ amount: Math.round((value ?? 0) * 100) })}
+              step={1}
+              min={0}
+              precision={2}
+              prefix={currencySymbol()}
+              placeholder="0.00"
+              accessibilityLabel="Amount"
+            />
+          </View>
+
+          <View className="gap-1.5">
+            <Text className="text-caption font-medium text-muted-foreground">Frequency</Text>
+            <SegmentedControl
+              options={CADENCE_SEGMENTS}
+              value={item.cadence}
+              onChange={(cadence) =>
+                patch({
+                  cadence,
+                  end_date: cadence === 'one_off' ? null : item.end_date,
+                  discount_end_date: cadence === 'one_off' ? null : item.discount_end_date,
+                })
+              }
+              wrap
+              size="sm"
+              accessibilityLabel="Frequency"
+            />
+          </View>
+
+          <View className="gap-1.5">
+            <Text className="text-caption font-medium text-muted-foreground">Category</Text>
+            <SearchablePicker
+              options={CATEGORY_PICKER_OPTIONS}
+              value={item.category}
+              onChange={(category) => patch({ category: category as CostCategory })}
+              placeholder="Category..."
+              searchPlaceholder="Search..."
+              ariaLabel="Category"
+            />
+          </View>
+
+          <ListGroup className="border-0 bg-transparent shadow-none">
+            {docsLinked && (
+              <ListItem
+                onPress={() => {
+                  setExpanded('docs');
+                  setQuickSheetOpen(false);
+                }}
+              >
+                <ListItemLeading>
+                  <FileText size={16} className="text-muted-foreground" />
+                </ListItemLeading>
+                <ListItemContent>
+                  <ListItemTitle>Files</ListItemTitle>
+                </ListItemContent>
+                <ListItemTrailing>
+                  <Text className="text-caption text-muted-foreground">
+                    {docCount != null && docCount > 0 ? docCount : 'Add'}
+                  </Text>
+                </ListItemTrailing>
+              </ListItem>
+            )}
+            <ListItem
+              onPress={() => {
+                setExpanded('comments');
+                setQuickSheetOpen(false);
+              }}
+            >
+              <ListItemLeading>
+                <MessageSquare size={16} className="text-muted-foreground" />
+              </ListItemLeading>
+              <ListItemContent>
+                <ListItemTitle>Comments</ListItemTitle>
+              </ListItemContent>
+              <ListItemTrailing>
+                <Text className="text-caption text-muted-foreground">
+                  {commentCount.count > 0 ? commentCount.count : 'Add'}
+                </Text>
+              </ListItemTrailing>
+            </ListItem>
+            <ListItem
+              onPress={() => {
+                onEdit(item);
+                setQuickSheetOpen(false);
+              }}
+            >
+              <ListItemLeading>
+                <Pencil size={16} className="text-muted-foreground" />
+              </ListItemLeading>
+              <ListItemContent>
+                <ListItemTitle>Edit details</ListItemTitle>
+              </ListItemContent>
+            </ListItem>
+            <ListItem
+              onPress={() => {
+                setQuickSheetOpen(false);
+                onDelete(item);
+              }}
+            >
+              <ListItemLeading>
+                <Trash2 size={16} className="text-destructive" />
+              </ListItemLeading>
+              <ListItemContent>
+                <ListItemTitle className="text-destructive">Delete</ListItemTitle>
+              </ListItemContent>
+            </ListItem>
+          </ListGroup>
+        </View>
+      </BottomSheet>
+    </View>
+  );
+}

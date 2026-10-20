@@ -1,0 +1,105 @@
+import { RegionProvider, GroceryStapleTemplate } from "./types";
+
+const AUDFormatter = new Intl.NumberFormat("en-AU", {
+  style: "currency",
+  currency: "AUD",
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0,
+});
+
+export const auProvider: RegionProvider = {
+  id: "AU",
+  currency: {
+    code: "AUD",
+    format: (amount: number) => AUDFormatter.format(amount),
+  },
+  expenseCategories: [
+    "Groceries",
+    "Transport",
+    "Utilities",
+    "Rent",
+    "Entertainment",
+    "Dining Out",
+    "Shopping",
+    "Health",
+    "Other",
+  ],
+  retailerHints: [
+    "Woolworths",
+    "Coles",
+    "ALDI",
+    "IGA",
+    "Bunnings",
+    "Officeworks",
+    "JB Hi-Fi",
+    "Target",
+    "Kmart",
+    "Big W",
+  ],
+  listingSources: [
+    {
+      name: "realestate.com.au",
+      url: "https://www.realestate.com.au",
+      scrapable: true,
+    },
+    {
+      name: "Domain",
+      url: "https://www.domain.com.au",
+      scrapable: true,
+    },
+    {
+      name: "Rent.com.au",
+      url: "https://www.rent.com.au",
+      scrapable: true,
+    },
+    {
+      name: "Facebook Marketplace",
+      url: "https://www.facebook.com/marketplace",
+      scrapable: false,
+    },
+  ],
+  groceryStaples: [
+    { template_key: "staple-milk",        name: "Milk",               aisle: "dairy_eggs",   quantity: 2,    unit: "L" },
+    { template_key: "staple-eggs",        name: "Eggs",               aisle: "dairy_eggs",   quantity: 12,   unit: null },
+    { template_key: "staple-butter",      name: "Butter",             aisle: "dairy_eggs",   quantity: 1,    unit: null },
+    { template_key: "staple-bread",       name: "Bread",              aisle: "bakery",       quantity: 1,    unit: null },
+    { template_key: "staple-rice",        name: "Rice",               aisle: "pantry",       quantity: 1,    unit: "kg" },
+    { template_key: "staple-pasta",       name: "Pasta",              aisle: "pantry",       quantity: 500,  unit: "g" },
+    { template_key: "staple-tinned-tom",  name: "Tinned tomatoes",    aisle: "pantry",       quantity: 2,    unit: null },
+    { template_key: "staple-olive-oil",   name: "Olive oil",          aisle: "pantry",       quantity: 1,    unit: null },
+    { template_key: "staple-chicken",     name: "Chicken breast",     aisle: "meat_seafood", quantity: 500,  unit: "g" },
+    { template_key: "staple-mince",       name: "Beef mince",         aisle: "meat_seafood", quantity: 500,  unit: "g" },
+    { template_key: "staple-spinach",     name: "Spinach",            aisle: "produce",      quantity: 1,    unit: null },
+    { template_key: "staple-tomatoes",    name: "Tomatoes",           aisle: "produce",      quantity: 4,    unit: null },
+    { template_key: "staple-onions",      name: "Onions",             aisle: "produce",      quantity: 3,    unit: null },
+    { template_key: "staple-garlic",      name: "Garlic",             aisle: "produce",      quantity: 1,    unit: null },
+    { template_key: "staple-bananas",     name: "Bananas",            aisle: "produce",      quantity: 1,    unit: null },
+    { template_key: "staple-coffee",      name: "Coffee",             aisle: "drinks",       quantity: 250,  unit: "g" },
+    { template_key: "staple-tea",         name: "Tea bags",           aisle: "drinks",       quantity: 1,    unit: null },
+    { template_key: "staple-dishwash",    name: "Dishwashing liquid", aisle: "household",    quantity: 1,    unit: null },
+    { template_key: "staple-tp",          name: "Toilet paper",       aisle: "household",    quantity: 1,    unit: null },
+    { template_key: "staple-bin-bags",    name: "Bin bags",           aisle: "household",    quantity: 1,    unit: null },
+  ] satisfies GroceryStapleTemplate[],
+
+  // Curated AU-relevant moving checklist. offset_days is relative to move-in day (0).
+  // Other regions can ship a different list without touching the feature code.
+  movingTasks: [
+    { template_key: "move-give-notice", title: "Give notice to current landlord / agent", offset_days: -30 },
+    { template_key: "move-book-removalist", title: "Book removalist or hire a van", offset_days: -30 },
+    { template_key: "move-mail-redirect", title: "Set up Australia Post mail redirection", offset_days: -21 },
+    { template_key: "move-electricity-gas", title: "Arrange electricity & gas connection", offset_days: -21, notes: "Compare providers (Origin, AGL, EnergyAustralia, etc.)" },
+    { template_key: "move-internet-nbn", title: "Book internet / NBN connection", offset_days: -14, notes: "NBN installs can take 1–2 weeks, so book early." },
+    { template_key: "move-update-address-gov", title: "Update address: Medicare, Centrelink, ATO, super", offset_days: -14 },
+    { template_key: "move-insurance", title: "Set up or transfer home & contents insurance", offset_days: -14 },
+    { template_key: "move-licence-rego", title: "Update address on driver licence & car rego", offset_days: -7 },
+    { template_key: "move-bond-clean", title: "Arrange end-of-lease / bond clean at old place", offset_days: -7 },
+    { template_key: "move-confirm-bookings", title: "Confirm removalist & connection times", offset_days: -3 },
+    { template_key: "move-essentials-box", title: "Pack an essentials box (chargers, toiletries, kettle)", offset_days: -1 },
+    { template_key: "move-keys-condition-report", title: "Pick up keys & complete entry condition report", offset_days: 0 },
+    { template_key: "move-meter-readings", title: "Take meter readings (electricity, gas, water)", offset_days: 0 },
+    { template_key: "move-safety-check", title: "Test smoke alarms & locate meter box / water shut-off", offset_days: 1 },
+    { template_key: "move-electoral-roll", title: "Update electoral enrolment (AEC)", offset_days: 7 },
+    { template_key: "move-local-services", title: "Find a local GP, pharmacy & nearest hospital", offset_days: 7 },
+    { template_key: "move-bond-lodged", title: "Check rental bond is lodged with the state authority", offset_days: 14 },
+  ],
+};

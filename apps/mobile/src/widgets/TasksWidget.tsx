@@ -1,0 +1,506 @@
+// Hearth v2 home-screen widget: Home's top in miniature. The lede ("3 of 7
+// left today" with its segmented meter) and the weather, then the Upcoming
+// feed grouped under Earlier / Today / Tomorrow / weekday headers, each row
+// leading with its section's tile, then the Spaces footer (to buy, budget).
+// Drawn by react-native-android-widget, which paints the tree to a bitmap,
+// so the widget renders twice (Ember Day and Ember Night) and Android shows
+// the one matching the phone's dark mode, as the app's "Match device" does.
+import * as React from 'react';
+import { FlexWidget, SvgWidget, TextWidget } from 'react-native-android-widget';
+import {
+  THEME_TOKENS,
+  WIDGET_SNAPSHOT_VERSION,
+  formatTime12h,
+  meterSegments,
+  oklchToHex,
+  sectionHueSwatch,
+  todayISO,
+  widgetFeedGroups,
+  widgetRowWhen,
+  widgetSections,
+  widgetTodayProgress,
+  SECTION_GLOW_OPACITY,
+  type ColorScheme,
+  type WidgetGrocerySnapshotItem,
+  type WidgetSummary,
+  type WidgetTaskSnapshotItem,
+} from '@homeup/core';
+import { WIDGET_GLYPHS, type WidgetGlyph } from './widget-glyphs';
+
+type Hex = `#${string}`;
+
+function mixHex(from: string, to: string, amount: number): Hex {
+  const channel = (hex: string, i: number) => parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16);
+  const out = [0, 1, 2].map((i) =>
+    Math.round(channel(from, i) + (channel(to, i) - channel(from, i)) * amount)
+      .toString(16)
+      .padStart(2, '0'),
+  );
+  return `#${out.join('')}`;
+}
+
+function paletteFor(scheme: ColorScheme) {
+  const c = THEME_TOKENS[scheme === 'dark' ? 'ember-night' : 'ember-day'].colors;
+  const background = oklchToHex(c.background);
+  const foreground = oklchToHex(c.foreground);
+  const glow = sectionHueSwatch('home', scheme).glow;
+  return {
+    scheme,
+    background,
+    // Hearth v2 glow (13.1): Home's coral wash from the top right, flattened
+    // into the ground because the widget's bitmap can't blend over the wallpaper.
+    glow: mixHex(background, glow, SECTION_GLOW_OPACITY[scheme] * 0.45),
+    card: oklchToHex(c.card),
+    foreground,
+    muted: oklchToHex(c['muted-foreground']),
+    primary: oklchToHex(c.primary),
+    primaryForeground: oklchToHex(c['primary-foreground']),
+    destructive: oklchToHex(c.destructive),
+    warning: oklchToHex(c.warning),
+    success: oklchToHex(c.success),
+    border: oklchToHex(c.border),
+    // The lede meter's unfilled track: a faint foreground (H3).
+    track: mixHex(background, foreground, 0.14),
+  };
+}
+
+type Palette = ReturnType<typeof paletteFor>;
+
+const PALETTES: Record<ColorScheme, Palette> = { light: paletteFor('light'), dark: paletteFor('dark') };
+
+const OPEN_HOME_URI = 'mobile://home';
+const OPEN_TASKS_ADD_URI = 'mobile://tasks?add=1';
+const OPEN_GROCERIES_URI = 'mobile://groceries';
+const OPEN_COSTS_URI = 'mobile://costs';
+
+function openUri(path: string | null): string {
+  return path ? `mobile:/${path.startsWith('/') ? path : `/${path}`}` : OPEN_HOME_URI;
+}
+
+function glyphSvg(glyph: WidgetGlyph, color: string, size: number): string {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">${WIDGET_GLYPHS[glyph]}</svg>`;
+}
+
+/** The row's glyph, as Home's feed picks it (task-row.tsx heroRowIcon, home's appointment rows). */
+function rowGlyph(item: WidgetTaskSnapshotItem): WidgetGlyph {
+  if (item.done) return 'check';
+  if (item.type === 'appointment') return 'calendar-clock';
+  switch (item.section) {
+    case 'household':
+      return item.type === 'reminder' ? 'alarm-clock' : 'list-todo';
+    case 'calendar':
+      return 'calendar-days';
+    case 'costs':
+      return 'wallet';
+    case 'documents':
+      return 'folder-open';
+    case 'checklists':
+      return 'list-todo';
+    default:
+      return 'layout-grid';
+  }
+}
+
+/** Hearth v2 leading tile (13.0): the section's tile hue holding its glyph. Identity only, never its own tap target. */
+function Tile(props: { section: string; glyph: WidgetGlyph; size: number; palette: Palette }) {
+  const { section, glyph, size, palette } = props;
+  const swatch = sectionHueSwatch(section, palette.scheme);
+  const icon = Math.round(size * 0.5);
+  return (
+    <FlexWidget
+      style={{
+        width: size,
+        height: size,
+        borderRadius: Math.round(size * 0.31),
+        backgroundColor: swatch.tile as Hex,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <SvgWidget svg={glyphSvg(glyph, swatch.glyph, icon)} style={{ width: icon, height: icon }} />
+    </FlexWidget>
+  );
+}
+
+function Lede(props: { items: WidgetTaskSnapshotItem[]; today: string; summary: WidgetSummary; showCount: boolean; palette: Palette }) {
+  const { items, today, summary, showCount, palette } = props;
+  const progress = widgetTodayProgress(items, today);
+  const meter = meterSegments(progress.done, progress.total);
+  const weather = summary.weather;
+  return (
+    <FlexWidget style={{ flexDirection: 'column', width: 'match_parent' }}>
+      <FlexWidget style={{ flexDirection: 'row', alignItems: 'flex-end', width: 'match_parent' }}>
+        <FlexWidget style={{ flex: 1, flexDirection: 'row', alignItems: 'flex-end' }}>
+          {showCount &&
+            (progress.left === 0 ? (
+              <FlexWidget style={{ flexDirection: 'column' }}>
+                <TextWidget text="All clear" style={{ fontSize: 26, fontWeight: '800', color: palette.foreground, letterSpacing: -0.8 }} />
+                <TextWidget
+                  text={progress.done > 0 ? `${progress.done} done today` : 'Nothing on today'}
+                  style={{ fontSize: 12, color: palette.muted, marginTop: 1 }}
+                />
+              </FlexWidget>
+            ) : (
+              <FlexWidget style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
+                <TextWidget
+                  text={String(progress.left)}
+                  style={{ fontSize: 40, fontWeight: '800', color: palette.foreground, letterSpacing: -1.6 }}
+                />
+                <TextWidget
+                  text={`of ${progress.total} left today`}
+                  style={{ fontSize: 14, fontWeight: '600', color: palette.muted, marginLeft: 6, marginBottom: 7 }}
+                />
+              </FlexWidget>
+            ))}
+        </FlexWidget>
+        {weather && (
+          <FlexWidget style={{ flexDirection: 'column', alignItems: 'flex-end', marginLeft: 8, marginBottom: 4 }}>
+            <TextWidget
+              text={`${Math.round(weather.tempC)}°`}
+              style={{ fontSize: 20, fontWeight: '700', color: palette.foreground }}
+            />
+            <TextWidget
+              text={weather.stale ? 'Last known' : weather.condition}
+              truncate="END"
+              maxLines={1}
+              style={{ fontSize: 11.5, color: palette.muted }}
+            />
+          </FlexWidget>
+        )}
+      </FlexWidget>
+      {showCount && progress.left > 0 && meter.count > 0 && (
+        <FlexWidget style={{ flexDirection: 'row', width: 'match_parent', marginTop: 6 }}>
+          {Array.from({ length: meter.count }, (_, i) => (
+            <FlexWidget
+              key={i}
+              style={{
+                flex: 1,
+                height: 3,
+                borderRadius: 2,
+                marginLeft: i === 0 ? 0 : 5,
+                backgroundColor: i < meter.filled ? palette.primary : palette.track,
+              }}
+            />
+          ))}
+        </FlexWidget>
+      )}
+    </FlexWidget>
+  );
+}
+
+function FeedHeading(props: { count: number; canAdd: boolean; palette: Palette }) {
+  const { count, canAdd, palette } = props;
+  return (
+    <FlexWidget style={{ flexDirection: 'row', alignItems: 'center', width: 'match_parent', marginTop: 12 }}>
+      <FlexWidget
+        style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}
+        clickAction="OPEN_URI"
+        clickActionData={{ uri: OPEN_HOME_URI }}
+      >
+        <TextWidget text="Upcoming" style={{ fontSize: 18, fontWeight: '700', color: palette.foreground, letterSpacing: -0.3 }} />
+        <TextWidget text={String(count)} style={{ fontSize: 14, color: palette.muted, marginLeft: 7 }} />
+      </FlexWidget>
+      {canAdd && (
+        <FlexWidget
+          style={{
+            width: 30,
+            height: 30,
+            borderRadius: 15,
+            backgroundColor: palette.primary,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+          clickAction="OPEN_URI"
+          clickActionData={{ uri: OPEN_TASKS_ADD_URI }}
+          accessibilityLabel="Add a task"
+        >
+          <SvgWidget svg={glyphSvg('plus', palette.primaryForeground, 16)} style={{ width: 16, height: 16 }} />
+        </FlexWidget>
+      )}
+    </FlexWidget>
+  );
+}
+
+function DayHeader(props: { label: string; earlier: boolean; first: boolean; palette: Palette }) {
+  const { label, earlier, first, palette } = props;
+  return (
+    <FlexWidget style={{ width: 'match_parent', paddingTop: first ? 2 : 10, paddingBottom: 5, paddingHorizontal: 4 }}>
+      <TextWidget
+        text={label.toUpperCase()}
+        style={{ fontSize: 10.5, fontWeight: '700', letterSpacing: 1.05, color: earlier ? palette.destructive : palette.muted }}
+      />
+    </FlexWidget>
+  );
+}
+
+function FeedRow(props: { item: WidgetTaskSnapshotItem; today: string; first: boolean; last: boolean; palette: Palette }) {
+  const { item, today, first, last, palette } = props;
+  const when = widgetRowWhen(item, today);
+  const whenText = when ? (when.kind === 'overdue' ? when.text : formatTime12h(when.time)) : null;
+  const meta = item.done ? 'Done' : whenText ? `${whenText} · ${item.sourceLabel}` : item.sourceLabel;
+  const click = item.toggleable
+    ? {
+        clickAction: 'TOGGLE_TASK',
+        clickActionData: {
+          id: item.id,
+          snapshotVersion: WIDGET_SNAPSHOT_VERSION,
+          snapshotDone: item.done,
+          snapshotSourceUpdatedAt: item.sourceUpdatedAt,
+        },
+      }
+    : { clickAction: 'OPEN_URI', clickActionData: { uri: openUri(item.openPath) } };
+
+  return (
+    <FlexWidget
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        width: 'match_parent',
+        backgroundColor: palette.card,
+        paddingHorizontal: 12,
+        paddingVertical: 9,
+        borderTopLeftRadius: first ? 18 : 0,
+        borderTopRightRadius: first ? 18 : 0,
+        borderBottomLeftRadius: last ? 18 : 0,
+        borderBottomRightRadius: last ? 18 : 0,
+        // Hairline dividers inside the day's card (H4).
+        borderTopWidth: first ? 0 : 1,
+        borderTopColor: palette.border,
+      }}
+      {...click}
+      accessibilityLabel={item.toggleable ? `${item.title}, ${item.done ? 'done, tap to undo' : 'tap to finish'}` : item.title}
+    >
+      <Tile section={item.section} glyph={rowGlyph(item)} size={32} palette={palette} />
+      <FlexWidget style={{ flex: 1, flexDirection: 'column', marginLeft: 10 }}>
+        <TextWidget
+          text={item.title}
+          truncate="END"
+          maxLines={1}
+          style={{ fontSize: 14, fontWeight: '600', color: item.done ? palette.muted : palette.foreground }}
+        />
+        <TextWidget
+          text={meta}
+          truncate="END"
+          maxLines={1}
+          style={{ fontSize: 12, color: when?.kind === 'overdue' && !item.done ? palette.destructive : palette.muted, marginTop: 1 }}
+        />
+      </FlexWidget>
+      {/* The trailing identity mark: a coral ring is yours, a dashed amber seat nobody's (6, States). */}
+      {item.toggleable && !item.done && (
+        <FlexWidget
+          style={{
+            width: 12,
+            height: 12,
+            borderRadius: 6,
+            marginLeft: 8,
+            borderWidth: 1.5,
+            borderStyle: item.assigned ? 'solid' : 'dashed',
+            borderColor: item.assignedToMe ? palette.primary : item.assigned ? palette.border : palette.warning,
+          }}
+        />
+      )}
+    </FlexWidget>
+  );
+}
+
+// Approximate heights (dp) of the pieces the feed is budgeted against. The
+// feed is plain rows, not a ListWidget: the library draws a ListWidget as a
+// native list positioned from the launcher's reported size, and on launchers
+// that report less than the real size it spilled past the card (fixed natively
+// only in 0.22, an APK change). Rows that don't fit become "N more in the app".
+const ROW_DP = 50;
+const DAY_HEADER_DP = 26;
+const MORE_DP = 24;
+/** No size from the launcher (older snapshot paths): a 4x3 widget's worth. */
+const FALLBACK_FEED_DP = 240;
+
+/** How many feed rows fit in `budgetDp`, counting day headers and the "N more" line. */
+export function widgetFeedFit(items: WidgetTaskSnapshotItem[], today: string, budgetDp: number): number {
+  let used = 0;
+  let fit = 0;
+  let n = 0;
+  for (const [g, group] of widgetFeedGroups(items, today).entries()) {
+    used += DAY_HEADER_DP - (g === 0 ? 8 : 0);
+    for (let i = 0; i < group.items.length; i++) {
+      used += ROW_DP;
+      n += 1;
+      if (used + (n < items.length ? MORE_DP : 0) <= budgetDp) fit = n;
+      else return fit;
+    }
+  }
+  return fit;
+}
+
+function Feed(props: { items: WidgetTaskSnapshotItem[]; today: string; budgetDp: number; palette: Palette }) {
+  const { items, today, budgetDp, palette } = props;
+  const shown = items.slice(0, widgetFeedFit(items, today, budgetDp));
+  const overflow = items.length - shown.length;
+  const children: React.ReactElement[] = [];
+  widgetFeedGroups(shown, today).forEach((group, g) => {
+    children.push(
+      <DayHeader key={`h-${group.key}`} label={group.label} earlier={group.key === 'earlier'} first={g === 0} palette={palette} />,
+    );
+    group.items.forEach((item, i) => {
+      children.push(
+        <FeedRow
+          key={item.id}
+          item={item}
+          today={today}
+          first={i === 0}
+          last={i === group.items.length - 1}
+          palette={palette}
+        />,
+      );
+    });
+  });
+  if (overflow > 0) {
+    children.push(
+      <FlexWidget
+        key="more"
+        style={{ width: 'match_parent', paddingTop: 8, paddingHorizontal: 4 }}
+        clickAction="OPEN_URI"
+        clickActionData={{ uri: OPEN_HOME_URI }}
+      >
+        <TextWidget text={`${overflow} more in the app`} style={{ fontSize: 12, color: palette.muted }} />
+      </FlexWidget>,
+    );
+  }
+  return <FlexWidget style={{ flex: 1, flexDirection: 'column', width: 'match_parent', marginTop: 6 }}>{children}</FlexWidget>;
+}
+
+function SpaceChip(props: {
+  section: string;
+  glyph: WidgetGlyph;
+  text: string;
+  uri: string;
+  palette: Palette;
+  meter?: { ratio: number; color: string };
+}) {
+  const { section, glyph, text, uri, palette, meter } = props;
+  return (
+    <FlexWidget
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: palette.card,
+        borderRadius: 14,
+        paddingLeft: 5,
+        paddingRight: 10,
+        paddingVertical: 5,
+        marginRight: 8,
+      }}
+      clickAction="OPEN_URI"
+      clickActionData={{ uri }}
+    >
+      <Tile section={section} glyph={glyph} size={22} palette={palette} />
+      <TextWidget text={text} style={{ fontSize: 12.5, fontWeight: '600', color: palette.foreground, marginLeft: 7 }} />
+      {meter && (
+        <FlexWidget style={{ height: 3, width: 36, borderRadius: 2, backgroundColor: palette.track, marginLeft: 7 }}>
+          <FlexWidget
+            style={{ height: 3, width: Math.max(2, Math.round(meter.ratio * 36)), borderRadius: 2, backgroundColor: meter.color as Hex }}
+          />
+        </FlexWidget>
+      )}
+    </FlexWidget>
+  );
+}
+
+const money = (cents: number, symbol = '$') => symbol + Math.round(cents / 100).toLocaleString('en-US');
+
+export interface TasksWidgetProps {
+  items: WidgetTaskSnapshotItem[];
+  groceries: WidgetGrocerySnapshotItem[];
+  summary: WidgetSummary;
+  scheme?: ColorScheme;
+  /** The widget's height in dp as the launcher reports it (WidgetInfo.height); sizes the feed. */
+  height?: number;
+}
+
+export function TasksWidget(props: TasksWidgetProps) {
+  const { items, summary, scheme = 'light' } = props;
+  const palette = PALETTES[scheme];
+  const today = todayISO();
+  const sections = widgetSections(summary, items.length);
+  const budget = sections.costs ? summary.budget : null;
+  const tone = { success: palette.success, warning: palette.warning, danger: palette.destructive };
+  const openCount = items.filter((i) => !i.done).length;
+  const showLede = sections.taskCounts || !!summary.weather;
+  const showSpaces = sections.toBuyCount || !!budget;
+  // The feed gets what's left of the widget after the padding, lede, heading and Spaces row.
+  const chromeDp = 26 + (showLede ? 62 : 0) + 42 + 6 + (showSpaces ? 42 : 0);
+  const feedBudgetDp = props.height ? props.height - chromeDp : FALLBACK_FEED_DP;
+
+  return (
+    <FlexWidget
+      style={{
+        height: 'match_parent',
+        width: 'match_parent',
+        backgroundGradient: { from: palette.glow, to: palette.background, orientation: 'TR_BL' },
+        flexDirection: 'column',
+        paddingHorizontal: 14,
+        paddingTop: 14,
+        paddingBottom: 12,
+        borderRadius: 24,
+      }}
+      clickAction="OPEN_URI"
+      clickActionData={{ uri: OPEN_HOME_URI }}
+      accessibilityLabel="Rooftap, upcoming"
+    >
+      {showLede && (
+        <Lede items={items} today={today} summary={summary} showCount={sections.taskCounts} palette={palette} />
+      )}
+
+      {sections.tasks && <FeedHeading count={openCount} canAdd={sections.tasks === 'tasks'} palette={palette} />}
+      {sections.tasks &&
+        (items.length === 0 ? (
+          <FlexWidget style={{ flex: 1, width: 'match_parent', marginTop: 8 }}>
+            <TextWidget text="Nothing on the agenda." style={{ fontSize: 13, color: palette.muted }} />
+          </FlexWidget>
+        ) : (
+          <Feed items={items} today={today} budgetDp={feedBudgetDp} palette={palette} />
+        ))}
+
+      {sections.nothingToShow && (
+        <FlexWidget style={{ flex: 1, width: 'match_parent' }}>
+          <TextWidget text="Nothing to show here. Tasks and Groceries are off." style={{ fontSize: 13, color: palette.muted }} />
+        </FlexWidget>
+      )}
+
+      {/* Hearth v2 Spaces (13.6): the sections' pulse under the feed, each opening its section. */}
+      {showSpaces && (
+        <FlexWidget style={{ flexDirection: 'row', alignItems: 'center', width: 'match_parent', marginTop: 10 }}>
+          {sections.toBuyCount && (
+            <SpaceChip
+              section="groceries"
+              glyph="shopping-cart"
+              text={summary.toBuyCount > 0 ? `${summary.toBuyCount} to buy` : 'Nothing to buy'}
+              uri={OPEN_GROCERIES_URI}
+              palette={palette}
+            />
+          )}
+          {budget && (
+            <SpaceChip
+              section="costs"
+              glyph="wallet"
+              text={`${money(budget.spentCents, budget.currencySymbol)} of ${money(budget.budgetCents, budget.currencySymbol)}`}
+              uri={OPEN_COSTS_URI}
+              palette={palette}
+              meter={{
+                ratio: budget.budgetCents > 0 ? Math.min(1, budget.spentCents / budget.budgetCents) : 0,
+                color: tone[budget.tone],
+              }}
+            />
+          )}
+        </FlexWidget>
+      )}
+    </FlexWidget>
+  );
+}
+
+/** Both Ember renders; Android shows the one that matches the phone's dark mode. */
+export function tasksWidgetRepresentation(props: Omit<TasksWidgetProps, 'scheme'>) {
+  return {
+    light: <TasksWidget {...props} scheme="light" />,
+    dark: <TasksWidget {...props} scheme="dark" />,
+  };
+}

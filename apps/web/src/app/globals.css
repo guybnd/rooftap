@@ -1,0 +1,831 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* Tailwind v4 auto-detects sources from this app's directory only, so the
+   literal utility strings defined in packages/core (CATEGORY_COLOR and the
+   documents/events/groceries palettes) were never scanned and their classes
+   never emitted — every per-category color except bg-blue-500 rendered as
+   nothing. */
+@source "../../../../packages/core/src";
+
+/* FLUX-195: a real mouse-vs-touch variant (vs. viewport-width `sm:`) — used to
+   hover-reveal the desktop overflow trigger only where hover genuinely exists. */
+@custom-variant pointer-fine (@media (pointer: fine));
+
+@theme inline {
+  --font-heading: var(--font-heading);
+  --font-mono: var(--font-mono);
+  --font-inscription: var(--font-inscription);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-axis: var(--axis);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+/* ==========================================================================
+   THEME: Axis Mundi — Day (default)
+   HOUP-295 cut the roster to the two Axis Mundi themes, Day as the app-wide
+   default. Daylight face of the monument: sunlit limestone and plaster, ink
+   text, deepened gilt that holds contrast on white. Independently selectable
+   (not an OS-follow of Night — see FLUX-1568 completion notes).
+     - Background: limestone
+     - Card/popover: plaster (paler than the limestone floor)
+     - Sidebar: kept dark (ink-anchored) — a dark dock against a light
+       working surface.
+     - Primary (interactive): working blue, deepened for light-bg contrast
+     - Ring/axis identity: gilt, deepened
+   ========================================================================== */
+@layer base {
+  :root,
+  [data-theme="axis-mundi-day"] {
+    --background: oklch(0.953 0.010 88);
+    --foreground: oklch(0.258 0.015 297);
+    --card: oklch(0.982 0.008 92);
+    --card-foreground: oklch(0.258 0.015 297);
+    --popover: oklch(0.982 0.008 92);
+    --popover-foreground: oklch(0.258 0.015 297);
+    --primary: oklch(0.610 0.116 79.4);
+    --primary-foreground: oklch(0.166 0.006 301);
+    --secondary: oklch(0.90 0.01 88);
+    --secondary-foreground: oklch(0.32 0.015 296);
+    --muted: oklch(0.91 0.008 88);
+    --muted-foreground: oklch(0.50 0.014 293);
+    --accent: oklch(0.89 0.012 88);
+    --accent-foreground: oklch(0.258 0.015 297);
+    --destructive: oklch(0.55 0.20 25);
+    /* FLUX-252: shared success/warning tokens — defined once here so both
+       themes render byte-identical status hues. */
+    --success: var(--color-emerald-600);
+    --success-foreground: oklch(1 0 0);
+    --warning: var(--color-amber-600);
+    --warning-foreground: oklch(1 0 0);
+    --border: oklch(0.84 0.012 88);
+    --input: oklch(0.94 0.008 90);
+    /* HOUP-296 (supersedes FLUX-1571's split): gilt leads interactive —
+       --primary is filled gilt, --ring demotes working blue to focus/links,
+       --axis stays the gilt identity line (meridian, avatar ring). */
+    --ring: oklch(0.52 0.19 258);
+    --axis: oklch(0.610 0.116 79.4);
+    --radius: 0.3125rem;
+    --sidebar: oklch(0.22 0.014 296);
+    --sidebar-foreground: oklch(0.90 0.01 88);
+    --sidebar-primary: oklch(0.610 0.116 79.4);
+    --sidebar-primary-foreground: oklch(0.166 0.006 301);
+    --sidebar-accent: oklch(0.28 0.016 296);
+    --sidebar-accent-foreground: oklch(0.93 0.01 88);
+    --sidebar-border: oklch(0.34 0.016 296);
+    --sidebar-ring: oklch(0.62 0.17 258);
+
+    --noise-opacity: 0.015;
+    --noise-blend: multiply;
+    --texture-opacity: 0;
+    --body-texture: none;
+    --glass-bg: oklch(0.982 0.008 92 / 1);
+    --glass-border: oklch(0.84 0.012 88 / 1);
+    --glass-highlight: oklch(1 0 0 / 0);
+    --glass-shadow: oklch(0 0 0 / 0);
+    /* HOUP-169: halved from 0.6/0.12 - full-strength shadow stacked with the
+       card's own border read as a doubled edge on this light theme. */
+    --card-shadow: 0 1px 0 oklch(0.80 0.015 90 / 0.3), 0 2px 8px oklch(0.30 0.02 90 / 0.06);
+  }
+
+  /* ========================================================================
+     THEME: Axis Mundi — Night
+     Cut-stone monument, not glass. A single gilt meridian is the only glow;
+     everything else is matte basalt/ashlar stone lit by working blue.
+       - Background: basalt slab
+       - Card: ashlar block
+       - Popover: ashlar block (same cut as card)
+       - Sidebar/inset: sky (the darkest stone, recessed)
+       - Primary (interactive): working blue — gilt never does this job
+       - Ring/axis identity: gilt — reserved for focus + the meridian
+     ======================================================================== */
+  [data-theme="axis-mundi-night"] {
+    --background: oklch(0.166 0.006 301);
+    --foreground: oklch(0.932 0.013 87);
+    --card: oklch(0.245 0.016 297);
+    --card-foreground: oklch(0.932 0.013 87);
+    --popover: oklch(0.245 0.016 297);
+    --popover-foreground: oklch(0.932 0.013 87);
+    --primary: oklch(0.751 0.130 79.8);
+    --primary-foreground: oklch(0.166 0.006 301);
+    --secondary: oklch(0.25 0.012 298);
+    --secondary-foreground: oklch(0.85 0.012 87);
+    --muted: oklch(0.305 0.01 298);
+    --muted-foreground: oklch(0.68 0.015 90);
+    --accent: oklch(0.235 0.014 297);
+    --accent-foreground: oklch(0.932 0.013 87);
+    --destructive: oklch(0.60 0.20 22);
+    --border: oklch(0.36 0.014 298);
+    --input: oklch(0.24 0.012 297);
+    --ring: oklch(0.70 0.15 255);
+    --axis: oklch(0.751 0.130 79.8);
+    --radius: 0.3125rem;
+    --sidebar: oklch(0.198 0.018 295);
+    --sidebar-foreground: oklch(0.85 0.012 87);
+    --sidebar-primary: oklch(0.751 0.130 79.8);
+    --sidebar-primary-foreground: oklch(0.166 0.006 301);
+    --sidebar-accent: oklch(0.25 0.016 296);
+    --sidebar-accent-foreground: oklch(0.932 0.013 87);
+    --sidebar-border: oklch(0.34 0.016 296);
+    --sidebar-ring: oklch(0.70 0.15 255);
+
+    --noise-opacity: 0.02;
+    --noise-blend: overlay;
+    --texture-opacity: 0;
+    --body-texture: none;
+    --glass-bg: oklch(0.245 0.016 297 / 1);
+    --glass-border: oklch(0.36 0.014 298 / 1);
+    --glass-highlight: oklch(1 0 0 / 0.04);
+    --glass-shadow: oklch(0 0 0 / 0);
+    --card-shadow: 0 1px 0 oklch(0.08 0.01 300 / 0.6), 0 3px 10px oklch(0 0 0 / 0.4);
+  }
+
+  /* ========================================================================
+     THEME: Ember — Night / Day (Hearth v2)
+     The Pulse + Feed redesign's theme pair, picked by default to follow the
+     device's light/dark setting (see lib/themes.ts `resolveThemePreference`).
+     Warm ink and paper grounds, one coral accent that means "interactive"
+     and nothing else (H2), status hues kept to text, dots and meters. Cards
+     are a fill step with a hairline, rounder corners than Axis Mundi.
+     Both blocks declare every key so neither inherits Axis Day's :root.
+     ======================================================================== */
+  [data-theme="ember-night"] {
+    --background: oklch(0.178 0.013 300.4);
+    --foreground: oklch(0.963 0.009 78.3);
+    --card: oklch(0.221 0.018 300.2);
+    --card-foreground: oklch(0.963 0.009 78.3);
+    --popover: oklch(0.221 0.018 300.2);
+    --popover-foreground: oklch(0.963 0.009 78.3);
+    --primary: oklch(0.729 0.169 34.1);
+    --primary-foreground: oklch(0.176 0.025 42.3);
+    --secondary: oklch(0.262 0.023 300.1);
+    --secondary-foreground: oklch(0.915 0.013 75.4);
+    --muted: oklch(0.262 0.023 300.1);
+    --muted-foreground: oklch(0.713 0.025 301.8);
+    --accent: oklch(0.262 0.023 300.1);
+    --accent-foreground: oklch(0.963 0.009 78.3);
+    --destructive: oklch(0.716 0.181 13.8);
+    --success: oklch(0.771 0.153 156.2);
+    --success-foreground: oklch(0.257 0.046 156.7);
+    --warning: oklch(0.824 0.149 73.3);
+    --warning-foreground: oklch(0.233 0.049 77.5);
+    --border: oklch(0.286 0.022 300.2);
+    --input: oklch(0.234 0.019 298.6);
+    --ring: oklch(0.729 0.169 34.1);
+    --axis: oklch(0.729 0.169 34.1);
+    --radius: 1.125rem;
+    --sidebar: oklch(0.194 0.017 302);
+    --sidebar-foreground: oklch(0.915 0.013 75.4);
+    --sidebar-primary: oklch(0.729 0.169 34.1);
+    --sidebar-primary-foreground: oklch(0.176 0.025 42.3);
+    --sidebar-accent: oklch(0.253 0.021 301.5);
+    --sidebar-accent-foreground: oklch(0.963 0.009 78.3);
+    --sidebar-border: oklch(0.286 0.022 300.2);
+    --sidebar-ring: oklch(0.729 0.169 34.1);
+    --noise-opacity: 0;
+    --noise-blend: overlay;
+    --texture-opacity: 0;
+    --body-texture: none;
+    --glass-bg: oklch(0.221 0.018 300.2 / 1);
+    --glass-border: oklch(0.286 0.022 300.2 / 1);
+    --glass-highlight: oklch(1 0 0 / 0.03);
+    --glass-shadow: oklch(0 0 0 / 0);
+    --card-shadow: none;
+  }
+
+  [data-theme="ember-day"] {
+    --background: oklch(0.965 0.006 75.4);
+    --foreground: oklch(0.222 0.018 305.1);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.222 0.018 305.1);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.222 0.018 305.1);
+    --primary: oklch(0.571 0.171 33.8);
+    --primary-foreground: oklch(1 0 0);
+    --secondary: oklch(0.93 0.01 72.7);
+    --secondary-foreground: oklch(0.295 0.021 305.7);
+    --muted: oklch(0.939 0.01 72.7);
+    --muted-foreground: oklch(0.517 0.023 304.9);
+    --accent: oklch(0.93 0.01 72.7);
+    --accent-foreground: oklch(0.222 0.018 305.1);
+    --destructive: oklch(0.572 0.197 15.9);
+    --success: oklch(0.553 0.118 160.1);
+    --success-foreground: oklch(1 0 0);
+    --warning: oklch(0.551 0.125 63.9);
+    --warning-foreground: oklch(1 0 0);
+    --border: oklch(0.909 0.012 71.9);
+    --input: oklch(0.945 0.01 72.7);
+    --ring: oklch(0.571 0.171 33.8);
+    --axis: oklch(0.571 0.171 33.8);
+    --radius: 1.125rem;
+    --sidebar: oklch(0.983 0.005 78.3);
+    --sidebar-foreground: oklch(0.295 0.021 305.7);
+    --sidebar-primary: oklch(0.571 0.171 33.8);
+    --sidebar-primary-foreground: oklch(1 0 0);
+    --sidebar-accent: oklch(0.939 0.01 72.7);
+    --sidebar-accent-foreground: oklch(0.222 0.018 305.1);
+    --sidebar-border: oklch(0.909 0.012 71.9);
+    --sidebar-ring: oklch(0.571 0.171 33.8);
+    --noise-opacity: 0;
+    --noise-blend: multiply;
+    --texture-opacity: 0;
+    --body-texture: none;
+    --glass-bg: oklch(1 0 0 / 1);
+    --glass-border: oklch(0.909 0.012 71.9 / 1);
+    --glass-highlight: oklch(1 0 0 / 0);
+    --glass-shadow: oklch(0 0 0 / 0);
+    --card-shadow: 0 1px 2px oklch(0.3 0.03 50 / 0.05), 0 10px 28px oklch(0.3 0.03 50 / 0.07);
+  }
+
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html,
+  body {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "ss01", "ss02", "cv01";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    position: relative;
+  }
+
+  h1, h2, h3, h4 {
+    letter-spacing: -0.025em;
+    text-wrap: balance;
+  }
+}
+
+/* ========================================================================
+   FLUX-1569: Axis Mundi inscription capitals — lapidary caps (Cinzel),
+   scoped to the wordmark, section-name capitals, and column/group headers
+   ONLY. Never Display/Title/Body prose (Geist stays) or data (Geist Mono
+   stays). Sanctioned, scoped exception to Hearth T1 "no per-theme fonts"
+   — see hearth.md §5 and FLUX-1567 (epic sign-off).
+
+   Gated on `[data-theme="axis-mundi-*"]` so the Cinzel file — loaded with
+   `preload: false` in layout.tsx — is never fetched unless one of these
+   rules actually matches, i.e. never outside Axis Mundi (the whole roster
+   since HOUP-295; the gate stays for any future non-Axis theme).
+
+   Deliberately left UNLAYERED (not inside @layer base/utilities): Tailwind
+   v4's `@layer theme, base, components, utilities` cascade means layered
+   utilities (e.g. `tracking-tight`) always beat `@layer base` regardless of
+   selector specificity. An unlayered rule outranks every layered rule, so
+   these declarations stay authoritative even on call sites that carry a
+   conflicting `tracking-*`/`normal-case` utility.
+   ======================================================================== */
+[data-theme="axis-mundi-night"] .cap-inscription,
+[data-theme="axis-mundi-day"] .cap-inscription {
+  font-family: var(--font-inscription), Georgia, serif;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+/* ========================================================================
+   FLUX-1570: Axis Mundi meridian — "one vertical gilt axis per surface"
+   (hearth.md §10, Axis Mundi subsection). `.meridian-axis` is `display:none`
+   by default so mounting `<MeridianAxis>` is a structural no-op under any
+   non-Axis theme; only axis-mundi-night/day reveal it. Deliberately
+   left UNLAYERED for the same cascade reason as .cap-inscription above.
+
+   --hero: the home lede's full-height center line + a small glowing node at
+   the top (the only glow this product allows outside focus — masonry
+   principle). --dock: a short tick marking the mobile tab bar's axis, kept
+   well clear of the raised capture FAB's footprint by its host (see
+   section-switcher.tsx). Never a running spine through list rows — legibility
+   (epic FLUX-1567 risk note).
+
+   Reduced motion: nothing here is animated (no keyframe/transition — the
+   "glow" is a static box-shadow), but a reduced-motion user still gets the
+   quieter face: the node's blur collapses to a flat gilt dot.
+   ======================================================================== */
+.meridian-axis {
+  display: none;
+}
+
+[data-theme="axis-mundi-night"] .meridian-axis--hero,
+[data-theme="axis-mundi-day"] .meridian-axis--hero {
+  display: block;
+  position: absolute;
+  inset: 0 auto 0 50%;
+  width: 1px;
+  transform: translateX(-50%);
+  background: linear-gradient(
+    to bottom,
+    var(--axis) 0%,
+    color-mix(in oklch, var(--axis) 35%, transparent) 40%,
+    transparent 100%
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+[data-theme="axis-mundi-night"] .meridian-axis__node,
+[data-theme="axis-mundi-day"] .meridian-axis__node {
+  position: absolute;
+  top: -3px;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  transform: translateX(-50%);
+  border-radius: 9999px;
+  background: var(--axis);
+  box-shadow: 0 0 8px 2px color-mix(in oklch, var(--axis) 65%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-theme="axis-mundi-night"] .meridian-axis__node,
+  [data-theme="axis-mundi-day"] .meridian-axis__node {
+    box-shadow: none;
+  }
+}
+
+[data-theme="axis-mundi-night"] .meridian-axis--dock,
+[data-theme="axis-mundi-day"] .meridian-axis--dock {
+  display: block;
+  position: absolute;
+  left: 50%;
+  bottom: 6px;
+  width: 2px;
+  height: 6px;
+  transform: translateX(-50%);
+  border-radius: 1px;
+  background: var(--axis);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Hearth v2 (H2): section identity. Each section's hue lives in exactly two
+   places, its leading tile and its screen glow (core section-hues.ts; the
+   values arrive as --hue-* variables from lib/section-hue-css.ts via
+   `data-hue`). The glow is one radial wash at the top corner, painted under
+   the page's content; Axis Mundi keeps its meridian as its one decorative
+   element instead. It is ground (§13.1): on a section change it stays put
+   and its hue blends into the next one on the page shift's timing, through
+   the registered --glow-hue (a plain custom property can't transition). */
+@property --glow-hue {
+  syntax: "<color>";
+  inherits: false;
+  initial-value: transparent;
+}
+.hue-tile {
+  background-color: var(--hue-tile);
+  color: var(--hue-glyph);
+}
+.section-glow {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 420px;
+  z-index: -1;
+  pointer-events: none;
+  --glow-hue: var(--hue-glow);
+  transition: --glow-hue var(--motion-slow) var(--motion-ease-out);
+  background: radial-gradient(
+    ellipse 85% 78% at 88% -8%,
+    var(--glow-hue) 0%,
+    color-mix(in srgb, var(--glow-hue) 35%, transparent) 55%,
+    transparent 100%
+  );
+  opacity: var(--glow-opacity);
+}
+@media (min-width: 768px) {
+  .section-glow {
+    background: radial-gradient(
+      ellipse 55% 85% at 92% -10%,
+      var(--glow-hue) 0%,
+      color-mix(in srgb, var(--glow-hue) 35%, transparent) 55%,
+      transparent 100%
+    );
+  }
+}
+[data-theme^="axis-mundi"] .section-glow {
+  display: none;
+}
+
+@layer utilities {
+  /* Hearth v2 (Pulse): the `hero` type step — the one huge number a
+     surface leads with (tokens.ts TYPE_SCALE.hero). Heading face at 800. */
+  .text-hero {
+    font-family: var(--font-heading), sans-serif;
+    font-size: 88px;
+    font-weight: 800;
+    line-height: 0.95;
+    letter-spacing: -0.045em;
+    font-variant-numeric: tabular-nums;
+  }
+  /* TYPE_SCALE.heroSection: a section screen's lede (Home keeps .text-hero). */
+  .text-hero-section {
+    font-family: var(--font-heading), sans-serif;
+    font-size: 64px;
+    font-weight: 800;
+    line-height: 0.97;
+    letter-spacing: -0.04em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .noise-overlay {
+    position: relative;
+  }
+  .noise-overlay::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 9999;
+    opacity: var(--noise-opacity, 0.018);
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    background-repeat: repeat;
+    mix-blend-mode: var(--noise-blend, overlay);
+  }
+
+  /* ==========================================================================
+     MOTION (Hearth §8) — duration + easing tokens shared by every
+     choreography (swipe complete/snooze, bottom sheet, hold-to-edit, nav).
+     transform/opacity only. Reduced-motion below collapses everything to 0ms.
+     ========================================================================== */
+  :root {
+    --motion-fast: 150ms;
+    --motion-base: 200ms;
+    --motion-slow: 300ms;
+    --motion-exit: 250ms;
+    --motion-settle: 240ms;
+    --motion-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --motion-ease-in: ease-in;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :root {
+      --motion-fast: 0ms;
+      --motion-base: 0ms;
+      --motion-slow: 0ms;
+      --motion-exit: 0ms;
+      --motion-settle: 0ms;
+      --motion-ease-out: linear;
+      --motion-ease-in: linear;
+    }
+  }
+
+  /* ==========================================================================
+     NAVIGATION CHOREOGRAPHY (Hearth §8.1) — driven by
+     src/lib/view-transitions.ts, which sets `data-nav-transition` on <html>
+     for the lifetime of one View Transition (crossfade | descend | back |
+     portal). The routed content wrapper (app-sidebar.tsx) carries the
+     `.route-transition-region` name so the sidebar/tab-bar/top-bar chrome —
+     left in the unnamed root group — never animates. This is a separate
+     compositing layer from that wrapper's own transform/filter transition
+     for the sheet page-behind (FLUX-274) — the two never fight. Reduced
+     motion already collapses every --motion-* token above to 0ms, which
+     collapses every rule below to an instant swap for free.
+     ========================================================================== */
+  .route-transition-region {
+    view-transition-name: route-content;
+  }
+
+  ::view-transition-group(root) {
+    animation: none;
+  }
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+    mix-blend-mode: normal;
+  }
+
+  /* The tab bar's raised "+" reaches up over the page; its own group keeps
+     it above route-content and still, so a page change never washes it. */
+  ::view-transition-group(capture-fab),
+  ::view-transition-new(capture-fab) {
+    animation: none;
+  }
+  ::view-transition-old(capture-fab) {
+    display: none;
+  }
+
+  /* Lateral tab switch, and portal jump: plain crossfade. */
+  html[data-nav-transition="crossfade"]::view-transition-old(route-content),
+  html[data-nav-transition="portal"]::view-transition-old(route-content) {
+    animation: var(--motion-fast) var(--motion-ease-in) both nav-fade-out;
+  }
+  html[data-nav-transition="crossfade"]::view-transition-new(route-content),
+  html[data-nav-transition="portal"]::view-transition-new(route-content) {
+    animation: var(--motion-fast) var(--motion-ease-out) both nav-fade-in;
+  }
+
+  /* Lateral tab switch with a known direction (Hearth §8.1 Shift): the
+     page shifts the way the tab bar's pebble travels, forward = toward the
+     end of the bar. --nav-shift is core's TAB_SHIFT_FRACTION of the width,
+     capped so a desktop jump stays a nudge. Clipped to the content region
+     so a shifting page never paints over the sidebar. */
+  :root {
+    --nav-shift: clamp(48px, 28vw, 140px);
+  }
+  html[data-nav-transition^="shift-"]::view-transition-group(route-content),
+  html[data-nav-transition^="shift-"]::view-transition-image-pair(route-content) {
+    overflow: clip;
+  }
+  html[data-nav-transition="shift-forward"]::view-transition-old(route-content) {
+    animation: var(--motion-slow) var(--motion-ease-out) both nav-shift-out-forward;
+  }
+  html[data-nav-transition="shift-forward"]::view-transition-new(route-content) {
+    animation: var(--motion-slow) var(--motion-ease-out) both nav-shift-in-forward;
+  }
+  html[data-nav-transition="shift-back"]::view-transition-old(route-content) {
+    animation: var(--motion-slow) var(--motion-ease-out) both nav-shift-out-back;
+  }
+  html[data-nav-transition="shift-back"]::view-transition-new(route-content) {
+    animation: var(--motion-slow) var(--motion-ease-out) both nav-shift-in-back;
+  }
+
+  /* Descend (list -> detail): destination slides in from the right at
+     --motion-slow; origin draws back ~30% + dims. */
+  html[data-nav-transition="descend"]::view-transition-old(route-content) {
+    animation: var(--motion-slow) var(--motion-ease-out) both nav-descend-out;
+  }
+  html[data-nav-transition="descend"]::view-transition-new(route-content) {
+    animation: var(--motion-slow) var(--motion-ease-out) both nav-descend-in;
+  }
+
+  /* Back: reverse of descend; exits quicker than it arrives. */
+  html[data-nav-transition="back"]::view-transition-old(route-content) {
+    animation: var(--motion-exit) var(--motion-ease-in) both nav-back-out;
+  }
+  html[data-nav-transition="back"]::view-transition-new(route-content) {
+    animation: var(--motion-slow) var(--motion-ease-out) both nav-back-in;
+  }
+
+  @keyframes nav-fade-out {
+    to { opacity: 0; }
+  }
+  @keyframes nav-fade-in {
+    from { opacity: 0; }
+  }
+  @keyframes nav-shift-out-forward {
+    to { transform: translateX(calc(-1 * var(--nav-shift))); opacity: 0; }
+  }
+  @keyframes nav-shift-in-forward {
+    from { transform: translateX(var(--nav-shift)); opacity: 0; }
+  }
+  @keyframes nav-shift-out-back {
+    to { transform: translateX(var(--nav-shift)); opacity: 0; }
+  }
+  @keyframes nav-shift-in-back {
+    from { transform: translateX(calc(-1 * var(--nav-shift))); opacity: 0; }
+  }
+  @keyframes nav-descend-out {
+    to { transform: translateX(-30%); filter: brightness(0.85); opacity: 0.92; }
+  }
+  @keyframes nav-descend-in {
+    from { transform: translateX(100%); }
+  }
+  @keyframes nav-back-out {
+    to { transform: translateX(100%); }
+  }
+  @keyframes nav-back-in {
+    from { transform: translateX(-30%); filter: brightness(0.85); opacity: 0.92; }
+    to { transform: translateX(0); filter: brightness(1); opacity: 1; }
+  }
+
+  .glass-surface {
+    background: var(--glass-bg);
+    backdrop-filter: blur(12px) saturate(1.2);
+    border: 1px solid var(--glass-border);
+    box-shadow:
+      inset 0 1px 0 var(--glass-highlight),
+      0 4px 24px var(--glass-shadow);
+  }
+
+  .card-elevated {
+    box-shadow: var(--card-shadow);
+  }
+
+  .foil-text {
+    background: linear-gradient(
+      135deg,
+      var(--primary) 0%,
+      oklch(from var(--primary) calc(l + 0.1) calc(c - 0.02) h) 50%,
+      var(--primary) 100%
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  /* ======================================================================
+     TEXTURE UTILITIES
+     Apply to any element for real material presence.
+     These use pseudo-elements so the texture doesn't interfere with content.
+     ====================================================================== */
+
+  .texture-grid {
+    position: relative;
+  }
+  .texture-grid::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: var(--texture-opacity, 0.06);
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image: radial-gradient(ellipse at center, black 40%, transparent 80%);
+    -webkit-mask-image: radial-gradient(ellipse at center, black 40%, transparent 80%);
+    border-radius: inherit;
+  }
+
+  .texture-grid-dashed {
+    position: relative;
+  }
+  .texture-grid-dashed::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: var(--texture-opacity, 0.08);
+    background-image:
+      repeating-linear-gradient(0deg, var(--border) 0, var(--border) 3px, transparent 3px, transparent 8px),
+      repeating-linear-gradient(90deg, var(--border) 0, var(--border) 3px, transparent 3px, transparent 8px);
+    background-size: 48px 48px;
+    background-position: center center;
+    border-radius: inherit;
+  }
+
+  .texture-dots {
+    position: relative;
+  }
+  .texture-dots::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: var(--texture-opacity, 0.12);
+    background-image: radial-gradient(circle, var(--border) 1px, transparent 1px);
+    background-size: 20px 20px;
+    border-radius: inherit;
+  }
+
+  .texture-dots-fine {
+    position: relative;
+  }
+  .texture-dots-fine::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: var(--texture-opacity, 0.10);
+    background-image: radial-gradient(circle, var(--border) 0.5px, transparent 0.5px);
+    background-size: 12px 12px;
+    border-radius: inherit;
+  }
+
+  .texture-scanlines {
+    position: relative;
+  }
+  .texture-scanlines::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: var(--texture-opacity, 0.04);
+    background-image: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      var(--border) 2px,
+      var(--border) 3px
+    );
+    border-radius: inherit;
+  }
+
+  .texture-crosshatch {
+    position: relative;
+  }
+  .texture-crosshatch::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: var(--texture-opacity, 0.05);
+    background-image:
+      repeating-linear-gradient(
+        45deg,
+        transparent,
+        transparent 8px,
+        var(--border) 8px,
+        var(--border) 9px
+      ),
+      repeating-linear-gradient(
+        -45deg,
+        transparent,
+        transparent 8px,
+        var(--border) 8px,
+        var(--border) 9px
+      );
+    border-radius: inherit;
+  }
+
+  .texture-diag {
+    position: relative;
+  }
+  .texture-diag::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: var(--texture-opacity, 0.04);
+    background-image: repeating-linear-gradient(
+      -45deg,
+      transparent,
+      transparent 6px,
+      var(--border) 6px,
+      var(--border) 7px
+    );
+    border-radius: inherit;
+  }
+
+  .stagger-in > * {
+    animation: stagger-fade-in 0.4s ease-out both;
+  }
+  .stagger-in > *:nth-child(1) { animation-delay: 0ms; }
+  .stagger-in > *:nth-child(2) { animation-delay: 50ms; }
+  .stagger-in > *:nth-child(3) { animation-delay: 100ms; }
+  .stagger-in > *:nth-child(4) { animation-delay: 150ms; }
+  .stagger-in > *:nth-child(5) { animation-delay: 200ms; }
+  .stagger-in > *:nth-child(6) { animation-delay: 250ms; }
+  .stagger-in > *:nth-child(7) { animation-delay: 300ms; }
+  .stagger-in > *:nth-child(8) { animation-delay: 350ms; }
+  .stagger-in > *:nth-child(9) { animation-delay: 400ms; }
+  .stagger-in > *:nth-child(n+10) { animation-delay: 450ms; }
+
+  @keyframes stagger-fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Hearth §8 "Tab glide": the glyph of the tab just arrived at pops once,
+     up to ~1.14 at fast and back at base, like the slide-to-finish check. */
+  .tab-arrive {
+    animation: tab-arrive calc(var(--motion-fast) + var(--motion-base)) var(--motion-ease-out) both;
+  }
+  @keyframes tab-arrive {
+    43% { transform: scale(1.14); }
+  }
+
+  /* Hearth §8 — the hold-to-edit menu pop (PopMenu's floating dropdown path;
+     the mobile sheet path gets its entrance from BottomSheet's own slide-up). */
+  @keyframes pop-in {
+    from {
+      opacity: 0;
+      transform: scale(0.97);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+}

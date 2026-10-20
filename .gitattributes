@@ -1,0 +1,13 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# Force LF regardless of local core.autocrlf (FLUX-1561): these are bind-
+# mounted straight into Linux containers by docker-compose.yml — a CRLF
+# checkout (e.g. Windows with autocrlf=true) breaks the shell scripts with
+# "bad interpreter" errors and can corrupt SQL script parsing.
+*.sh text eol=lf
+Dockerfile text eol=lf
+docker-compose.yml text eol=lf
+docker/**/*.sql text eol=lf
+docker/**/*.yml text eol=lf
+docker/**/Caddyfile text eol=lf

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <!-- Single-color silhouette for Android 13+ themed icons (API 33 monochrome
+       layer). The OS applies its own tint over this shape's alpha channel;
+       white-on-transparent is the standard convention. Same geometry as mark-adaptive.svg. -->
+  <g transform="translate(256 256) scale(0.72) translate(-256 -256)"><path d="M116 280 L256 150 L396 280" fill="none" stroke="#FFFFFF" stroke-width="52" stroke-linecap="round" stroke-linejoin="round"/><circle cx="256" cy="345" r="43" fill="#FFFFFF"/></g>
+</svg>

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <!-- Rooftap icon: the roof runs through the section hues (core section-hues.ts
+       glow swatches: coral, sun, mint, sky, lilac, rose), the dot is the tap in
+       Home coral, on the Ember night ground. Full bleed; launchers apply their mask. -->
+  <defs><linearGradient id="roof" gradientUnits="userSpaceOnUse" x1="90" y1="0" x2="422" y2="0"><stop offset="0" stop-color="#FF7A5C"/><stop offset=".2" stop-color="#FFC93D"/><stop offset=".4" stop-color="#5FE0B0"/><stop offset=".6" stop-color="#7CB8FF"/><stop offset=".8" stop-color="#9C8BFF"/><stop offset="1" stop-color="#FF7AB8"/></linearGradient></defs>
+  <rect width="512" height="512" fill="#121016"/>
+  <path d="M116 280 L256 150 L396 280" fill="none" stroke="url(#roof)" stroke-width="52" stroke-linecap="round" stroke-linejoin="round"/><circle cx="256" cy="345" r="43" fill="#FF7A5C"/>
+</svg>

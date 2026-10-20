@@ -1,0 +1,105 @@
+// App-wide OTA toasts, the passive counterpart to the About & updates panel
+// (features/settings/panels/app-updates.tsx). checkAutomatically: 'ON_LOAD'
+// with fallbackToCacheTimeout: 0 (app.config.ts) downloads a new bundle in
+// the background and only applies it on the NEXT cold launch, so without a
+// signal the user can't tell an update is waiting or that one just landed.
+//
+// ON_LOAD only checks on a cold launch, and Android keeps the app alive in
+// the background for days, so updates were only ever found by tapping
+// "Check for updates". This hook also checks (and downloads) whenever the
+// app returns to the foreground, at most every RESUME_CHECK_INTERVAL_MS.
+//
+// - "Update ready": fires once per downloaded update while the app is open,
+//   with a Restart action that applies it now.
+// - "App updated": fires once on the first launch running a new OTA, naming
+//   the commit CI inlined (EXPO_PUBLIC_GIT_SHA), same value as the panel's
+//   Commit row.
+//
+// Mobile only: web is served fresh per deploy and has no pending-bundle state.
+import * as React from 'react';
+import { AppState } from 'react-native';
+import * as Updates from 'expo-updates';
+import { toast } from '@homeup/ui';
+import { nativeStoreEnvironment } from './legend/environment';
+import {
+  LAST_SEEN_UPDATE_KEY,
+  appliedDescription,
+  resolveLaunch,
+  shouldCheckOnResume,
+} from './update-toast-logic';
+
+const READY_TOAST_MS = 10000;
+
+export function useUpdateToasts(): void {
+  const { currentlyRunning, isUpdatePending, downloadedUpdate } = Updates.useUpdates();
+  const announcedReady = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    if (!Updates.isEnabled) return;
+    let lastSeen: string | null = null;
+    try {
+      lastSeen = nativeStoreEnvironment.keyValue.getItem(LAST_SEEN_UPDATE_KEY);
+    } catch {
+      return;
+    }
+    const { remember, announceApplied } = resolveLaunch(lastSeen, currentlyRunning);
+    try {
+      nativeStoreEnvironment.keyValue.setItem(LAST_SEEN_UPDATE_KEY, remember);
+    } catch {
+      // Storage unavailable: worst case the toast repeats next launch.
+    }
+    if (announceApplied) {
+      toast.success('App updated', {
+        description: appliedDescription(process.env.EXPO_PUBLIC_GIT_SHA),
+        placement: 'top',
+      });
+    }
+    // Launch-time only: currentlyRunning can't change without a reload.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Launch counts as a check: ON_LOAD already ran one natively.
+  const lastCheck = React.useRef<number | null>(Date.now());
+  const pendingRef = React.useRef(isUpdatePending);
+  pendingRef.current = isUpdatePending;
+
+  React.useEffect(() => {
+    if (!Updates.isEnabled) return;
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state !== 'active' || pendingRef.current) return;
+      const now = Date.now();
+      if (!shouldCheckOnResume(lastCheck.current, now)) return;
+      lastCheck.current = now;
+      // Silent: a failed background check (offline, server hiccup) just
+      // waits for the next resume. Downloading flips isUpdatePending,
+      // which shows the "Update ready" toast below.
+      Updates.checkForUpdateAsync()
+        .then((result) => (result.isAvailable ? Updates.fetchUpdateAsync() : undefined))
+        .catch(() => {});
+    });
+    return () => sub.remove();
+  }, []);
+
+  React.useEffect(() => {
+    if (!Updates.isEnabled || !isUpdatePending) return;
+    const id = downloadedUpdate?.updateId ?? 'pending';
+    if (announcedReady.current === id) return;
+    announcedReady.current = id;
+    toast.message('Update ready', {
+      description: 'Restart to apply it now, or it applies on next launch.',
+      duration: READY_TOAST_MS,
+      placement: 'top',
+      action: {
+        label: 'Restart',
+        onPress: () => {
+          Updates.reloadAsync().catch(() => {
+            toast.error('Could not restart', {
+              description: 'The update applies on next launch.',
+              placement: 'top',
+            });
+          });
+        },
+      },
+    });
+  }, [isUpdatePending, downloadedUpdate?.updateId]);
+}

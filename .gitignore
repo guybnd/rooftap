@@ -1,0 +1,81 @@
+# dependencies
+node_modules/
+node_modules
+apps/*/node_modules/
+packages/*/node_modules/
+
+# next.js
+.next/
+out/
+apps/*/.next/
+
+# expo / metro (apps/mobile)
+apps/mobile/.expo/
+apps/mobile/dist/
+# apps/mobile/expo-env.d.ts is committed (see apps/mobile/.gitignore note)
+
+# production
+build/
+
+# env
+.env
+.env.local
+.env.*.local
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# PWA
+apps/web/public/sw.js
+apps/web/public/sw.js.map
+apps/web/public/swe-worker-*.js
+apps/web/public/workbox-*.js
+apps/web/public/workbox-*.js.map
+
+# supabase
+supabase/.temp/
+
+# IDE
+.vscode/
+.idea/
+
+# other AI tools
+.gemini/
+# .github was ignored wholesale to keep Copilot/AI tool config out of the repo,
+# which also silently blocked CI workflows from ever being committed. Ignore the
+# directory's *contents* rather than the directory itself (git cannot re-include
+# a path whose parent dir is excluded), then re-admit workflows.
+.github/*
+!.github/workflows/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# misc
+*.tsbuildinfo
+*.pem
+
+# secrets
+.docs/secrets.md
+
+# claude
+.claude/settings.local.json
+
+# flux-data orphan mode
+.flux/*.md
+.flux/config.json
+.flux/assets/
+.flux/read-state.json
+.flux-store/
+
+# turborepo local cache
+.turbo/
+
+# landing page screen demo build (apps/web/landing-static/demo)
+apps/web/landing-static/dist/
+apps/web/landing-static/dist-ssr/
+apps/web/landing-static/demo/dist/
+r2-copy-report-*.json

@@ -1,0 +1,14 @@
+# HOUP-106: EAS Build archives the project tree to build server-side. Keep
+# this in sync with .gitignore's exclusions, plus paths .gitignore doesn't
+# need to cover but that don't belong in an EAS upload.
+node_modules
+.expo
+dist
+web-build
+android
+ios
+
+# The HOUP-71 spike hit an EAS archive failure on a Windows-created symlink
+# at the repo root (.agents/skills) — excluded defensively since apps/mobile's
+# EAS project root can still see paths above it in the monorepo tree.
+.agents
