@@ -133,7 +133,8 @@ describe('the edge-function twin (supabase/functions/_shared/module-rules.ts)', 
         );
       }
     }
-  });
+    // 2^modules combinations: about 1s warm, over 10s on a cold CI runner.
+  }, 30_000);
 
   it('falls back to each module default when a household has no rows', () => {
     expect([...twin.resolveEnabledModules({ available: null, rows: [] })].sort()).toEqual(
