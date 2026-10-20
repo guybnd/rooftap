@@ -515,6 +515,26 @@ secrets from `.env` (the `migrate` step updates them on every run).
 The `storage-data` volume holds uploaded files (photos, attachments) — back it
 up the same way as `db-data` if you use file uploads.
 
+### Encryption at rest
+
+Rooftap doesn't encrypt your data or uploaded files itself: Postgres and the
+storage service write them to the Docker volumes as they are. Anyone who gets
+the disk, or a copy of a backup, can read passports, receipts and everything
+else people upload. So:
+
+- **Encrypt the disk** that holds Docker's data (`/var/lib/docker` by
+  default): LUKS on Linux (most installers offer it), FileVault on a Mac,
+  BitLocker on Windows. A NAS usually has an encrypted-volume option.
+- **Encrypt your backups**, including the `backups/pre-migrate-*.dump` files
+  `migrate` writes into the repo folder, before they leave the machine. For
+  example `restic` or `borg` (both encrypt by default), or
+  `gpg -c backup.sql` for a one-off file.
+- **Keep `.env` out of the same unencrypted place as the backups.** It holds
+  the service-role key and database password.
+
+The hosted service's storage providers (Supabase Storage, Cloudflare R2)
+encrypt at rest on their side.
+
 ## Upgrading Rooftap
 
 ```bash
