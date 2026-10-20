@@ -1,0 +1,83 @@
+diff --git a/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidgetUtil.java b/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidgetUtil.java
+index a057c09..451b983 100644
+--- a/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidgetUtil.java
++++ b/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidgetUtil.java
+@@ -6,7 +6,11 @@ import android.appwidget.AppWidgetManager;
+ import android.appwidget.AppWidgetProviderInfo;
+ import android.content.ComponentName;
+ import android.content.Context;
++import android.os.Build;
++import android.os.Bundle;
+ import android.util.DisplayMetrics;
++import android.util.Log;
++import android.util.SizeF;
+ import android.util.TypedValue;
+ 
+ import com.facebook.react.bridge.Arguments;
+@@ -14,10 +18,15 @@ import com.facebook.react.bridge.ReactApplicationContext;
+ import com.facebook.react.bridge.WritableArray;
+ import com.facebook.react.bridge.WritableMap;
+ 
++import java.util.ArrayList;
+ import java.util.List;
+ 
+ public class RNWidgetUtil {
+     public static int getWidgetWidth(Context context, int widgetId) {
++        SizeF exact = getExactWidgetSize(context, widgetId);
++        if (exact != null) {
++            return Math.round(exact.getWidth());
++        }
+         boolean isPortrait = context.getResources().getConfiguration().orientation == ORIENTATION_PORTRAIT;
+         if (isPortrait) {
+             return getWidgetSizeInDp(context, widgetId, AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH);
+@@ -27,6 +36,10 @@ public class RNWidgetUtil {
+     }
+ 
+     public static int getWidgetHeight(Context context, int widgetId) {
++        SizeF exact = getExactWidgetSize(context, widgetId);
++        if (exact != null) {
++            return Math.round(exact.getHeight());
++        }
+         boolean isPortrait = context.getResources().getConfiguration().orientation == ORIENTATION_PORTRAIT;
+         if (isPortrait) {
+             return getWidgetSizeInDp(context, widgetId, AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT);
+@@ -44,6 +57,39 @@ public class RNWidgetUtil {
+         return pxValue / displayMetrics.density;
+     }
+ 
++    /**
++     * HomeUp patch: Android 12+ launchers report the exact sizes a widget is shown at
++     * (OPTION_APPWIDGET_SIZES), one per orientation. The min/max fallback below is an
++     * estimate some launchers get wrong, which drew the widget smaller than its box.
++     * Portrait takes the tallest entry, landscape the widest.
++     */
++    private static SizeF getExactWidgetSize(Context context, int widgetId) {
++        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
++            return null;
++        }
++        Bundle options = AppWidgetManager.getInstance(context).getAppWidgetOptions(widgetId);
++        ArrayList<SizeF> sizes = options.getParcelableArrayList(AppWidgetManager.OPTION_APPWIDGET_SIZES);
++        Log.d("RNWidgetSize", "widget " + widgetId + " sizes=" + sizes
++            + " min=" + options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH) + "x" + options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT)
++            + " max=" + options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH) + "x" + options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT));
++        if (sizes == null || sizes.isEmpty()) {
++            return null;
++        }
++        boolean isPortrait = context.getResources().getConfiguration().orientation == ORIENTATION_PORTRAIT;
++        SizeF best = null;
++        for (SizeF size : sizes) {
++            if (size.getWidth() <= 0 || size.getHeight() <= 0) {
++                continue;
++            }
++            if (best == null
++                || (isPortrait && size.getHeight() > best.getHeight())
++                || (!isPortrait && size.getWidth() > best.getWidth())) {
++                best = size;
++            }
++        }
++        return best;
++    }
++
+     private static int getWidgetSizeInDp(Context context, int widgetId, String key) {
+         return AppWidgetManager.getInstance(context).getAppWidgetOptions(widgetId).getInt(key, 0);
+     }
