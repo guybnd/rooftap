@@ -34,6 +34,8 @@ export function getDocumentStorage(): DocumentStorageEnvironment | null {
 
 export type StorageReply =
   | { provider: 'supabase'; r2?: boolean }
+  /** The server won't take this upload (over the household's cap); `error` is user-facing. */
+  | { provider: 'refused'; error: string }
   | { provider: 'r2'; url?: string; headers?: Record<string, string> };
 
 export interface StorageRequest {
@@ -54,7 +56,7 @@ export async function requestDocumentStorage(req: StorageRequest): Promise<Stora
   if (!env || Date.now() < r2OffUntil) return null;
   try {
     const reply = (await env.postJson('/api/storage', req)) as StorageReply | null;
-    if (!reply || (reply.provider !== 'r2' && reply.provider !== 'supabase')) return null;
+    if (!reply || (reply.provider !== 'r2' && reply.provider !== 'supabase' && reply.provider !== 'refused')) return null;
     if (reply.provider === 'supabase' && reply.r2 === false) r2OffUntil = Date.now() + R2_OFF_CACHE_MS;
     return reply;
   } catch {

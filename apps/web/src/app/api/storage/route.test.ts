@@ -9,9 +9,13 @@ vi.mock("@/lib/supabase/session", () => ({ getSessionUser: getSessionUserMock })
 
 // group_members rows the fake admin client knows about: "user:group".
 let memberships = new Set<string>();
+// group_entitlements rows by group id.
+let usedBytes = 0;
+let entitlements: Record<string, { plan: string; plan_expires_at: string | null; billing_exempt: boolean }> = {};
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
-    from: () => {
+    rpc: async () => ({ data: usedBytes, error: null }),
+    from: (table: string) => {
       const filters: Record<string, string> = {};
       const q = {
         select: () => q,
@@ -19,10 +23,13 @@ vi.mock("@/lib/supabase/admin", () => ({
           filters[col] = val;
           return q;
         },
-        maybeSingle: async () => ({
-          data: memberships.has(`${filters.user_id}:${filters.group_id}`) ? { user_id: filters.user_id } : null,
-          error: null,
-        }),
+        maybeSingle: async () => {
+          if (table === "group_entitlements") return { data: entitlements[filters.group_id] ?? null, error: null };
+          return {
+            data: memberships.has(`${filters.user_id}:${filters.group_id}`) ? { user_id: filters.user_id } : null,
+            error: null,
+          };
+        },
       };
       return q;
     },
@@ -68,6 +75,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   r2Configured = true;
   memberships = new Set([`me:${MINE}`]);
+  entitlements = {};
+  usedBytes = 0;
   getSessionUserMock.mockResolvedValue({ id: "me" });
   r2ExistsMock.mockResolvedValue(true);
 });
@@ -108,10 +117,45 @@ describe("POST /api/storage", () => {
   it("only signs uploads of allowed types within the size cap", async () => {
     const path = `${MINE}/d/f.pdf`;
     expect((await call({ op: "upload", bucket: "documents", path, mimeType: "text/html", sizeBytes: 10 })).status).toBe(400);
-    expect((await call({ op: "upload", bucket: "documents", path, mimeType: "application/pdf", sizeBytes: 101 * 1024 * 1024 })).status).toBe(400);
+    expect((await call({ op: "upload", bucket: "documents", path, mimeType: "application/pdf", sizeBytes: 0 })).status).toBe(400);
+    expect((await call({ op: "upload", bucket: "documents", path, mimeType: "application/pdf", sizeBytes: 21 * 1024 * 1024 })).json).toEqual({
+      provider: "refused",
+      error: "File is too large (max 20 MB).",
+    });
     const ok = await call({ op: "upload", bucket: "documents", path, mimeType: "application/pdf", sizeBytes: 10 });
     expect(ok.json.provider).toBe("r2");
     expect(ok.json.url).toContain("X-Amz-SignedHeaders=content-length%3Bcontent-type%3Bhost");
+  });
+
+  it("lets a comped household upload far bigger files", async () => {
+    entitlements[MINE] = { plan: "free", plan_expires_at: null, billing_exempt: true };
+    const path = `${MINE}/d/f.pdf`;
+    const big = await call({ op: "upload", bucket: "documents", path, mimeType: "application/pdf", sizeBytes: 3 * 1024 ** 3 });
+    expect(big.json.provider).toBe("r2");
+    const tooBig = await call({ op: "upload", bucket: "documents", path, mimeType: "application/pdf", sizeBytes: 6 * 1024 ** 3 });
+    expect(tooBig.json).toEqual({ provider: "refused", error: "File is too large (max 5 GB)." });
+  });
+
+  it("refuses an upload that would take a household past its storage total", async () => {
+    usedBytes = 2 * 1024 ** 3 - 1024;
+    const res = await call({ op: "upload", bucket: "documents", path: `${MINE}/d/f.pdf`, mimeType: "application/pdf", sizeBytes: 2048 });
+    expect(res.json).toEqual({
+      provider: "refused",
+      error: "Your household's 2 GB of document storage is full. Delete some documents to make room.",
+    });
+  });
+
+  it("never applies a storage total to a comped household", async () => {
+    entitlements[MINE] = { plan: "free", plan_expires_at: null, billing_exempt: true };
+    usedBytes = 500 * 1024 ** 3;
+    const res = await call({ op: "upload", bucket: "documents", path: `${MINE}/d/f.pdf`, mimeType: "application/pdf", sizeBytes: 2048 });
+    expect(res.json.provider).toBe("r2");
+  });
+
+  it("gives Plus households the Plus cap", async () => {
+    entitlements[MINE] = { plan: "plus", plan_expires_at: null, billing_exempt: false };
+    const res = await call({ op: "upload", bucket: "documents", path: `${MINE}/d/f.pdf`, mimeType: "application/pdf", sizeBytes: 500 * 1024 * 1024 });
+    expect(res.json.provider).toBe("r2");
   });
 
   it("sends the client to Supabase when the file has no R2 copy", async () => {

@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import {
   DOCUMENT_ACCEPTED_TYPES,
-  DOCUMENT_MAX_BYTES,
   SIGNED_URL_TTL_SECONDS,
+  documentFileLimit,
+  documentStorageLimit,
+  type GroupEntitlements,
 } from "@homeup/core";
 import { getSessionUser } from "@/lib/supabase/session";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -73,8 +75,29 @@ export async function POST(request: Request) {
       if (!mimeType || !(DOCUMENT_ACCEPTED_TYPES as readonly string[]).includes(mimeType)) {
         return bad("Only images (JPG, PNG, WebP) or PDF files are allowed.");
       }
-      if (typeof sizeBytes !== "number" || !Number.isInteger(sizeBytes) || sizeBytes <= 0 || sizeBytes > DOCUMENT_MAX_BYTES) {
-        return bad("File is too large.");
+      if (typeof sizeBytes !== "number" || !Number.isInteger(sizeBytes) || sizeBytes <= 0) {
+        return bad("Invalid file size.");
+      }
+      // Each household's cap comes from its plan (packages/core/src/entitlements.ts).
+      const { data: entitlements } = await admin
+        .from("group_entitlements")
+        .select("plan, plan_expires_at, billing_exempt")
+        .eq("group_id", groupId)
+        .maybeSingle();
+      const limit = documentFileLimit(entitlements as GroupEntitlements | null);
+      if (sizeBytes > limit.bytes) {
+        return NextResponse.json({ provider: "refused", error: `File is too large (max ${limit.label}).` });
+      }
+      const total = documentStorageLimit(entitlements as GroupEntitlements | null);
+      if (total) {
+        const { data: used, error: usedErr } = await admin.rpc("group_document_bytes", { target_group_id: groupId });
+        if (usedErr) throw new Error(`group_document_bytes: ${usedErr.message}`);
+        if (Number(used ?? 0) + sizeBytes > total.bytes) {
+          return NextResponse.json({
+            provider: "refused",
+            error: `Your household's ${total.label} of document storage is full. Delete some documents to make room.`,
+          });
+        }
       }
       return NextResponse.json({
         provider: "r2",

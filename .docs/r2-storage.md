@@ -1,6 +1,6 @@
 # Document storage on Cloudflare R2
 
-> **TL;DR** — Hosted Rooftap keeps documents-store files in Cloudflare R2 (free up to 10 GB, no download fees, up to 100 MB per file). Supabase Storage stays the fallback: for self-hosted servers, for files not copied yet, and whenever R2 or the API can't be reached. Existing files are copied by a script that never deletes anything.
+> **TL;DR** — Hosted Rooftap keeps documents-store files in Cloudflare R2 (free up to 10 GB, no download fees, per-file cap by household plan). Supabase Storage stays the fallback: for self-hosted servers, for files not copied yet, and whenever R2 or the API can't be reached. Existing files are copied by a script that never deletes anything.
 
 ## How it works
 
@@ -12,7 +12,12 @@
   - `delete`: removes the R2 copy. The Supabase original is removed by the client as before.
 - Access mirrors the Supabase bucket policies (HOUP-291): the path's first segment is the group id, and the caller must be a member of it.
 - When the four `R2_*` env vars are unset the route answers `{ provider: "supabase", r2: false }`, and clients stop asking for five minutes. Self-hosted servers need nothing.
-- Caps: 100 MB to R2 (`DOCUMENT_MAX_BYTES`), 50 MB to Supabase (`SUPABASE_DOCUMENT_MAX_BYTES`, the bucket limit and the Supabase Free maximum).
+- Caps: per household, from its plan in `group_entitlements` (`packages/core/src/entitlements.ts`): Free 20 MB per file and 2 GB in total, Plus 1 GB per file and 25 GB in total, comped (`billing_exempt`) 5 GB per file (R2's single-upload ceiling) with no total. The total counts live `documents` rows (`group_document_bytes`). The route enforces them; clients only pre-check against the largest. Supabase fallback stays 50 MB (`SUPABASE_DOCUMENT_MAX_BYTES`, the bucket limit and the Supabase Free maximum).
+- Comping a household (service role only; members can read their row, nobody can write it from the app):
+  ```sql
+  insert into group_entitlements (group_id, billing_exempt) values ('<group id>', true)
+  on conflict (group_id) do update set billing_exempt = true, updated_at = now();
+  ```
 - Native uploads from the pickers stream from disk (`FileSystem.uploadAsync`), so big files aren't held in JS memory.
 - Signing is plain SigV4 in `apps/web/src/lib/r2-sign.mjs` (no S3 SDK), shared with the copy script and tested against AWS's published example.
 

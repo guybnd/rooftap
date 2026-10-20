@@ -195,6 +195,17 @@ describe('uploadDocument with R2 (document-storage seam)', () => {
     expect(supabase.__storageUpload).toHaveBeenCalled();
   });
 
+  it('surfaces the server refusing an upload over the household cap', async () => {
+    const env = storageEnv({ provider: 'refused', error: 'File is too large (max 20 MB).' });
+    const supabase = makeFakeSupabase({ insertResult: { data: row, error: null } });
+    await expect(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      uploadDocument({ supabase: supabase as any, groupId: 'group-1', input: fakeInput, docType: 'other', source: 'capture' })
+    ).rejects.toThrow('File is too large (max 20 MB).');
+    expect(env.putFile).not.toHaveBeenCalled();
+    expect(supabase.__storageUpload).not.toHaveBeenCalled();
+  });
+
   it('refuses a file over the Supabase cap when it can only go to Supabase', async () => {
     storageEnv({ provider: 'supabase' });
     const supabase = makeFakeSupabase({ insertResult: { data: row, error: null } });

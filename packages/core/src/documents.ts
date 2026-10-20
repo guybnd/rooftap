@@ -30,6 +30,7 @@ import { documents$ } from './data/stores';
 import { envRandomUUID } from './data/store-environment';
 import type { ModuleFeatureId } from './module-features';
 import { getDocumentStorage, requestDocumentStorage } from './document-storage';
+import { DOCUMENT_FILE_LIMITS } from './entitlements';
 
 // Canonical label + chip colour for each document category. Single source of
 // truth for the capture flow (FLUX-114) and the documents explorer (FLUX-118);
@@ -77,11 +78,12 @@ export function defaultDocName(docType: DocType, ocrTitle?: string | null): stri
 
 export const DOCUMENTS_BUCKET = 'documents';
 
-// The largest document any storage backend takes: R2 on hosted Rooftap
-// (.docs/r2-storage.md). The /api/storage route enforces the same number.
-export const DOCUMENT_MAX_BYTES = 100 * 1024 * 1024;
-/** The cap as users read it, for upload hints and errors. */
-export const DOCUMENT_MAX_LABEL = '100 MB';
+// The largest document any household may upload (a comped household on R2,
+// .docs/r2-storage.md). Clients only pre-check against this; the /api/storage
+// route enforces each household's own cap (entitlements.ts).
+export const DOCUMENT_MAX_BYTES = DOCUMENT_FILE_LIMITS.exempt.bytes;
+/** The standard (Free) cap as users read it, for upload hints. */
+export const DOCUMENT_MAX_LABEL = DOCUMENT_FILE_LIMITS.free.label;
 // Supabase Storage's cap: the documents bucket's file_size_limit, and the most
 // a Supabase Free project allows per file. Applies when a file falls back to
 // Supabase (self-host, or R2 unreachable); keep it in step with the bucket.
@@ -119,7 +121,7 @@ export function validateDocumentMeta({
     return 'Only images (JPG, PNG, WebP) or PDF files are allowed.';
   }
   if (sizeBytes > DOCUMENT_MAX_BYTES) {
-    return `File is too large (max ${DOCUMENT_MAX_LABEL}).`;
+    return `File is too large (max ${DOCUMENT_FILE_LIMITS.exempt.label}).`;
   }
   return null;
 }
@@ -241,6 +243,8 @@ async function uploadToR2(path: string, input: DocumentUploadInput): Promise<boo
     mimeType: input.mimeType ?? undefined,
     sizeBytes: input.sizeBytes,
   });
+  // The server knows this household's cap; a refusal is final, not a fallback.
+  if (reply?.provider === 'refused') throw new Error(reply.error);
   const env = getDocumentStorage();
   if (reply?.provider !== 'r2' || !reply.url || !env) return false;
   try {
