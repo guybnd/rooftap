@@ -51,7 +51,7 @@ Design and architecture notes are in [.docs/](.docs/INDEX.md).
 
 ## Contributing
 
-This repository is a published snapshot of Rooftap's main development repository, synced on every release. Issues and pull requests are welcome here. Accepted changes are applied upstream and come back in the next sync, so a merged PR may show as closed rather than merged.
+This repository is a published snapshot of Rooftap's main development repository, synced on every release. Issues and pull requests are welcome here. Accepted changes are applied upstream and come back in the next sync, so a merged PR may show as closed rather than merged. [CONTRIBUTING.md](CONTRIBUTING.md) has the details.
 
 Please report security problems privately; see [SECURITY.md](SECURITY.md).
 
