@@ -231,9 +231,16 @@ function DocumentsView() {
   // below is untouched and still reads Supabase directly.
   useReconnectSync(documents$(groupId));
   const storeLoaded = useStoreLoaded(documents$(groupId));
-  const nativeDocs = use$(() =>
+  const nativeDocsNow = use$(() =>
     Object.values(documents$(groupId).get() ?? {}).filter((d): d is Document => !!d && !d.deleted)
   );
+  // use$ rebuilds this array on every render, and `load` depends on it: kept
+  // as is, every load's state updates re-render, rebuild it and load again,
+  // forever (opening a preview froze the page). Only a change in the rows
+  // makes a new array.
+  const nativeDocsKey = JSON.stringify(nativeDocsNow);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const nativeDocs = useMemo(() => nativeDocsNow, [nativeDocsKey]);
 
   const [docs, setDocs] = useState<UnifiedDocument[]>([]);
   const [links, setLinks] = useState<DocumentLink[]>([]);

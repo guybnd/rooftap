@@ -10,6 +10,10 @@
     <style>
       html { --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif; --font-mono: "Geist Mono", ui-monospace, monospace; --font-heading: "Bricolage Grotesque", var(--font-sans); }
       html, body { background: var(--background); }
+      /* The web app's small-screen top bar (menu and page title) is not part of the phone app: the tab bar does its job. */
+      header.sticky.top-0.md\:hidden { display: none; }
+      /* Nobody signs in to the demo, so nobody signs out. */
+      form[action="/logout"] { display: none; }
     </style>
     <script>
       // The theme is part of the scene: ?theme=ember-day for a day shot.

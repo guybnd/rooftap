@@ -27,7 +27,6 @@ export default defineConfig({
       { find: /^@\/lib\/legend\/sync-status$/, replacement: mock("sync-status.tsx") },
       { find: /^@\/lib\/use-section$/, replacement: mock("use-section.ts") },
       { find: /^@\/hooks\/use-overdue-task-count$/, replacement: mock("use-overdue-task-count.ts") },
-      { find: /^@\/components\/capture\/capture-sheet$/, replacement: mock("capture-sheet.tsx") },
       { find: /^@\/components\/module-picker$/, replacement: mock("module-picker.tsx") },
       { find: "virtual:create-group-store-original", replacement: here("../../../../packages/core/src/data/create-group-store.ts") },
       { find: /^@\//, replacement: here("../../src/") },

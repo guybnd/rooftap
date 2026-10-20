@@ -6,7 +6,6 @@ import { SectionTile } from "./cards";
 import { COMPARE, FAQ, FEATURE_GROUPS, LICENCE_URL, SELF_HOST_FACTS, SELF_HOST_STEPS } from "./content";
 import { Fits } from "./fits";
 import { HeroPhone } from "./hero-phone";
-import { LiveDemo } from "./live-demo";
 import styles from "./landing.module.css";
 import { SignIn, SignInHref } from "./sign-in";
 import { HERO_STORIES, ROOM_STORIES } from "./stories";
@@ -86,7 +85,7 @@ export function LandingPage({
                 </div>
                 <p className={styles.heroFacts}>Web and Android · Free to self-host · Elastic License 2.0</p>
               </div>
-              <HeroPhone />
+              <HeroPhone demoHref={demoHref} />
             </div>
           </section>
 
@@ -94,21 +93,6 @@ export function LandingPage({
             <StoryPlayer stories={HERO_STORIES} eager />
             <StoryPlayer stories={ROOM_STORIES} />
           </div>
-
-          {demoHref && (
-            <section id="demo" className={styles.section} aria-labelledby="demo-title">
-              <div className={cn(styles.wrap, styles.split)}>
-                <div className={styles.sectionHead}>
-                  <p className={styles.eyebrow}>Live demo</p>
-                  <h2 id="demo-title" className={cn(styles.display, styles.sectionTitle)}>
-                    Try the app
-                  </h2>
-                  <p className={styles.sectionLede}>The real web app, with a demo household. Tick things off, add items and move between modules. Your changes stay in this tab until you reload it.</p>
-                </div>
-                <LiveDemo href={demoHref} />
-              </div>
-            </section>
-          )}
 
           <section id="fits" className={styles.section} aria-labelledby="fits-title">
             <div className={styles.wrap}>

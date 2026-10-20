@@ -149,6 +149,16 @@
 .stageGl::before {
   opacity: 0;
 }
+/* The glow fades in below the stage's top edge, so the hero above runs into it without a seam. */
+.stage::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  inset: 0 0 auto;
+  height: 28%;
+  background: linear-gradient(180deg, var(--background), transparent);
+  pointer-events: none;
+}
 .stageCanvas {
   position: absolute;
   inset: 0;
@@ -1196,6 +1206,10 @@
   --phone-w: min(340px, 30vw, calc((100svh - 190px) * 0.462));
   justify-self: center;
 }
+/* Room for the "Try it yourself" hint above the phone. */
+.heroDemo .heroPhone {
+  --phone-w: min(340px, 30vw, calc((100svh - 240px) * 0.462));
+}
 @media (max-width: 860px) {
   .hero {
     padding-block: 96px 56px;
@@ -1203,7 +1217,8 @@
   .heroInner {
     grid-template-columns: minmax(0, 1fr);
   }
-  .heroPhone {
+  .heroPhone,
+  .heroDemo .heroPhone {
     --phone-w: min(300px, 70vw);
   }
 }
@@ -1615,10 +1630,6 @@
 }
 
 /* ---------- live demo ---------- */
-.livePhone {
-  --phone-w: min(360px, 80vw, calc((100svh - 140px) * 0.462));
-  justify-self: center;
-}
 .liveFrame {
   position: absolute;
   top: 0;
@@ -1627,16 +1638,72 @@
   transform-origin: 0 0;
   background: var(--background);
 }
-.livePoster {
-  display: block;
-  width: 100%;
-  height: auto;
-  filter: brightness(0.55);
-}
-.liveStart {
+.liveCover {
   position: absolute;
-  left: 50%;
-  top: 50%;
-  translate: -50% -50%;
-  white-space: nowrap;
+  inset: 0;
+  z-index: 3;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.liveCover:focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: -3px;
+}
+/* The phone and its "Try it yourself" hint, in the hero. */
+.heroDemo {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+}
+.liveHint {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 6px 14px;
+  border: 1px solid color-mix(in oklab, var(--primary) 45%, transparent);
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--primary) 12%, transparent);
+  color: var(--foreground);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+}
+p.liveHint {
+  border-color: var(--border);
+  background: transparent;
+  color: var(--muted-foreground);
+  font-weight: 500;
+  font-size: 13px;
+}
+button.liveHint {
+  cursor: pointer;
+}
+button.liveHint:hover {
+  border-color: var(--primary);
+}
+button.liveHint:focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 2px;
+}
+.liveDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--primary);
+  box-shadow: 0 0 0 0 var(--primary);
+  animation: liveDot 1.8s ease-out infinite;
+}
+@keyframes liveDot {
+  70%,
+  100% {
+    box-shadow: 0 0 0 8px transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .liveDot {
+    animation: none;
+  }
 }
