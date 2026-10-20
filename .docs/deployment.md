@@ -146,28 +146,7 @@ condition at the source: use a timestamp later than every file already on
 
 - `scripts/public-mirror.sh` builds the snapshot: tracked files minus `.public-mirror/exclude.txt`, plus `.public-mirror/overlay/` (the public README, SECURITY.md and a check-only `ci.yml`). It refuses to publish anything credential-shaped. Preview it with `./scripts/public-mirror.sh /tmp/homeup-public`.
 - A new private-only file (agent config, a hosted-only script) needs a line in `exclude.txt`, or it goes public on the next sync.
-- Setup: repo variable `PUBLIC_MIRROR_REPO` (owner/name) and secret `PUBLIC_MIRROR_TOKEN` (fine-grained, on that repo only: Contents, Workflows and Pull requests, all read/write). Until the variable is set, the job is skipped. When the token expires, syncs fail with a red "Public mirror" run and nothing else.
-- Each sync replaces the public repo's whole tree, so never commit or merge there. Tags and releases don't sync; the release workflow below makes them.
-
-## Releases
-
-Semver, in `version` of `apps/mobile/app.config.ts`. Cut a release when the app needs a new APK (runtimeVersion moved) or at a milestone; JS-only changes reach phones by OTA without one.
-
-1. In a PR: bump `version`, and move the `CHANGELOG.md` "Unreleased" lines under `## <version> (<date>)`. Merge it.
-2. Tag the merge commit and push the tag: `git tag v1.1.0 <sha> && git push origin v1.1.0`.
-3. `.github/workflows/release.yml` checks the tag matches `version` and the changelog, waits for the mirror to sync that commit, and creates release `v1.1.0` on the public repo with the changelog section as notes. A hyphenated version (`1.1.0-beta.1`) is a pre-release.
-4. Build the APK on the PC from the tagged commit and attach it:
-   ```powershell
-   ./scripts/build-android.ps1
-   Copy-Item apps/mobile/android/app/build/outputs/apk/release/app-release.apk rooftap-android-1.1.0.apk
-   gh release upload v1.1.0 rooftap-android-1.1.0.apk --repo guybnd/rooftap
-   ```
-
-1.0.0 predates this and is tagged `android-1.0.0-a956c18` on the public repo.
-
-## Public pull requests
-
-The public repo's PRs can't merge there (the next sync wipes them). To take one, run **Actions > Port public PR** with its number. `.github/workflows/port-public-pr.yml` applies its commits here with `git am` (the contributor stays the author; overlay paths such as the public README map back into `.public-mirror/overlay/`), adds a `Ported-from: <repo>#<n>` trailer, opens a PR here, starts CI on it, and comments on the public PR. Review and merge it like any PR, and credit the contributor in `CHANGELOG.md`. The next sync closes the public PR with a link to the sync commit. A PR that doesn't apply cleanly fails the run; port it by hand then, and add the same trailer.
+- Setup: repo variable `PUBLIC_MIRROR_REPO` (owner/name) and secret `PUBLIC_MIRROR_TOKEN` (fine-grained, Contents read/write on that repo only). Until the variable is set, the job is skipped.
 
 ## Related
 
