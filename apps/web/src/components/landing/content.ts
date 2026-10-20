@@ -1,7 +1,7 @@
 // The landing page's plain sections: the self-host steps, every feature by
 // module, and the FAQ. Each claim exists in the app (packages/core
 // module-features.ts names the cross-module links). Licence: Elastic 2.0,
-// never "open source". Platforms: web and Android.
+// never "open source". Platforms: a web app (PWA) for every OS, native Android, native iOS coming soon.
 
 /** Self-hosting in three steps (.docs/self-hosting.md). */
 export const SELF_HOST_STEPS: ReadonlyArray<{ title: string; text: string; code?: readonly string[] }> = [
@@ -31,6 +31,12 @@ export interface FeatureGroup {
   items: ReadonlyArray<[name: string, text: string]>;
 }
 
+/** The hero's small print: one line each, wrapping only between facts. */
+export const HERO_FACTS: readonly (readonly string[])[] = [
+  ["Web app (PWA) for every OS", "Native Android", "Native iOS coming soon"],
+  ["Free to self-host", "Elastic License 2.0"],
+];
+
 /** Every feature, by module. */
 export const FEATURE_GROUPS: readonly FeatureGroup[] = [
   {
@@ -38,7 +44,7 @@ export const FEATURE_GROUPS: readonly FeatureGroup[] = [
     name: "Everywhere",
     items: [
       ["Shared household", "everyone sees each change as it happens"],
-      ["Web and Android", "one app, both platforms"],
+      ["Every platform", "a web app (PWA) on any OS, native Android, native iOS coming soon"],
       ["Offline", "reads work without a connection, writes sync after"],
       ["Capture", "one + adds anything to any module"],
       ["Share sheet", "a link or a photo from any app"],
@@ -143,7 +149,7 @@ export const FEATURE_GROUPS: readonly FeatureGroup[] = [
 export const FAQ: ReadonlyArray<[question: string, answer: string]> = [
   ["Where is my data?", "On a server you run, in its Postgres database, when you self-host. Nothing leaves it unless you turn on an add-on such as Google Calendar sync."],
   ["What does it cost?", "Self-hosting is free. Hosted plans come later."],
-  ["Which platforms?", "The web app and Android. There is no iOS app yet."],
+  ["Which platforms?", "A web app you can install on any OS as a PWA, and a native Android app. A native iOS app is coming soon."],
   ["Does it work offline?", "The Android app reads without a connection and syncs your changes when it is back online."],
   ["Do I need a Google account?", "No. Google sign-in and Google Calendar sync are optional."],
   ["What is the licence?", "The Elastic License 2.0. You can read the source, run it and change it for your own household. You cannot offer it to others as a hosted service."],

@@ -1,9 +1,10 @@
 "use client";
 
+import { Fragment } from "react";
 import { cn } from "@/lib/utils";
 import { AskPanel } from "./ask";
 import { SectionTile } from "./cards";
-import { COMPARE, FAQ, FEATURE_GROUPS, LICENCE_URL, SELF_HOST_FACTS, SELF_HOST_STEPS } from "./content";
+import { COMPARE, FAQ, HERO_FACTS, FEATURE_GROUPS, LICENCE_URL, SELF_HOST_FACTS, SELF_HOST_STEPS } from "./content";
 import { Fits } from "./fits";
 import { HeroPhone } from "./hero-phone";
 import styles from "./landing.module.css";
@@ -83,7 +84,18 @@ export function LandingPage({
                     See the modules
                   </a>
                 </div>
-                <p className={styles.heroFacts}>Web and Android · Free to self-host · Elastic License 2.0</p>
+                <p className={styles.heroFacts}>
+                  {HERO_FACTS.map((line) => (
+                    <span key={line.join()} className={styles.heroFactsLine}>
+                      {line.map((fact, i) => (
+                        <Fragment key={fact}>
+                          {i > 0 && " "}
+                          <span>{i < line.length - 1 ? `${fact} ·` : fact}</span>
+                        </Fragment>
+                      ))}
+                    </span>
+                  ))}
+                </p>
               </div>
               <HeroPhone demoHref={demoHref} />
             </div>

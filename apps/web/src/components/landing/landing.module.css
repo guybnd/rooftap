@@ -1202,6 +1202,8 @@
   letter-spacing: 0.02em;
   color: var(--muted-foreground);
 }
+.heroFactsLine { display: block; }
+.heroFactsLine > span { white-space: nowrap; }
 .heroPhone {
   --phone-w: min(340px, 30vw, calc((100svh - 190px) * 0.462));
   justify-self: center;
