@@ -5,6 +5,16 @@
 // Web twin: apps/web/src/app/assistant/assistant-parts.tsx.
 import * as React from 'react';
 import { Linking, Pressable, TextInput, View } from 'react-native';
+import Animated, {
+  Easing,
+  cancelAnimation,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withDelay,
+  withRepeat,
+  withTiming,
+} from 'react-native-reanimated';
 import { ArrowUp, Check, X } from 'lucide-react-native';
 import { Text, LeadingTile, cn } from '@homeup/ui';
 import {
@@ -150,11 +160,25 @@ export function MessageBubble({
   );
 }
 
+function ThinkingDot({ index, still }: { index: number; still: boolean }) {
+  const opacity = useSharedValue(0.35);
+  React.useEffect(() => {
+    if (still) return;
+    // The web twin's animate-pulse: a slow fade, staggered so the dots ripple.
+    // A looping wait indicator is the one loop Hearth allows (MO, like skeletons).
+    opacity.value = withDelay(index * 160, withRepeat(withTiming(1, { duration: 1000, easing: Easing.inOut(Easing.ease) }), -1, true));
+    return () => cancelAnimation(opacity);
+  }, [index, still, opacity]);
+  const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
+  return <Animated.View className="size-1.5 rounded-full bg-muted-foreground" style={style} />;
+}
+
 export function Thinking() {
+  const still = useReducedMotion();
   return (
     <View className="flex-row items-center gap-1.5 px-1 py-2" accessibilityLabel="Rooftap is thinking" accessibilityRole="progressbar">
-      {[0.35, 0.6, 0.85].map((o) => (
-        <View key={o} className="size-1.5 rounded-full bg-muted-foreground" style={{ opacity: o }} />
+      {[0, 1, 2].map((i) => (
+        <ThinkingDot key={i} index={i} still={still} />
       ))}
     </View>
   );

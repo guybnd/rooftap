@@ -15,7 +15,7 @@ describe("resolveServerBrain", () => {
     const brain = await resolveServerBrain(from({ OPENAI_API_KEY: "sk", GEMINI_API_KEY: "g" }));
     expect(brain?.provider).toBe("gemini");
     expect(brain?.connection.baseURL).toContain("generativelanguage");
-    expect(brain?.quickModel).toBe("gemini-2.5-flash-lite");
+    expect(brain?.quickModel).toBe("gemini-3.1-flash-lite");
   });
 
   it("honours ASSISTANT_PROVIDER and model overrides, and ignores placeholders", async () => {

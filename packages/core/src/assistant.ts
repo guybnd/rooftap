@@ -266,6 +266,7 @@ export interface ModelPrice {
  * in usage; local models (Ollama and the like) should be listed at 0.
  */
 export const MODEL_PRICES: Record<string, ModelPrice> = {
+  'gemini-3.1-flash-lite': { input: 0.25, output: 1.5 },
   'gemini-2.5-flash-lite': { input: 0.1, output: 0.4 },
   'gemini-2.5-flash': { input: 0.3, output: 2.5 },
   'gpt-4o-mini': { input: 0.15, output: 0.6 },

@@ -338,6 +338,9 @@ services:
       ASSISTANT_BASE_URL: ${ASSISTANT_BASE_URL:-}
       ASSISTANT_API_KEY: ${ASSISTANT_API_KEY:-}
       ASSISTANT_MODEL_PRICES: ${ASSISTANT_MODEL_PRICES:-}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
       SCRAPER_API_KEY: ${SCRAPER_API_KEY:-}
       # Shopper price sources and the daily price check (.docs/shopper-sources.md).
       SERPAPI_API_KEY: ${SERPAPI_API_KEY:-}
@@ -433,6 +436,26 @@ services:
     environment:
       TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
     command: ["tunnel", "--no-autoupdate", "run"]
+
+  # Assistant on Telegram with no public address (HOUP-446): long-polls
+  # Telegram and forwards each update to the app on localhost. Needs
+  # TELEGRAM_BOT_TOKEN and TELEGRAM_WEBHOOK_SECRET in .env.
+  #   docker compose --profile telegram up -d
+  # See .docs/self-hosting.md "Assistant on Telegram".
+  telegram:
+    image: node:22-alpine
+    profiles: ["telegram"]
+    restart: unless-stopped
+    depends_on:
+      - app
+    network_mode: host
+    environment:
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-}
+      APP_PORT: ${APP_PORT:-3000}
+    volumes:
+      - ./scripts/telegram-poller.mjs:/poller.mjs:ro
+    command: ["node", "/poller.mjs"]
 
 volumes:
   db-data:

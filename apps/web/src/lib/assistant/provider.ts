@@ -32,13 +32,13 @@ const PROVIDERS: Record<Exclude<AssistantProvider, "compatible">, ProviderDef> =
     keyName: "GEMINI_API_KEY",
     wire: "openai",
     baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
-    models: { chat: "gemini-2.5-flash", quick: "gemini-2.5-flash-lite" },
+    models: { chat: "gemini-3.1-flash-lite", quick: "gemini-3.1-flash-lite" },
   },
   openrouter: {
     keyName: "OPENROUTER_API_KEY",
     wire: "openai",
     baseURL: "https://openrouter.ai/api/v1",
-    models: { chat: "google/gemini-2.5-flash", quick: "google/gemini-2.5-flash-lite" },
+    models: { chat: "google/gemini-3.1-flash-lite", quick: "google/gemini-3.1-flash-lite" },
   },
   openai: { keyName: "OPENAI_API_KEY", wire: "openai", models: { chat: "gpt-4o-mini", quick: "gpt-4o-mini" } },
   anthropic: {

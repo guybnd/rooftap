@@ -97,6 +97,20 @@ export interface AssistantUsage {
   isOwner: boolean;
 }
 
+/** Whether this server runs a Telegram bot, and the member's link to it (HOUP-446). */
+export interface AssistantTelegramStatus {
+  configured: boolean;
+  botUsername: string | null;
+  linked: { username: string | null; since: string } | null;
+}
+
+export interface AssistantTelegramCode {
+  code: string;
+  expiresAt: string;
+  /** A t.me link that opens the bot with the code filled in, when the bot's name is known. */
+  link: string | null;
+}
+
 /** Stable error codes the apps turn into sheets or lines. */
 export type AssistantErrorCode =
   | 'assistant_requires_plus'
@@ -140,6 +154,9 @@ export function createAssistantApi(call: AssistantCall) {
       call<AssistantUsage>(`/api/assistant/usage${month ? `?month=${encodeURIComponent(month)}` : ''}`),
     saveMemberLimit: (userId: string, patch: { monthlyBudgetCents?: number | null; readOnly?: boolean }) =>
       call<{ ok: true }>('/api/assistant/limits', { method: 'PUT', body: { userId, ...patch } }),
+    telegramStatus: () => call<AssistantTelegramStatus>('/api/assistant/telegram'),
+    telegramLinkCode: () => call<AssistantTelegramCode>('/api/assistant/telegram', { method: 'POST' }),
+    telegramUnlink: () => call<{ ok: true }>('/api/assistant/telegram', { method: 'DELETE' }),
     memories: async () => (await call<{ memories: AssistantMemory[] }>('/api/assistant/memories')).memories,
     addMemory: (text: string) => call<{ memory: AssistantMemory }>('/api/assistant/memories', { method: 'POST', body: { text } }),
     removeMemory: (id: string) => call<{ ok: true }>(`/api/assistant/memories/${encodeURIComponent(id)}`, { method: 'DELETE' }),

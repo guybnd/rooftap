@@ -13,6 +13,7 @@ import { NavigationSettings } from './panels/navigation-settings';
 import { ModulesSettings } from './panels/modules-settings';
 import { AssistantSettings } from './panels/assistant-settings';
 import { AssistantSpending } from './panels/assistant-spending';
+import { AssistantTelegram } from './panels/assistant-telegram';
 import { NotificationsSettings } from './panels/notifications-settings';
 import { ApiKeysSettings } from './panels/api-keys-settings';
 import { HouseholdAiKeys } from './panels/household-ai-keys';
@@ -57,7 +58,7 @@ export const sectionPanels: Record<string, ComponentType[]> = {
   groceries: [GroceriesSettings],
   checklists: [ChecklistsSettings],
   calendar: [CalendarSetup],
-  assistant: [AssistantSettings, AssistantSpending],
+  assistant: [AssistantSettings, AssistantSpending, AssistantTelegram],
   shopper: [ShopperSettings],
 };
 

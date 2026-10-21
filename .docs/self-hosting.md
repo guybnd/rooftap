@@ -312,6 +312,43 @@ lets usage tracking price a model Rooftap doesn't know; local models count as
 free. Each household then picks what the assistant may do per module (Read,
 Ask first, Act) in Settings → Assistant.
 
+### Assistant on Telegram (HOUP-446)
+
+Your household can talk to the assistant from Telegram, privately or in a
+family group. Everything said there is stored like any other message, so the
+chat history stays on your server and shows in the app too.
+
+1. Make a bot with [@BotFather](https://t.me/BotFather) (`/newbot`) and copy
+   its token. For group use, also send BotFather `/setprivacy` → Disable if you
+   want the bot to see replies to it without a mention (mentions and commands
+   work either way).
+2. In `.env`, set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_SECRET` (any long
+   random string, e.g. `openssl rand -hex 32`). `TELEGRAM_BOT_USERNAME` is
+   optional; the app looks it up from the token.
+3. Get updates to the app, one of two ways:
+   - **No public address** (the usual home server): run the poller,
+     `docker compose --profile telegram up -d`. It long-polls Telegram from
+     your box and forwards each update to the app on localhost. No open ports.
+   - **Public HTTPS** (a domain or a tunnel from "Mobile access"): point
+     Telegram at the webhook instead, and don't run the poller:
+     ```
+     curl "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" \
+       -d url=https://<your-domain>/api/assistant/telegram/webhook \
+       -d secret_token=$TELEGRAM_WEBHOOK_SECRET \
+       -d 'allowed_updates=["message","callback_query"]'
+     ```
+4. Each person links their own account in Settings → Assistant → Telegram
+   (Link Telegram gives a code to send the bot as `/start CODE`). The bot then
+   answers as that person, with their private items, the household's trust
+   levels and their allowance.
+
+In a private chat the bot talks in the household thread unless the person
+starts their own chat (`/new <question>`, `/chats`, `/switch <n>`,
+`/household`). In a group it answers when mentioned, replied to or sent a
+command, always in the household thread, so only add it to groups whose
+members should see household answers. Changes under "Ask first" come with Do
+it / Not now buttons.
+
 ## The `NEXT_PUBLIC_*` build-time trade-off
 
 Next.js inlines `NEXT_PUBLIC_*` env vars into the JS bundle at `next build`

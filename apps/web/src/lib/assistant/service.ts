@@ -71,18 +71,29 @@ export { billingMode };
 export async function assistantRequest(opts: { allowNoAccess?: boolean } = {}): Promise<{ error: NextResponse } | AssistantContext> {
   const user = await getSessionUser();
   if (!user) return { error: assistantErrorResponse(401, "Unauthorized") };
-  const admin = createAdminClient();
-  const { data: membership } = await admin.from("group_members").select("group_id, role").eq("user_id", user.id).limit(1).maybeSingle();
-  if (!membership) return { error: assistantErrorResponse(404, "Not found") };
-  const enabled = await getEnabledModules(admin, membership.group_id);
-  if (!enabled.has("assistant")) return { error: assistantErrorResponse(404, "Not found") };
-
-  const { data: ent } = await admin.from("group_entitlements").select("*").eq("group_id", membership.group_id).maybeSingle();
-  const access = assistantAccess(entitlementTier(ent as GroupEntitlements | null), billingMode());
-  if (access === "none" && !opts.allowNoAccess) {
+  const ctx = await assistantContextFor(createAdminClient(), user.id);
+  if ("error" in ctx) return { error: assistantErrorResponse(ctx.status, ctx.error, ctx.code) };
+  if (ctx.access === "none" && !opts.allowNoAccess) {
     return { error: assistantErrorResponse(402, "The assistant comes with Plus.", "assistant_requires_plus") };
   }
-  return { admin, userId: user.id, groupId: membership.group_id, isOwner: membership.role === "owner", enabled, access };
+  return ctx;
+}
+
+/**
+ * A member's assistant context without a web session: the routes above and
+ * channels that identify the person another way (Telegram's link).
+ */
+export async function assistantContextFor(
+  admin: SupabaseClient,
+  userId: string
+): Promise<AssistantContext | { error: string; status: number; code?: AssistantErrorCode }> {
+  const { data: membership } = await admin.from("group_members").select("group_id, role").eq("user_id", userId).limit(1).maybeSingle();
+  if (!membership) return { error: "Not found", status: 404 };
+  const enabled = await getEnabledModules(admin, membership.group_id);
+  if (!enabled.has("assistant")) return { error: "Not found", status: 404 };
+  const { data: ent } = await admin.from("group_entitlements").select("*").eq("group_id", membership.group_id).maybeSingle();
+  const access = assistantAccess(entitlementTier(ent as GroupEntitlements | null), billingMode());
+  return { admin, userId, groupId: membership.group_id, isOwner: membership.role === "owner", enabled, access };
 }
 
 // ── Rows to DTOs ──────────────────────────────────────────────────────────

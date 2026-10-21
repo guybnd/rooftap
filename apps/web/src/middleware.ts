@@ -40,6 +40,8 @@ export async function middleware(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/api/setup/status") ||
     request.nextUrl.pathname.startsWith("/api/setup/first-user") ||
     request.nextUrl.pathname.startsWith("/api/mcp") ||
+    // HOUP-446: Telegram posts bot updates with its secret header, no session.
+    request.nextUrl.pathname.startsWith("/api/assistant/telegram/webhook") ||
     // MCP sign-in (lib/mcp-oauth.ts): discovery, app registration and token
     // exchange are called by the connecting app, never with a session.
     request.nextUrl.pathname.startsWith("/.well-known/oauth-") ||

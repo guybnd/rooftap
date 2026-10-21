@@ -24,6 +24,7 @@ import { SetupStoresSettings } from "@/components/setup-stores-settings";
 import { ModulesSettings } from "@/components/modules-settings";
 import { AssistantSettings } from "@/components/assistant-settings";
 import { AssistantSpending } from "@/components/assistant-spending";
+import { AssistantTelegram } from "@/components/assistant-telegram";
 import { ShopperSettings } from "@/components/shopper-settings";
 
 export interface GlobalMenu {
@@ -52,7 +53,7 @@ export const sectionPanels: Record<string, ComponentType[]> = {
   groceries: [GroceriesSettings],
   checklists: [ChecklistsSettings],
   calendar: [CalendarSetup],
-  assistant: [AssistantSettings, AssistantSpending],
+  assistant: [AssistantSettings, AssistantSpending, AssistantTelegram],
   shopper: [ShopperSettings],
 };
 
