@@ -8,6 +8,7 @@ import {
   PLUS_SCOUT_RUNS_PER_MONTH,
   SCOUT_MAX_PICKS,
   SCOUT_WHERE_LABELS,
+  scoutTitle,
   sortOffers,
   todayISO,
   type AiErrorCode,
@@ -23,6 +24,7 @@ import { billingMode, householdTier } from "@/lib/billing";
 import { householdKeys } from "@/lib/ai/household-keys";
 import { resolveHouseholdBrain, resolveServerBrain, type AssistantBrain } from "@/lib/assistant/provider";
 import { llmClient, type ChatMessage, type LlmClient, type ToolSpec } from "@/lib/assistant/llm";
+import { sendPushToUsers, type PushPayload } from "@/lib/push";
 import { applicableSources, householdDisabledSources, sourceContext } from "./lookup";
 
 // HOUP-435: Scout's agent. A household's brief goes to a model with two
@@ -49,6 +51,7 @@ export interface ScoutDeps {
   /** One query across the household's offer sources, filtered and merged. */
   search?: (query: string) => Promise<FoundOffer[]>;
   now?: () => number;
+  push?: typeof sendPushToUsers;
 }
 
 export type ScoutBrainResult = { brain: AssistantBrain } | { blocked: AiErrorCode };
@@ -317,6 +320,19 @@ export async function runScoutAgent(
   };
 }
 
+/** The notification for a finished run (HOUP-464): who asked hears back, on every device. */
+export function scoutPushPayload(search: Pick<ShopperSearch, "id" | "brief">, outcome: { picks: number; failed: boolean }, currency: string): PushPayload {
+  const title = scoutTitle(search.brief);
+  const max = search.brief.budget_max_cents;
+  const noun = outcome.picks === 1 ? "pick" : "picks";
+  return {
+    title: outcome.failed ? "Scout didn't finish" : `Scout found ${outcome.picks} ${noun}`,
+    body: outcome.failed ? `${title}. Open it to try again.` : max != null ? `${title}, under ${money(max, currency)}` : title,
+    url: `/shopper/scout/${search.id}`,
+    tag: `scout-${search.id}`,
+  };
+}
+
 /** Runs a started search to the end and saves its picks. Never throws: a failure lands on the row. */
 export async function completeScout(admin: SupabaseClient, search: ShopperSearch, group: Group, brain: AssistantBrain, deps: ScoutDeps = {}): Promise<void> {
   const finish = async (fields: Partial<ShopperSearch>) => {
@@ -325,7 +341,12 @@ export async function completeScout(admin: SupabaseClient, search: ShopperSearch
       .update({ ...fields, finished_at: new Date().toISOString() })
       .eq("id", search.id);
     if (error) console.error("[scout] could not finish run", search.id, error.message);
+    if (search.created_by) {
+      const payload = scoutPushPayload(search, { picks, failed: fields.status !== "done" }, sourceContext(group).currency);
+      await (deps.push ?? sendPushToUsers)(admin, [search.created_by], payload).catch(() => undefined);
+    }
   };
+  let picks = 0;
   try {
     const outcome = await runScoutAgent(search.brief, group, {
       brain,
@@ -341,6 +362,7 @@ export async function completeScout(admin: SupabaseClient, search: ShopperSearch
       .from("shopper_picks")
       .insert(outcome.picks.map((p) => ({ ...p, group_id: search.group_id, search_id: search.id })));
     if (error) throw new Error(error.message);
+    picks = outcome.picks.length;
     await finish({ status: "done", error: null, stores_checked: outcome.storesChecked });
   } catch (err) {
     console.error("[scout] run failed", search.id, err instanceof Error ? err.message : err);
