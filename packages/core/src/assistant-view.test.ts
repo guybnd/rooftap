@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AssistantConversation } from './assistant-api';
-import { assistantModules, conversationTitle, formatCents, formatMicros, groupConversations, minutesLeft, parseReply } from './assistant-view';
+import { assistantModules, conversationTitle, formatCents, formatMicros, groupConversations, looksLikeQuestion, minutesLeft, parseReply } from './assistant-view';
 
 const NOW = new Date('2026-10-21T10:00:00Z');
 const conv = (id: string, extra: Partial<AssistantConversation>): AssistantConversation => ({
@@ -81,5 +81,21 @@ describe('parseReply', () => {
 describe('assistantModules', () => {
   it('lists switched-on modules that have tools', () => {
     expect(assistantModules(new Set(['costs', 'household', 'recipes'])).map((m) => m.id)).toEqual(['costs', 'household']);
+  });
+});
+
+describe('looksLikeQuestion', () => {
+  it('reads questions and requests as asks', () => {
+    expect(looksLikeQuestion('what can I make with the chicken')).toBe(true);
+    expect(looksLikeQuestion('milk?')).toBe(true);
+    expect(looksLikeQuestion("What's on this weekend")).toBe(true);
+    expect(looksLikeQuestion('plan a dinner for six')).toBe(true);
+  });
+
+  it('leaves things to add alone', () => {
+    expect(looksLikeQuestion('milk')).toBe(false);
+    expect(looksLikeQuestion('call the plumber')).toBe(false);
+    expect(looksLikeQuestion('find')).toBe(false);
+    expect(looksLikeQuestion('   ')).toBe(false);
   });
 });

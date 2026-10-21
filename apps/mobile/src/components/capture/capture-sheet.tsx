@@ -51,6 +51,7 @@ import {
   householdTasks$,
   listDocumentTags,
   listSetupStores,
+  looksLikeQuestion,
   recipes$,
   shopperWants$,
   sectionHueSwatch,
@@ -278,6 +279,13 @@ export function CaptureSheet() {
     openRoute(href);
   };
 
+  // One box: what's typed can also go to Rooftap as a quick ask.
+  const canAsk = modules.isEnabled('assistant') && isOnline;
+  const asking = canAsk && looksLikeQuestion(q);
+  const askRooftap = (text: string) => {
+    if (text.trim()) navigateTo(`/assistant/new?kind=quick&ask=${encodeURIComponent(text.trim())}`);
+  };
+
   const openGroceryEdit = (g: GroceryItem) => {
     setEditingGrocery(g);
     setNewGroceryName('');
@@ -383,16 +391,27 @@ export function CaptureSheet() {
       <BottomSheet open={open} onOpenChange={setOpen}>
         <View className="gap-4 px-4 pb-2 pt-1">
           <Text className="font-heading text-title font-medium text-foreground">Capture</Text>
-          <SectionSearchBar value={q} onChange={setQ} placeholder="Search or add…" />
+          <SectionSearchBar
+            value={q}
+            onChange={setQ}
+            placeholder={canAsk ? 'Add or ask anything' : 'Search or add…'}
+            onSubmit={asking ? askRooftap : undefined}
+          />
 
           {q.trim() ? (
             <View className="gap-3">
-              {/* HOUP-443: hand the text to the assistant as a quick ask. */}
-              {modules.isEnabled('assistant') && isOnline && (
+              {/* HOUP-443: hand the text to the assistant as a quick ask.
+                  When it reads as a question it leads, in the assistant's tile
+                  hue, and the keyboard's return key sends it. */}
+              {canAsk && (
                 <Pressable
-                  onPress={() => navigateTo(`/assistant/new?kind=quick&ask=${encodeURIComponent(q.trim())}`)}
+                  onPress={() => askRooftap(q)}
                   accessibilityRole="button"
-                  className="min-h-11 flex-row items-center gap-2 rounded-xl border border-border bg-card px-3 py-2.5"
+                  className={cn(
+                    'min-h-11 flex-row items-center gap-2 rounded-xl border px-3 py-2.5',
+                    asking ? 'border-transparent' : 'border-border bg-card'
+                  )}
+                  style={asking ? { backgroundColor: sectionHueSwatch('assistant', scheme).tile } : undefined}
                 >
                   <Sparkles size={16} color={sectionHueSwatch('assistant', scheme).glyph} />
                   <Text numberOfLines={1} className="min-w-0 flex-1 text-sm text-foreground">

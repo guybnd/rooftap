@@ -40,6 +40,7 @@ import {
   recordRecentSection,
   sectionHueSwatch,
   splitTabBar,
+  useModules,
   useRecentSectionIds,
   type Section,
   type SectionHueSwatch,
@@ -137,7 +138,9 @@ export function PrimaryTabBar() {
   const [slotPick, setSlotPick] = React.useState<Section | null>(null);
   const openRoute = useOpenRoute();
   const insets = useSafeAreaInsets();
-  const { group, updateUserSettings } = useDataCache();
+  const { group, updateUserSettings, isOnline } = useDataCache();
+  // Holding + offers Ask while the assistant is on (capture-fab.tsx).
+  const canAsk = useModules().isEnabled('assistant') && isOnline;
   const { openCapture } = useCapture();
   const overdueCount = useOverdueTaskCount(group?.id);
   // Which swatch of each section hue the bar wears: the theme's ground
@@ -290,7 +293,10 @@ export function PrimaryTabBar() {
           {leftTabs.map(renderTab)}
         </View>
         <View className="relative w-16 shrink-0">
-          <CaptureFab onPress={() => { haptics.commit(); openCapture(); }} />
+          <CaptureFab
+            onPress={() => { haptics.commit(); openCapture(); }}
+            onAsk={canAsk ? () => openRoute('/assistant/new?kind=quick') : undefined}
+          />
           {/* HOUP-171: the dock's meridian tick — anchored near the bottom of
               this column, clear of the FAB's raised footprint. */}
           <MeridianAxis variant="dock" />

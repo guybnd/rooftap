@@ -25,7 +25,7 @@ import { useDataCache } from "@/lib/data-cache";
 import { useCapture } from "@/components/capture/capture-context";
 import { getCaptureLauncherCurrentKey } from "@/components/capture/launcher-current";
 import { useSectionSettings } from "@/lib/use-section";
-import { getEnabledModules, getEnabledSections, getSectionByPath, hiddenWithDisabledModules, isCaptureCategoryEnabled, isFeatureEnabled, listSetupStores, sectionHue, syncedGroupId, useModules, useReconnectSync, useStoreHelpers, householdTasks$, groceryItems$, costItems$, setupItems$, recipes$ as recipesStore$, checklists$ as checklistsStore$, shopperWants$, apartments$, appointments$, apartmentChecklistItems$ } from "@homeup/core";
+import { getEnabledModules, getEnabledSections, getSectionByPath, hiddenWithDisabledModules, isCaptureCategoryEnabled, isFeatureEnabled, looksLikeQuestion, listSetupStores, sectionHue, syncedGroupId, useModules, useReconnectSync, useStoreHelpers, householdTasks$, groceryItems$, costItems$, setupItems$, recipes$ as recipesStore$, checklists$ as checklistsStore$, shopperWants$, apartments$, appointments$, apartmentChecklistItems$ } from "@homeup/core";
 import { dialog } from "@homeup/core";
 import { useGlobalSearchIndex, resolveGlobalHitAction, type GlobalHit } from "@/hooks/use-global-search-index";
 import { useKeyboardInset } from "@/hooks/use-keyboard-inset";
@@ -384,6 +384,13 @@ export function CaptureSheet() {
     suppressNextSheetTidy();
     closeCapture();
     router.push(href);
+  };
+
+  // One box: what's typed can also go to Rooftap as a quick ask.
+  const canAsk = modules.isEnabled("assistant") && isOnline;
+  const asking = canAsk && looksLikeQuestion(q);
+  const askRooftap = (text: string) => {
+    if (text.trim()) navigateTo(`/assistant/new?kind=quick&ask=${encodeURIComponent(text.trim())}`);
   };
 
   // "Add '{query}' as…" — mirrors home/page.tsx handleAddAs, but if an item with
@@ -832,7 +839,7 @@ export function CaptureSheet() {
           </SheetTitle>
           <SheetDescription>
             {step === "launcher"
-              ? "Add anything, or search to jump to it."
+              ? canAsk ? "Add anything, ask Rooftap, or search to jump to it." : "Add anything, or search to jump to it."
               : step === "source"
               ? "Snap a photo or pick a file. We'll file it for you."
               : step === "category"
@@ -854,8 +861,16 @@ export function CaptureSheet() {
                 <input
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
-                  placeholder="Search or add…"
-                  aria-label="Search or add"
+                  onKeyDown={(e) => {
+                    // A question goes to Rooftap on Enter; anything else waits for a pick.
+                    if (e.key === "Enter" && asking) {
+                      e.preventDefault();
+                      askRooftap(q);
+                    }
+                  }}
+                  placeholder={canAsk ? "Add or ask anything" : "Search or add…"}
+                  aria-label={canAsk ? "Add or ask anything" : "Search or add"}
+                  enterKeyHint={asking ? "send" : undefined}
                   className="w-full rounded-lg border border-border bg-background pl-9 pr-3 py-2 text-sm outline-none focus:border-ring"
                 />
               </div>
@@ -864,18 +879,30 @@ export function CaptureSheet() {
                 <div className="space-y-3">
                   {/* Add-as chips pinned ABOVE results so the keyboard can't hide
                       the primary add actions (FLUX-176 point 2). */}
-                  {/* HOUP-443: hand the text to the assistant as a quick ask. */}
-                  {modules.isEnabled("assistant") && isOnline && (
+                  {/* HOUP-443: hand the text to the assistant as a quick ask.
+                      When it reads as a question it leads, in the assistant's
+                      tile hue, and Enter sends it (one box: add or ask). */}
+                  {canAsk && (
                     <button
                       type="button"
                       data-hue={sectionHue("assistant")}
-                      onClick={() => navigateTo(`/assistant/new?kind=quick&ask=${encodeURIComponent(q.trim())}`)}
-                      className="flex w-full items-center gap-2 rounded-xl border border-border bg-card px-3 py-2.5 text-left text-sm transition hover:bg-muted/60"
+                      onClick={() => askRooftap(q)}
+                      className={cn(
+                        "flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left text-sm transition",
+                        asking
+                          ? "border-transparent bg-[var(--hue-tile)] hover:brightness-110"
+                          : "border-border bg-card hover:bg-muted/60"
+                      )}
                     >
                       <Sparkles className="h-4 w-4 shrink-0 text-[var(--hue-glyph)]" />
                       <span className="min-w-0 flex-1 truncate">
                         Ask Rooftap <span className="text-muted-foreground">“{q.trim()}”</span>
                       </span>
+                      {asking && (
+                        <kbd className="hidden shrink-0 rounded-md border border-border px-1.5 py-0.5 font-sans text-[11px] text-muted-foreground md:inline">
+                          Enter
+                        </kbd>
+                      )}
                     </button>
                   )}
 

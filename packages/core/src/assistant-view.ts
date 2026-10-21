@@ -131,3 +131,24 @@ export function parseReply(text: string): ReplyBlock[] {
   flush();
   return blocks;
 }
+
+// Words that open a question or a request for the assistant rather than a
+// thing to add ("milk", "call the plumber").
+const ASK_OPENERS = new Set([
+  'what', "what's", 'whats', 'how', "how's", 'when', "when's", 'where', "where's", 'who', "who's", 'why', 'which',
+  'can', 'could', 'should', 'would', 'will', 'do', 'does', 'did', 'is', 'are', 'was', 'were', 'have', 'has', 'am',
+  'plan', 'suggest', 'help', 'tell', 'summarise', 'summarize', 'explain', 'compare', 'recommend', 'find',
+]);
+
+/**
+ * Whether text typed into the + sheet reads as something to ask Rooftap.
+ * The sheet then leads with Ask and Enter sends it there; otherwise adding
+ * stays first. A guess, so both choices are always on screen.
+ */
+export function looksLikeQuestion(text: string): boolean {
+  const t = text.trim().toLowerCase();
+  if (!t) return false;
+  if (t.endsWith('?')) return true;
+  const words = t.split(/\s+/);
+  return words.length >= 3 && ASK_OPENERS.has(words[0].replace(/[^a-z']/g, ''));
+}
