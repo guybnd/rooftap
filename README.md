@@ -17,7 +17,7 @@ This repository has everything you need to run your own Rooftap server, so your 
 
 ## Modules
 
-<img src=".github/readme/module-map.webp" alt="Map of the fourteen modules. Lines show which modules link to each other, for example Recipes to Groceries and Groceries to Costs.">
+<img src=".github/readme/module-map.webp" alt="Map of the Rooftap modules. Each line is a link between two modules, for example Recipes to Groceries.">
 
 | Module | What it does |
 | --- | --- |
@@ -39,17 +39,17 @@ Everything works with no AI and no AI key. The Assistant and MCP modules stay of
 
 ### How the modules work together
 
-Each module works alone. When two related modules are on, they link up. These examples come from the demo data.
+Each module works alone. When two related modules are on, they link to each other. The screens show the demo data.
 
-<img src=".github/readme/journey-recipe-to-budget.webp" alt="Recipes adds the missing ingredients to Groceries, and the shopping trip logs its total in Costs.">
+<img src=".github/readme/journey-recipe-to-budget.webp" alt="Recipes adds the missing ingredients to Groceries. The shopping trip adds a cost line to Costs.">
 
-<img src=".github/readme/journey-wish-list-to-plan.webp" alt="Shopper tracks a price. Plan to buy adds a task in Tasks and a cost in Costs.">
+<img src=".github/readme/journey-wish-list-to-plan.webp" alt="Shopper shows the price history of an item. Plan to buy adds a task and a cost.">
 
-<img src=".github/readme/journey-paperwork-reminders.webp" alt="A warranty in Documents gets an expiry reminder in Tasks, and the reminder shows on Home.">
+<img src=".github/readme/journey-paperwork-reminders.webp" alt="A warranty in Documents gets a reminder in Tasks. The reminder shows on Home.">
 
-<img src=".github/readme/journey-hosting-day.webp" alt="A Checklists shopping list logs checked items in Costs, its date puts it on Tasks, and it shows in Calendar.">
+<img src=".github/readme/journey-hosting-day.webp" alt="Checked items in a checklist log their cost. The checklist date makes a task, and the checklist shows in Calendar.">
 
-<img src=".github/readme/journey-rewards-at-the-till.webp" alt="Rewards finds the card a store takes, the barcode opens from Groceries, and perks that end soon come first.">
+<img src=".github/readme/journey-rewards-at-the-till.webp" alt="Rewards finds the card for a store. The card barcode opens from Groceries. Perks that end soon show first.">
 
 ## Quick start
 
