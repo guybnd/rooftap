@@ -23,6 +23,8 @@ export interface AssistantConversation {
   closes_at: string | null;
   /** Proposals in this conversation waiting for an OK. */
   pending: number;
+  /** Something happened here since this person last read it. Missing from servers before assistant_reads. */
+  unread?: boolean;
 }
 
 export interface ProposalItem {
@@ -62,6 +64,16 @@ export interface AssistantStatus {
   /** This month's household spend in cents. */
   spentCents: number;
   isOwner: boolean;
+  /** Conversations with something this person hasn't read. Missing from servers before assistant_reads. */
+  unread?: number;
+}
+
+/** One person's say over "it answered" pushes (assistant_notify_prefs). */
+export interface AssistantNotifyPrefs {
+  /** A reply that lands after you left sends a push. */
+  replies: boolean;
+  /** The push shows the reply's text, not just "Rooftap answered". */
+  preview: boolean;
 }
 
 export interface ChatResponse {
@@ -138,6 +150,15 @@ export function createAssistantApi(call: AssistantCall) {
       call<{ conversation: AssistantConversation; messages: AssistantMessage[] }>(
         `/api/assistant/conversations/${encodeURIComponent(conversationId)}`
       ),
+    /** `seen`: the app showed a banner for the reply, so no push; it stays unread. */
+    markRead: (conversationId: string, opts: { seen?: boolean } = {}) =>
+      call<{ ok: true }>(`/api/assistant/conversations/${encodeURIComponent(conversationId)}/read`, {
+        method: 'POST',
+        body: { seen: opts.seen === true },
+      }),
+    notifyPrefs: () => call<{ prefs: AssistantNotifyPrefs }>('/api/assistant/notify-prefs'),
+    saveNotifyPrefs: (patch: Partial<AssistantNotifyPrefs>) =>
+      call<{ prefs: AssistantNotifyPrefs }>('/api/assistant/notify-prefs', { method: 'PUT', body: patch }),
     updateConversation: (conversationId: string, patch: { title?: string; pinned?: boolean; deleted?: boolean }) =>
       call<{ ok: true }>(`/api/assistant/conversations/${encodeURIComponent(conversationId)}`, { method: 'PATCH', body: patch }),
     send: (input: { text: string; conversationId?: string | null; kind?: ConversationKind }) =>

@@ -6,7 +6,7 @@
 // Web twin: apps/web/src/components/assistant-settings.tsx.
 import { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
-import { Brain, Cpu, ShieldCheck, Trash2 } from 'lucide-react-native';
+import { Bell, Brain, Cpu, ShieldCheck, Trash2 } from 'lucide-react-native';
 import { Button, Input, SegmentedControl, Text, toast } from '@homeup/ui';
 import {
   DEFAULT_TRUST,
@@ -14,6 +14,7 @@ import {
   assistantModules,
   useModules,
   type AssistantMemory,
+  type AssistantNotifyPrefs,
   type AssistantSettings as Settings,
   type ModuleId,
   type TrustLevel,
@@ -153,6 +154,8 @@ export function AssistantSettings() {
         )}
       </SettingsPanel>
 
+      {modules.server('assistant.reply-notifications') && <ReplyNotifications />}
+
       <SettingsPanel icon={Brain} title="Memories" description="Facts the assistant keeps about your home. It adds its own as it learns; remove any you don't want.">
         {memories.length > 0 && (
           <SettingsInset>
@@ -186,5 +189,45 @@ export function AssistantSettings() {
         </View>
       </SettingsPanel>
     </View>
+  );
+}
+
+/** Your own say over pushes for replies that land after you left (not the household's). */
+function ReplyNotifications() {
+  const [prefs, setPrefs] = useState<AssistantNotifyPrefs | null>(null);
+  useEffect(() => {
+    assistantApi
+      .notifyPrefs()
+      .then((res) => setPrefs(res.prefs))
+      .catch(() => {});
+  }, []);
+
+  const save = async (patch: Partial<AssistantNotifyPrefs>) => {
+    if (!prefs) return;
+    const before = prefs;
+    setPrefs({ ...prefs, ...patch });
+    try {
+      setPrefs((await assistantApi.saveNotifyPrefs(patch)).prefs);
+    } catch (err) {
+      setPrefs(before);
+      toast.error(err instanceof Error ? err.message : 'Could not save that.');
+    }
+  };
+
+  return (
+    <SettingsPanel icon={Bell} title="When it answers after you leave" description="Just for you. Only sent if you weren't looking at the chat.">
+      {prefs && (
+        <SettingsInset>
+          <SettingsSwitchRow title="Send a notification" checked={prefs.replies} onChange={(replies) => void save({ replies })} />
+          <SettingsSwitchRow
+            title="Include the answer"
+            description={'Off shows only "Rooftap answered".'}
+            checked={prefs.preview}
+            disabled={!prefs.replies}
+            onChange={(preview) => void save({ preview })}
+          />
+        </SettingsInset>
+      )}
+    </SettingsPanel>
   );
 }

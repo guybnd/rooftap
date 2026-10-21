@@ -14,7 +14,7 @@ import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type P
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Plus, Sparkles } from "lucide-react";
-import { sectionHue, useModules } from "@homeup/core";
+import { sectionHue, useAssistantUnread, useModules } from "@homeup/core";
 import { cn } from "@/lib/utils";
 import { commit } from "@/lib/haptics";
 import { useDataCache } from "@/lib/data-cache";
@@ -54,6 +54,7 @@ export function MobileCaptureFab() {
   const modules = useModules();
   const { isOnline } = useDataCache();
   const canAsk = modules.isEnabled("assistant") && isOnline;
+  const unread = useAssistantUnread();
   const [fanOpen, setFanOpen] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const start = useRef<{ x: number; y: number } | null>(null);
@@ -108,7 +109,7 @@ export function MobileCaptureFab() {
           }
           openCapture();
         }}
-        aria-label={canAsk ? "Add (hold to ask Rooftap)" : "Add"}
+        aria-label={canAsk ? (unread > 0 ? "Add (hold to ask Rooftap, new answer waiting)" : "Add (hold to ask Rooftap)") : "Add"}
         className={cn(
           "md:hidden absolute left-1/2 -translate-x-1/2 -top-5 z-30 [view-transition-name:capture-fab] select-none [-webkit-touch-callout:none]",
           "flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground",
@@ -116,6 +117,14 @@ export function MobileCaptureFab() {
         )}
       >
         <Plus className="h-6 w-6" />
+        {/* A reply you haven't opened yet: the assistant's glow, in a small dose. */}
+        {canAsk && unread > 0 && (
+          <span
+            aria-hidden
+            data-hue={sectionHue("assistant")}
+            className="absolute right-0 top-0 size-3.5 rounded-full border-2 border-background bg-[var(--hue-glow)]"
+          />
+        )}
       </button>
       {fanOpen && (
         <AskFan

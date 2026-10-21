@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { ArrowLeft, Pin, PinOff, Trash2 } from 'lucide-react';
 import {
   AssistantApiError,
+  announceAnswer,
   conversationTitle,
   isConversationOpen,
   minutesLeft,
@@ -22,7 +23,7 @@ import {
   type ConversationKind,
 } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
-import { assistantApi } from '@/lib/assistant-client';
+import { assistantApi, refreshAssistantUnread } from '@/lib/assistant-client';
 import { navLinkClickHandler } from '@/lib/view-transitions';
 import { Composer, MessageBubble, Thinking } from '../assistant-parts';
 import { AssistantNotice } from '../assistant-notice';
@@ -57,6 +58,14 @@ export default function AssistantThreadPage() {
   const [showCost, setShowCost] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
   const sentAsk = useRef(false);
+  // A reply that lands after this page was left goes to the banner host instead.
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   const kind: ConversationKind = conversation?.kind ?? (id === 'household' ? 'household' : newKind);
 
@@ -81,6 +90,8 @@ export default function AssistantThreadPage() {
     } finally {
       setLoading(false);
     }
+    // Opening it read it, so the + dot may go.
+    void refreshAssistantUnread();
   }, [id, isNew]);
 
   useEffect(() => {
@@ -102,6 +113,13 @@ export default function AssistantThreadPage() {
       setSending(true);
       try {
         const res = await assistantApi.send({ text, conversationId: conversation?.id ?? null, kind });
+        const reply = res.messages.filter((m) => m.role === 'assistant').pop();
+        if (!mounted.current) {
+          if (reply) announceAnswer({ conversation: res.conversation, reply });
+          return true;
+        }
+        // On screen and in view is read; a hidden tab gets the push and reads it on return.
+        if (document.visibilityState === 'visible') void assistantApi.markRead(res.conversation.id).catch(() => {});
         setConversation(res.conversation);
         setMessages((m) => [...m.filter((x) => x.id !== local.id), ...res.messages]);
         if (res.budget === 'warn') toast("The assistant is close to this month's budget.");
@@ -127,6 +145,17 @@ export default function AssistantThreadPage() {
     sentAsk.current = true;
     void send(ask);
   }, [isNew, search, send]);
+
+  // Coming back to a tab that got its answer while hidden reads it.
+  const conversationId = conversation?.id;
+  useEffect(() => {
+    if (!conversationId) return;
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void assistantApi.markRead(conversationId).catch(() => {});
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [conversationId]);
 
   const decide = async (messageId: string, decision: 'confirm' | 'decline') => {
     setDeciding(messageId);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AssistantConversation } from './assistant-api';
-import { assistantModules, conversationTitle, formatCents, formatMicros, groupConversations, looksLikeQuestion, minutesLeft, parseReply } from './assistant-view';
+import { assistantModules, conversationTitle, formatCents, formatMicros, groupConversations, looksLikeQuestion, minutesLeft, parseReply, replyPreview } from './assistant-view';
 
 const NOW = new Date('2026-10-21T10:00:00Z');
 const conv = (id: string, extra: Partial<AssistantConversation>): AssistantConversation => ({
@@ -97,5 +97,12 @@ describe('looksLikeQuestion', () => {
     expect(looksLikeQuestion('call the plumber')).toBe(false);
     expect(looksLikeQuestion('find')).toBe(false);
     expect(looksLikeQuestion('   ')).toBe(false);
+  });
+});
+
+describe('replyPreview', () => {
+  it('flattens the Markdown subset onto one line and trims', () => {
+    expect(replyPreview('**Sunday** works.\n\n- Burgers\n- [Buns](https://example.com)')).toBe('Sunday works. Burgers Buns');
+    expect(replyPreview('a'.repeat(200), 10)).toBe(`${'a'.repeat(9)}…`);
   });
 });

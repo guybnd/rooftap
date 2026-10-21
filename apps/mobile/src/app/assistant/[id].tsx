@@ -5,7 +5,7 @@
 // proposal cards with one primary action (PC).
 // Web twin: apps/web/src/app/assistant/[id]/page.tsx.
 import * as React from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { AppState, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -13,6 +13,7 @@ import { ArrowLeft, Pin, PinOff, Trash2 } from 'lucide-react-native';
 import { Text, ScreenBackground, toast } from '@homeup/ui';
 import {
   AssistantApiError,
+  announceAnswer,
   conversationTitle,
   isConversationOpen,
   minutesLeft,
@@ -22,7 +23,7 @@ import {
   type ConversationKind,
 } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
-import { assistantApi } from '@/features/assistant/assistant-api';
+import { assistantApi, refreshAssistantUnread } from '@/features/assistant/assistant-api';
 import { Composer, MessageBubble, Thinking } from '@/features/assistant/assistant-parts';
 import { AssistantNotice } from '@/features/assistant/assistant-notice';
 
@@ -56,6 +57,14 @@ export default function AssistantThreadScreen() {
   const [showCost, setShowCost] = React.useState(false);
   const scrollRef = React.useRef<ScrollView>(null);
   const sentAsk = React.useRef(false);
+  // A reply that lands after this screen was left goes to the banner host instead.
+  const mounted = React.useRef(true);
+  React.useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   const kind: ConversationKind = conversation?.kind ?? (params.id === 'household' ? 'household' : newKind);
 
@@ -75,6 +84,8 @@ export default function AssistantThreadScreen() {
     } finally {
       setLoading(false);
     }
+    // Opening it read it, so the + dot may go.
+    void refreshAssistantUnread();
   }, [params.id, isNew]);
 
   React.useEffect(() => {
@@ -92,6 +103,13 @@ export default function AssistantThreadScreen() {
       setSending(true);
       try {
         const res = await assistantApi.send({ text, conversationId: conversation?.id ?? null, kind });
+        const reply = res.messages.filter((m) => m.role === 'assistant').pop();
+        if (!mounted.current) {
+          if (reply) announceAnswer({ conversation: res.conversation, reply });
+          return true;
+        }
+        // On screen with the app in front is read; in the background the push covers it.
+        if (AppState.currentState === 'active') void assistantApi.markRead(res.conversation.id).catch(() => {});
         setConversation(res.conversation);
         setMessages((m) => [...m.filter((x) => x.id !== local.id), ...res.messages]);
         if (res.budget === 'warn') toast.message("The assistant is close to this month's budget.");
@@ -115,6 +133,16 @@ export default function AssistantThreadScreen() {
     sentAsk.current = true;
     void send(params.ask);
   }, [isNew, params.ask, send]);
+
+  // Coming back to the app with this chat open reads what landed meanwhile.
+  const conversationId = conversation?.id;
+  React.useEffect(() => {
+    if (!conversationId) return;
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void assistantApi.markRead(conversationId).catch(() => {});
+    });
+    return () => sub.remove();
+  }, [conversationId]);
 
   const decide = async (messageId: string, decision: 'confirm' | 'decline') => {
     setDeciding(messageId);

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { assistantErrorResponse, assistantRequest, conversationMessages, findConversation, pendingCounts, toConversation } from "@/lib/assistant/service";
+import { markConversationRead } from "@/lib/assistant/reads";
 
 // HOUP-443: one conversation's messages; renaming, pinning or deleting your own.
 type Params = { params: Promise<{ id: string }> };
@@ -15,6 +16,8 @@ export async function GET(_request: Request, { params }: Params) {
     conversationMessages(ctx, id),
   ]);
   if (!conversation) return assistantErrorResponse(404, "Not found");
+  // Opening a conversation reads it.
+  await markConversationRead(ctx, conversation.id);
   return NextResponse.json({
     conversation: toConversation(conversation, pending.get(conversation.id) ?? 0),
     messages,

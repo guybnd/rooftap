@@ -152,3 +152,13 @@ export function looksLikeQuestion(text: string): boolean {
   const words = t.split(/\s+/);
   return words.length >= 3 && ASK_OPENERS.has(words[0].replace(/[^a-z']/g, ''));
 }
+
+/** A reply as one line of plain text, for a notification or banner. */
+export function replyPreview(text: string, max = 140): string {
+  const plain = parseReply(text)
+    .map((b) => b.spans.map((s) => s.text).join(''))
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return plain.length > max ? `${plain.slice(0, max - 1).trimEnd()}…` : plain;
+}

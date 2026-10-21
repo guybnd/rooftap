@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import type { ConversationKind } from "@homeup/core";
 import { assistantErrorResponse, assistantRequest, runChat } from "@/lib/assistant/service";
+import { notifyIfAway } from "@/lib/assistant/reads";
 
 // HOUP-443: one assistant turn. Starts a quick ask or chat, continues one,
 // or talks in the household thread, and answers with the stored messages.
@@ -21,5 +22,11 @@ export async function POST(request: Request) {
     kind,
   });
   if (!out.ok) return assistantErrorResponse(out.status, out.error, out.code);
+  // If the person left while Rooftap was thinking, the reply reaches them as a push.
+  const reply = out.messages.findLast((m) => m.role === "assistant");
+  if (reply) {
+    const conversation = out.conversation;
+    after(() => notifyIfAway(ctx, conversation, reply).then(() => undefined, (e) => console.error("[assistant] reply push failed", e)));
+  }
   return NextResponse.json({ conversation: out.conversation, messages: out.messages, budget: out.budget });
 }

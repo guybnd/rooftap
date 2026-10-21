@@ -45,6 +45,10 @@ export const SERVER_FEATURES = {
     minSchema: '20261021080000_shopper_scout',
     label: 'Scout, AI research for things you want to buy',
   },
+  'assistant.reply-notifications': {
+    minSchema: '20261021090000_assistant_reads',
+    label: 'notifications when the assistant answers',
+  },
 } as const satisfies Record<string, ServerFeatureDef>;
 
 export type ServerFeatureId = keyof typeof SERVER_FEATURES;

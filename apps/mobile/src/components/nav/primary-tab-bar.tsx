@@ -40,6 +40,7 @@ import {
   recordRecentSection,
   sectionHueSwatch,
   splitTabBar,
+  useAssistantUnread,
   useModules,
   useRecentSectionIds,
   type Section,
@@ -141,6 +142,7 @@ export function PrimaryTabBar() {
   const { group, updateUserSettings, isOnline } = useDataCache();
   // Holding + offers Ask while the assistant is on (capture-fab.tsx).
   const canAsk = useModules().isEnabled('assistant') && isOnline;
+  const assistantUnread = useAssistantUnread();
   const { openCapture } = useCapture();
   const overdueCount = useOverdueTaskCount(group?.id);
   // Which swatch of each section hue the bar wears: the theme's ground
@@ -296,6 +298,7 @@ export function PrimaryTabBar() {
           <CaptureFab
             onPress={() => { haptics.commit(); openCapture(); }}
             onAsk={canAsk ? () => openRoute('/assistant/new?kind=quick') : undefined}
+            unread={canAsk && assistantUnread > 0}
           />
           {/* HOUP-171: the dock's meridian tick — anchored near the bottom of
               this column, clear of the FAB's raised footprint. */}

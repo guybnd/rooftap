@@ -20,6 +20,7 @@ import {
   ListItemTrailing,
   Pill,
   ScreenBackground,
+  useThemeMaterial,
 } from '@homeup/ui';
 import {
   AssistantApiError,
@@ -27,6 +28,8 @@ import {
   formatCents,
   groupConversations,
   minutesLeft,
+  sectionHueSwatch,
+  setAssistantUnread,
   timeAgo,
   type AssistantConversation,
   type AssistantErrorCode,
@@ -39,6 +42,7 @@ import { Composer } from '@/features/assistant/assistant-parts';
 import { AssistantNotice } from '@/features/assistant/assistant-notice';
 
 function ConversationRow({ conversation, onPress }: { conversation: AssistantConversation | null; onPress: () => void }) {
+  const { scheme } = useThemeMaterial();
   const kind = conversation?.kind ?? 'household';
   const Icon = kind === 'household' ? Users : kind === 'quick' ? Zap : MessageCircle;
   const left = conversation ? minutesLeft(conversation) : null;
@@ -60,16 +64,26 @@ function ConversationRow({ conversation, onPress }: { conversation: AssistantCon
         </View>
       )}
       <ListItemContent>
-        <ListItemTitle numberOfLines={1}>{conversation ? conversationTitle(conversation) : 'Household'}</ListItemTitle>
+        <ListItemTitle numberOfLines={1} className={conversation?.unread ? 'font-semibold' : undefined}>
+          {conversation ? conversationTitle(conversation) : 'Household'}
+        </ListItemTitle>
         {meta && (
           <ListItemMeta>
             <Text className="text-caption text-muted-foreground">{meta}</Text>
           </ListItemMeta>
         )}
       </ListItemContent>
-      {conversation && conversation.pending > 0 && (
+      {conversation && (conversation.pending > 0 || conversation.unread) && (
         <ListItemTrailing>
-          <Pill variant="primary">{`${conversation.pending} to OK`}</Pill>
+          {conversation.pending > 0 ? (
+            <Pill variant="primary">{`${conversation.pending} to OK`}</Pill>
+          ) : (
+            <View
+              accessibilityLabel="New answer"
+              className="size-2.5 rounded-full"
+              style={{ backgroundColor: sectionHueSwatch('assistant', scheme).glow }}
+            />
+          )}
         </ListItemTrailing>
       )}
     </ListItem>
@@ -106,7 +120,9 @@ export default function AssistantScreen() {
       setStatus(s);
       if (s.access === 'none') return setBlocked('assistant_requires_plus');
       setBlocked(s.ready ? null : 'assistant_not_configured');
-      setConversations(await assistantApi.conversations());
+      const list = await assistantApi.conversations();
+      setConversations(list);
+      setAssistantUnread(list.filter((c) => c.unread).length);
       setError(null);
     } catch (err) {
       if (err instanceof AssistantApiError && err.code) setBlocked(err.code);

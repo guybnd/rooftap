@@ -2,7 +2,7 @@
 // request shapes match web. Same authed pattern as features/shopper/shopper-api.ts:
 // the server origin plus the Supabase session as `Authorization: Bearer`.
 // Web twin: apps/web/src/lib/assistant-client.ts.
-import { assistantError, createAssistantApi } from '@homeup/core';
+import { assistantError, createAssistantApi, setAssistantUnread } from '@homeup/core';
 import { getCurrentSupabaseClient } from '@/lib/supabase-client';
 import { getStoredServer } from '@/lib/server-config';
 
@@ -24,3 +24,11 @@ export const assistantApi = createAssistantApi(async (path, init) => {
   if (!res.ok) throw assistantError(res.status, body);
   return body as never;
 });
+
+/** Re-reads how many conversations hold news for this person (the + dot). */
+export function refreshAssistantUnread(): Promise<void> {
+  return assistantApi
+    .status()
+    .then((s) => setAssistantUnread(s.unread ?? 0))
+    .catch(() => {});
+}

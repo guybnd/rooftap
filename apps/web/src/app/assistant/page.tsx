@@ -15,6 +15,8 @@ import {
   formatCents,
   groupConversations,
   minutesLeft,
+  sectionHue,
+  setAssistantUnread,
   timeAgo,
   type AssistantConversation,
   type AssistantErrorCode,
@@ -56,12 +58,23 @@ function ConversationRow({ conversation, href }: { conversation: AssistantConver
           )}
         </ListItemLeading>
         <ListItemContent>
-          <ListItemTitle>{conversation ? conversationTitle(conversation) : 'Household'}</ListItemTitle>
+          <ListItemTitle className={conversation?.unread ? 'font-semibold' : undefined}>
+            {conversation ? conversationTitle(conversation) : 'Household'}
+          </ListItemTitle>
           {meta && <ListItemMeta>{meta}</ListItemMeta>}
         </ListItemContent>
-        {conversation && conversation.pending > 0 && (
+        {conversation && (conversation.pending > 0 || conversation.unread) && (
           <ListItemTrailing>
-            <Pill variant="primary">{conversation.pending} to OK</Pill>
+            {conversation.pending > 0 ? (
+              <Pill variant="primary">{conversation.pending} to OK</Pill>
+            ) : (
+              <span
+                role="img"
+                aria-label="New answer"
+                data-hue={sectionHue('assistant')}
+                className="size-2.5 rounded-full bg-[var(--hue-glow)]"
+              />
+            )}
           </ListItemTrailing>
         )}
       </Link>
@@ -83,7 +96,9 @@ export default function AssistantPage() {
       setStatus(s);
       if (s.access === 'none') return setBlocked('assistant_requires_plus');
       if (!s.ready) setBlocked('assistant_not_configured');
-      setConversations(await assistantApi.conversations());
+      const list = await assistantApi.conversations();
+      setConversations(list);
+      setAssistantUnread(list.filter((c) => c.unread).length);
       setError(null);
     } catch (err) {
       if (err instanceof AssistantApiError && err.code) setBlocked(err.code);

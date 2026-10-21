@@ -42,6 +42,7 @@ import { SERVER_BRAIN_KEYS, resolveHouseholdBrain, resolveServerBrain, type Assi
 import { resolveServerKeys } from "@/lib/admin-config";
 import { householdKeys } from "@/lib/ai/household-keys";
 import { assistantTools } from "./tools";
+import { isUnread, markConversationRead, readStates } from "./reads";
 
 // HOUP-443: the assistant's server side, shared by every /api/assistant
 // route (and, later, Telegram and routines). Loads the household's context,
@@ -129,7 +130,7 @@ interface MessageRow {
   created_at: string;
 }
 
-export function toConversation(row: ConversationRow, pending = 0): AssistantConversation {
+export function toConversation(row: ConversationRow, pending = 0, unread = false): AssistantConversation {
   return {
     id: row.id,
     kind: row.kind,
@@ -138,6 +139,7 @@ export function toConversation(row: ConversationRow, pending = 0): AssistantConv
     last_active_at: row.last_active_at,
     closes_at: row.closes_at,
     pending,
+    unread,
   };
 }
 
@@ -373,8 +375,9 @@ export async function listConversations(ctx: AssistantContext): Promise<Assistan
     .order("last_active_at", { ascending: false })
     .limit(100);
   const rows = (data ?? []) as ConversationRow[];
-  const pending = await pendingCounts(ctx, rows.map((r) => r.id));
-  return rows.map((r) => toConversation(r, pending.get(r.id) ?? 0));
+  const ids = rows.map((r) => r.id);
+  const [pending, reads] = await Promise.all([pendingCounts(ctx, ids), readStates(ctx, ids)]);
+  return rows.map((r) => toConversation(r, pending.get(r.id) ?? 0, isUnread(r.last_active_at, reads.get(r.id))));
 }
 
 /** A conversation's messages. Callers check the person may see it (findConversation), which can run alongside. */
@@ -463,6 +466,8 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
     ctx.admin.from("assistant_memories").select("text").eq("group_id", ctx.groupId).eq("deleted", false).order("created_at").limit(60),
     memberNames(ctx.admin, ctx.groupId),
     userTimeZone(ctx.admin, ctx.userId),
+    // Sending is reading: anything before this turn is no longer news to them.
+    markConversationRead(ctx, conversation.id, { at: now }),
   ]);
   const history = toHistory(((recent ?? []) as MessageRow[]).reverse()).slice(-settings.contextMessages * 3);
 
@@ -546,7 +551,8 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
     .single();
 
   const touched = {
-    last_active_at: now.toISOString(),
+    // When the reply landed, so it reads as news to anyone who hasn't seen it.
+    last_active_at: new Date(Math.max(Date.now(), now.getTime())).toISOString(),
     ...(conversation.kind === "quick" ? { closes_at: quickAskClosesAt(now, settings.quickAskIdleMinutes).toISOString() } : {}),
   };
   // The bookkeeping after the reply doesn't depend on itself, so it goes in one round.
@@ -569,6 +575,8 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
       p_cost_micros: cost,
     }),
     ctx.admin.from("assistant_conversations").update(touched).eq("id", conversation.id),
+    // A reply sent to Telegram was read there.
+    channel !== "app" ? markConversationRead(ctx, conversation.id, { at: new Date(touched.last_active_at) }) : null,
   ]);
 
   // This month's usage as read before the turn, plus the turn itself.

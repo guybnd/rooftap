@@ -6,6 +6,7 @@
 // `SectionTabBar` as a fixed bar alongside routed content rather than as part
 // of a tab navigator. `AnimatedSplashOverlay` is kept as-is (unrelated to nav)
 // — it owns the `SplashScreen.hideAsync()` call below.
+import { AssistantAnswers } from '@/features/assistant/assistant-answers';
 import '@/global.css';
 // HOUP-86: registers apps/mobile's StoreEnvironment (expo-sqlite persist,
 // NetInfo/AppState online+reconnect detection) before any Legend-State store
@@ -127,6 +128,7 @@ export default function RootLayout() {
               <CaptureProvider>
                 <WidgetSync />
                 <UpdateToasts />
+                <AssistantAnswers />
                 <ModuleRouteGuard />
                 <ShareIntentHandler />
                 <AnimatedSplashOverlay />

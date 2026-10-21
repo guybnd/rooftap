@@ -19,5 +19,6 @@ export async function GET() {
     pending: conversations.reduce((t, c) => t + c.pending, 0),
     spentCents: Math.ceil(micros / 10_000),
     isOwner: ctx.isOwner,
+    unread: conversations.filter((c) => c.unread).length,
   });
 }

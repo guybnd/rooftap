@@ -15,13 +15,16 @@ const ASK_HOLD_MS = 450;
 
 export interface CaptureFabProps {
   onPress?: () => void;
+  /** A reply waiting unread: the + wears a small dot in the assistant's glow. */
+  unread?: boolean;
   /** Offered on a hold; leave out to make the + tap-only. */
   onAsk?: () => void;
   className?: string;
 }
 
-export function CaptureFab({ onPress, onAsk, className }: CaptureFabProps) {
+export function CaptureFab({ onPress, onAsk, unread, className }: CaptureFabProps) {
   const [fanOpen, setFanOpen] = React.useState(false);
+  const { scheme } = useThemeMaterial();
   return (
     <>
       <Pressable
@@ -36,7 +39,7 @@ export function CaptureFab({ onPress, onAsk, className }: CaptureFabProps) {
         }
         delayLongPress={ASK_HOLD_MS}
         accessibilityRole="button"
-        accessibilityLabel="Add"
+        accessibilityLabel={unread ? 'Add, new answer waiting' : 'Add'}
         accessibilityHint={onAsk ? 'Hold to ask Rooftap' : undefined}
         accessibilityActions={onAsk ? [{ name: 'longpress', label: 'Ask Rooftap' }] : undefined}
         onAccessibilityAction={(e) => e.nativeEvent.actionName === 'longpress' && onAsk?.()}
@@ -46,6 +49,13 @@ export function CaptureFab({ onPress, onAsk, className }: CaptureFabProps) {
         )}
       >
         <Plus size={24} className="text-primary-foreground" />
+        {unread && (
+          <View
+            pointerEvents="none"
+            className="absolute right-0 top-0 size-3.5 rounded-full border-2 border-background"
+            style={{ backgroundColor: sectionHueSwatch('assistant', scheme).glow }}
+          />
+        )}
       </Pressable>
       {onAsk && (
         <AskFan
