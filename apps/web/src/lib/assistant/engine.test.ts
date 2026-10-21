@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { ANSWER_NOW_NOTE, MAX_TOOL_RESULT_CHARS, OUT_OF_TIME_REPLY, STEP_LIMIT_REPLY, TurnTimeoutError, executeProposals, runAssistantTurn } from "./engine";
+import { ANSWER_NOW_NOTE, MAX_TOOL_RESULT_CHARS, OUT_OF_TIME_REPLY, STEP_LIMIT_REPLY, TurnTimeoutError, executeProposals, failureReason, runAssistantTurn } from "./engine";
 import type { LlmClient, LlmStep } from "./llm";
 import type { AssistantTool } from "./tools";
 
@@ -145,5 +145,13 @@ describe("executeProposals", () => {
     );
     expect(create.run).toHaveBeenCalledWith({ name: "Milk" });
     expect(out.map((o) => o.ok)).toEqual([true, false]);
+  });
+});
+
+describe("failureReason", () => {
+  it("pulls the error out of a tool's JSON and keeps it short", () => {
+    expect(failureReason('{"error":"MatchFailedError: no entity named livingroom light."}')).toBe("MatchFailedError: no entity named livingroom light");
+    expect(failureReason("Service   not\nfound")).toBe("Service not found");
+    expect(failureReason("x".repeat(300))).toHaveLength(160);
   });
 });

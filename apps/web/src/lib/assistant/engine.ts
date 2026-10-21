@@ -197,6 +197,26 @@ export async function runAssistantTurn(input: TurnInput): Promise<TurnResult> {
  * (ignoring the gate: the tap is the OK). Each tool must still be offered,
  * so a module switched off or a trust level lowered since then wins.
  */
+/**
+ * Why a change failed, in a few words a person can read: the error a tool
+ * returned (often JSON like {"error": "..."}), squeezed onto one short line.
+ */
+export function failureReason(text: string): string {
+  let reason = text;
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    if (parsed && typeof parsed === "object") {
+      const o = parsed as Record<string, unknown>;
+      const picked = [o.error, o.message, o.detail].find((v) => typeof v === "string" && v.trim());
+      if (typeof picked === "string") reason = picked;
+    }
+  } catch {
+    // Plain text is the reason as it is.
+  }
+  reason = reason.replace(/\s+/g, " ").trim().replace(/[.\s]+$/, "");
+  return reason.length > 160 ? `${reason.slice(0, 157)}...` : reason;
+}
+
 export async function executeProposals(proposals: Proposal[], tools: AssistantTool[]) {
   const byName = new Map(tools.map((t) => [t.name, t]));
   const outcomes: { tool: string; ok: boolean; text: string }[] = [];

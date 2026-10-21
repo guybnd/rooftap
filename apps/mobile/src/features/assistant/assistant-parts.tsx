@@ -70,7 +70,7 @@ export function ReplyText({ text }: { text: string }) {
   );
 }
 
-const STATE_LABEL: Record<ProposalState, string> = { pending: 'Waiting', confirmed: 'Done', declined: 'Not done', expired: 'Expired' };
+const STATE_LABEL: Record<ProposalState, string> = { pending: 'Waiting', confirmed: 'Approved', declined: 'Not done', expired: 'Expired' };
 
 export function ProposalCard({
   message,

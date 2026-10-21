@@ -42,7 +42,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getSessionUser } from "@/lib/supabase/session";
 import { getEnabledModules } from "@/lib/server-modules";
 import { billingMode } from "@/lib/billing";
-import { TurnTimeoutError, executeProposals, runAssistantTurn, type Proposal } from "./engine";
+import { TurnTimeoutError, executeProposals, failureReason, runAssistantTurn, type Proposal } from "./engine";
 import { isProviderBusy, llmClient, withFallbackModel, type ChatMessage, type LlmClient } from "./llm";
 import { SERVER_BRAIN_KEYS, resolveBackupBrain, resolveHouseholdBrain, resolveServerBrain, type AssistantBrain } from "./provider";
 import { resolveServerKeys } from "@/lib/admin-config";
@@ -903,7 +903,14 @@ export async function decideProposal(ctx: AssistantContext, messageId: string, d
     );
     runMs = Date.now() - started - toolsMs;
     const done = items.filter((_, i) => outcomes[i]?.ok).map((i) => i.summary);
-    const failed = items.filter((_, i) => !outcomes[i]?.ok).map((i) => i.summary);
+    // The reason goes into the note, so the person (and the next turn's model) knows why.
+    const failed = items.flatMap((item, i) => {
+      const outcome = outcomes[i];
+      if (outcome?.ok) return [];
+      const reason = outcome ? failureReason(outcome.text) : "";
+      console.warn("[assistant] change failed", JSON.stringify({ conversation: row.conversation_id, tool: outcome?.tool, args: item.args, reason }));
+      return [reason ? `${item.summary} (${reason})` : item.summary];
+    });
     note = [
       done.length ? `Done: ${done.join("; ")}.` : null,
       failed.length ? `Couldn't do: ${failed.join("; ")}.` : null,
