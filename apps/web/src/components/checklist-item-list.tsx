@@ -227,6 +227,74 @@ export function ChecklistItemList({
       ? 'divide-y divide-border'
       : 'divide-y divide-border overflow-hidden rounded-3xl border border-border/60 bg-card shadow-[var(--card-shadow)]';
 
+  // Add item — HOUP-329 fast entry. H4: `inline` gets the token-driven inset
+  // fill (no border), matching packages/ui's native add well. It sits right
+  // after the open items, above the Completed band, so new items land where
+  // you typed however long the done list grows.
+  const addWell = (
+    <div className="space-y-1.5">
+      <div
+        className={cn(
+          'flex items-center gap-2 rounded-lg px-3 py-2',
+          variant === 'detail' ? 'border border-border bg-card' : 'bg-muted/30',
+        )}
+      >
+        <input
+          ref={labelInputRef}
+          autoFocus={autoFocusAdd}
+          value={newLabel}
+          onChange={(e) => setNewLabel(e.target.value)}
+          onPaste={onLabelPaste}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              addItem();
+            }
+          }}
+          placeholder="Add an item…"
+          className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder-muted-foreground focus:outline-none"
+        />
+        {checklist.type === 'shopping' && (
+          <input
+            value={newCost}
+            onChange={(e) => setNewCost(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                addItem();
+              }
+            }}
+            placeholder={currencySymbol()}
+            inputMode="decimal"
+            className="w-16 rounded border border-border bg-input px-2 py-1 text-sm text-foreground placeholder-muted-foreground focus:outline-none"
+          />
+        )}
+        <button
+          type="button"
+          onClick={() => addItem()}
+          disabled={!newLabel.trim() || !!duplicate}
+          className="inline-flex items-center gap-1 rounded-lg bg-primary px-2.5 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/80 disabled:opacity-50"
+        >
+          <Plus className="h-4 w-4" />
+          Add
+        </button>
+      </div>
+      {duplicate && (
+        <p role="status" className="px-3 text-xs font-medium text-warning">
+          {duplicate.label} is already on this list ·{' '}
+          <button
+            type="button"
+            onClick={() => addItem({ force: true })}
+            className="text-ring hover:underline focus:outline-none focus-visible:underline"
+          >
+            Add anyway
+          </button>
+        </p>
+      )}
+    </div>
+  );
+  const bandDone = viewPrefs.completedToBottom && doneItems.length > 0;
+
   return (
     <div className={cn('space-y-2', variant === 'inline' && 'space-y-1.5')}>
       {orderedItems.length > 0 && (
@@ -234,7 +302,8 @@ export function ChecklistItemList({
           {viewPrefs.completedToBottom ? (
             <>
               {openItems.length > 0 && <div className={rowListClass}>{openItems.map(renderRow)}</div>}
-              {doneItems.length > 0 && (
+              {bandDone && addWell}
+              {bandDone && (
                 <div className="space-y-2">
                   <button
                     type="button"
@@ -256,68 +325,7 @@ export function ChecklistItemList({
         </div>
       )}
 
-      {/* Add item — HOUP-329 fast entry. H4: `inline` gets the token-driven
-          inset fill (no border), matching packages/ui's native add well. */}
-      <div className="space-y-1.5">
-        <div
-          className={cn(
-            'flex items-center gap-2 rounded-lg px-3 py-2',
-            variant === 'detail' ? 'border border-border bg-card' : 'bg-muted/30',
-          )}
-        >
-          <input
-            ref={labelInputRef}
-            autoFocus={autoFocusAdd}
-            value={newLabel}
-            onChange={(e) => setNewLabel(e.target.value)}
-            onPaste={onLabelPaste}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                addItem();
-              }
-            }}
-            placeholder="Add an item…"
-            className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder-muted-foreground focus:outline-none"
-          />
-          {checklist.type === 'shopping' && (
-            <input
-              value={newCost}
-              onChange={(e) => setNewCost(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  addItem();
-                }
-              }}
-              placeholder={currencySymbol()}
-              inputMode="decimal"
-              className="w-16 rounded border border-border bg-input px-2 py-1 text-sm text-foreground placeholder-muted-foreground focus:outline-none"
-            />
-          )}
-          <button
-            type="button"
-            onClick={() => addItem()}
-            disabled={!newLabel.trim() || !!duplicate}
-            className="inline-flex items-center gap-1 rounded-lg bg-primary px-2.5 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/80 disabled:opacity-50"
-          >
-            <Plus className="h-4 w-4" />
-            Add
-          </button>
-        </div>
-        {duplicate && (
-          <p role="status" className="px-3 text-xs font-medium text-warning">
-            {duplicate.label} is already on this list ·{' '}
-            <button
-              type="button"
-              onClick={() => addItem({ force: true })}
-              className="text-ring hover:underline focus:outline-none focus-visible:underline"
-            >
-              Add anyway
-            </button>
-          </p>
-        )}
-      </div>
+      {!bandDone && addWell}
 
       {variant === 'inline' && (
         <div className="flex items-center justify-between pt-1">

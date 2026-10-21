@@ -234,6 +234,13 @@ export function ChecklistItemList({
     </SwipeActions>
   );
 
+  // The add well sits right after the open items, above the Completed band,
+  // so new items land where you typed however long the done list grows.
+  const addWell = (
+    <ChecklistAddWell checklist={checklist} orderedItems={orderedItems} onAdd={onAdd} autoFocusAdd={autoFocusAdd} />
+  );
+  const bandDone = viewPrefs.completedToBottom && doneItems.length > 0;
+
   return (
     <View className={cn('gap-2', variant === 'inline' && 'gap-1.5')}>
       {orderedItems.length > 0 && (
@@ -243,7 +250,8 @@ export function ChecklistItemList({
               {openItems.length > 0 && (
                 <ListGroup bordered={variant === 'detail'}>{openItems.map(renderItemRow)}</ListGroup>
               )}
-              {doneItems.length > 0 && (
+              {bandDone && addWell}
+              {bandDone && (
                 <View className="gap-2">
                   <Pressable
                     onPress={() => {
@@ -278,7 +286,7 @@ export function ChecklistItemList({
         </View>
       )}
 
-      <ChecklistAddWell checklist={checklist} orderedItems={orderedItems} onAdd={onAdd} autoFocusAdd={autoFocusAdd} />
+      {!bandDone && addWell}
 
       {variant === 'inline' && (
         <View className="flex-row items-center justify-between pt-1">
