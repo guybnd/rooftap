@@ -26,6 +26,18 @@ export async function setAdminConfigValue(key: string, value: string): Promise<v
   if (error) throw new Error(error.message);
 }
 
+/**
+ * resolveServerKey for several keys in one query, as a lookup. For callers
+ * that would otherwise read admin_config once per key in a row (each a round
+ * trip to the database).
+ */
+export async function resolveServerKeys(keys: readonly string[]): Promise<(key: string) => Promise<string | undefined>> {
+  const admin = createAdminClient();
+  const { data } = await admin.from("admin_config").select("key, value").in("key", [...keys]);
+  const stored = new Map(((data ?? []) as { key: string; value: string | null }[]).map((r) => [r.key, r.value ?? undefined]));
+  return async (key) => stored.get(key) ?? process.env[key];
+}
+
 export async function resolveServerKey(key: string): Promise<string | undefined> {
   const stored = await getAdminConfigValue(key);
   return stored ?? process.env[key];

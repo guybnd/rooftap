@@ -152,6 +152,7 @@ export function openAIClient(conn: LlmConnection, fetchImpl?: typeof fetch): Llm
     ...(conn.baseURL ? { baseURL: conn.baseURL } : {}),
     ...(fetchImpl ? { fetch: fetchImpl } : {}),
   });
+  const isGemini = !!conn.baseURL?.includes("generativelanguage.googleapis.com");
   return async (req) => {
     const response = await client.chat.completions.create({
       model: req.model,
@@ -165,6 +166,10 @@ export function openAIClient(conn: LlmConnection, fetchImpl?: typeof fetch): Llm
           }
         : {}),
       max_tokens: req.maxTokens ?? 1024,
+      // Gemini 3 thinks before answering by default, which is most of a
+      // reply's wait; household questions don't need deep thought. Only
+      // Gemini gets this: other OpenAI-compatible servers may reject it.
+      ...(isGemini ? { reasoning_effort: "low" as const } : {}),
     });
     const message = response.choices[0]?.message;
     const toolCalls: ToolCall[] = (message?.tool_calls ?? []).flatMap((c) =>

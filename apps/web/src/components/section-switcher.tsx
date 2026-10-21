@@ -12,7 +12,15 @@ import {
 import Link from "next/link";
 import { Check, Settings, MoreHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { sectionHue, splitTabBar, type Section } from "@homeup/core";
+import {
+  initRecentSections,
+  pickRecentSections,
+  recordRecentSection,
+  sectionHue,
+  splitTabBar,
+  useRecentSectionIds,
+  type Section,
+} from "@homeup/core";
 import { sectionIcons } from "@/lib/section-icons";
 import { LeadingTile } from "@/components/ui/leading-tile";
 import { MobileCaptureFab } from "@/components/capture/capture-buttons";
@@ -86,6 +94,11 @@ interface TabBarProps extends SwitcherProps {
   onChooseForSlot: (slotId: string, chosenId: string) => void;
   overdueCount: number;
 }
+
+// Settings > Global settings holds the Navigation panel (bar order, hidden).
+const EDIT_BAR_HREF = "/settings/global";
+
+const MICRO_LABEL = "px-1 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground";
 
 // Hold this long on a tab to choose what sits in its slot (native twin:
 // apps/mobile's primary-tab-bar.tsx).
@@ -168,6 +181,26 @@ export function SectionTabBar({
   // so all 4 render inline instead (2 left + 2 right) and overflow stays empty.
   const { primary, overflow } = splitTabBar(enabledSections);
   const barSectionIds = new Set(primary.map((s) => s.id));
+
+  // The More sheet's Recent strip (core recent-sections.ts): this device's
+  // last-opened spaces, never the bar's own or the one you're on.
+  useEffect(() => {
+    try {
+      initRecentSections(window.localStorage);
+    } catch {
+      // Storage blocked: the strip just stays empty.
+    }
+  }, []);
+  useEffect(() => {
+    recordRecentSection(currentSectionId);
+  }, [currentSectionId]);
+  const recentIds = useRecentSectionIds();
+  const recentSections = pickRecentSections(
+    recentIds,
+    enabledSections,
+    new Set([...barSectionIds, currentSectionId])
+  );
+  const hasBarTiles = enabledSections.some((s) => barSectionIds.has(s.id));
 
   const leftTabs = primary.slice(0, 2);
   const rightPrimary = primary.slice(2); // the 3rd primary section (if it exists)
@@ -334,65 +367,119 @@ export function SectionTabBar({
       {overflow.length > 0 && (
         <Sheet open={moreOpen} onOpenChange={setMoreOpen}>
           <SheetContent side="bottom" open={moreOpen} onOpenChange={setMoreOpen}>
-            <SheetHeader>
+            <SheetHeader className="flex-row items-center justify-between">
               <SheetTitle>More</SheetTitle>
+              <Link
+                href={EDIT_BAR_HREF}
+                onClick={() => setMoreOpen(false)}
+                className="text-[13px] font-medium text-primary hover:underline"
+              >
+                Edit bar
+              </Link>
             </SheetHeader>
-            <div className="px-2 pb-4 space-y-1">
-              {/* Every visible section, not only the ones that don't fit the
-                  bar; the bar's own are marked. */}
-              {enabledSections.map((section) => {
-                const active = section.id === currentSectionId;
-                const inBar = barSectionIds.has(section.id);
-                const Icon = sectionIcons[section.iconId];
-                const showBadge =
-                  overdueCount > 0 && section.navItems.some((i) => i.badge === "overdueTasks");
-                // Same language as the tab bar: each section leads with its own
-                // identity tile; the current one names itself in its glyph hue.
-                return (
-                  <button
-                    key={section.id}
-                    data-hue={sectionHue(section.id)}
-                    aria-current={active ? "page" : undefined}
-                    aria-label={showBadge ? `${section.label}, ${overdueCount} overdue` : undefined}
-                    onClick={() => {
-                      onSelect(section.id);
-                      suppressNextSheetTidy();
-                      setMoreOpen(false);
-                    }}
-                    className={cn(
-                      "w-full flex min-h-11 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                      active
-                        ? "font-semibold text-[var(--hue-glyph)]"
-                        : "text-foreground/70 hover:text-foreground hover:bg-accent/60"
-                    )}
-                  >
-                    {/* §13.0: the tile never carries a badge; the count trails the row (as on native). */}
-                    <LeadingTile sectionId={section.id} Icon={Icon} size="sm" />
-                    <span className="min-w-0 flex-1 truncate text-left">{section.label}</span>
-                    {inBar && <span className="shrink-0 text-xs font-normal text-muted-foreground">In bar</span>}
-                    {showBadge && (
-                      <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-destructive px-1.5 text-[11px] font-semibold tabular-nums leading-none text-white">
-                        {overdueCount}
+            <div className="px-4 pb-4">
+              {/* Guy's pick (Oct 21), twin of apps/mobile's
+                  section-switcher-sheet.tsx: a Recent strip, then every
+                  visible section as a 4-across tile grid so each keeps a
+                  fixed spot; the bar's own wear an outlined tile. */}
+              {recentSections.length > 0 && (
+                <div className="pb-4">
+                  <p className={MICRO_LABEL}>Recent</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {recentSections.map((section) => {
+                      const Icon = sectionIcons[section.iconId];
+                      return (
+                        <button
+                          key={section.id}
+                          onClick={() => {
+                            onSelect(section.id);
+                            suppressNextSheetTidy();
+                            setMoreOpen(false);
+                          }}
+                          className="flex min-h-12 items-center gap-2 rounded-2xl border border-border bg-card px-2.5 text-left text-[13px] font-medium leading-tight text-foreground transition-transform active:scale-[0.97]"
+                        >
+                          <LeadingTile sectionId={section.id} Icon={Icon} size="sm" />
+                          <span className="line-clamp-2 min-w-0">{section.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              {recentSections.length > 0 && <p className={MICRO_LABEL}>All spaces</p>}
+              <div className="grid grid-cols-4 gap-x-1 gap-y-2">
+                {enabledSections.map((section) => {
+                  const active = section.id === currentSectionId;
+                  const inBar = barSectionIds.has(section.id);
+                  const Icon = sectionIcons[section.iconId];
+                  const showBadge =
+                    overdueCount > 0 && section.navItems.some((i) => i.badge === "overdueTasks");
+                  // Same language as the tab bar: each section leads with its
+                  // own identity tile; the current one names itself in its
+                  // glyph hue. §13.0: the tile never carries a badge, so the
+                  // count trails the label (as on native).
+                  return (
+                    <button
+                      key={section.id}
+                      data-hue={sectionHue(section.id)}
+                      aria-current={active ? "page" : undefined}
+                      aria-label={[section.label, inBar ? "in bar" : null, showBadge ? `${overdueCount} overdue` : null]
+                        .filter(Boolean)
+                        .join(", ")}
+                      onClick={() => {
+                        onSelect(section.id);
+                        suppressNextSheetTidy();
+                        setMoreOpen(false);
+                      }}
+                      className="flex min-h-[92px] flex-col items-center gap-2 rounded-xl px-1 py-1.5 transition-transform active:scale-[0.95]"
+                    >
+                      <LeadingTile
+                        sectionId={section.id}
+                        Icon={Icon}
+                        size="xl"
+                        className={cn(inBar && "!bg-transparent ring-[1.5px] ring-inset ring-[var(--hue-glyph)]")}
+                      />
+                      <span className="flex items-center gap-1">
+                        <span
+                          className={cn(
+                            "line-clamp-2 text-center text-xs leading-tight",
+                            active
+                              ? "font-semibold text-[var(--hue-glyph)]"
+                              : inBar
+                                ? "font-medium text-muted-foreground"
+                                : "font-medium text-foreground"
+                          )}
+                        >
+                          {section.label}
+                        </span>
+                        {showBadge && (
+                          <span className="inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold tabular-nums leading-none text-white">
+                            {overdueCount}
+                          </span>
+                        )}
                       </span>
-                    )}
-                  </button>
-                );
-              })}
-              {/* Settings shortcut — always present in the More sheet. Always lands
-                  on the settings menu (not a deep-linked screen) so this entry
-                  point matches the sidebar/drawer's menu-first behavior (HOUP-50
-                  bug 2) — a bottom sheet isn't the right surface for an in-place
-                  sub-menu, so landing on the menu is the consistent minimum. */}
-              <div className="border-t border-border/40 pt-1 mt-1">
+                    </button>
+                  );
+                })}
+              </div>
+              {/* Settings always lands on the settings menu (HOUP-50 bug 2),
+                  matching the sidebar/drawer's menu-first behaviour. */}
+              <div className="mt-3 flex items-center justify-between gap-3 border-t border-border pt-3">
+                {hasBarTiles ? (
+                  <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span aria-hidden className="size-3.5 rounded-[5px] border-[1.5px] border-muted-foreground" />
+                    Outlined: already in your bar
+                  </span>
+                ) : (
+                  <span />
+                )}
                 <Link
                   href="/settings"
                   onClick={() => setMoreOpen(false)}
-                  className="flex min-h-11 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-foreground/70 hover:text-foreground hover:bg-accent/60 transition-colors"
+                  className="flex min-h-9 items-center gap-1.5 rounded-full bg-secondary px-3 text-[13px] font-medium text-foreground transition-transform active:scale-[0.97]"
                 >
-                  <span className="flex size-7 shrink-0 items-center justify-center">
-                    <Settings className="h-5 w-5" />
-                  </span>
-                  <span>Settings</span>
+                  <Settings className="h-4 w-4 text-muted-foreground" />
+                  Settings
                 </Link>
               </div>
             </div>

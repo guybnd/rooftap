@@ -38,7 +38,8 @@ import { getEnabledModules } from "@/lib/server-modules";
 import { billingMode } from "@/lib/billing";
 import { executeProposals, runAssistantTurn, type Proposal } from "./engine";
 import { llmClient, type ChatMessage, type LlmClient } from "./llm";
-import { resolveHouseholdBrain, resolveServerBrain, type AssistantBrain } from "./provider";
+import { SERVER_BRAIN_KEYS, resolveHouseholdBrain, resolveServerBrain, type AssistantBrain } from "./provider";
+import { resolveServerKeys } from "@/lib/admin-config";
 import { householdKeys } from "@/lib/ai/household-keys";
 import { assistantTools } from "./tools";
 
@@ -89,9 +90,12 @@ export async function assistantContextFor(
 ): Promise<AssistantContext | { error: string; status: number; code?: AssistantErrorCode }> {
   const { data: membership } = await admin.from("group_members").select("group_id, role").eq("user_id", userId).limit(1).maybeSingle();
   if (!membership) return { error: "Not found", status: 404 };
-  const enabled = await getEnabledModules(admin, membership.group_id);
+  // Independent reads go together: each is a round trip to the database.
+  const [enabled, { data: ent }] = await Promise.all([
+    getEnabledModules(admin, membership.group_id),
+    admin.from("group_entitlements").select("*").eq("group_id", membership.group_id).maybeSingle(),
+  ]);
   if (!enabled.has("assistant")) return { error: "Not found", status: 404 };
-  const { data: ent } = await admin.from("group_entitlements").select("*").eq("group_id", membership.group_id).maybeSingle();
   const access = assistantAccess(entitlementTier(ent as GroupEntitlements | null), billingMode());
   return { admin, userId, groupId: membership.group_id, isOwner: membership.role === "owner", enabled, access };
 }
@@ -181,7 +185,20 @@ export function toHistory(rows: MessageRow[]): ChatMessage[] {
 
 // ── Household context ────────────────────────────────────────────────────
 
+// Names come from auth, one admin call per member, on every turn and every
+// history load. They hardly change, so a warm server keeps them a few minutes.
+const NAMES_TTL_MS = 5 * 60_000;
+const namesCache = new Map<string, { at: number; names: Map<string, string> }>();
+
 export async function memberNames(admin: SupabaseClient, groupId: string): Promise<Map<string, string>> {
+  const cached = namesCache.get(groupId);
+  if (cached && Date.now() - cached.at < NAMES_TTL_MS) return cached.names;
+  const names = await loadMemberNames(admin, groupId);
+  namesCache.set(groupId, { at: Date.now(), names });
+  return names;
+}
+
+async function loadMemberNames(admin: SupabaseClient, groupId: string): Promise<Map<string, string>> {
   const { data: members } = await admin.from("group_members").select("user_id").eq("group_id", groupId);
   const names = new Map<string, string>();
   await Promise.all(
@@ -360,14 +377,12 @@ export async function listConversations(ctx: AssistantContext): Promise<Assistan
   return rows.map((r) => toConversation(r, pending.get(r.id) ?? 0));
 }
 
-export async function conversationMessages(ctx: AssistantContext, conversation: ConversationRow): Promise<AssistantMessage[]> {
-  const { data } = await ctx.admin
-    .from("assistant_messages")
-    .select("*")
-    .eq("conversation_id", conversation.id)
-    .order("created_at", { ascending: true })
-    .limit(500);
-  const names = await memberNames(ctx.admin, ctx.groupId);
+/** A conversation's messages. Callers check the person may see it (findConversation), which can run alongside. */
+export async function conversationMessages(ctx: AssistantContext, conversationId: string): Promise<AssistantMessage[]> {
+  const [{ data }, names] = await Promise.all([
+    ctx.admin.from("assistant_messages").select("*").eq("conversation_id", conversationId).eq("group_id", ctx.groupId).order("created_at", { ascending: true }).limit(500),
+    memberNames(ctx.admin, ctx.groupId),
+  ]);
   return ((data ?? []) as MessageRow[]).flatMap((r) => toMessage(r, names) ?? []);
 }
 
@@ -396,7 +411,8 @@ export function turnCost(brain: Pick<AssistantBrain, "free">, model: string, inp
 
 /** The household's own key first (HOUP-436), then the server's. */
 export async function assistantBrain(admin: SupabaseClient, groupId: string): Promise<AssistantBrain | null> {
-  return resolveHouseholdBrain(await householdKeys(admin, groupId)) ?? (await resolveServerBrain());
+  const [keys, lookup] = await Promise.all([householdKeys(admin, groupId), resolveServerKeys(SERVER_BRAIN_KEYS)]);
+  return resolveHouseholdBrain(keys) ?? (await resolveServerBrain(lookup));
 }
 
 export interface ChatDeps {
@@ -408,12 +424,17 @@ export interface ChatDeps {
 export async function runChat(ctx: AssistantContext, input: ChatInput, deps: ChatDeps = {}): Promise<ChatOutcome> {
   const text = input.text.trim();
   if (!text) return { ok: false, status: 400, error: "Say something first." };
-  const brain = deps.brain === undefined ? await assistantBrain(ctx.admin, ctx.groupId) : deps.brain;
+  // Everything a turn needs before the model runs is read in two parallel
+  // rounds, not one query after another: each read is a database round trip.
+  const [brain, settings, limits, usage, found] = await Promise.all([
+    deps.brain === undefined ? assistantBrain(ctx.admin, ctx.groupId) : Promise.resolve(deps.brain),
+    loadSettings(ctx.admin, ctx.groupId),
+    loadMemberLimits(ctx.admin, ctx.groupId, ctx.userId),
+    monthUsage(ctx.admin, ctx.groupId),
+    input.conversationId ? findConversation(ctx, input.conversationId) : Promise.resolve(null),
+  ]);
   if (!brain) return { ok: false, status: 503, error: "No AI model is set up on this server yet.", code: "assistant_not_configured" };
-
-  const settings = await loadSettings(ctx.admin, ctx.groupId);
-  const limits = await loadMemberLimits(ctx.admin, ctx.groupId, ctx.userId);
-  const budget = budgetFor(await monthUsage(ctx.admin, ctx.groupId), ctx.userId, settings, limits.budgetCents, ctx.access, brain.keySource);
+  const budget = budgetFor(usage, ctx.userId, settings, limits.budgetCents, ctx.access, brain.keySource);
   if (budget.action === "stop") {
     return { ok: false, status: 402, error: "This month's assistant budget is used up.", code: "assistant_budget_reached" };
   }
@@ -421,7 +442,6 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
   const now = deps.now ?? new Date();
   let conversation: ConversationRow;
   if (input.conversationId) {
-    const found = await findConversation(ctx, input.conversationId);
     if (!found) return { ok: false, status: 404, error: "Not found" };
     if (!isConversationOpen(found.kind, found.closes_at, now)) {
       return { ok: false, status: 409, error: "This quick ask has closed. Start a new one.", code: "assistant_conversation_closed" };
@@ -433,19 +453,18 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
     conversation = await startConversation(ctx, input.kind === "chat" ? "chat" : "quick", text, settings.quickAskIdleMinutes);
   }
 
-  const { data: recent } = await ctx.admin
-    .from("assistant_messages")
-    .select("*")
-    .eq("conversation_id", conversation.id)
-    .order("created_at", { ascending: false })
-    .limit(settings.contextMessages * 3);
-  const history = toHistory(((recent ?? []) as MessageRow[]).reverse()).slice(-settings.contextMessages * 3);
-
-  const [{ data: memoryRows }, names, timeZone] = await Promise.all([
+  const [{ data: recent }, { data: memoryRows }, names, timeZone] = await Promise.all([
+    ctx.admin
+      .from("assistant_messages")
+      .select("*")
+      .eq("conversation_id", conversation.id)
+      .order("created_at", { ascending: false })
+      .limit(settings.contextMessages * 3),
     ctx.admin.from("assistant_memories").select("text").eq("group_id", ctx.groupId).eq("deleted", false).order("created_at").limit(60),
     memberNames(ctx.admin, ctx.groupId),
     userTimeZone(ctx.admin, ctx.userId),
   ]);
+  const history = toHistory(((recent ?? []) as MessageRow[]).reverse()).slice(-settings.contextMessages * 3);
 
   const tools = assistantTools(
     { admin: ctx.admin, userId: ctx.userId, groupId: ctx.groupId, enabled: ctx.enabled },
@@ -471,12 +490,14 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
   const model = useCheap ? settings.quickModel ?? brain.quickModel : settings.chatModel ?? brain.chatModel;
   const channel = input.channel ?? "app";
 
-  const { data: userRow, error: userErr } = await ctx.admin
+  // The person's message is saved while the model works on it.
+  const savingUser = ctx.admin
     .from("assistant_messages")
     .insert({ conversation_id: conversation.id, group_id: ctx.groupId, user_id: ctx.userId, role: "user", content: text, channel })
     .select("*")
-    .single();
-  if (userErr || !userRow) return { ok: false, status: 500, error: userErr?.message ?? "Could not save the message" };
+    .single()
+    // A query builder only runs once something awaits it; start it now.
+    .then((r) => r);
 
   let turn;
   try {
@@ -487,6 +508,9 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
     const reason = ctx.isOwner && e instanceof Error ? ` (${e.message.slice(0, 200)})` : "";
     return { ok: false, status: 502, error: `The AI model didn't answer. Try again in a moment.${reason}` };
   }
+
+  const { data: userRow, error: userErr } = await savingUser;
+  if (userErr || !userRow) return { ok: false, status: 500, error: userErr?.message ?? "Could not save the message" };
 
   const cost = turnCost(brain, model, turn.inputTokens, turn.outputTokens);
   // Steps before the final answer are stored for the model's memory of the
@@ -521,30 +545,41 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
     .select("*")
     .single();
 
-  if (turn.memories.length) {
-    await ctx.admin
-      .from("assistant_memories")
-      .insert(turn.memories.map((m) => ({ group_id: ctx.groupId, text: m.slice(0, 500), source: "agent", created_by: ctx.userId })));
-  }
-  await ctx.admin.rpc("assistant_record_usage", {
-    p_group_id: ctx.groupId,
-    p_user_id: ctx.userId,
-    p_month: usageMonth(now),
-    p_feature: channel === "telegram" ? "telegram" : conversation.kind === "quick" ? "quick" : conversation.kind,
-    p_model: model,
-    p_key_source: brain.keySource,
-    p_input_tokens: turn.inputTokens,
-    p_output_tokens: turn.outputTokens,
-    p_cost_micros: cost,
-  });
   const touched = {
     last_active_at: now.toISOString(),
     ...(conversation.kind === "quick" ? { closes_at: quickAskClosesAt(now, settings.quickAskIdleMinutes).toISOString() } : {}),
   };
-  await ctx.admin.from("assistant_conversations").update(touched).eq("id", conversation.id);
+  // The bookkeeping after the reply doesn't depend on itself, so it goes in one round.
+  const [pending] = await Promise.all([
+    pendingCounts(ctx, [conversation.id]),
+    turn.memories.length
+      ? ctx.admin
+          .from("assistant_memories")
+          .insert(turn.memories.map((m) => ({ group_id: ctx.groupId, text: m.slice(0, 500), source: "agent", created_by: ctx.userId })))
+      : null,
+    ctx.admin.rpc("assistant_record_usage", {
+      p_group_id: ctx.groupId,
+      p_user_id: ctx.userId,
+      p_month: usageMonth(now),
+      p_feature: channel === "telegram" ? "telegram" : conversation.kind === "quick" ? "quick" : conversation.kind,
+      p_model: model,
+      p_key_source: brain.keySource,
+      p_input_tokens: turn.inputTokens,
+      p_output_tokens: turn.outputTokens,
+      p_cost_micros: cost,
+    }),
+    ctx.admin.from("assistant_conversations").update(touched).eq("id", conversation.id),
+  ]);
 
-  const after = budgetFor(await monthUsage(ctx.admin, ctx.groupId), ctx.userId, settings, limits.budgetCents, ctx.access, brain.keySource);
-  const pending = await pendingCounts(ctx, [conversation.id]);
+  // This month's usage as read before the turn, plus the turn itself.
+  const after = budgetFor(
+    [...usage, { user_id: ctx.userId, key_source: brain.keySource, cost_micros: cost }],
+    ctx.userId,
+    settings,
+    limits.budgetCents,
+    ctx.access,
+    brain.keySource
+  );
   return {
     ok: true,
     conversation: toConversation({ ...conversation, ...touched }, pending.get(conversation.id) ?? 0),

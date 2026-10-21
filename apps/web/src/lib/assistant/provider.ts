@@ -64,6 +64,16 @@ export interface AssistantBrain {
 
 type Lookup = (key: string) => Promise<string | undefined>;
 
+/** Every setting resolveServerBrain may read, so a caller can fetch them in one go (resolveServerKeys). */
+export const SERVER_BRAIN_KEYS: readonly string[] = [
+  "ASSISTANT_PROVIDER",
+  "ASSISTANT_MODEL",
+  "ASSISTANT_QUICK_MODEL",
+  "ASSISTANT_BASE_URL",
+  "ASSISTANT_API_KEY",
+  ...Object.values(PROVIDERS).map((p) => p.keyName),
+];
+
 async function usable(lookup: Lookup, key: string): Promise<string | undefined> {
   const value = (await lookup(key))?.trim();
   return value && !PLACEHOLDERS.has(value) ? value : undefined;

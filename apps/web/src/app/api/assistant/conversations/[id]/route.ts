@@ -8,12 +8,16 @@ export async function GET(_request: Request, { params }: Params) {
   const { id } = await params;
   const ctx = await assistantRequest();
   if ("error" in ctx) return ctx.error;
-  const conversation = await findConversation(ctx, id);
+  // All three reads at once; the messages are only returned once the access check passes.
+  const [conversation, pending, messages] = await Promise.all([
+    findConversation(ctx, id),
+    pendingCounts(ctx, [id]),
+    conversationMessages(ctx, id),
+  ]);
   if (!conversation) return assistantErrorResponse(404, "Not found");
-  const pending = await pendingCounts(ctx, [conversation.id]);
   return NextResponse.json({
     conversation: toConversation(conversation, pending.get(conversation.id) ?? 0),
-    messages: await conversationMessages(ctx, conversation),
+    messages,
   });
 }
 

@@ -35,14 +35,19 @@ import { Text, cn, haptics, MeridianAxis, TabGlide, useThemeMaterial } from '@ho
 import {
   MOTION_DURATIONS_MS,
   assignTabSlot,
+  initRecentSections,
+  pickRecentSections,
+  recordRecentSection,
   sectionHueSwatch,
   splitTabBar,
+  useRecentSectionIds,
   type Section,
   type SectionHueSwatch,
 } from '@homeup/core';
 import { useOverdueTaskCount } from '@homeup/core/src/hooks/use-overdue-task-count';
 import { useCapture } from '@/components/capture/capture-context';
 import { useDataCache } from '@/lib/data-cache';
+import { nativeStoreEnvironment } from '@/lib/legend/environment';
 import { perfMark } from '@/lib/perf-log';
 import { sectionIcons } from '@/lib/section-icons';
 import { useOpenRoute } from '@/lib/tab-routes';
@@ -52,6 +57,10 @@ import { TabSlotPickerSheet } from './tab-slot-picker-sheet';
 import { useTabBarSections } from './use-tab-bar-sections';
 
 const SWIFT_OUT = Easing.bezier(0.16, 1, 0.3, 1);
+
+// The More sheet's Recent strip reads this device's list from the
+// synchronous kv-store, so it's there on the sheet's first frame.
+initRecentSections(nativeStoreEnvironment.keyValue);
 
 // A tap's onPress follows its onPressIn well within this; a screen-reader
 // activation has no onPressIn at all.
@@ -137,12 +146,18 @@ export function PrimaryTabBar() {
   const { pathname, currentSection, orderedSections, hiddenSections, visibleSections: enabledSections } =
     useTabBarSections();
   const currentSectionId = currentSection.id;
+  React.useEffect(() => {
+    recordRecentSection(currentSectionId);
+  }, [currentSectionId]);
+  const recentIds = useRecentSectionIds();
 
   // Fixed 2*+*2 split, mirrors SectionTabBar: 4 visible sections render all
   // inline (2 left + 2 right), otherwise 3 primary (2 left + 1 right) and the
   // rest overflow into the "More" sheet.
   const { primary, overflow } = splitTabBar(enabledSections);
   const barSectionIds = new Set(primary.map((s) => s.id));
+  // The bar's own are a tap away already, and so is the one you're on.
+  const recentSections = pickRecentSections(recentIds, enabledSections, new Set([...barSectionIds, currentSectionId]));
   const leftTabs = primary.slice(0, 2);
   const rightPrimary = primary.slice(2);
   // The active section, when it lives behind More: the More tab then wears
@@ -312,6 +327,7 @@ export function PrimaryTabBar() {
           onOpenChange={setMoreOpen}
           sections={enabledSections}
           barSectionIds={barSectionIds}
+          recentSections={recentSections}
           currentSectionId={currentSectionId}
           onSelect={(section) => {
             setMoreOpen(false);

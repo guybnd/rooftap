@@ -37,6 +37,7 @@ export * from './shopper-relevance';
 export * from './setup';
 export * from './setup-templates';
 export * from './sections';
+export * from './recent-sections';
 export * from './modules';
 export * from './modules-store';
 export * from './module-features';
