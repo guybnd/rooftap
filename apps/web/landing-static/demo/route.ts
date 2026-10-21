@@ -35,6 +35,7 @@ export function useDemoRoute(): DemoRoute {
 /** Pages with an id in the path; the rest have none. */
 const PARAM_ROUTES: ReadonlyArray<[prefix: string, name: string]> = [
   ["/recipes/", "id"],
+  ["/apartment/", "id"],
   ["/checklists/", "id"],
   ["/shopper/scout/", "id"],
   ["/shopper/", "id"],

@@ -45,6 +45,18 @@ const Assistant = lazy(() => import("../../src/app/assistant/page"));
 const AssistantThread = lazy(() => import("../../src/app/assistant/[id]/page"));
 const Rewards = lazy(() => import("../../src/app/rewards/page"));
 const Settings = lazy(() => import("../../src/app/settings/[key]/page"));
+const SettingsHome = lazy(() => import("../../src/app/settings/page"));
+const ChecklistTemplates = lazy(() => import("../../src/app/checklists/templates/page"));
+const ChecklistNew = lazy(() => import("../../src/app/checklists/new/page"));
+const RecipeNew = lazy(() => import("../../src/app/recipes/new/page"));
+const Setup = lazy(() => import("../../src/app/setup/page"));
+const HomeSearch = lazy(() => import("../../src/app/homesearch/page"));
+const Appointments = lazy(() => import("../../src/app/appointments/page"));
+const ApartmentNew = lazy(() => import("../../src/app/apartment/new/page"));
+const Apartment = lazy(() => import("../../src/app/apartment/[id]/page"));
+const MapView = lazy(() => import("../../src/app/map/page"));
+const SearchChecklist = lazy(() => import("../../src/app/checklist/page"));
+const ShelfLife = lazy(() => import("../../src/app/groceries/shelf-life/page"));
 
 /** The to-do that Plan to buy writes for the robot vacuum, at the cheapest store. */
 const planToBuyTask = () =>
@@ -297,7 +309,7 @@ export const SCENES: Scene[] = [
     params: { id: "household" },
     page: AssistantThread,
     actions: [{ scroll: -2000 }, { wait: 400 }],
-    marks: { noa: ["text=Are the bins tonight", 1], tag: "text=52m ago · Telegram", groceries: ["text=Add \"Milk\" to Groceries", 3], done: "text=Done >> visible=true" },
+    marks: { noa: ["text=Are the bins tonight", 1], tag: "text=52m ago · Telegram", groceries: ["text=Add \"Milk\" to Groceries", 3] },
   },
   // A named chat that reached Home Assistant: a look-up, then lights and heating.
   {
@@ -345,12 +357,16 @@ export const SCENES: Scene[] = [
 /** The live demo's pages, by path; a path with an id matches its prefix. */
 const LIVE_PAGES: ReadonlyArray<[path: string, page: LazyExoticComponent<ComponentType>]> = [
   ["/home", Home],
+  ["/groceries/shelf-life", ShelfLife],
   ["/groceries", Groceries],
   ["/calendar", Calendar],
+  ["/recipes/new", RecipeNew],
   ["/recipes/", RecipeDetail],
   ["/recipes", Recipes],
   ["/costs", Costs],
   ["/documents", Documents],
+  ["/checklists/templates", ChecklistTemplates],
+  ["/checklists/new", ChecklistNew],
   ["/checklists/", ChecklistDetail],
   ["/checklists", Checklists],
   ["/tasks", Tasks],
@@ -358,9 +374,17 @@ const LIVE_PAGES: ReadonlyArray<[path: string, page: LazyExoticComponent<Compone
   ["/shopper/", ShopperItem],
   ["/shopper", Shopper],
   ["/rewards", Rewards],
+  ["/setup", Setup],
+  ["/homesearch", HomeSearch],
+  ["/appointments", Appointments],
+  ["/map", MapView],
+  ["/checklist", SearchChecklist],
+  ["/apartment/new", ApartmentNew],
+  ["/apartment/", Apartment],
   ["/assistant/", AssistantThread],
   ["/assistant", Assistant],
   ["/settings/", Settings],
+  ["/settings", SettingsHome],
 ];
 
 export function livePage(path: string): LazyExoticComponent<ComponentType> | null {

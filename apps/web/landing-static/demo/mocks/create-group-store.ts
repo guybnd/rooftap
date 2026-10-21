@@ -20,3 +20,9 @@ export const createGroupStore: typeof realCreateGroupStore = <T extends SyncedRo
 };
 
 export const useReconnectSync: typeof realUseReconnectSync = () => {};
+
+/** Writes a row into a demo store, as a sync would: the live demo's assistant uses it to act. */
+export function demoUpsert<T extends { id: string }>(collection: string, row: T) {
+  if (!live.has(collection)) live.set(collection, observable(structuredClone(HOUSEHOLD.stores[collection] ?? {})));
+  (live.get(collection) as { [id: string]: { set: (v: unknown) => void } })[row.id].set(row);
+}

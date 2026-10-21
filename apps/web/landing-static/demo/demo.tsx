@@ -41,6 +41,72 @@ document.head.appendChild(hues);
 // The live demo opens on Home with the first-run tips already read.
 if (live) localStorage.setItem("homeup_shopping_tooltip_dismissed", "1");
 
+/**
+ * The live demo points at the roof button until someone first presses it:
+ * a ring pulses out of it and a label says the hold opens the Assistant.
+ */
+if (live) {
+  const roof = 'button[aria-label^="Add (hold"]';
+  const hint = document.createElement("style");
+  hint.textContent = `
+    @keyframes demo-roof-pulse { 0% { opacity: .7; transform: scale(1); } 100% { opacity: 0; transform: scale(1.9); } }
+    @keyframes demo-roof-bob { 0%, 100% { translate: -50% 0; } 50% { translate: -50% -3px; } }
+    html:not(.demo-roof-found) ${roof}::after {
+      content: ""; position: absolute; inset: 0; border-radius: 9999px; pointer-events: none;
+      box-shadow: 0 0 0 3px var(--primary); animation: demo-roof-pulse 1.6s cubic-bezier(.2,.7,.3,1) infinite;
+    }
+    html:not(.demo-roof-found) ${roof}::before {
+      content: "Hold to ask Rooftap"; position: absolute; left: 50%; bottom: calc(100% + 14px); white-space: nowrap; pointer-events: none;
+      padding: 6px 12px; border-radius: 9999px; background: var(--foreground); color: var(--background);
+      font: 600 12px/1.2 var(--font-sans, system-ui); box-shadow: 0 6px 18px rgb(0 0 0 / .18);
+      animation: demo-roof-bob 2.4s ease-in-out infinite;
+    }
+    @media (prefers-reduced-motion: reduce) { ${roof}::after, ${roof}::before { animation: none !important; } }
+  `;
+  document.head.appendChild(hint);
+
+  // An empty chat lists asks the demo has answers for; a tap sends one.
+  const STARTERS = ["Add milk and bread to the list", "What can we cook tonight?", "Turn off the lights", "What's on this week?"];
+  const chips = document.createElement("style");
+  chips.textContent = `
+    .demo-starters { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; padding: 0 4px 24px; }
+    .demo-starters button { padding: 8px 14px; border-radius: 9999px; border: 1px solid var(--border); background: var(--card); color: var(--foreground); font: 500 14px/1.2 var(--font-sans, system-ui); }
+  `;
+  document.head.appendChild(chips);
+  const ask = (from: Element, text: string) => {
+    let box: Element | null = from;
+    while (box && !box.querySelector("form textarea")) box = box.parentElement;
+    const field = box?.querySelector<HTMLTextAreaElement>("form textarea");
+    if (!field) return;
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(field, text);
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+    // After React has the text, so the form's submit sends it.
+    setTimeout(() => field.form?.requestSubmit(), 30);
+  };
+  new MutationObserver(() => {
+    // React does not know the row, so it goes when the empty state does.
+    for (const row of document.querySelectorAll(".demo-starters")) {
+      if (!row.previousElementSibling?.textContent?.startsWith("Ask about tasks")) row.remove();
+    }
+    for (const p of document.querySelectorAll("p")) {
+      if (!p.textContent?.startsWith("Ask about tasks") || p.nextElementSibling?.classList.contains("demo-starters")) continue;
+      const row = document.createElement("div");
+      row.className = "demo-starters";
+      for (const text of STARTERS) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.textContent = text;
+        b.onclick = () => ask(p, text);
+        row.append(b);
+      }
+      p.after(row);
+    }
+  }).observe(document.body, { childList: true, subtree: true });
+  document.addEventListener("pointerdown", (e) => {
+    if ((e.target as Element | null)?.closest?.(roof)) document.documentElement.classList.add("demo-roof-found");
+  });
+}
+
 /** In the live demo, a tap on an in-app link moves the demo's route instead of the frame. */
 if (live) {
   document.addEventListener(

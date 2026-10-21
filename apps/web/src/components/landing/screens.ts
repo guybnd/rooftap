@@ -100,7 +100,7 @@ export const SCREEN_ALT: Record<ScreenId, string> = {
   "rewards-store": "Rewards looked up for Officeworks: Flybuys works there with 10 percent off, and a Show Flybuys card button",
   "rewards-card": "The Flybuys card: its barcode and number, its perks at Officeworks and Kmart, and its 6 stores",
   "rewards-perks": "The Perks tab: 9 perks, 4 ending this month, starting with 10 percent off print and copy at Officeworks",
-  assistant: "The Assistant space: one change waiting on your OK, the ask field, the Household thread, two chats and the quick asks",
+  assistant: "The Assistant space: one change waiting on your OK, the ask field, the Household thread, four chats and two open quick asks",
   "assistant-household": "The household thread: Ava asks to book the plumber, and the assistant proposes a calendar event and a budget line with Do all 2",
   "assistant-telegram": "The household thread from its start: Noa's message and the reply came from Telegram, and the milk and eggs were added",
   "assistant-house": "A chat that used Home Assistant: the garage door closed, the porch light on and the lounge set to 21 degrees, each marked Done",

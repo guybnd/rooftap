@@ -28,6 +28,10 @@ import type {
   ShopperSearch,
   ShopperWant,
   UserSettings,
+  SetupItem,
+  Apartment,
+  Appointment,
+  ChecklistItem,
 } from "@homeup/core";
 import type { AssistantScope, AssistantSettings, HomeAssistantStatus, HomeAssistantToolInfo } from "@homeup/core";
 
@@ -160,7 +164,7 @@ export const costItems: CostItem[] = [
 ];
 
 // ── Tasks ────────────────────────────────────────────────────────────────────
-const task = (id: string, title: string, extra: Partial<HouseholdTask> = {}): HouseholdTask => ({
+export const task = (id: string, title: string, extra: Partial<HouseholdTask> = {}): HouseholdTask => ({
   ...base,
   id,
   title,
@@ -784,6 +788,7 @@ export const scoutPicks: ShopperPick[] = [
 
 // ── Assistant ────────────────────────────────────────────────────────────────
 const minutesAgo = (m: number) => new Date(now.getTime() - m * 60_000).toISOString();
+const minutesFromNow = (m: number) => new Date(now.getTime() + m * 60_000).toISOString();
 
 const conv = (id: string, kind: AssistantConversation["kind"], title: string | null, activeMinutesAgo: number, extra: Partial<AssistantConversation> = {}): AssistantConversation => ({
   id,
@@ -801,9 +806,10 @@ export const assistantConversations: AssistantConversation[] = [
   conv("conv-house", "chat", "The house tonight", 35),
   conv("conv-hosting", "chat", "Hosting Saturday", 120, { pinned: true }),
   conv("conv-holiday", "chat", "Holiday in March", 3 * 24 * 60),
-  conv("conv-dinner", "quick", "Dinner tonight", 8, { closes_at: new Date(now.getTime() + 22 * 60_000).toISOString() }),
-  conv("conv-dentist", "quick", "When is the dentist?", 26 * 60, { closes_at: minutesAgo(25 * 60) }),
-  conv("conv-groceries-spend", "quick", "Grocery spend this month", 2 * 24 * 60, { closes_at: minutesAgo(47 * 60) }),
+  conv("conv-spend", "chat", "Grocery spend this month", 2 * 24 * 60),
+  // Quick asks still open, so each one shows its answer and takes a follow-up.
+  conv("conv-dinner", "quick", "Dinner tonight", 8, { closes_at: minutesFromNow(22) }),
+  conv("conv-dentist", "quick", "When is the dentist?", 12, { closes_at: minutesFromNow(18) }),
 ];
 
 // The summaries are core's describeProposal lines, written out: core's
@@ -883,12 +889,40 @@ const dinnerChat: AssistantMessage[] = [
   msg("d-2", "assistant", 8, "You can make **Steak and potatoes** now. Every ingredient is in the house. **Green curry** needs only coconut milk."),
 ];
 
+/** A named chat from earlier in the week: flights in the budget, the dates on the calendar. */
+const holidayChat: AssistantMessage[] = [
+  msg("v-1", "user", 3 * 24 * 60 + 6, "We booked Bali for 14 to 21 March. Flights were $1,840. Put them in the budget and block the dates.", { author: "Ava" }),
+  msg("v-2", "assistant", 3 * 24 * 60 + 5, "Done. **Bali flights** is a one-off cost of $1,840 in Travel, and **Bali** is on the calendar from 14 to 21 March. Nothing else is booked that week.", {
+    proposal: proposal("confirmed", [
+      ["create_cost_item", "costs", { name: "Bali flights" }, 'Add "Bali flights" to Budget'],
+      ["create_event", "calendar", { title: "Bali" }, 'Add "Bali" to Calendar'],
+    ]),
+  }),
+  msg("v-3", "user", 3 * 24 * 60 + 2, "Who feeds the plants while we are away?", { author: "Ava" }),
+  msg("v-4", "assistant", 3 * 24 * 60 + 1, "**Water the plants** repeats every 3 days and is assigned to Noa. Noa is on the trip too. Shall I ask in the Household chat?"),
+];
+
+/** A named chat that reads the budget. */
+const spendChat: AssistantMessage[] = [
+  msg("b-1", "user", 2 * 24 * 60 + 3, "How much have we spent on groceries this month?", { author: "Ava" }),
+  msg("b-2", "assistant", 2 * 24 * 60 + 2, "**$255** in 3 trips: FreshCo $119 and $72, Woolworths $64. The grocery estimate is $640 a month, so **$385 is left**."),
+];
+
+/** A quick ask that reads the calendar. */
+const dentistChat: AssistantMessage[] = [
+  msg("q-1", "user", 13, "When is the dentist?", { author: "Ava" }),
+  msg("q-2", "assistant", 12, "**Dentist** is tomorrow at 2:30 PM. Travel is about 28 minutes, so leave by 2 PM."),
+];
+
 /** Each conversation's messages, by conversation id. */
 export const assistantMessages: Record<string, AssistantMessage[]> = {
   "conv-household": householdThread,
   "conv-house": houseChat,
   "conv-hosting": hostingChat,
+  "conv-holiday": holidayChat,
+  "conv-spend": spendChat,
   "conv-dinner": dinnerChat,
+  "conv-dentist": dentistChat,
 };
 
 /** Home Assistant, connected through its MCP Server integration, under Act. */
@@ -947,6 +981,125 @@ export const assistantUsage: AssistantUsage = {
 
 export const assistantTelegram = { configured: true, botUsername: "wattle_st_bot", linked: { username: "ava_k", since: at(-9, "20:00") } };
 
+// ── Home Setup and Home Search ───────────────────────────────────────────────
+const setupItem = (id: string, room: string, name: string, extra: Partial<SetupItem> = {}): SetupItem => ({
+  id,
+  group_id: GROUP,
+  name,
+  room,
+  priority: "medium",
+  status: "needed",
+  est_price: null,
+  actual_price: null,
+  where_to_buy: null,
+  store_id: null,
+  url: null,
+  notes: null,
+  assigned_to: null,
+  private: false,
+  template_key: null,
+  ai_suggestion: null,
+  sort_order: 0,
+  created_by: AVA,
+  created_at: STAMP,
+  updated_at: STAMP,
+  deleted: false,
+  ...extra,
+});
+
+/** The new place, half set up: the big things in, the small things still to get. */
+export const setupItems: SetupItem[] = [
+  setupItem("su-fridge", "Kitchen", "Fridge/Freezer", { priority: "high", status: "installed", est_price: 1200, actual_price: 1090 }),
+  setupItem("su-kettle", "Kitchen", "Kettle and toaster", { est_price: 120, where_to_buy: "Kmart", assigned_to: NOA }),
+  setupItem("su-knives", "Kitchen", "Good knife set", { priority: "low", est_price: 180 }),
+  setupItem("su-sofa", "Living Room", "Sofa", { priority: "high", status: "installed", est_price: 1500, actual_price: 1340 }),
+  setupItem("su-rug", "Living Room", "Rug", { est_price: 260, where_to_buy: "IKEA" }),
+  setupItem("su-lamp", "Living Room", "Floor lamp", { priority: "low", est_price: 90, where_to_buy: "IKEA" }),
+  setupItem("su-mattress", "Bedroom", "Mattress", { priority: "high", status: "installed", est_price: 600, actual_price: 640 }),
+  setupItem("su-blinds", "Bedroom", "Blackout blinds", { priority: "high", est_price: 220, assigned_to: AVA }),
+  setupItem("su-towels", "Bathroom", "Towels and bath mat", { est_price: 110 }),
+  setupItem("su-shelf", "Bathroom", "Over-toilet shelf", { priority: "low", est_price: 70 }),
+].map((item, i) => ({ ...item, sort_order: i }));
+
+const apartment = (id: string, address: string, suburb: string, rent: number, extra: Partial<Apartment> = {}): Apartment => ({
+  id,
+  user_id: AVA,
+  group_id: GROUP,
+  address,
+  suburb,
+  rent_per_week: rent,
+  bedrooms: 2,
+  bathrooms: 1,
+  parking: false,
+  listing_url: null,
+  notes: null,
+  lat: null,
+  lng: null,
+  agent_id: null,
+  preliminary_score: null,
+  nearest_supermarket_m: null,
+  nearest_transport_m: null,
+  disposition: null,
+  move_in_date: null,
+  main_location: null,
+  archived: false,
+  created_at: STAMP,
+  updated_at: STAMP,
+  deleted: false,
+  ...extra,
+});
+
+/** A few places on the go for the next move. */
+export const apartments: Apartment[] = [
+  apartment("ap-ocean", "4/18 Ocean St", "Bondi", 820, { bedrooms: 2, bathrooms: 2, parking: true, lat: -33.8915, lng: 151.2767, preliminary_score: 8, nearest_supermarket_m: 350, nearest_transport_m: 200, notes: "Sunny, balcony faces north." }),
+  apartment("ap-wattle", "12 Wattle Lane", "Marrickville", 690, { bedrooms: 3, lat: -33.9106, lng: 151.1553, preliminary_score: 7, nearest_supermarket_m: 600, nearest_transport_m: 450, disposition: "to_book" }),
+  apartment("ap-crown", "7/220 Crown St", "Surry Hills", 760, { lat: -33.8861, lng: 151.2111, preliminary_score: 6, nearest_supermarket_m: 150, nearest_transport_m: 500, notes: "Street noise at night." }),
+];
+
+const appointment = (id: string, apartmentId: string, scheduledAt: string, extra: Partial<Appointment> = {}): Appointment => ({
+  id,
+  user_id: AVA,
+  group_id: GROUP,
+  apartment_id: apartmentId,
+  scheduled_at: scheduledAt,
+  notes: null,
+  status: "scheduled",
+  created_at: STAMP,
+  updated_at: STAMP,
+  deleted: false,
+  ...extra,
+});
+
+/** What the household scores each place on. */
+export const searchChecklist: ChecklistItem[] = (
+  [
+    ["Natural light", "Living", 8, false, false],
+    ["Two bedrooms or more", "Space", 10, true, false],
+    ["Under 15 minutes to the train", "Location", 7, false, false],
+    ["Laundry inside", "Amenities", 5, false, false],
+    ["Balcony or courtyard", "Amenities", 3, false, true],
+    ["Quiet at night", "Living", 6, false, false],
+  ] as const
+).map(([label, category, weight, is_dealbreaker, is_bonus], order) => ({
+  id: `sc-${order}`,
+  user_id: AVA,
+  group_id: GROUP,
+  label,
+  category,
+  weight,
+  is_dealbreaker,
+  is_bonus,
+  order,
+  created_at: STAMP,
+  updated_at: STAMP,
+  deleted: false,
+}));
+
+export const appointments: Appointment[] = [
+  appointment("vw-ocean", "ap-ocean", at(SATURDAY + 1, "10:30"), { notes: "Open home, bring the checklist." }),
+  appointment("vw-crown", "ap-crown", at(SATURDAY + 1, "11:15")),
+];
+
 // ── Assembled ────────────────────────────────────────────────────────────────
 const byId = <T extends { id: string }>(rows: T[]) => Object.fromEntries(rows.map((r) => [r.id, r]));
 
@@ -986,6 +1139,10 @@ export const HOUSEHOLD: Household = {
     shopper_offers: byId(shopperOffers),
     shopper_price_snapshots: byId(shopperSnapshots),
     shopper_searches: byId([scoutSearch]),
+    setup_items: byId(setupItems),
+    apartments: byId(apartments),
+    appointments: byId(appointments),
+    checklist_items: byId(searchChecklist),
   },
   tables: {
     document_links: documentLinks,

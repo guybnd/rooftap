@@ -277,6 +277,11 @@ function PopupSurface({ open, onMinimize, title, children }: { open: boolean; on
       return () => cancelAnimationFrame(frame);
     }
     setShown(false);
+    // The shrink's transitionend unmounts it. Without a transition (reduced
+    // motion, a hidden tab) that never fires, and the invisible layer would
+    // keep taking every tap, so unmount after the exit time regardless.
+    const fallback = setTimeout(() => setMounted(false), 600);
+    return () => clearTimeout(fallback);
   }, [open]);
 
   useEffect(() => {
@@ -304,7 +309,9 @@ function PopupSurface({ open, onMinimize, title, children }: { open: boolean; on
         aria-modal="true"
         aria-label={title}
         onTransitionEnd={(e) => {
-          if (e.target === e.currentTarget && e.propertyName === "transform" && !open) setMounted(false);
+          // Tailwind v4's translate-* and scale-* set the translate and scale
+          // properties, not transform, so the card's own opacity marks the end.
+          if (e.target === e.currentTarget && e.propertyName === "opacity" && !open) setMounted(false);
         }}
         style={{
           bottom: keyboardInset > 0 ? keyboardInset + 10 : undefined,
@@ -313,7 +320,7 @@ function PopupSurface({ open, onMinimize, title, children }: { open: boolean; on
         className={cn(
           "absolute inset-x-2.5 bottom-[calc(env(safe-area-inset-bottom)+0.625rem)] flex h-[min(74dvh,680px)] flex-col overflow-hidden rounded-[28px] border border-border/60 bg-popover shadow-[var(--card-shadow)]",
           "origin-bottom md:inset-x-auto md:bottom-6 md:right-6 md:w-[420px] md:origin-bottom-right",
-          "transition-[transform,opacity] will-change-transform",
+          "transition-[translate,scale,opacity] will-change-transform",
           shown
             ? "translate-y-0 scale-100 opacity-100 duration-[var(--motion-slow)] ease-[var(--motion-ease-out)]"
             : "translate-y-[2.75rem] scale-[0.08] opacity-0 duration-[var(--motion-exit)] ease-[var(--motion-ease-in)] md:translate-y-0"
