@@ -118,3 +118,48 @@ export async function notifyIfAway(
   const { sent } = await sendPushToUsers(who.admin, [who.userId], payload, deps);
   return sent > 0 ? "sent" : "none";
 }
+
+/**
+ * A member wrote in the household thread: after the grace, push it to the
+ * other members who haven't read it (or seen it in the app) and haven't
+ * switched assistant notifications off. Tagged messages go out the same way,
+ * since the ask and Rooftap's answer are news to everyone.
+ */
+export async function notifyHousehold(
+  who: Who,
+  conversation: AssistantConversation,
+  message: AssistantMessage,
+  deps: NotifyDeps = {}
+): Promise<number> {
+  await (deps.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms))))(NOTIFY_GRACE_MS);
+  const { data: members } = await who.admin.from("group_members").select("user_id").eq("group_id", who.groupId);
+  const others = ((members ?? []) as { user_id: string }[]).map((m) => m.user_id).filter((id) => id !== who.userId);
+  if (others.length === 0) return 0;
+  const [{ data: reads }, { data: prefRows }] = await Promise.all([
+    who.admin.from("assistant_reads").select("user_id, read_at, seen_at").eq("conversation_id", conversation.id).in("user_id", others),
+    who.admin.from("assistant_notify_prefs").select("user_id, replies, preview").in("user_id", others),
+  ]);
+  const sentAt = Date.parse(message.created_at);
+  const noticed = new Set(
+    ((reads ?? []) as (ReadState & { user_id: string })[])
+      .filter((r) => [r.read_at, r.seen_at].some((t) => t && Date.parse(t) >= sentAt))
+      .map((r) => r.user_id)
+  );
+  const prefs = new Map(((prefRows ?? []) as (AssistantNotifyPrefs & { user_id: string })[]).map((p) => [p.user_id, p]));
+  const due = others.filter((id) => !noticed.has(id) && prefs.get(id)?.replies !== false);
+  if (due.length === 0) return 0;
+  const title = `${message.author ?? "Someone"} in Household`;
+  const payload = (preview: boolean): PushPayload => ({
+    title,
+    body: preview ? replyPreview(message.content) || "Tap to read it." : "Tap to read it.",
+    url: `/assistant/${conversation.id}`,
+    tag: `assistant-${conversation.id}`,
+  });
+  const withPreview = due.filter((id) => prefs.get(id)?.preview !== false);
+  const without = due.filter((id) => prefs.get(id)?.preview === false);
+  const results = await Promise.all([
+    withPreview.length ? sendPushToUsers(who.admin, withPreview, payload(true), deps) : { sent: 0 },
+    without.length ? sendPushToUsers(who.admin, without, payload(false), deps) : { sent: 0 },
+  ]);
+  return results.reduce((n, r) => n + r.sent, 0);
+}

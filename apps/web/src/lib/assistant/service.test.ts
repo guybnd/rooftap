@@ -42,11 +42,39 @@ describe("toHistory", () => {
   });
 });
 
+describe("toHistory in the household thread", () => {
+  it("names each member and folds their chat into one message before the ask", () => {
+    const names = new Map([
+      ["u1", "Guy"],
+      ["u2", "Noa"],
+    ]);
+    const history = toHistory(
+      [
+        row({ role: "user", user_id: "u1", content: "pizza tonight?" }),
+        row({ role: "user", user_id: "u2", content: "yes" }),
+        row({ role: "user", user_id: "u1", content: "@Rooftap add dough to the list" }),
+        row({ role: "assistant", content: "Added." }),
+      ],
+      names
+    );
+    expect(history).toEqual([
+      { role: "user", content: "Guy: pizza tonight?\nNoa: yes\nGuy: @Rooftap add dough to the list" },
+      { role: "assistant", content: "Added." },
+    ]);
+  });
+});
+
 describe("toMessage", () => {
   const names = new Map([["u1", "Guy"]]);
   it("hides tool output and tool-call steps", () => {
     expect(toMessage(row({ role: "tool" }), names)).toBeNull();
     expect(toMessage(row({ role: "assistant", content: "", tool_calls: [{ id: "c" }] }), names)).toBeNull();
+  });
+
+  it("marks which messages the viewer wrote", () => {
+    expect(toMessage(row({ content: "hi", user_id: "u1" }), names, "u1")?.mine).toBe(true);
+    expect(toMessage(row({ content: "hi", user_id: "u1" }), names, "u2")?.mine).toBe(false);
+    expect(toMessage(row({ role: "assistant", content: "ok" }), names, "u1")?.mine).toBe(false);
   });
 
   it("names the author and summarises a proposal", () => {

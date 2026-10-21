@@ -234,6 +234,9 @@ export function anthropicClient(conn: LlmConnection, fetchImpl: typeof fetch = f
       body: JSON.stringify({
         model: req.model,
         max_tokens: req.maxTokens ?? 1024,
+        // Haiku 5.5 thinks by default; household asks don't need it, it's
+        // most of the wait, and replayed tool calls would need its blocks.
+        ...(/^claude-haiku-5/.test(req.model) ? { thinking: { type: "disabled" } } : {}),
         system: req.system,
         messages: toAnthropicMessages(req.messages),
         ...(req.tools.length
@@ -261,4 +264,55 @@ export function anthropicClient(conn: LlmConnection, fetchImpl: typeof fetch = f
 
 export function llmClient(conn: LlmConnection): LlmClient {
   return conn.wire === "anthropic" ? anthropicClient(conn) : openAIClient(conn);
+}
+
+/** The provider is busy or briefly down (overloaded, rate limited, a 5xx), as opposed to a bad key, model or request. */
+export function isProviderBusy(err: unknown): boolean {
+  const status = (err as { status?: unknown } | null)?.status;
+  if (typeof status === "number") return status === 429 || status >= 500;
+  const message = err instanceof Error ? err.message : String(err);
+  return /\((429|5\d\d)\b|\b(429|5\d\d) status code|overloaded|unavailable/i.test(message);
+}
+
+export interface FallbackTarget {
+  llm: LlmClient;
+  model: string;
+}
+
+/**
+ * When the model is busy (its SDK has already retried), the turn moves to
+ * a fallback and stays there for the rest of the turn: the household's other
+ * model on the same client (a string), or whatever `fallback` finds, such as
+ * another provider the server has a key for (looked up only when needed).
+ * `model()` says which one last answered, for the usage record.
+ */
+export function withFallbackModel(
+  llm: LlmClient,
+  fallback: string | (() => Promise<FallbackTarget | null>) | null | undefined
+): LlmClient & { model: () => string | null } {
+  let backup: FallbackTarget | null = null;
+  let last: string | null = null;
+  const client = (async (req) => {
+    if (backup) {
+      const step = await backup.llm({ ...req, model: backup.model });
+      last = backup.model;
+      return step;
+    }
+    try {
+      const step = await llm(req);
+      last = req.model;
+      return step;
+    } catch (err) {
+      if (!fallback || !isProviderBusy(err)) throw err;
+      const target = typeof fallback === "string" ? { llm, model: fallback } : await fallback().catch(() => null);
+      if (!target || (target.llm === llm && target.model === req.model)) throw err;
+      console.warn(`[assistant] ${req.model} is busy, trying ${target.model}`);
+      backup = target;
+      const step = await target.llm({ ...req, model: target.model });
+      last = target.model;
+      return step;
+    }
+  }) as LlmClient & { model: () => string | null };
+  client.model = () => last;
+  return client;
 }

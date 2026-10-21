@@ -32,6 +32,7 @@ export * from './grocery-sessions';
 export * from './loyalty-cards';
 export * from './recipes';
 export * from './shopper';
+export * from './rewards';
 export * from './shopper-sources';
 export * from './shopper-relevance';
 export * from './shopper-scout';
@@ -112,6 +113,7 @@ export * from './data/use-checklist-view-prefs';
 export * from './data/use-add-checklist-to-task';
 export * from './data/use-entity-comments';
 export * from './data/use-event-save';
+export * from './data/use-rewards';
 
 // hooks/use-debounce + hooks/use-fuzzy-search are deliberately NOT exported
 // here: they import React client hooks, and this barrel is also consumed by

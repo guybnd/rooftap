@@ -44,7 +44,7 @@ const PROVIDERS: Record<Exclude<AssistantProvider, "compatible">, ProviderDef> =
   anthropic: {
     keyName: "ANTHROPIC_API_KEY",
     wire: "anthropic",
-    models: { chat: "claude-haiku-4-5-20251001", quick: "claude-haiku-4-5-20251001" },
+    models: { chat: "claude-haiku-5-5", quick: "claude-haiku-5-5" },
   },
 };
 
@@ -108,6 +108,31 @@ export async function resolveServerBrain(lookup: Lookup = resolveServerKey): Pro
       connection: { wire: def.wire, apiKey, ...(def.baseURL ? { baseURL: def.baseURL } : {}) },
       chatModel: chatOverride ?? def.models.chat,
       quickModel: quickOverride ?? def.models.quick,
+      free: false,
+      keySource: "server",
+    };
+  }
+  return null;
+}
+
+/**
+ * A second provider for when the first is busy (a 503 from an overloaded
+ * model): the next provider in order that has a server key, on its default
+ * models. None when the operator pinned ASSISTANT_PROVIDER or only one is set.
+ */
+export async function resolveBackupBrain(primary: AssistantBrain, lookup: Lookup = resolveServerKey): Promise<AssistantBrain | null> {
+  if (primary.keySource !== "server" || primary.provider === "compatible") return null;
+  if (await usable(lookup, "ASSISTANT_PROVIDER")) return null;
+  for (const provider of ASSISTANT_PROVIDERS) {
+    if (provider === "compatible" || provider === primary.provider) continue;
+    const def = PROVIDERS[provider];
+    const apiKey = await usable(lookup, def.keyName);
+    if (!apiKey) continue;
+    return {
+      provider,
+      connection: { wire: def.wire, apiKey, ...(def.baseURL ? { baseURL: def.baseURL } : {}) },
+      chatModel: def.models.chat,
+      quickModel: def.models.quick,
       free: false,
       keySource: "server",
     };

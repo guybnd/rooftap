@@ -36,7 +36,7 @@ function LoadFailed({ message, onRetry }: { message: string; onRetry: () => void
 }
 
 export function ThreadMessages({ thread, className }: { thread: AssistantThread; className?: string }) {
-  const { loading, loadError, reload, messages, sending, kind, showCost, deciding, decide } = thread;
+  const { loading, loadError, reload, messages, sending, thinking, kind, showCost, deciding, decide } = thread;
   const scrollRef = React.useRef<ScrollView>(null);
   return (
     <ScrollView
@@ -52,7 +52,7 @@ export function ThreadMessages({ thread, className }: { thread: AssistantThread;
       ) : loadError && messages.length === 0 ? null : messages.length === 0 && !sending ? (
         <Text className="px-1 py-10 text-center text-sm text-muted-foreground">
           {kind === 'household'
-            ? 'The thread the whole household shares. Ask about the week, the list or the bills.'
+            ? 'The household chat. Talk to each other here, and tag @Rooftap when you want it to look something up or make a change.'
             : 'Ask about tasks, the calendar, the budget, groceries, recipes or your lists. Rooftap asks before it changes anything.'}
         </Text>
       ) : (
@@ -67,7 +67,7 @@ export function ThreadMessages({ thread, className }: { thread: AssistantThread;
           />
         ))
       )}
-      {sending && <Thinking />}
+      {thinking && <Thinking />}
     </ScrollView>
   );
 }
@@ -113,8 +113,8 @@ export function ThreadFooter({
       ) : (
         <>
           <Composer
-            placeholder={kind === 'household' ? 'Message the household thread' : conversation ? 'Ask a follow-up' : 'Ask Rooftap anything'}
-            disabled={offline || blocked === 'assistant_requires_plus' || blocked === 'assistant_not_configured'}
+            placeholder={kind === 'household' ? 'Message the household, tag @Rooftap to ask it' : conversation ? 'Ask a follow-up' : 'Ask Rooftap anything'}
+            disabled={offline || blocked === 'assistant_requires_plus' || (blocked === 'assistant_not_configured' && kind !== 'household')}
             busy={sending}
             autoFocus={autoFocus || thread.resumed}
             onSend={send}

@@ -651,6 +651,14 @@ export interface LoyaltyCard {
   /** What the code encodes, already normalized (see normalizeLoyaltyNumber). */
   number: string;
   format: LoyaltyCardFormat;
+  // Rewards module (migration 20261021130000_rewards). Optional: a server
+  // without that migration sends none of them, and Groceries never sets them.
+  /** The scheme this card belongs to (rewards.ts). */
+  scheme_id?: string | null;
+  /** "Just me": only `created_by` can see it (RLS). */
+  private?: boolean;
+  expires_on?: string | null;
+  notes?: string | null;
   created_at: string;
   updated_at: string;
   deleted: boolean;

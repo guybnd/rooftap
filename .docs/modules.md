@@ -47,6 +47,7 @@ Module ids reuse the existing section ids so `hidden_sections`, `section_order`,
 | `search` | Home Search (listings, agents, map, appointments, scoring) | Off | | `calendar`, `setup` |
 | `google-calendar` | Google Calendar sync | Off | `calendar` | `household` |
 | `shopper` | Shopper (watchlist, price history, deal rating) | Off | | `household`, `costs` |
+| `rewards` | Rewards (loyalty cards and memberships, their partner stores and perks, store lookup) | Off | | `groceries` |
 | `assistant` | Assistant (quick asks, chats, the household thread; asks before changing anything) | Off | | `household`, `calendar`, `costs`, `groceries` |
 | `mcp` | MCP / agent access | Off | | all |
 
@@ -63,6 +64,7 @@ Known soft features to gate (each must check both modules):
 - Calendar → Tasks, Home Search, Google Calendar: tasks, appointments and pulled events on the calendar.
 - Calendar → Costs: an event's ticket cost kept as a Going out line in the Budget (`calendar.budget`).
 - Setup → Home Search: the chosen apartment as the home being set up.
+- Rewards ↔ Groceries: both show the household's `loyalty_cards` (the table syncs while either is on). Groceries' rewards sheet works with Rewards off; Rewards adds schemes, partner stores, perks and "Just me" cards.
 - Shopper → Tasks, Costs: "Plan to buy" writes a to-do (`shopper.tasks`) and a planned purchase cost (`shopper.costs`).
 - Assistant → Tasks, Calendar, Costs, Groceries: the assistant only gets tools for modules that are on (the same gating as `/api/mcp`), so switching one off removes it from what the assistant can read or change.
 

@@ -18,7 +18,7 @@ import {
   type AssistantErrorCode,
   type AssistantMessage,
 } from './assistant-api';
-import { isConversationOpen, type ConversationKind } from './assistant';
+import { isConversationOpen, wantsAssistantReply, type ConversationKind } from './assistant';
 import { deviceKeyValue } from './data/store-environment';
 
 interface CachedThread {
@@ -27,6 +27,8 @@ interface CachedThread {
 }
 
 const THREAD_CACHE_SIZE = 12;
+/** How often an open household thread checks for what other members wrote. */
+export const HOUSEHOLD_POLL_MS = 6_000;
 const threadCache = new Map<string, CachedThread>();
 
 // The cache is also kept on the device (the app's key-value store), so a
@@ -149,6 +151,7 @@ function pendingMessage(text: string): AssistantMessage {
     role: 'user',
     content: text,
     author: null,
+    mine: true,
     channel: 'app',
     created_at: new Date().toISOString(),
     proposal: null,
@@ -168,6 +171,9 @@ export function useAssistantThread(target: ThreadTarget, host: ThreadHost) {
   // Only a thread with nothing to show yet waits; a cached one refreshes behind.
   const [loading, setLoading] = useState(!isNew && !cached);
   const [sending, setSending] = useState(false);
+  // Waiting on Rooftap's answer (the dots); a household message that doesn't tag it just sends.
+  const [thinking, setThinking] = useState(false);
+  const sendingRef = useRef(false);
   const [deciding, setDeciding] = useState<string | null>(null);
   const [blocked, setBlocked] = useState<AssistantErrorCode | null>(null);
   // Why the last load failed (offline, timed out), offered with Try again.
@@ -209,31 +215,34 @@ export function useAssistantThread(target: ThreadTarget, host: ThreadHost) {
   }, [target.id]);
 
   /** Re-reads the thread (opening it marks it read on the server, so the + dot may go). */
-  const reload = useCallback(async () => {
+  const reload = useCallback(async ({ quiet = false }: { quiet?: boolean } = {}) => {
     const { api } = hostRef.current;
     let id: string | undefined = conversationIdRef.current ?? (isNew ? undefined : target.id);
     if (!id) {
       setLoading(false);
       return;
     }
-    setLoadError(null);
+    if (!quiet) setLoadError(null);
     // A retry with nothing on screen shows the skeleton again; a refresh under messages doesn't.
-    if (shownCount.current === 0) setLoading(true);
+    if (!quiet && shownCount.current === 0) setLoading(true);
     try {
       if (id === 'household') id = (await api.conversations()).find((c) => c.kind === 'household')?.id;
       if (id) {
         const res = await api.messages(id);
+        // A message going out meanwhile would vanish from the list; the send brings it back with the rest.
+        if (quiet && sendingRef.current) return;
         rememberThread(res.conversation, res.messages);
         setConversation(res.conversation);
         setMessages(res.messages);
       }
     } catch (err) {
+      if (quiet) return;
       if (err instanceof AssistantApiError && err.code) setBlocked(err.code);
       else setLoadError(errorText(err, 'Could not load this conversation.'));
     } finally {
       setLoading(false);
     }
-    refreshUnread();
+    if (!quiet) refreshUnread();
   }, [isNew, target.id, refreshUnread]);
 
   useEffect(() => {
@@ -244,12 +253,24 @@ export function useAssistantThread(target: ThreadTarget, host: ThreadHost) {
       .catch(() => {});
   }, [reload]);
 
+  // The household thread is a chat room: while it is on screen, what other members write shows up.
+  const householdId = kind === 'household' ? conversation?.id ?? null : null;
+  useEffect(() => {
+    if (!householdId) return;
+    const timer = setInterval(() => {
+      if (hostRef.current.presence() === 'here') void reload({ quiet: true });
+    }, HOUSEHOLD_POLL_MS);
+    return () => clearInterval(timer);
+  }, [householdId, reload]);
+
   const send = useCallback(
     async (text: string) => {
       const { api, toast } = hostRef.current;
       const local = pendingMessage(text);
       setMessages((m) => [...m, local]);
       setSending(true);
+      sendingRef.current = true;
+      setThinking(wantsAssistantReply(kind, 'app', text));
       try {
         const res = await api.send({ text, conversationId: conversationIdRef.current, kind, reopen: resumedRef.current || undefined });
         resumedRef.current = false;
@@ -278,6 +299,8 @@ export function useAssistantThread(target: ThreadTarget, host: ThreadHost) {
         return false;
       } finally {
         setSending(false);
+        sendingRef.current = false;
+        setThinking(false);
       }
     },
     [kind]
@@ -341,7 +364,7 @@ export function useAssistantThread(target: ThreadTarget, host: ThreadHost) {
   // Closed: a quick ask past its idle time, unless the person chose to carry on.
   const closed = !!conversation && !resumed && !isConversationOpen(conversation.kind, conversation.closes_at);
 
-  return { conversation, messages, kind, loading, loadError, sending, deciding, blocked, showCost, closed, resumed, send, decide, togglePin, remove, reload, resume };
+  return { conversation, messages, kind, loading, loadError, sending, thinking, deciding, blocked, showCost, closed, resumed, send, decide, togglePin, remove, reload, resume };
 }
 
 export type AssistantThread = ReturnType<typeof useAssistantThread>;

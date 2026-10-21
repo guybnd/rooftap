@@ -5,7 +5,7 @@ import type { AssistantConversation, AssistantMessage } from "@homeup/core";
 vi.mock("@/lib/push", () => ({ sendPushToUsers: vi.fn(async () => ({ sent: 1, pruned: 0 })) }));
 
 import { sendPushToUsers } from "@/lib/push";
-import { isUnread, markConversationRead, notifyIfAway, replyPush } from "./reads";
+import { isUnread, markConversationRead, notifyHousehold, notifyIfAway, replyPush } from "./reads";
 
 type Row = Record<string, unknown>;
 
@@ -106,5 +106,34 @@ describe("notifyIfAway", () => {
   it("respects the person's switch", async () => {
     const admin = fakeAdmin({ assistant_notify_prefs: [{ user_id: "u1", replies: false, preview: true }] });
     expect(await notifyIfAway({ admin, userId: "u1", groupId: "g1" }, conversation, reply, noWait)).toBe("off");
+  });
+});
+
+describe("notifyHousehold", () => {
+  const household: AssistantConversation = { ...conversation, id: "h1", kind: "household", title: "Household" };
+  const said: AssistantMessage = { ...reply, id: "m3", role: "user", author: "Guy", mine: true, content: "Pizza tonight?" };
+
+  it("pushes a member's message to the others who haven't read it, by their preview switch", async () => {
+    vi.mocked(sendPushToUsers).mockClear();
+    const admin = fakeAdmin({
+      group_members: [
+        { group_id: "g1", user_id: "u1" },
+        { group_id: "g1", user_id: "u2" },
+        { group_id: "g1", user_id: "u3" },
+        { group_id: "g1", user_id: "u4" },
+      ],
+      assistant_reads: [{ user_id: "u3", conversation_id: "h1", read_at: "2026-10-26T18:42:09Z", seen_at: null }],
+      assistant_notify_prefs: [{ user_id: "u4", replies: true, preview: false }],
+    });
+    expect(await notifyHousehold({ admin, userId: "u1", groupId: "g1" }, household, said, noWait)).toBe(2);
+    expect(sendPushToUsers).toHaveBeenCalledWith(admin, ["u2"], expect.objectContaining({ title: "Guy in Household", body: "Pizza tonight?", url: "/assistant/h1" }), noWait);
+    expect(sendPushToUsers).toHaveBeenCalledWith(admin, ["u4"], expect.objectContaining({ body: "Tap to read it." }), noWait);
+  });
+
+  it("sends nothing when the writer is alone in the home", async () => {
+    vi.mocked(sendPushToUsers).mockClear();
+    const admin = fakeAdmin({ group_members: [{ group_id: "g1", user_id: "u1" }] });
+    expect(await notifyHousehold({ admin, userId: "u1", groupId: "g1" }, household, said, noWait)).toBe(0);
+    expect(sendPushToUsers).not.toHaveBeenCalled();
   });
 });

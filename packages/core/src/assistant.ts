@@ -85,6 +85,23 @@ export function isConversationOpen(
   return !closesAt || new Date(closesAt) > now;
 }
 
+/** Tagging Rooftap in the household thread: `@Rooftap` anywhere in the message, any case. */
+const ROOFTAP_TAG = /(^|[^\w@])@rooftap\b/i;
+
+export function mentionsRooftap(text: string): boolean {
+  return ROOFTAP_TAG.test(text);
+}
+
+/**
+ * Whether a message gets an answer from the model. The household thread in
+ * the app is the members' own chat room: Rooftap only answers when tagged.
+ * Everywhere else (quick asks, chats, Telegram, which talks to the bot
+ * directly) every message is for Rooftap.
+ */
+export function wantsAssistantReply(kind: ConversationKind, channel: MessageChannel, text: string): boolean {
+  return kind !== 'household' || channel !== 'app' || mentionsRooftap(text);
+}
+
 /** When a quick ask closes if nothing more is said, counted from `lastActive`. */
 export function quickAskClosesAt(lastActive: Date, idleMinutes: number): Date {
   return new Date(lastActive.getTime() + Math.max(1, idleMinutes) * 60_000);
@@ -271,6 +288,7 @@ export const MODEL_PRICES: Record<string, ModelPrice> = {
   'gemini-2.5-flash': { input: 0.3, output: 2.5 },
   'gpt-4o-mini': { input: 0.15, output: 0.6 },
   'claude-haiku-4-5-20251001': { input: 1, output: 5 },
+  'claude-haiku-5-5': { input: 0.1, output: 0.5 },
 };
 
 /**

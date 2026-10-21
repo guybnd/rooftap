@@ -15,6 +15,7 @@ import {
   entitlementTier,
   getModule,
   isConversationOpen,
+  wantsAssistantReply,
   microsToCents,
   parseAssistantSettings,
   parseModelPrices,
@@ -41,9 +42,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getSessionUser } from "@/lib/supabase/session";
 import { getEnabledModules } from "@/lib/server-modules";
 import { billingMode } from "@/lib/billing";
-import { executeProposals, runAssistantTurn, type Proposal } from "./engine";
-import { llmClient, type ChatMessage, type LlmClient } from "./llm";
-import { SERVER_BRAIN_KEYS, resolveHouseholdBrain, resolveServerBrain, type AssistantBrain } from "./provider";
+import { TurnTimeoutError, executeProposals, runAssistantTurn, type Proposal } from "./engine";
+import { isProviderBusy, llmClient, withFallbackModel, type ChatMessage, type LlmClient } from "./llm";
+import { SERVER_BRAIN_KEYS, resolveBackupBrain, resolveHouseholdBrain, resolveServerBrain, type AssistantBrain } from "./provider";
 import { resolveServerKeys } from "@/lib/admin-config";
 import { householdKeys } from "@/lib/ai/household-keys";
 import { assistantTools } from "./tools";
@@ -174,7 +175,8 @@ function proposalItems(row: MessageRow): ProposalItem[] {
 }
 
 /** A stored row as the apps see it, or null for rows they don't show (tool output, tool-call steps). */
-export function toMessage(row: MessageRow, names: Map<string, string>): AssistantMessage | null {
+/** A stored message for the app; `viewerId` marks which ones the person looking wrote. */
+export function toMessage(row: MessageRow, names: Map<string, string>, viewerId?: string): AssistantMessage | null {
   if (row.role === "tool") return null;
   if (row.role === "assistant" && row.tool_calls && !row.content) return null;
   return {
@@ -182,6 +184,7 @@ export function toMessage(row: MessageRow, names: Map<string, string>): Assistan
     role: row.role,
     content: row.content,
     author: row.role === "user" && row.user_id ? names.get(row.user_id) ?? null : null,
+    ...(viewerId ? { mine: row.role === "user" && row.user_id === viewerId } : {}),
     channel: row.channel,
     created_at: row.created_at,
     proposal: row.proposal && row.proposal_state ? { items: proposalItems(row), state: row.proposal_state } : null,
@@ -189,11 +192,21 @@ export function toMessage(row: MessageRow, names: Map<string, string>): Assistan
   };
 }
 
-/** Rows back into the model's chat format, starting at a user message so no tool result is orphaned. */
-export function toHistory(rows: MessageRow[]): ChatMessage[] {
+/**
+ * Rows back into the model's chat format, starting at a user message so no
+ * tool result is orphaned. With `names` (the household thread) each member's
+ * message says who wrote it, and members talking among themselves become one
+ * user message, since the model only answers when tagged.
+ */
+export function toHistory(rows: MessageRow[], names?: Map<string, string>): ChatMessage[] {
   const out: ChatMessage[] = [];
   for (const row of rows) {
-    if (row.role === "user") out.push({ role: "user", content: row.content });
+    if (row.role === "user" && names) {
+      const line = `${(row.user_id && names.get(row.user_id)) || "Someone"}: ${row.content}`;
+      const last = out[out.length - 1];
+      if (last?.role === "user") last.content = `${last.content}\n${line}`;
+      else out.push({ role: "user", content: line });
+    } else if (row.role === "user") out.push({ role: "user", content: row.content });
     else if (row.role === "assistant") {
       const calls = Array.isArray(row.tool_calls) ? (row.tool_calls as { id: string; name: string; args: Record<string, unknown> }[]) : undefined;
       out.push({ role: "assistant", content: row.content, ...(calls?.length ? { toolCalls: calls } : {}) });
@@ -407,7 +420,7 @@ export async function conversationMessages(ctx: AssistantContext, conversationId
     ctx.admin.from("assistant_messages").select("*").eq("conversation_id", conversationId).eq("group_id", ctx.groupId).order("created_at", { ascending: true }).limit(500),
     memberNames(ctx.admin, ctx.groupId),
   ]);
-  return ((data ?? []) as MessageRow[]).flatMap((r) => toMessage(r, names) ?? []);
+  return ((data ?? []) as MessageRow[]).flatMap((r) => toMessage(r, names, ctx.userId) ?? []);
 }
 
 // ── A turn ────────────────────────────────────────────────────────────────
@@ -429,6 +442,8 @@ export type ChatOutcome =
       budget: BudgetCheck["status"];
       /** Bookkeeping that can wait until the reply is sent: folding older messages into the summary. */
       afterReply: () => Promise<void>;
+      /** A member's message in the household thread, for the other members' push. */
+      posted?: AssistantMessage;
     }
   | { ok: false; status: number; error: string; code?: AssistantErrorCode };
 
@@ -460,6 +475,15 @@ export interface ChatDeps {
  * gathering tools (Home Assistant's listing), each model call, each tool
  * that ran, and the whole request. Search the logs for "[assistant] timing".
  */
+/**
+ * The chat route has 60 s (maxDuration). Past TURN_ANSWER_BY_MS the model
+ * answers with what it has; a model call still running at TURN_GIVE_UP_MS
+ * ends the turn with a clear error, leaving time to say so before the
+ * platform cuts the request off with a bare 504.
+ */
+export const TURN_ANSWER_BY_MS = 35_000;
+export const TURN_GIVE_UP_MS = 52_000;
+
 function logTurnTiming(t: Record<string, unknown>) {
   console.info(`[assistant] timing ${JSON.stringify(t)}`);
 }
@@ -477,6 +501,13 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
     monthUsage(ctx.admin, ctx.groupId),
     input.conversationId ? findConversation(ctx, input.conversationId) : Promise.resolve(null),
   ]);
+  // The household thread is the members' chat room: a message that doesn't
+  // tag Rooftap is just posted, with no model, key or budget involved.
+  const roomKind = input.conversationId ? found?.kind : input.kind;
+  if (roomKind === "household" && !wantsAssistantReply("household", input.channel ?? "app", text)) {
+    if (input.conversationId && !found) return { ok: false, status: 404, error: "Not found" };
+    return postToHousehold(ctx, found ?? (await householdThread(ctx)), text, input.channel ?? "app", deps.now ?? new Date());
+  }
   if (!brain) return { ok: false, status: 503, error: "No AI model is set up on this server yet.", code: "assistant_not_configured" };
   const budget = budgetFor(usage, ctx.userId, settings, limits.budgetCents, ctx.access, brain.keySource);
   if (budget.action === "stop") {
@@ -518,7 +549,8 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
     // Sending is reading: anything before this turn is no longer news to them.
     markConversationRead(ctx, conversation.id, { at: now }),
   ]);
-  const history = toHistory(((recent ?? []) as MessageRow[]).reverse()).slice(-settings.contextMessages * 3);
+  const household = conversation.kind === "household";
+  const history = toHistory(((recent ?? []) as MessageRow[]).reverse(), household ? names : undefined).slice(-settings.contextMessages * 3);
 
   const contextMs = Date.now() - started - readMs;
   const { tools, homeAssistant, ms: toolsMs } = await gathering;
@@ -549,8 +581,22 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
   });
 
   const useCheap = budget.action === "cheap" || conversation.kind === "quick";
-  const model = useCheap ? settings.quickModel ?? brain.quickModel : settings.chatModel ?? brain.chatModel;
+  const quickModel = settings.quickModel ?? brain.quickModel;
+  const chatModel = settings.chatModel ?? brain.chatModel;
+  const chosenModel = useCheap ? quickModel : chatModel;
   const channel = input.channel ?? "app";
+  // A busy model (the provider's 503 after its own retries) hands the turn to
+  // the household's other model, or to another provider the server has a key for.
+  const otherModel = useCheap ? chatModel : quickModel;
+  const llm = withFallbackModel(
+    deps.llm ?? llmClient(brain.connection),
+    otherModel !== chosenModel
+      ? otherModel
+      : async () => {
+          const backup = deps.llm ? null : await resolveBackupBrain(brain);
+          return backup ? { llm: llmClient(backup.connection), model: useCheap ? backup.quickModel : backup.chatModel } : null;
+        }
+  );
 
   // The person's message is saved while the model works on it.
   const savingUser = ctx.admin
@@ -563,18 +609,36 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
 
   let turn;
   try {
-    turn = await runAssistantTurn({ llm: deps.llm ?? llmClient(brain.connection), model, system, history, userText: text, tools });
+    // In the household thread the model sees who is asking, like the messages before.
+    const userText = household ? `${names.get(ctx.userId) ?? "Someone"}: ${text}` : text;
+    turn = await runAssistantTurn({
+      llm,
+      model: chosenModel,
+      system,
+      history,
+      userText,
+      tools,
+      deadline: { answerBy: started + TURN_ANSWER_BY_MS, giveUpAt: started + TURN_GIVE_UP_MS },
+      onEvent: (e) => console.info(`[assistant] step ${JSON.stringify({ conversation: conversation.id, ...e })}`),
+    });
   } catch (e) {
+    if (e instanceof TurnTimeoutError) {
+      logTurnTiming({ conversation: conversation.id, model: llm.model() ?? chosenModel, timedOut: true, totalMs: Date.now() - started, readMs, contextMs, toolsMs });
+      return { ok: false, status: 504, error: "Rooftap took too long to answer. Try again, or ask for less at once." };
+    }
     console.error("[assistant] turn failed", e);
     // Owners see the provider's reason, so a bad key or model name can be fixed without the server logs.
     const reason = ctx.isOwner && e instanceof Error ? ` (${e.message.slice(0, 200)})` : "";
-    return { ok: false, status: 502, error: `The AI model didn't answer. Try again in a moment.${reason}` };
+    const busy = isProviderBusy(e) ? "The AI model is busy right now (the provider is overloaded). Try again in a minute." : "The AI model didn't answer. Try again in a moment.";
+    return { ok: false, status: 502, error: `${busy}${reason}` };
   }
 
   const turnMs = Date.now() - started - readMs - contextMs;
   const { data: userRow, error: userErr } = await savingUser;
   if (userErr || !userRow) return { ok: false, status: 500, error: userErr?.message ?? "Could not save the message" };
 
+  // The model that answered, which is the fallback if the first was busy.
+  const model = llm.model() ?? chosenModel;
   const cost = turnCost(brain, model, turn.inputTokens, turn.outputTokens);
   // Steps before the final answer are stored for the model's memory of the
   // turn; only the last one carries the proposals, tokens and cost.
@@ -659,10 +723,12 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
     ctx.access,
     brain.keySource
   );
+  const messages = [userRow as MessageRow, replyRow as MessageRow].flatMap((r) => (r ? toMessage(r, names, ctx.userId) ?? [] : []));
   return {
     ok: true,
     conversation: toConversation({ ...conversation, ...touched }, pending.get(conversation.id) ?? 0),
-    messages: [userRow as MessageRow, replyRow as MessageRow].flatMap((r) => (r ? toMessage(r, names) ?? [] : [])),
+    messages,
+    posted: household && channel === "app" ? messages[0] : undefined,
     budget: after.status,
     afterReply: () =>
       foldOlderMessages(ctx, conversation, {
@@ -673,6 +739,41 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
         feature: channel === "telegram" ? "telegram" : conversation.kind,
         names,
       }).catch((e) => console.error("[assistant] summary fold failed", e)),
+  };
+}
+
+/** A member's message in the household chat room, with no answer from Rooftap. */
+async function postToHousehold(
+  ctx: AssistantContext,
+  conversation: ConversationRow,
+  text: string,
+  channel: MessageChannel,
+  now: Date
+): Promise<ChatOutcome> {
+  const [{ data: row, error }, names] = await Promise.all([
+    ctx.admin
+      .from("assistant_messages")
+      .insert({ conversation_id: conversation.id, group_id: ctx.groupId, user_id: ctx.userId, role: "user", content: text, channel })
+      .select("*")
+      .single(),
+    memberNames(ctx.admin, ctx.groupId),
+  ]);
+  if (error || !row) return { ok: false, status: 500, error: error?.message ?? "Could not save the message" };
+  const touched = { last_active_at: (row as MessageRow).created_at ?? now.toISOString() };
+  const [pending] = await Promise.all([
+    pendingCounts(ctx, [conversation.id]),
+    ctx.admin.from("assistant_conversations").update(touched).eq("id", conversation.id),
+    // Their own message is never news to them.
+    markConversationRead(ctx, conversation.id, { at: new Date(touched.last_active_at) }),
+  ]);
+  const message = toMessage(row as MessageRow, names, ctx.userId)!;
+  return {
+    ok: true,
+    conversation: toConversation({ ...conversation, ...touched }, pending.get(conversation.id) ?? 0),
+    messages: [message],
+    budget: "ok",
+    afterReply: async () => {},
+    posted: message,
   };
 }
 
@@ -822,7 +923,7 @@ export async function decideProposal(ctx: AssistantContext, messageId: string, d
   ]);
   if (decision === "confirm") logTurnTiming({ conversation: row.conversation_id, confirm: true, totalMs: Date.now() - started, toolsMs, runMs });
 
-  const updated = toMessage({ ...row, proposal_state: next }, names)!;
-  return { ok: true, message: updated, outcome: outcomeRow ? toMessage(outcomeRow as MessageRow, names) : null };
+  const updated = toMessage({ ...row, proposal_state: next }, names, ctx.userId)!;
+  return { ok: true, message: updated, outcome: outcomeRow ? toMessage(outcomeRow as MessageRow, names, ctx.userId) : null };
 }
 

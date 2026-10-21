@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { MAX_TOOL_RESULT_CHARS, STEP_LIMIT_REPLY, executeProposals, runAssistantTurn } from "./engine";
+import { ANSWER_NOW_NOTE, MAX_TOOL_RESULT_CHARS, OUT_OF_TIME_REPLY, STEP_LIMIT_REPLY, TurnTimeoutError, executeProposals, runAssistantTurn } from "./engine";
 import type { LlmClient, LlmStep } from "./llm";
 import type { AssistantTool } from "./tools";
 
@@ -26,6 +26,24 @@ function tool(name: string, gate: AssistantTool["gate"], text = '{"ok":true}'): 
 }
 
 const base = { model: "m", system: "sys", history: [], userText: "add milk" };
+
+describe("runAssistantTurn against the clock", () => {
+  it("asks for an answer once time is short and runs no more tools", async () => {
+    const lookup = tool("get_tasks", "run");
+    const llm = scripted({ toolCalls: [{ id: "1", name: "get_tasks", args: {} }] });
+    const r = await runAssistantTurn({ ...base, llm, tools: [lookup], deadline: { answerBy: Date.now() - 1, giveUpAt: Date.now() + 10_000 } });
+    expect(llm.calls[0].system).toContain(ANSWER_NOW_NOTE);
+    expect(lookup.run).not.toHaveBeenCalled();
+    expect(r.reply).toBe(OUT_OF_TIME_REPLY);
+  });
+
+  it("gives up on a model call still running at the limit", async () => {
+    const llm = (() => new Promise(() => {})) as unknown as Parameters<typeof runAssistantTurn>[0]["llm"];
+    await expect(
+      runAssistantTurn({ ...base, llm, tools: [], deadline: { answerBy: Date.now() + 5, giveUpAt: Date.now() + 10 } })
+    ).rejects.toBeInstanceOf(TurnTimeoutError);
+  });
+});
 
 describe("runAssistantTurn", () => {
   it("runs a step's lookups side by side, changes after them in order, and times each", async () => {

@@ -5,6 +5,8 @@ import {
   checkBudget,
   costMicros,
   isConversationOpen,
+  mentionsRooftap,
+  wantsAssistantReply,
   microsToCents,
   parseAssistantSettings,
   parseModelPrices,
@@ -32,6 +34,20 @@ describe('trust', () => {
   it('always asks before a delete', () => {
     expect(toolGate('write', 'act', true)).toBe('propose');
     expect(toolGate('write', 'read', true)).toBe('hidden');
+  });
+});
+
+describe('the household chat room', () => {
+  it('answers in the household thread only when Rooftap is tagged', () => {
+    expect(mentionsRooftap('@Rooftap add milk')).toBe(true);
+    expect(mentionsRooftap('can you check, @rooftap?')).toBe(true);
+    expect(mentionsRooftap('mail me at me@rooftap.app')).toBe(false);
+    expect(mentionsRooftap('rooftap is great')).toBe(false);
+    expect(wantsAssistantReply('household', 'app', 'pizza tonight?')).toBe(false);
+    expect(wantsAssistantReply('household', 'app', '@Rooftap pizza tonight?')).toBe(true);
+    // Telegram talks to the bot directly, and quick asks and chats are always for Rooftap.
+    expect(wantsAssistantReply('household', 'telegram', 'pizza tonight?')).toBe(true);
+    expect(wantsAssistantReply('chat', 'app', 'pizza tonight?')).toBe(true);
   });
 });
 

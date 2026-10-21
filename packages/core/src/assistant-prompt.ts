@@ -38,7 +38,10 @@ const CHANNEL_TEXT: Record<MessageChannel, string> = {
 const KIND_TEXT: Record<ConversationKind, string> = {
   quick: 'This is a quick ask: answer in a sentence or two unless asked for more.',
   chat: 'This is a chat the person keeps; it can run over several days.',
-  household: 'This is the shared household thread: several members may write here, so address people by name.',
+  household:
+    "This is the household's shared chat. Members talk to each other here and tag @Rooftap when they want you, so " +
+    'earlier messages that do not tag you were between them, not to you. Answer the latest message, address people by name, ' +
+    'and do not reply to or act on the others unless asked.',
 };
 
 export interface AssistantModuleBrief {

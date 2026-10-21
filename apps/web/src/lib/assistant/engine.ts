@@ -29,6 +29,36 @@ export interface TurnInput {
   userText: string;
   tools: AssistantTool[];
   maxSteps?: number;
+  /**
+   * Wall-clock limits (epoch ms), so a turn ends inside the server's time
+   * limit with an answer instead of being cut off: after `answerBy` the
+   * model gets no more tools and must answer with what it has; a model
+   * call still going at `giveUpAt` fails the turn with TurnTimeoutError.
+   */
+  deadline?: { answerBy: number; giveUpAt: number };
+  /** Called as each model call and tool finishes, for the server log (a turn cut off never reaches its summary line). */
+  onEvent?: (event: { kind: "llm" | "tool"; name?: string; ms: number; step: number }) => void;
+}
+
+export class TurnTimeoutError extends Error {
+  constructor() {
+    super("The assistant took too long to answer.");
+  }
+}
+
+export const OUT_OF_TIME_REPLY = "I ran out of time before I could finish that. Try asking again, or ask for less at once.";
+
+/** Added to the system prompt once time is short. */
+export const ANSWER_NOW_NOTE =
+  "Time is nearly up for this message: don't call any more tools. Answer now with what you already found, and say briefly if something is left to check.";
+
+function before<T>(work: Promise<T>, at: number | undefined): Promise<T> {
+  if (at === undefined) return work;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new TurnTimeoutError()), Math.max(0, at - Date.now()));
+  });
+  return Promise.race([work, late]).finally(() => clearTimeout(timer));
 }
 
 export interface TurnResult {
@@ -61,7 +91,7 @@ function resultText(result: { content: { text: string }[] }): string {
 async function handleCall(
   call: ToolCall,
   byName: Map<string, AssistantTool>,
-  out: Pick<TurnResult, "proposals" | "ran" | "timing">
+  out: CallOut
 ): Promise<string> {
   const tool = byName.get(call.name);
   if (!tool) return JSON.stringify({ error: `No tool called ${call.name} is available.` });
@@ -78,16 +108,20 @@ async function handleCall(
     out.ran.push({ tool: tool.name, args: call.args, ok: false });
     return JSON.stringify({ error: e instanceof Error ? e.message : "Tool failed" });
   } finally {
-    out.timing.tools.push({ tool: tool.name, ms: Date.now() - started });
+    const ms = Date.now() - started;
+    out.timing.tools.push({ tool: tool.name, ms });
+    out.onTool?.(tool.name, ms);
   }
 }
+
+type CallOut = Pick<TurnResult, "proposals" | "ran" | "timing"> & { onTool?: (name: string, ms: number) => void };
 
 /**
  * Runs one step's calls. Lookups run side by side (a model often asks for
  * several at once, and each may be a round trip to Home Assistant); changes
  * run one after another, in the order asked, after the lookups.
  */
-async function handleCalls(calls: ToolCall[], byName: Map<string, AssistantTool>, out: Pick<TurnResult, "proposals" | "ran" | "timing">) {
+async function handleCalls(calls: ToolCall[], byName: Map<string, AssistantTool>, out: CallOut) {
   const contents = new Array<string>(calls.length);
   const lookups = calls.flatMap((c, i) => (byName.get(c.name)?.lookup && byName.get(c.name)?.gate === "run" ? [i] : []));
   await Promise.all(lookups.map(async (i) => (contents[i] = await handleCall(calls[i], byName, out))));
@@ -102,13 +136,36 @@ export async function runAssistantTurn(input: TurnInput): Promise<TurnResult> {
   const conversation: ChatMessage[] = [...input.history, { role: "user", content: input.userText }];
   const result: TurnResult = { reply: "", memories: [], messages: [], proposals: [], inputTokens: 0, outputTokens: 0, steps: 0, ran: [], timing: { llmMs: [], tools: [] } };
 
+  const out: CallOut = {
+    proposals: result.proposals,
+    ran: result.ran,
+    timing: result.timing,
+    onTool: (name, ms) => input.onEvent?.({ kind: "tool", name, ms, step: result.steps }),
+  };
+
   for (let step = 0; step < maxSteps; step++) {
     const asked = Date.now();
-    const res = await input.llm({ model: input.model, system: input.system, messages: conversation, tools: specs });
+    // Out of time for more lookups: the model answers with what it has.
+    const hurry = !!input.deadline && asked >= input.deadline.answerBy;
+    const res = await before(
+      input.llm({
+        model: input.model,
+        system: hurry ? `${input.system}\n\n${ANSWER_NOW_NOTE}` : input.system,
+        messages: conversation,
+        // Still offered, since the history holds tool calls (some providers refuse those without tools).
+        tools: specs,
+      }),
+      input.deadline?.giveUpAt
+    );
     result.timing.llmMs.push(Date.now() - asked);
+    input.onEvent?.({ kind: "llm", ms: Date.now() - asked, step });
     result.steps++;
     result.inputTokens += res.inputTokens;
     result.outputTokens += res.outputTokens;
+
+    // Asked to answer but reached for another tool anyway: stop here.
+    if (hurry && res.toolCalls.length > 0) res.toolCalls = [];
+    if (hurry && res.toolCalls.length === 0 && !res.text.trim()) res.text = OUT_OF_TIME_REPLY;
 
     if (res.toolCalls.length === 0) {
       const { cleanedText, memories } = extractMemoryMarkers(res.text);
@@ -122,7 +179,7 @@ export async function runAssistantTurn(input: TurnInput): Promise<TurnResult> {
     const assistant: ChatMessage = { role: "assistant", content: res.text, toolCalls: res.toolCalls };
     conversation.push(assistant);
     result.messages.push(assistant);
-    const contents = await handleCalls(res.toolCalls, byName, result);
+    const contents = await handleCalls(res.toolCalls, byName, out);
     res.toolCalls.forEach((call, i) => {
       const toolMessage: ChatMessage = { role: "tool", toolCallId: call.id, name: call.name, content: contents[i] };
       conversation.push(toolMessage);

@@ -24,6 +24,7 @@ export type ModuleId =
   | 'setup'
   | 'search'
   | 'shopper'
+  | 'rewards'
   | 'assistant'
   | 'google-calendar'
   | 'mcp';
@@ -129,6 +130,15 @@ export const MODULES: ModuleDef[] = [
     defaultEnabled: false,
     enhances: ['household', 'costs'],
     minSchema: '20261021010000_shopper',
+  },
+  {
+    id: 'rewards',
+    label: 'Rewards',
+    description: 'Loyalty cards and memberships, the stores they work at, and what they get you there.',
+    iconId: 'wallet-cards',
+    defaultEnabled: false,
+    enhances: ['groceries'],
+    minSchema: '20261021130000_rewards',
   },
   {
     id: 'assistant',

@@ -49,6 +49,8 @@ export interface AssistantMessage {
   content: string;
   /** Who wrote it, for user messages in the household thread. */
   author: string | null;
+  /** Written by the person viewing it. Older servers leave it out: every user message was theirs. */
+  mine?: boolean;
   channel: MessageChannel;
   created_at: string;
   proposal: { items: ProposalItem[]; state: ProposalState } | null;
@@ -204,7 +206,14 @@ export type AssistantApi = ReturnType<typeof createAssistantApi>;
 /** Reads an error body from /api/assistant into an AssistantApiError. */
 export function assistantError(status: number, body: unknown): AssistantApiError {
   const b = (body ?? {}) as { error?: string; code?: string };
-  return new AssistantApiError(b.error ?? `Request failed (${status})`, status, (b.code as AssistantErrorCode) ?? null);
+  return new AssistantApiError(b.error ?? bareError(status), status, (b.code as AssistantErrorCode) ?? null);
+}
+
+/** An error with no message from Rooftap's server: the hosting platform answered instead (a time limit, a deploy, a hiccup). */
+function bareError(status: number): string {
+  if (status === 504) return "Rooftap took too long to answer. Try again, or ask for less at once.";
+  if (status === 502 || status === 503) return `Rooftap's server didn't answer just then (${status}). Try again in a moment.`;
+  return `Request failed (${status})`;
 }
 
 // ── Proposal summaries ──────────────────────────────────────────────────

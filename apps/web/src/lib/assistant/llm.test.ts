@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { anthropicClient, openAIClient, portableSchema, toAnthropicMessages, toOpenAIMessages, type ChatMessage } from "./llm";
+import { anthropicClient, isProviderBusy, openAIClient, portableSchema, toAnthropicMessages, toOpenAIMessages, withFallbackModel, type ChatMessage } from "./llm";
 
 const convo: ChatMessage[] = [
   { role: "user", content: "add milk" },
@@ -92,6 +92,20 @@ describe("wire formats", () => {
   });
 });
 
+describe("anthropicClient on Haiku 5.5", () => {
+  it("turns thinking off, which it has on by default", async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ content: [{ type: "text", text: "ok" }], usage: {} })));
+    await anthropicClient({ wire: "anthropic", apiKey: "k" }, fetchImpl as unknown as typeof fetch)({
+      model: "claude-haiku-5-5",
+      system: "s",
+      messages: [{ role: "user", content: "hi" }],
+      tools: [],
+    });
+    const body = JSON.parse((fetchImpl.mock.calls[0] as unknown as [string, RequestInit])[1].body as string);
+    expect(body.thinking).toEqual({ type: "disabled" });
+  });
+});
+
 describe("portableSchema", () => {
   it("rewrites zod's JSON Schema into the subset Gemini accepts", () => {
     expect(
@@ -114,5 +128,46 @@ describe("portableSchema", () => {
         tags: { type: "array", items: { type: "object", properties: { additionalProperties: { type: "string" } } } },
       },
     });
+  });
+});
+
+describe("withFallbackModel", () => {
+  const req = { model: "fast", system: "s", messages: [], tools: [] };
+  const ok = { text: "hi", toolCalls: [], inputTokens: 1, outputTokens: 1 };
+
+  it("moves to the other model when the first is busy, and stays there", async () => {
+    const seen: string[] = [];
+    const base = vi.fn(async (r: { model: string }) => {
+      seen.push(r.model);
+      if (r.model === "fast") throw Object.assign(new Error("503 status code (no body)"), { status: 503 });
+      return ok;
+    });
+    const llm = withFallbackModel(base, "steady");
+    await llm(req);
+    await llm(req);
+    expect(seen).toEqual(["fast", "steady", "steady"]);
+    expect(llm.model()).toBe("steady");
+  });
+
+  it("doesn't hide a bad key or request behind the fallback", async () => {
+    const llm = withFallbackModel(vi.fn(async () => Promise.reject(Object.assign(new Error("bad key"), { status: 401 }))), "steady");
+    await expect(llm(req)).rejects.toThrow("bad key");
+  });
+
+  it("looks up another provider only when the first is busy", async () => {
+    const busy = vi.fn(async () => Promise.reject(Object.assign(new Error("503 status code (no body)"), { status: 503 })));
+    const other = vi.fn(async () => ok);
+    const find = vi.fn(async () => ({ llm: other, model: "gpt" }));
+    const llm = withFallbackModel(busy, find);
+    await llm(req);
+    expect(find).toHaveBeenCalledTimes(1);
+    expect(other).toHaveBeenCalledWith(expect.objectContaining({ model: "gpt" }));
+    expect(llm.model()).toBe("gpt");
+  });
+
+  it("knows a busy provider from its message too", () => {
+    expect(isProviderBusy(new Error("Anthropic request failed (529): overloaded"))).toBe(true);
+    expect(isProviderBusy(new Error("503 status code (no body)"))).toBe(true);
+    expect(isProviderBusy(new Error("Anthropic request failed (400): bad"))).toBe(false);
   });
 });

@@ -143,13 +143,25 @@ export function MessageBubble({
   busy: boolean;
   onDecide: (messageId: string, decision: 'confirm' | 'decline') => void;
 }) {
-  const mine = message.role === 'user';
+  const user = message.role === 'user';
+  // Older servers don't say whose a message is: every user message was the viewer's.
+  const mine = user && (message.mine ?? true);
+  // In the household thread members are named, and so is Rooftap, so a reply reads apart from the chat.
+  const author = !showAuthor || mine ? null : user ? message.author : 'Rooftap';
   return (
     <View className={cn(mine ? 'items-end' : 'items-start')}>
-      {showAuthor && message.author && <Text className="mb-1 px-1 text-[11px] font-medium text-muted-foreground">{message.author}</Text>}
-      <View className={cn(mine ? 'max-w-[88%] rounded-2xl rounded-br-md bg-muted px-3.5 py-2.5' : 'w-full px-1')}>
+      {author && <Text className="mb-1 px-1 text-[11px] font-medium text-muted-foreground">{author}</Text>}
+      <View
+        className={cn(
+          mine
+            ? 'max-w-[88%] rounded-2xl rounded-br-md bg-muted px-3.5 py-2.5'
+            : user
+              ? 'max-w-[88%] rounded-2xl rounded-bl-md bg-muted/50 px-3.5 py-2.5'
+              : 'w-full px-1'
+        )}
+      >
         <ReplyText text={message.content} />
-        {!mine && <ProposalCard message={message} busy={busy} onDecide={(d) => onDecide(message.id, d)} />}
+        {!user && <ProposalCard message={message} busy={busy} onDecide={(d) => onDecide(message.id, d)} />}
       </View>
       <Text className="mt-1 px-1 text-[11px] text-muted-foreground" style={{ fontVariant: ['tabular-nums'] }}>
         {timeAgo(message.created_at)}

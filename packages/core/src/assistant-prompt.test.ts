@@ -43,7 +43,7 @@ describe('buildAssistantSystemPrompt', () => {
 
   it('adapts to the channel and conversation kind', () => {
     const prompt = buildAssistantSystemPrompt({ ...base, kind: 'household', channel: 'telegram' });
-    expect(prompt).toContain('shared household thread');
+    expect(prompt).toContain("household's shared chat");
     expect(prompt).toContain('Telegram');
   });
 });
