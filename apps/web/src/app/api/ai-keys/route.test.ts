@@ -59,6 +59,20 @@ describe("/api/ai-keys", () => {
     expect(json).toMatchObject({ access: "none", isOwner: true, canStore: true, allowance: null });
   });
 
+  it("says when the server's own keys already cover the household", async () => {
+    const { GET } = await import("./route");
+    expect((await (await GET()).json()).serverKeysCover).toBe(false);
+    getSessionUserMock.mockResolvedValue({ id: "u1", email: "Op@Example.com" });
+    vi.stubEnv("SERVER_OPERATOR_EMAILS", "op@example.com");
+    expect((await (await GET()).json()).serverKeysCover).toBe(true);
+    // Self-hosted: covered once someone manages the server's keys, not before.
+    getSessionUserMock.mockResolvedValue({ id: "u1", email: "member@example.com" });
+    vi.stubEnv("ROOFTAP_BILLING", "off");
+    expect((await (await GET()).json()).serverKeysCover).toBe(true);
+    vi.stubEnv("SERVER_OPERATOR_EMAILS", "");
+    expect((await (await GET()).json()).serverKeysCover).toBe(false);
+  });
+
   it("stores an owner's key encrypted", async () => {
     const { PUT } = await import("./route");
     const res = await PUT(req("PUT", { provider: "openai", key: " sk-test-1234567890abcdefgh " }));

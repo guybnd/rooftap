@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   EMPTY_DRAFT,
+  LEAD_IN_MIN_MS,
+  LEAD_IN_MAX_MS,
   applyStreamEvent,
+  createDraftPacer,
+  leadInDwellMs,
   createAssistantStreamReader,
   createSseReader,
   encodeSseEvent,
@@ -45,14 +49,75 @@ describe('visibleDraftText', () => {
 });
 
 describe('applyStreamEvent', () => {
-  it('grows text, shows status until text comes, and clears a step set aside', () => {
+  it('keeps a lead-in on screen until the answer replaces it', () => {
     let d = applyStreamEvent(EMPTY_DRAFT, { type: 'text', text: 'Let me look.' });
     d = applyStreamEvent(d, { type: 'status', text: 'Checking Groceries' });
     expect(d).toEqual({ status: 'Checking Groceries', text: 'Let me look.' });
     d = applyStreamEvent(d, { type: 'step' });
-    expect(d).toEqual({ status: 'Checking Groceries', text: '' });
+    expect(d).toEqual({ status: 'Checking Groceries', text: 'Let me look.', stale: true });
     d = applyStreamEvent(d, { type: 'text', text: 'You need milk.' });
     expect(d).toEqual({ status: null, text: 'You need milk.' });
+    d = applyStreamEvent(d, { type: 'text', text: ' And eggs.' });
+    expect(d.text).toBe('You need milk. And eggs.');
+  });
+});
+
+describe('createDraftPacer', () => {
+  function fakeClock() {
+    let t = 0;
+    const timers: { at: number; fn: () => void }[] = [];
+    return {
+      now: () => t,
+      later: (fn: () => void, ms: number) => void timers.push({ at: t + ms, fn }),
+      advance(ms: number) {
+        t += ms;
+        for (const timer of timers.filter((x) => x.at <= t).sort((a, b) => a.at - b.at)) {
+          timers.splice(timers.indexOf(timer), 1);
+          timer.fn();
+        }
+      },
+    };
+  }
+
+  it('lets a lead-in be read before the answer replaces it, holding nothing else', () => {
+    const clock = fakeClock();
+    const shown: string[] = [];
+    const pacer = createDraftPacer((d) => shown.push(d.text), clock);
+    pacer.push({ type: 'text', text: 'Let me check your list.' });
+    pacer.push({ type: 'status', text: 'Checking Groceries' });
+    clock.advance(300);
+    pacer.push({ type: 'step' });
+    pacer.push({ type: 'text', text: 'You need milk.' });
+    pacer.push({ type: 'text', text: ' And eggs.' });
+    expect(shown.at(-1)).toBe('Let me check your list.');
+    clock.advance(LEAD_IN_MIN_MS - 300);
+    expect(shown.at(-1)).toBe('You need milk. And eggs.');
+  });
+
+  it("doesn't wait when the lead-in has been up long enough already", () => {
+    const clock = fakeClock();
+    const shown: string[] = [];
+    const pacer = createDraftPacer((d) => shown.push(d.text), clock);
+    pacer.push({ type: 'text', text: 'Let me check.' });
+    clock.advance(5000);
+    pacer.push({ type: 'step' });
+    pacer.push({ type: 'text', text: 'You need milk.' });
+    expect(shown.at(-1)).toBe('You need milk.');
+  });
+
+  it('settles once a pending lead-in has had its moment', async () => {
+    const clock = fakeClock();
+    const pacer = createDraftPacer(() => {}, clock);
+    pacer.push({ type: 'text', text: 'Let me check.' });
+    pacer.push({ type: 'step' });
+    let settled = false;
+    void pacer.settled().then(() => (settled = true));
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    clock.advance(leadInDwellMs('Let me check.'));
+    await Promise.resolve();
+    expect(settled).toBe(true);
+    expect(leadInDwellMs('word '.repeat(40))).toBe(LEAD_IN_MAX_MS);
   });
 });
 

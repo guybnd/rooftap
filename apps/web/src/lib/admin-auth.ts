@@ -23,7 +23,12 @@ type OperatorGateResult =
   | { error: NextResponse }
   | { user: User; admin: SupabaseClient };
 
-function isServerOperator(user: User): boolean {
+/** Whether this deployment names any operator, who can then manage its keys in the app. */
+export function hasServerOperators(): boolean {
+  return (process.env.SERVER_OPERATOR_EMAILS ?? "").split(",").some((email) => email.trim());
+}
+
+export function isServerOperator(user: User): boolean {
   const allowlist = process.env.SERVER_OPERATOR_EMAILS;
   if (!allowlist || !user.email) return false;
   const emails = allowlist

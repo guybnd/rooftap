@@ -21,15 +21,95 @@ export type AssistantStreamEvent =
 export interface AssistantDraft {
   status: string | null;
   text: string;
+  /**
+   * The text is a lead-in from a step that went on to use tools ("Let me
+   * check your list"). It stays on screen until the answer's first words
+   * replace it.
+   */
+  stale?: boolean;
 }
 
 export const EMPTY_DRAFT: AssistantDraft = { status: null, text: '' };
 
 export function applyStreamEvent(draft: AssistantDraft, event: AssistantStreamEvent): AssistantDraft {
-  if (event.type === 'step') return { status: draft.status, text: '' };
-  if (event.type === 'status') return { status: event.text, text: draft.text };
-  if (event.type === 'text') return { status: null, text: draft.text + event.text };
+  if (event.type === 'step') return { ...draft, stale: true };
+  if (event.type === 'status') return { ...draft, status: event.text };
+  if (event.type === 'text') return { status: null, text: draft.stale ? event.text : draft.text + event.text };
   return draft;
+}
+
+/** A lead-in stays readable at least this long after its last words arrived, and never longer than the max. */
+export const LEAD_IN_MIN_MS = 1200;
+export const LEAD_IN_MAX_MS = 3000;
+
+/** Reading time for a lead-in, within LEAD_IN_MIN_MS and LEAD_IN_MAX_MS. */
+export function leadInDwellMs(text: string): number {
+  const words = text.trim().split(/\s+/).filter(Boolean).length;
+  return Math.min(LEAD_IN_MAX_MS, Math.max(LEAD_IN_MIN_MS, words * 220));
+}
+
+export interface PacerClock {
+  now: () => number;
+  later: (fn: () => void, ms: number) => void;
+}
+
+const REAL_CLOCK: PacerClock = { now: () => Date.now(), later: (fn, ms) => void setTimeout(fn, ms) };
+
+/**
+ * Applies stream events to the draft on screen, in order, with one pause:
+ * when the answer would replace a lead-in that arrived only a moment ago,
+ * it waits until the lead-in has had time to be read (leadInDwellMs).
+ * Nothing else is held back. `settled()` resolves once the queue is drained
+ * and any lead-in still showing has had its moment, so the stored reply
+ * doesn't cut it off either.
+ */
+export function createDraftPacer(onDraft: (draft: AssistantDraft) => void, clock: PacerClock = REAL_CLOCK) {
+  let draft = EMPTY_DRAFT;
+  let textAt = 0;
+  let waiting = false;
+  const queue: AssistantStreamEvent[] = [];
+  const idle: (() => void)[] = [];
+  const holdLeft = () => (draft.stale && draft.text.trim() ? textAt + leadInDwellMs(draft.text) - clock.now() : 0);
+
+  const pump = () => {
+    while (queue.length) {
+      const event = queue[0];
+      if (event.type === 'text' && draft.stale) {
+        const wait = holdLeft();
+        if (wait > 0) {
+          waiting = true;
+          clock.later(() => {
+            waiting = false;
+            pump();
+          }, wait);
+          return;
+        }
+      }
+      queue.shift();
+      draft = applyStreamEvent(draft, event);
+      if (event.type === 'text') textAt = clock.now();
+      onDraft(draft);
+    }
+    for (const done of idle.splice(0)) done();
+  };
+
+  return {
+    push(event: AssistantStreamEvent) {
+      queue.push(event);
+      if (!waiting) pump();
+    },
+    settled(): Promise<void> {
+      return new Promise((resolve) => {
+        const check = () => {
+          if (waiting || queue.length) return void idle.push(check);
+          const wait = holdLeft();
+          if (wait > 0) clock.later(resolve, wait);
+          else resolve();
+        };
+        check();
+      });
+    },
+  };
 }
 
 export function encodeSseEvent(event: AssistantStreamEvent): string {

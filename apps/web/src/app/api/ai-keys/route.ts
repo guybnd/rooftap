@@ -9,6 +9,7 @@ import {
   type HouseholdAiKeysStatus,
 } from "@homeup/core";
 import { getSessionUser } from "@/lib/supabase/session";
+import { hasServerOperators, isServerOperator } from "@/lib/admin-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { billingMode, householdTier } from "@/lib/billing";
 import { monthReads } from "@/lib/ai/access";
@@ -24,6 +25,7 @@ interface HouseholdContext {
   userId: string;
   groupId: string;
   isOwner: boolean;
+  isOperator: boolean;
 }
 
 async function household(): Promise<{ error: NextResponse } | HouseholdContext> {
@@ -32,7 +34,7 @@ async function household(): Promise<{ error: NextResponse } | HouseholdContext> 
   const admin = createAdminClient();
   const { data } = await admin.from("group_members").select("group_id, role").eq("user_id", user.id).limit(1).maybeSingle();
   if (!data) return { error: NextResponse.json({ error: "Not found" }, { status: 404 }) };
-  return { admin, userId: user.id, groupId: data.group_id as string, isOwner: data.role === "owner" };
+  return { admin, userId: user.id, groupId: data.group_id as string, isOwner: data.role === "owner", isOperator: isServerOperator(user) };
 }
 
 export async function GET() {
@@ -51,6 +53,11 @@ export async function GET() {
     allowance: access === "allowance" ? PLUS_AI_READS_PER_MONTH : null,
     isOwner: ctx.isOwner,
     canStore: canStoreHouseholdKeys(),
+    // The person runs the server, or it's self-hosted with an operator who
+    // manages its keys: the server's own keys already cover this household.
+    // A self-hosted server with no operator named keeps household keys, the
+    // only way to add a key from the app there.
+    serverKeysCover: ctx.isOperator || (billingMode() !== "on" && hasServerOperators()),
   };
   return NextResponse.json(status);
 }

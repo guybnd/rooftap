@@ -11,6 +11,8 @@ import {
   AI_KEY_PROVIDER_META,
   AI_KEY_PROVIDERS,
   aiKeysUsageLine,
+  householdAiKeysDescription,
+  householdAiKeysShown,
   useModules,
   type AiKeyProvider,
   type HouseholdAiKeysStatus,
@@ -55,12 +57,14 @@ export function HouseholdAiKeys() {
     }
   };
 
+  // The server's own keys cover this household (self-hosted, or its operator): nothing to add here.
+  if (status && !householdAiKeysShown(status)) return null;
+  // Then only keys saved earlier show, to remove.
+  const canAdd = !!status && status.isOwner && !status.serverKeysCover;
+  const providers = status?.serverKeysCover ? AI_KEY_PROVIDERS.filter((p) => status.keys.some((k) => k.provider === p)) : AI_KEY_PROVIDERS;
+
   return (
-    <SettingsPanel
-      icon={Sparkles}
-      title="AI keys"
-      description="Your household's own AI keys. With one, AI reads and the assistant run on it, with no monthly limit."
-    >
+    <SettingsPanel icon={Sparkles} title="Household AI keys" description={householdAiKeysDescription(status)}>
       {!supported ? (
         <Text className="text-sm text-muted-foreground">Update your server to use your household&apos;s own AI key.</Text>
       ) : failed ? (
@@ -73,7 +77,7 @@ export function HouseholdAiKeys() {
             {aiKeysUsageLine(status)}
           </Text>
           <FormSection>
-            {AI_KEY_PROVIDERS.map((provider) => {
+            {providers.map((provider) => {
               const meta = AI_KEY_PROVIDER_META[provider];
               const saved = status.keys.find((k) => k.provider === provider);
               const draft = drafts[provider]?.trim() ?? '';
@@ -88,14 +92,14 @@ export function HouseholdAiKeys() {
                       <Button size="sm" variant="ghost" onPress={() => void run(provider, 'remove')} disabled={busy === provider}>
                         Remove
                       </Button>
-                    ) : (
+                    ) : !canAdd ? undefined : (
                       <Button size="sm" variant="ghost" onPress={() => void Linking.openURL(meta.keyUrl)}>
                         Get a key
                       </Button>
                     )
                   }
                 >
-                  {status.isOwner && status.canStore ? (
+                  {canAdd && status.canStore ? (
                     <View className="flex-row items-center gap-2">
                       <Input
                         className="flex-1"
@@ -121,7 +125,7 @@ export function HouseholdAiKeys() {
               );
             })}
           </FormSection>
-          {status.isOwner && !status.canStore && (
+          {canAdd && !status.canStore && (
             <Text className="px-1 text-xs text-muted-foreground">This server isn&apos;t set up to store household keys yet.</Text>
           )}
           {!status.isOwner && <Text className="px-1 text-xs text-muted-foreground">A household owner can add or remove keys.</Text>}

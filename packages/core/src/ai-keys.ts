@@ -110,11 +110,30 @@ export interface HouseholdAiKeysStatus {
   isOwner: boolean;
   /** False when the server can't store keys (no HOUSEHOLD_KEYS_SECRET). */
   canStore: boolean;
+  /**
+   * The server's own keys already cover this household with no limit: the
+   * person runs the server, or it's self-hosted with an operator managing them. A household key adds
+   * nothing then, so the panel only shows keys saved earlier, to remove them.
+   * Missing on older servers.
+   */
+  serverKeysCover?: boolean;
+}
+
+/** Whether Settings shows the household AI keys panel at all. */
+export function householdAiKeysShown(status: Pick<HouseholdAiKeysStatus, 'keys' | 'serverKeysCover'>): boolean {
+  return !status.serverKeysCover || status.keys.length > 0;
+}
+
+/** The panel's description, which says who pays. */
+export function householdAiKeysDescription(status: Pick<HouseholdAiKeysStatus, 'serverKeysCover'> | null): string {
+  return status?.serverKeysCover
+    ? "This server's own keys already cover your household. Remove a key here to use them instead."
+    : 'Keys your household pays for itself, used for AI reads and the assistant.';
 }
 
 /** The one-line summary at the top of Settings > AI keys. */
 export function aiKeysUsageLine(status: Pick<HouseholdAiKeysStatus, 'keys' | 'access' | 'used' | 'allowance'>): string {
-  if (status.keys.length) return "AI reads use your household's key first, with no monthly limit.";
+  if (status.keys.length) return "Your household's key is used first, with no monthly limit.";
   if (status.access === 'unlimited') return "AI reads use this server's key, with no monthly limit.";
   if (status.access === 'allowance') return `${status.used} of ${status.allowance} AI reads on Rooftap's key used this month.`;
   return "Your plan doesn't include AI on Rooftap's key. Add your own key to read receipts, recipes, listings and events.";

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { aiAccess, aiKeysUsageLine, aiBlockedMessage, cleanAiKey, decideAiKey, PLUS_AI_READS_PER_MONTH, type AiKeyInput } from './ai-keys';
+import { aiAccess, aiKeysUsageLine, householdAiKeysShown, aiBlockedMessage, cleanAiKey, decideAiKey, PLUS_AI_READS_PER_MONTH, type AiKeyInput } from './ai-keys';
 
 const base: AiKeyInput = { preferred: 'gemini', householdKeys: new Set(), serverKey: true, access: 'allowance', usedThisMonth: 0 };
 
@@ -57,10 +57,19 @@ describe('aiBlockedMessage', () => {
   });
 });
 
+describe('householdAiKeysShown', () => {
+  it('hides the panel when the server keys cover the household, unless a key is saved to remove', () => {
+    const k = [{ provider: 'gemini' as const, last4: 'abcd', createdAt: '' }];
+    expect(householdAiKeysShown({ keys: [] })).toBe(true);
+    expect(householdAiKeysShown({ keys: [], serverKeysCover: true })).toBe(false);
+    expect(householdAiKeysShown({ keys: k, serverKeysCover: true })).toBe(true);
+  });
+});
+
 describe('aiKeysUsageLine', () => {
   it('says whose key pays', () => {
     const k = [{ provider: 'gemini' as const, last4: 'abcd', createdAt: '' }];
-    expect(aiKeysUsageLine({ keys: k, access: 'none', used: 0, allowance: null })).toContain("household's key first");
+    expect(aiKeysUsageLine({ keys: k, access: 'none', used: 0, allowance: null })).toContain("household's key is used first");
     expect(aiKeysUsageLine({ keys: [], access: 'allowance', used: 12, allowance: 300 })).toBe("12 of 300 AI reads on Rooftap's key used this month.");
     expect(aiKeysUsageLine({ keys: [], access: 'none', used: 0, allowance: null })).toContain('Add your own key');
   });

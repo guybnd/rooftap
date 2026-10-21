@@ -256,7 +256,7 @@ UI-set key and still needs the value in `.env` and `docker-compose.yml`.
 
 **Households' own AI keys (HOUP-436):** separate from the operator keys
 above, any household owner can save their own Gemini, OpenAI, Anthropic or
-OpenRouter key in **Settings → Integrations & keys → AI keys**. AI reads
+OpenRouter key in **Settings → Integrations & keys → Household AI keys**. AI reads
 (receipts, recipes, listings, events) and the assistant then use the
 household's key first, with no monthly limit, and fall back to the server's
 key only when the household has none. Keys are encrypted with
@@ -265,6 +265,13 @@ they reach the service-role-only `household_ai_keys` table, and only the last
 four characters are ever shown again. `self-host-init.sh` generates the
 secret on first boot; without it households can't save keys. Changing it makes
 every saved key unreadable.
+
+The panel only shows where a household key adds something. A server operator
+never sees it (the server's keys already cover them; a key saved earlier stays
+listed with Remove until it's gone), and on a self-hosted server with
+`SERVER_OPERATOR_EMAILS` set nobody does, since the operator manages the
+server's keys in **AI providers**. A self-hosted server with no operator named
+keeps the panel, the only way to add a key from the app there.
 
 With `ROOFTAP_BILLING` unset (every self-hosted server), every household may
 use the server's key with no cap. Hosted Rooftap sets `ROOFTAP_BILLING=on`:

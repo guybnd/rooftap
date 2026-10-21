@@ -18,7 +18,7 @@ import {
   type AssistantErrorCode,
   type AssistantMessage,
 } from './assistant-api';
-import { EMPTY_DRAFT, applyStreamEvent, type AssistantDraft } from './assistant-stream';
+import { createDraftPacer, type AssistantDraft } from './assistant-stream';
 import { isConversationOpen, wantsAssistantReply, type ConversationKind } from './assistant';
 import { deviceKeyValue } from './data/store-environment';
 
@@ -275,9 +275,12 @@ export function useAssistantThread(target: ThreadTarget, host: ThreadHost) {
       sendingRef.current = true;
       setThinking(wantsAssistantReply(kind, 'app', text));
       try {
+        const pacer = createDraftPacer(setDraft);
         const res = await api.send({ text, conversationId: conversationIdRef.current, kind, reopen: resumedRef.current || undefined }, (event) =>
-          setDraft((d) => applyStreamEvent(d ?? EMPTY_DRAFT, event))
+          pacer.push(event)
         );
+        // A lead-in still on screen gets its moment before the stored reply replaces it.
+        await pacer.settled();
         resumedRef.current = false;
         setResumed(false);
         const reply = res.messages.filter((m) => m.role === 'assistant').pop();
