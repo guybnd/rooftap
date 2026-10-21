@@ -29,6 +29,7 @@ export default defineConfig({
       { find: /^@\/hooks\/use-overdue-task-count$/, replacement: mock("use-overdue-task-count.ts") },
       { find: /^@\/components\/module-picker$/, replacement: mock("module-picker.tsx") },
       { find: /^@\/components\/whats-new$/, replacement: mock("whats-new.tsx") },
+      { find: /^@\/components\/(map-view-lazy|itinerary-map-lazy)$/, replacement: mock("demo-map.tsx") },
       { find: "virtual:create-group-store-original", replacement: here("../../../../packages/core/src/data/create-group-store.ts") },
       { find: /^@\//, replacement: here("../../src/") },
     ],

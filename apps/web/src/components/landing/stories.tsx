@@ -49,6 +49,51 @@ export const HOME_STORY: Story = {
   ],
 };
 
+export const CAPTURE_STORY: Story = {
+  id: "capture",
+  room: "home",
+  eyebrow: "Capture",
+  label: "Capture: one + opens a sheet for every module; type first, see what already matches, then add it where it belongs or ask Rooftap",
+  steps: [
+    {
+      title: "One + for everything",
+      features: [
+        play("The roof button.", "Tap the + on any screen. Hold it to go straight to a chat with Rooftap.", [
+          { at: 0, show: { a: "home" } },
+          { at: 200, highlight: at("a", m("home", "roof")) },
+          { at: 900, tap: m("home", "roof") },
+          { at: 1300, show: { a: "capture" } },
+          { at: 1600, highlight: at("a", m("capture", "field")) },
+          { at: 3300, highlight: null },
+        ]),
+        point("Every module.", "A cost, a scanned document, a grocery, a to-do, an event, a recipe or a checklist, each one tap away.", at("a", m("capture", "grocery"), true)),
+        fact("Only your modules.", "A module the household has switched off leaves no tile."),
+        point("Chat with Rooftap.", "Questions and multi-step asks go to the Assistant.", at("a", m("capture", "chat"), true)),
+      ],
+      a: "capture",
+    },
+    {
+      title: "Type first, decide after",
+      features: [
+        point("It searches as you type.", "What you type matches across every module, shown as each one's own rows.", at("a", m("capture-search", "costRow"), true)),
+        point("Already there.", "The insurance renewal is a cost and a reminder task, so nothing gets added twice.", at("a", m("capture-search", "taskRow"), true)),
+        play("Add it as.", "Make it a to-do, a grocery or a cost. The form opens with the text filled in.", [
+          { at: 0, show: { a: "capture-search" } },
+          { at: 200, highlight: at("a", m("capture-search", "todo"), true) },
+          { at: 1200, tap: m("capture-search", "todo") },
+          { at: 1700, show: { b: "capture-todo" } },
+          { at: 1700, pop: "b" },
+          { at: 2000, highlight: at("b", m("capture-todo", "task"), true) },
+          { at: 3800, highlight: null },
+        ]),
+        point("Or ask.", "Ask Rooftap sends the same text to the Assistant, which can answer or make the change.", at("a", m("capture-search", "ask"), true)),
+      ],
+      a: "capture-search",
+      b: "capture-todo",
+    },
+  ],
+};
+
 export const GROCERIES_STORY: Story = {
   id: "groceries",
   room: "groceries",
@@ -664,4 +709,4 @@ export const NATIVE_STORY: Story = {
 /** The first stage: the Home dashboard, under the self-hosting section. */
 export const HERO_STORIES: readonly Story[] = [HOME_STORY];
 /** The modules, one continuous stage, the Android app last. */
-export const ROOM_STORIES: readonly Story[] = [GROCERIES_STORY, CALENDAR_STORY, RECIPES_STORY, SHOPPER_STORY, REWARDS_STORY, ASSISTANT_STORY, MCP_STORY, COSTS_STORY, DOCUMENTS_STORY, CHECKLISTS_STORY, NATIVE_STORY];
+export const ROOM_STORIES: readonly Story[] = [CAPTURE_STORY, GROCERIES_STORY, CALENDAR_STORY, RECIPES_STORY, SHOPPER_STORY, REWARDS_STORY, ASSISTANT_STORY, MCP_STORY, COSTS_STORY, DOCUMENTS_STORY, CHECKLISTS_STORY, NATIVE_STORY];

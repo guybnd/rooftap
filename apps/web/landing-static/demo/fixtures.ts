@@ -499,7 +499,7 @@ export const recipeIngredients: RecipeIngredient[] = [
 ];
 
 // ── Calendar ─────────────────────────────────────────────────────────────────
-const event = (id: string, title: string, starts: string, ends: string, extra: Partial<GroupEvent> = {}): GroupEvent => ({
+export const event = (id: string, title: string, starts: string, ends: string, extra: Partial<GroupEvent> = {}): GroupEvent => ({
   ...base,
   id,
   created_by: AVA,
@@ -911,7 +911,7 @@ const spendChat: AssistantMessage[] = [
 /** A quick ask that reads the calendar. */
 const dentistChat: AssistantMessage[] = [
   msg("q-1", "user", 13, "When is the dentist?", { author: "Ava" }),
-  msg("q-2", "assistant", 12, "**Dentist** is tomorrow at 2:30 PM. Travel is about 28 minutes, so leave by 2 PM."),
+  msg("q-2", "assistant", 12, `**Dentist** is on ${new Date(now.getTime() + 2 * 86_400_000).toLocaleDateString("en-AU", { weekday: "long" })} at 2:30 PM. Travel is about 28 minutes, so leave by 2 PM.`),
 ];
 
 /** Each conversation's messages, by conversation id. */
@@ -1051,12 +1051,12 @@ const apartment = (id: string, address: string, suburb: string, rent: number, ex
 
 /** A few places on the go for the next move. */
 export const apartments: Apartment[] = [
-  apartment("ap-ocean", "4/18 Ocean St", "Bondi", 820, { bedrooms: 2, bathrooms: 2, parking: true, lat: -33.8915, lng: 151.2767, preliminary_score: 8, nearest_supermarket_m: 350, nearest_transport_m: 200, notes: "Sunny, balcony faces north." }),
-  apartment("ap-wattle", "12 Wattle Lane", "Marrickville", 690, { bedrooms: 3, lat: -33.9106, lng: 151.1553, preliminary_score: 7, nearest_supermarket_m: 600, nearest_transport_m: 450, disposition: "to_book" }),
-  apartment("ap-crown", "7/220 Crown St", "Surry Hills", 760, { lat: -33.8861, lng: 151.2111, preliminary_score: 6, nearest_supermarket_m: 150, nearest_transport_m: 500, notes: "Street noise at night." }),
+  apartment("ap-ocean", "4/18 Rose St", "Fitzroy", 820, { bedrooms: 2, bathrooms: 2, parking: true, lat: -37.7985, lng: 144.978, preliminary_score: 8, nearest_supermarket_m: 350, nearest_transport_m: 200, notes: "Sunny, balcony faces north." }),
+  apartment("ap-wattle", "12 Separation St", "Northcote", 690, { bedrooms: 3, lat: -37.7699, lng: 144.999, preliminary_score: 7, nearest_supermarket_m: 600, nearest_transport_m: 450, disposition: "to_book" }),
+  apartment("ap-crown", "7/220 Sydney Rd", "Coburg", 760, { lat: -37.744, lng: 144.9645, preliminary_score: 6, nearest_supermarket_m: 150, nearest_transport_m: 500, notes: "Street noise at night." }),
 ];
 
-const appointment = (id: string, apartmentId: string, scheduledAt: string, extra: Partial<Appointment> = {}): Appointment => ({
+export const appointment = (id: string, apartmentId: string, scheduledAt: string, extra: Partial<Appointment> = {}): Appointment => ({
   id,
   user_id: AVA,
   group_id: GROUP,

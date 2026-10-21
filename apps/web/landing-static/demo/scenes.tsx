@@ -69,6 +69,9 @@ const planToBuyTask = () =>
  */
 const VIEW = "[aria-label^='View options'] >> nth=1";
 const REWARDS = "[aria-label='Rewards cards'] >> nth=1";
+const ROOF = "button[aria-label^='Add (hold']";
+const CAPTURE_FIELD = "input[placeholder='Add or ask anything']";
+const QUOTE = "Compare insurance quotes";
 const STORE_SEARCH = "[placeholder='Which store are you at?']";
 
 function groceriesView(mode: "aisle" | "flat") {
@@ -87,7 +90,29 @@ export const SCENES: Scene[] = [
     id: "home",
     path: "/home",
     page: Home,
-    marks: { count: ["text=left today", 2], weather: ["text=Rain from", 1], now: ["text=Bins out >> visible=true", 4], upcoming: ["text=Upcoming", 3] },
+    marks: { count: ["text=left today", 2], weather: ["text=Rain from", 1], now: ["text=Bins out >> visible=true", 4], upcoming: ["text=Upcoming", 3], roof: ROOF },
+  },
+  // Capture: the + opens one sheet for every module; what's typed searches them all.
+  {
+    id: "capture",
+    path: "/home",
+    page: Home,
+    actions: [{ click: ROOF }, { wait: 700 }],
+    marks: { field: CAPTURE_FIELD, chat: "text=Chat with Rooftap", grocery: ["text=Grocery", 1] },
+  },
+  {
+    id: "capture-search",
+    path: "/home",
+    page: Home,
+    actions: [{ click: ROOF }, { wait: 600 }, { fill: CAPTURE_FIELD, value: "insurance" }, { wait: 700 }],
+    marks: { ask: "button:has-text('Ask Rooftap')", todo: "button:has-text('To-do') >> visible=true", cost: "button:has-text('Cost') >> visible=true", costRow: ["text=NRMA", 2], taskRow: "text=Home insurance contract ends >> nth=-1" },
+  },
+  {
+    id: "capture-todo",
+    path: "/home",
+    page: Home,
+    actions: [{ click: ROOF }, { wait: 600 }, { fill: CAPTURE_FIELD, value: QUOTE }, { wait: 700 }, { click: "button:has-text('To-do') >> visible=true" }, { wait: 800 }],
+    marks: { task: "input[value='Compare insurance quotes']", due: "text=Due date" },
   },
   {
     id: "home-upcoming",

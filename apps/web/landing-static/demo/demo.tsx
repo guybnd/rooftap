@@ -9,6 +9,7 @@ import { sectionHueCss } from "../../src/lib/section-hue-css";
 import { AppSidebar } from "../../src/components/app-sidebar";
 import { ThemeProvider } from "../../src/components/theme-provider";
 import { installFetchShim } from "./fetch-shim";
+import { seedLiveExtras } from "./live-extras";
 import { findScene, livePage, SCENES } from "./scenes";
 import { navigate, setDemoRoute, useDemoRoute } from "./route";
 
@@ -28,6 +29,7 @@ localStorage.clear();
 // ?theme= pins the theme; without it the demo follows the device, as the app does.
 if (params.get("theme")) localStorage.setItem(THEME_PREFERENCE_STORAGE_KEY, params.get("theme")!);
 scene.prepare?.();
+if (live) seedLiveExtras();
 setDemoRoute({ path: scene.path, search: "", params: scene.params ?? {} });
 // Every module is on, and the server offers them all.
 setModuleRows(ALL_MODULE_IDS.map((id) => ({ group_id: "demo-home", module_id: id, enabled: true, updated_by: null, updated_at: "" })));

@@ -160,7 +160,7 @@ const scenarios: Scenario[] = [
     test: /when|calendar|week|tomorrow|today|tonight|bins?|dentist|saturday|weekend|plans?|schedule|busy/i,
     answer: () => ({
       content:
-        "Tonight: **Bins out** at 7 PM (you). Tomorrow: **Dentist** at 2:30 PM, leave by 2 PM. Saturday: **Hosting** at 7 PM for six, and Noa picks up the chairs on Friday. Rain is due from early evening, so bring the bins out before then.",
+        `Next up: **Coffee with Jo** and **Pick up Mia** later today, then **Mia's piano lesson**. **Bins out** is due at 7 PM (you). Tomorrow: the **parent-teacher meeting** at 5:30 PM. ${new Date(Date.now() + 2 * 86_400_000).toLocaleDateString("en-AU", { weekday: "long" })}: **Dentist** at 2:30 PM. Saturday: **Hosting** at 7 PM for six.`,
     }),
   },
 ];

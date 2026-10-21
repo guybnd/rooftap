@@ -47,7 +47,7 @@ export const FEATURE_GROUPS: readonly FeatureGroup[] = [
       ["Shared household", "everyone sees each change as it happens"],
       ["Every platform", "a web app (PWA) on any OS, native Android, native iOS coming soon"],
       ["Offline", "reads work without a connection, writes sync after"],
-      ["Capture", "one + adds anything to any module"],
+      ["Capture", "one + adds anything to any module, and finds what is already there"],
       ["Share sheet", "a link or a photo from any app"],
       ["Android widget", "Upcoming by day on the home screen"],
       ["Weather on Home", "the forecast and the hour the rain starts"],

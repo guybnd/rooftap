@@ -6,6 +6,9 @@
 export const SCREEN_IDS = [
   "home",
   "home-upcoming",
+  "capture",
+  "capture-search",
+  "capture-todo",
   "groceries-aisles",
   "groceries-flat",
   "groceries-aisles-menu",
@@ -61,6 +64,9 @@ export type ScreenId = (typeof SCREEN_IDS)[number];
 export const SCREEN_ALT: Record<ScreenId, string> = {
   home: "The Home screen: two of two left today, the weather, the next task and the Upcoming feed",
   "home-upcoming": "The Upcoming feed on Home, with a bill reminder, a chore, a dentist visit, a warranty check, a party and a birthday",
+  capture: "The Add sheet over Home: a field to add or ask anything, Chat with Rooftap, and a tile for each module",
+  "capture-search": "The Add sheet with insurance typed: Ask Rooftap, add it as a to-do, grocery or cost, and the matching cost and task",
+  "capture-todo": "Add to-do with the task Compare insurance quotes filled in from the Add sheet, due today",
   "groceries-aisles": "The Groceries list sorted by aisle, with two items that might be running low",
   "groceries-flat": "The Groceries list as one plain list",
   "groceries-aisles-menu": "The Groceries View menu open on By aisle, with One list and Only needed",
