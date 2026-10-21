@@ -64,6 +64,10 @@ patches from the public repo, and so does everything the public repo runs
 (`.public-mirror/overlay/.github/workflows/`): never point those at a
 self-hosted runner.
 
+## Function region
+
+`apps/web/vercel.json` pins the Vercel functions (every `/api` route) to `sin1`, Singapore, beside the hosted Supabase project (`ap-southeast-1`). An API request makes several database round trips, so a function in Vercel's default US East region paid a trans-Pacific round trip on each one. If the Supabase project ever moves, move `regions` with it.
+
 ## Two secrets this job needs
 
 `migrate` requires two repository secrets, both set on 2026-10-18. To
