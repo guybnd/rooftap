@@ -51,6 +51,7 @@ import {
   listDocumentTags,
   listSetupStores,
   recipes$,
+  shopperWants$,
   sectionHueSwatch,
   setupItems$,
   useModules,
@@ -66,6 +67,7 @@ import {
   type GroceryItem,
   type HouseholdTask,
   type Recipe,
+  type ShopperWant,
   type SetupItem,
   type SetupStore,
 } from '@homeup/core';
@@ -185,12 +187,14 @@ export function CaptureSheet() {
   const recipes$store = recipes$(syncedGroup(recipes$));
   const checklists$store = checklists$(syncedGroup(checklists$));
   const documents$store = documents$(syncedGroup(documents$));
+  const shopper$store = shopperWants$(syncedGroup(shopperWants$));
   useReconnectSync(appointments$store);
   useReconnectSync(apartments$store);
   useReconnectSync(checklistItems$store);
   useReconnectSync(recipes$store);
   useReconnectSync(checklists$store);
   useReconnectSync(documents$store);
+  useReconnectSync(shopper$store);
   const appointments = use$(() =>
     open ? Object.values(appointments$store.get() ?? {}).filter((a): a is Appointment => !!a && !a.deleted) : []
   );
@@ -205,6 +209,9 @@ export function CaptureSheet() {
   );
   const checklistsList = use$(() =>
     open ? Object.values(checklists$store.get() ?? {}).filter((c): c is Checklist => !!c && !c.deleted) : []
+  );
+  const shopperList = use$(() =>
+    open ? Object.values(shopper$store.get() ?? {}).filter((w): w is ShopperWant => !!w && !w.deleted) : []
   );
   const documentRows = use$(() =>
     open ? Object.values(documents$store.get() ?? {}).filter((d): d is Document => !!d && !d.deleted) : []
@@ -229,6 +236,7 @@ export function CaptureSheet() {
     recipes: recipesList,
     checklists: checklistsList,
     documentStoreRows: documentRows,
+    shopperWants: shopperList,
   });
 
   // Setup stores name a setup row's store and back its editor's store picker
@@ -411,6 +419,7 @@ export function CaptureSheet() {
                 costItems={costItemsList}
                 setupItems={setupItemsList}
                 recipes={recipesList}
+                shopperWants={shopperList}
                 checklists={checklistsList}
                 setupStores={setupStores}
                 customAisles={groceryAux.customAisles}

@@ -22,9 +22,12 @@ import {
   recipeIngredients$,
   syncedGroupId,
   todayISO,
+  summarizeWants,
+  useHouseholdCurrency,
   useModules,
   useReconnectSync,
   type Checklist,
+  type ShopperWant,
   type ChecklistTaskItem,
   type CostItem,
   type GroceryCustomAisle,
@@ -52,6 +55,7 @@ import { CostCard } from "@/app/costs/cost-card";
 import { SetupItemCard } from "@/app/setup/setup-item-card";
 import { ChecklistRow } from "@/app/checklists/checklist-row";
 import { RecipeRow } from "@/app/recipes/recipe-row";
+import { WantRow } from "@/app/shopper/want-row";
 
 /** Results cap across all sections (FLUX-176: the sheet and keyboard always fit). */
 const RESULT_LIMIT = 3;
@@ -75,6 +79,7 @@ export interface CaptureSearchResultsProps {
   setupItems: SetupItem[];
   recipes: Recipe[];
   checklists: Checklist[];
+  shopperWants?: ShopperWant[];
   setupStores: SetupStore[];
   onSetupStoreCreated: (store: SetupStore) => void;
   customAisles?: GroceryCustomAisle[];
@@ -142,6 +147,7 @@ export function CaptureSearchResults({
   setupItems,
   recipes,
   checklists,
+  shopperWants = [],
   setupStores,
   onSetupStoreCreated,
   customAisles,
@@ -163,6 +169,7 @@ export function CaptureSearchResults({
   onHitClick,
 }: CaptureSearchResultsProps) {
   const modules = useModules();
+  const currency = useHouseholdCurrency();
   const hits = useFuzzySearch(index, query, ["title", "subtitle", "keywords"]).slice(0, RESULT_LIMIT);
 
   // Checklist items back both a task's "Checklist N/M" chip and a checklist
@@ -304,6 +311,11 @@ export function CaptureSearchResults({
             onNavigate={onBeforeNavigate}
           />
         );
+      }
+      case "shopper": {
+        const want = shopperWants.find((w) => w.id === hit.id);
+        if (!want) return null;
+        return <WantRow row={summarizeWants([want], [], todayISO())[0]} currency={currency} onNavigate={onBeforeNavigate} />;
       }
       default:
         return null;

@@ -5,5 +5,11 @@
       "**": false,
       "main": true
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/shopper/refresh",
+      "schedule": "0 19 * * *"
+    }
+  ]
 }

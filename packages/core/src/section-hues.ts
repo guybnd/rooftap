@@ -19,6 +19,7 @@ export type SectionHue =
   | 'rose'
   | 'teal'
   | 'lime'
+  | 'orchid'
   | 'slate';
 
 export interface SectionHueSwatch {
@@ -40,6 +41,7 @@ export const SECTION_HUE_IDS: readonly SectionHue[] = [
   'rose',
   'teal',
   'lime',
+  'orchid',
   'slate',
 ];
 
@@ -82,6 +84,10 @@ export const SECTION_HUES: Record<SectionHue, Record<ColorScheme, SectionHueSwat
     dark: { tile: '#2C3A10', glyph: '#D4F27A', glow: '#B8E34F' },
     light: { tile: '#EEF8D2', glyph: '#557A0E', glow: '#B8E34F' },
   },
+  orchid: {
+    dark: { tile: '#3E1A4A', glyph: '#EBAAFF', glow: '#D58BFF' },
+    light: { tile: '#F6E3FB', glyph: '#8A2FA6', glow: '#D58BFF' },
+  },
   slate: {
     dark: { tile: '#262B36', glyph: '#B9C2D4', glow: '#8A96AE' },
     light: { tile: '#E8EBF1', glyph: '#4A5468', glow: '#8A96AE' },
@@ -102,6 +108,7 @@ export const SECTION_HUE_BY_SECTION: Readonly<Record<string, SectionHue>> = {
   setup: 'rose',
   search: 'teal',
   checklists: 'lime',
+  shopper: 'orchid',
   documents: 'slate',
   profile: 'slate',
 };

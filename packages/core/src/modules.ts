@@ -23,6 +23,7 @@ export type ModuleId =
   | 'costs'
   | 'setup'
   | 'search'
+  | 'shopper'
   | 'google-calendar'
   | 'mcp';
 
@@ -118,6 +119,15 @@ export const MODULES: ModuleDef[] = [
     iconId: 'layout-dashboard',
     defaultEnabled: false,
     enhances: ['calendar', 'setup'],
+  },
+  {
+    id: 'shopper',
+    label: 'Shopper',
+    description: 'Things you want to buy, with price tracking and a deal rating.',
+    iconId: 'shopping-bag',
+    defaultEnabled: false,
+    enhances: ['household', 'costs'],
+    minSchema: '20261021010000_shopper',
   },
   // Integrations: modules with no section of their own (.docs/modules.md, section 3).
   {

@@ -320,7 +320,7 @@ describe('resolveGlobalHitAction', () => {
     expect(action).toEqual({ kind: 'nav', href: '/setup' });
   });
 
-  it.each(['calendar', 'checklist', 'search', 'documents', 'recipes', 'checklists'] as const)(
+  it.each(['calendar', 'checklist', 'search', 'documents', 'recipes', 'shopper', 'checklists'] as const)(
     'resolves %s hits to a nav action',
     (section) => {
       const action = resolveGlobalHitAction({ ...baseHit, section, href: '/somewhere' });
@@ -369,6 +369,27 @@ describe('buildGlobalHits with a module switched off', () => {
     ],
     recipes: [recipe()],
     checklists: [checklist()],
+    shopperWants: [
+      {
+        id: 'want-1',
+        group_id: 'group-1',
+        title: 'Sony Bravia 7',
+        query: null,
+        target_cents: null,
+        budget_cents: null,
+        status: 'watching' as const,
+        need_by: null,
+        notes: null,
+        best_cents: null,
+        best_store: null,
+        last_checked_at: null,
+        bought_at: null,
+        created_by: null,
+        created_at: '2026-10-21T00:00:00.000Z',
+        updated_at: '2026-10-21T00:00:00.000Z',
+        deleted: false,
+      },
+    ],
   };
 
   // Which module owns each kind of hit. Viewings (calendar) and the apartment
@@ -383,6 +404,7 @@ describe('buildGlobalHits with a module switched off', () => {
     search: 'search',
     documents: 'documents',
     recipes: 'recipes',
+    shopper: 'shopper',
     checklists: 'checklists',
   };
 

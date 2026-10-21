@@ -22,6 +22,9 @@ import {
   taskFieldPatch,
   useEntityCommentCounts,
   useModules,
+  useHouseholdCurrency,
+  summarizeWants,
+  todayISO,
   useReconnectSync,
   type Checklist,
   type ChecklistTaskItem,
@@ -31,6 +34,7 @@ import {
   type GroupMember,
   type HouseholdTask,
   type Recipe,
+  type ShopperWant,
   type RecipeIngredient,
   type SetupItem,
   type SetupStore,
@@ -46,6 +50,7 @@ import { CostRow } from '@/features/costs/cost-card';
 import { SetupItemCard } from '@/features/setup/setup-item-card';
 import { ChecklistRow } from '@/features/checklists/checklist-row';
 import { RecipeRow } from '@/features/recipes/recipe-row';
+import { WantRow } from '@/features/shopper/want-row';
 import { getBoundSupabaseClient } from '@/lib/supabase-client';
 import { createUndoToastPresenter } from '@/lib/undo-toast';
 import { randomUUID } from '@/lib/uuid';
@@ -68,6 +73,8 @@ export interface CaptureSearchResultsProps {
   costItems: CostItem[];
   setupItems: SetupItem[];
   recipes: Recipe[];
+  /** Shopper items (HOUP-434); empty while the module is off. */
+  shopperWants?: ShopperWant[];
   checklists: Checklist[];
   setupStores: SetupStore[];
   customAisles?: GroceryCustomAisle[];
@@ -105,6 +112,7 @@ export function CaptureSearchResults({
   costItems,
   setupItems,
   recipes,
+  shopperWants = [],
   checklists,
   setupStores,
   customAisles,
@@ -125,6 +133,7 @@ export function CaptureSearchResults({
   onHitPress,
 }: CaptureSearchResultsProps) {
   const modules = useModules();
+  const currency = useHouseholdCurrency();
   const hits = useFuzzySearch(index, query, ['title', 'subtitle', 'keywords']).slice(0, GLOBAL_SEARCH_RESULT_LIMIT);
 
   // The bound (non-throwing) client: this only mounts while searching, long
@@ -322,6 +331,17 @@ export function CaptureSearchResults({
             groceryItems={groceries}
             groceriesLinked={modules.feature('recipes.groceries')}
             onPress={() => onNavigate(`/recipes/${recipe.id}`)}
+          />
+        );
+      }
+      case 'shopper': {
+        const want = shopperWants.find((w) => w.id === hit.id);
+        if (!want) return null;
+        return (
+          <WantRow
+            row={summarizeWants([want], [], todayISO())[0]}
+            currency={currency}
+            onPress={() => onNavigate(`/shopper/${want.id}`)}
           />
         );
       }

@@ -25,7 +25,7 @@ import { useDataCache } from "@/lib/data-cache";
 import { useCapture } from "@/components/capture/capture-context";
 import { getCaptureLauncherCurrentKey } from "@/components/capture/launcher-current";
 import { useSectionSettings } from "@/lib/use-section";
-import { getEnabledModules, getEnabledSections, getSectionByPath, hiddenWithDisabledModules, isCaptureCategoryEnabled, isFeatureEnabled, listSetupStores, sectionHue, syncedGroupId, useModules, useReconnectSync, useStoreHelpers, householdTasks$, groceryItems$, costItems$, setupItems$, recipes$ as recipesStore$, checklists$ as checklistsStore$, apartments$, appointments$, apartmentChecklistItems$ } from "@homeup/core";
+import { getEnabledModules, getEnabledSections, getSectionByPath, hiddenWithDisabledModules, isCaptureCategoryEnabled, isFeatureEnabled, listSetupStores, sectionHue, syncedGroupId, useModules, useReconnectSync, useStoreHelpers, householdTasks$, groceryItems$, costItems$, setupItems$, recipes$ as recipesStore$, checklists$ as checklistsStore$, shopperWants$, apartments$, appointments$, apartmentChecklistItems$ } from "@homeup/core";
 import { useGlobalSearchIndex, resolveGlobalHitAction, type GlobalHit } from "@/hooks/use-global-search-index";
 import { useKeyboardInset } from "@/hooks/use-keyboard-inset";
 import { HOUSEHOLD_TASKS_CHANGED_EVENT } from "@/hooks/use-overdue-task-count";
@@ -64,7 +64,7 @@ import {
 } from '@homeup/core';
 import { uploadReceipt } from '@/lib/grocery-sessions';
 import { parseReceiptFile } from '@/lib/grocery-receipt-parse';
-import type { Apartment, Appointment, ChecklistItem, CostItem, DocType, GroceryItem, HouseholdTask, SetupItem, SetupStore, Recipe, Checklist } from '@homeup/core';
+import type { Apartment, Appointment, ChecklistItem, CostItem, DocType, GroceryItem, HouseholdTask, SetupItem, SetupStore, Recipe, Checklist, ShopperWant } from '@homeup/core';
 
 type Step = "launcher" | "source" | "category" | "invoice" | "details" | "multi";
 
@@ -187,6 +187,7 @@ export function CaptureSheet() {
   const setup$ = setupItems$(syncedGroup(setupItems$));
   const recipes$ = recipesStore$(syncedGroup(recipesStore$));
   const checklists$ = checklistsStore$(syncedGroup(checklistsStore$));
+  const shopper$ = shopperWants$(syncedGroup(shopperWants$));
   const apartments$store = apartments$(syncedGroup(apartments$));
   const appointments$store = appointments$(syncedGroup(appointments$));
   const apartmentChecklistItems$store = apartmentChecklistItems$(syncedGroup(apartmentChecklistItems$));
@@ -196,6 +197,7 @@ export function CaptureSheet() {
   useReconnectSync(setup$);
   useReconnectSync(recipes$);
   useReconnectSync(checklists$);
+  useReconnectSync(shopper$);
   useReconnectSync(apartments$store);
   useReconnectSync(appointments$store);
   useReconnectSync(apartmentChecklistItems$store);
@@ -224,6 +226,9 @@ export function CaptureSheet() {
   const checklistsList = use$(() =>
     active ? Object.values(checklists$.get() ?? {}).filter((c): c is Checklist => !!c && !c.deleted) : []
   );
+  const shopperList = use$(() =>
+    active ? Object.values(shopper$.get() ?? {}).filter((w): w is ShopperWant => !!w && !w.deleted) : []
+  );
   const apartments = use$(() =>
     active ? Object.values(apartments$store.get() ?? {}).filter((a): a is Apartment => !!a && !a.deleted) : []
   );
@@ -247,6 +252,7 @@ export function CaptureSheet() {
     checklistItems: checklistItems ?? [],
     recipes: recipesList,
     checklists: checklistsList,
+    shopperWants: shopperList,
   });
 
   // Setup stores back a setup hit's card (its store chip) and its editor.
@@ -897,6 +903,7 @@ export function CaptureSheet() {
                       costItems={costItemsList}
                       setupItems={setupItemsList}
                       recipes={recipesList}
+                      shopperWants={shopperList}
                       checklists={checklistsList}
                       setupStores={setupStores}
                       onSetupStoreCreated={(store) => setSetupStores((prev) => [...prev, store])}

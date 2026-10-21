@@ -13,12 +13,24 @@ import * as React from 'react';
 import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { use$ } from '@legendapp/state/react';
-import { Hammer, LayoutDashboard, CalendarClock, Star, ChevronRight } from 'lucide-react-native';
+import { Hammer, LayoutDashboard, CalendarClock, Star, ChevronRight, ShoppingBag } from 'lucide-react-native';
 import { Text, Card, LeadingTile } from '@homeup/ui';
 import {
   summarize,
   useReconnectSync,
   setupItems$,
+  shopperWants$,
+  shopperPriceSnapshots$,
+  summarizeWants,
+  sortWatching,
+  isGoodNow,
+  hitTarget,
+  formatMoney,
+  todayISO,
+  useHouseholdCurrency,
+  DEAL_META,
+  type ShopperWant,
+  type ShopperPriceSnapshot,
   type Group,
   type SetupItem,
   type Appointment,
@@ -144,6 +156,71 @@ export function HomeSearchTile({
                 <Text className="text-caption text-muted-foreground">No listings yet</Text>
               )}
             </View>
+          </View>
+        </Card>
+      </Pressable>
+    </View>
+  );
+}
+
+// ── Shopper (HOUP-434) ──────────────────────────────────────────────────────────
+// How many watched items are at a good price now, and the best of them.
+export function ShopperTile({ group }: { group: Group }) {
+  const router = useRouter();
+  const currency = useHouseholdCurrency();
+  const wants$ = shopperWants$(group.id);
+  const snaps$ = shopperPriceSnapshots$(group.id);
+  useReconnectSync(wants$);
+  useReconnectSync(snaps$);
+  const wants = use$(() =>
+    Object.values(wants$.get() ?? {}).filter((w): w is ShopperWant => !!w && !w.deleted && w.status === 'watching')
+  );
+  const snaps = use$(() =>
+    Object.values(snaps$.get() ?? {}).filter((s): s is ShopperPriceSnapshot => !!s && !s.deleted)
+  );
+  const rows = sortWatching(summarizeWants(wants, snaps, todayISO()));
+  const good = rows.filter(isGoodNow);
+  const top = good[0] ?? null;
+
+  return (
+    <View className="min-w-[47%] flex-1">
+      <Pressable
+        onPress={() => router.push(top ? `/shopper/${top.want.id}` : '/shopper')}
+        accessibilityRole="button"
+        accessibilityLabel="Shopper"
+      >
+        <Card size="sm">
+          <View className="gap-2 px-4">
+            <TileHeader Icon={ShoppingBag} sectionId="shopper" title="Shopper" />
+            {rows.length === 0 ? (
+              <Text className="text-caption text-muted-foreground">Nothing being watched.</Text>
+            ) : (
+              <View className="gap-2">
+                <View className="flex-row items-baseline gap-2">
+                  <Text className="text-title font-semibold text-foreground" style={{ fontVariant: ['tabular-nums'] }}>
+                    {good.length}
+                  </Text>
+                  <Text className="text-caption text-muted-foreground">
+                    {good.length === 1 ? 'good deal' : 'good deals'} · {rows.length} watching
+                  </Text>
+                </View>
+                {top && top.want.best_cents != null && (
+                  <View className="min-w-0">
+                    <Text numberOfLines={1} className="text-caption text-foreground">
+                      {top.want.title}
+                    </Text>
+                    <Text numberOfLines={1} className="text-[11px] text-muted-foreground" style={{ fontVariant: ['tabular-nums'] }}>
+                      <Text className="text-[11px] text-success">
+                        {hitTarget(top.want) ? 'Hit target' : top.verdict.rating ? DEAL_META[top.verdict.rating].label : ''}
+                      </Text>
+                      {' · '}
+                      {formatMoney(top.want.best_cents, { currency })}
+                      {top.want.best_store ? ` at ${top.want.best_store}` : ''}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
           </View>
         </Card>
       </Pressable>

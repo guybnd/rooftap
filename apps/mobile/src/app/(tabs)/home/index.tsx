@@ -155,7 +155,7 @@ import { HeroCustomizeSheet } from '@/features/home/hero-customize-sheet';
 import { GroceriesWidget } from '@/features/home/groceries-widget';
 import { FeedControls, type FeedTypeOption } from '@/features/home/feed-heading';
 import { BudgetSpace, BillsSpace } from '@/features/home/money-spaces';
-import { SetupTile, HomeSearchTile } from '@/features/home/section-tiles';
+import { SetupTile, HomeSearchTile, ShopperTile } from '@/features/home/section-tiles';
 import { formatTime12h, localDateISO } from '@homeup/core';
 import { HeroTaskRow } from '@/features/tasks/task-row';
 import { HouseholdTaskModal } from '@/features/tasks/household-task-modal';
@@ -1299,6 +1299,7 @@ export default function HomeSectionScreen() {
         <View className="flex-row flex-wrap gap-3" style={showIf(!shownLens)}>
           {!hidden.includes('setup') && <SetupTile group={group} />}
           {searchVisible && <HomeSearchTile apartments={apartmentsWithScore} appointments={appointmentsList} />}
+          {!hidden.includes('shopper') && <ShopperTile group={group} />}
         </View>
 
         <Moment

@@ -102,6 +102,16 @@ export const MODULE_FEATURES = {
     what: 'Have and need from the shopping list, "Add missing", and the recipe chip on grocery items.',
   },
 
+  // ── Shopper ──────────────────────────────────────────────────────────────
+  'shopper.tasks': {
+    modules: ['shopper', 'household'],
+    what: 'A "Buy it" to-do from Plan to buy on a Shopper item.',
+  },
+  'shopper.costs': {
+    modules: ['shopper', 'costs'],
+    what: 'A planned one-off cost from Plan to buy on a Shopper item.',
+  },
+
   // ── Costs ────────────────────────────────────────────────────────────────
   'costs.from-groceries': {
     modules: ['costs', 'groceries'],

@@ -37,6 +37,12 @@ export const RUNTIME_KEYS: KeyDefinition[] = [
     purpose: "Fetches listing pages that block direct requests.",
   },
   {
+    key: "SERPAPI_API_KEY",
+    class: "runtime",
+    label: "SerpApi key",
+    purpose: "Finds current prices for Shopper items through Google Shopping.",
+  },
+  {
     key: "GOOGLE_CLIENT_ID",
     class: "runtime",
     label: "Google Calendar OAuth",

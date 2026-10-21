@@ -30,6 +30,8 @@ export * from './grocery-icons';
 export * from './grocery-sessions';
 export * from './loyalty-cards';
 export * from './recipes';
+export * from './shopper';
+export * from './shopper-sources';
 export * from './setup';
 export * from './setup-templates';
 export * from './sections';

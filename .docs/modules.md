@@ -46,6 +46,7 @@ Module ids reuse the existing section ids so `hidden_sections`, `section_order`,
 | `setup` | Home Setup & Moving | Off | | `search`, `costs` |
 | `search` | Home Search (listings, agents, map, appointments, scoring) | Off | | `calendar`, `setup` |
 | `google-calendar` | Google Calendar sync | Off | `calendar` | `household` |
+| `shopper` | Shopper (watchlist, price history, deal rating) | Off | | `household`, `costs` |
 | `mcp` | MCP / agent access | Off | | all |
 
 `home` (the hub) and `profile` (Settings) are platform, not modules.
@@ -61,6 +62,7 @@ Known soft features to gate (each must check both modules):
 - Calendar → Tasks, Home Search, Google Calendar: tasks, appointments and pulled events on the calendar.
 - Calendar → Costs: an event's ticket cost kept as a Going out line in the Budget (`calendar.budget`).
 - Setup → Home Search: the chosen apartment as the home being set up.
+- Shopper → Tasks, Costs: "Plan to buy" writes a to-do (`shopper.tasks`) and a planned purchase cost (`shopper.costs`).
 
 ## 4. Data model
 
@@ -167,6 +169,7 @@ The tricky cases are features that **write into another module's tables**, becau
 | Checklists ↔ Tasks | scheduling a checklist writes its linked task; completing syncs it | no new linked task; an existing one still follows the list's date, title, completion and removal. The checklist chip, panel and picker hide (`tasks.checklists`) |
 | Checklists → Costs | `log_costs` checklists write purchase cost lines | checking logs no new cost line; unchecking still removes the one an item logged. The "log costs" option hides (`costs.from-checklists`) |
 | Groceries → Costs | a shopping session writes a `grocery_estimate` cost line | no new cost line; a trip's existing line keeps its total, or goes at $0. The trip panel's cost copy hides (`costs.from-groceries`) |
+| Shopper → Tasks, Costs | "Plan to buy" writes a household task and a one-off purchase cost (`linked_section: 'shopper'`) | Plan to buy offers only what is on; with both off the item page offers Mark bought and an alert instead (`shopper.tasks`, `shopper.costs`) |
 | Recipes → Groceries | "Add missing" writes grocery items | have and need, "Add missing" and the recipe chip on grocery items hide (`recipes.groceries`) |
 | Calendar → Tasks, Search | the calendar creates tasks and viewings; Google import writes either | the add chooser, Google import buttons and viewing suggestions offer only what is on (`calendar.tasks`, `calendar.viewings`) |
 | Capture and share | categories on mobile share and web capture | each category needs the features it writes through (`CAPTURE_CATEGORY_FEATURES` in documents.ts; an invoice needs Costs and Documents). A share nothing can take says so instead of landing on Home |

@@ -11,7 +11,7 @@ import {
   type GlobalHitAction,
   type SectionKey,
 } from '@homeup/core/src/hooks/use-global-search-index';
-import type { HouseholdTask, GroceryItem, CostItem, SetupItem, Appointment, ChecklistItem, Recipe, Checklist } from '@homeup/core';
+import type { HouseholdTask, GroceryItem, CostItem, SetupItem, Appointment, ChecklistItem, Recipe, Checklist, ShopperWant } from '@homeup/core';
 
 export { SECTION_LABELS, GLOBAL_HIT_SECTION_ID, resolveGlobalHitAction } from '@homeup/core/src/hooks/use-global-search-index';
 export type { GlobalHit, GlobalHitAction, SectionKey };
@@ -28,6 +28,7 @@ interface UseGlobalSearchIndexArgs {
   checklistItems: ChecklistItem[];
   recipes: Recipe[];
   checklists: Checklist[];
+  shopperWants?: ShopperWant[];
 }
 
 export function useGlobalSearchIndex(args: UseGlobalSearchIndexArgs): { index: GlobalHit[]; docsLoading: boolean } {

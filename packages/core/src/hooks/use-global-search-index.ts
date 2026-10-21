@@ -19,6 +19,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { listUnifiedDocuments, type UnifiedDocument } from '../documents';
 import { recipeCuisines } from '../recipes';
 import { useModules } from '../modules-store';
+import type { ShopperWant } from '../shopper';
 import type { HouseholdTask, GroceryItem, CostItem, SetupItem, Appointment, ChecklistItem, Recipe, Checklist, Document } from '../types';
 
 export type SectionKey =
@@ -31,6 +32,7 @@ export type SectionKey =
   | 'search'
   | 'documents'
   | 'recipes'
+  | 'shopper'
   | 'checklists';
 
 export const SECTION_LABELS: Record<SectionKey, string> = {
@@ -45,6 +47,7 @@ export const SECTION_LABELS: Record<SectionKey, string> = {
   search: 'Home Search',
   documents: 'Documents',
   recipes: 'Recipes',
+  shopper: 'Shopper',
   checklists: 'Checklists',
 };
 
@@ -66,6 +69,7 @@ export const GLOBAL_HIT_SECTION_ID: Record<SectionKey, string> = {
   search: 'search',
   documents: 'documents',
   recipes: 'recipes',
+  shopper: 'shopper',
   checklists: 'checklists',
 };
 
@@ -76,6 +80,7 @@ const SECTION_PATHS: Partial<Record<SectionKey, string>> = {
   checklist: '/checklist',
   documents: '/documents',
   recipes: '/recipes',
+  shopper: '/shopper',
   checklists: '/checklists',
 };
 
@@ -124,6 +129,8 @@ interface UseGlobalSearchIndexArgs {
   checklistItems: ChecklistItem[];
   recipes: Recipe[];
   checklists: Checklist[];
+  /** Shopper wants; omitted by callers that don't read the shopper store. */
+  shopperWants?: ShopperWant[];
   /** Optional pre-fetched document rows (e.g. a Legend store) in place of a fresh fetch. */
   documentStoreRows?: Document[];
 }
@@ -140,6 +147,7 @@ interface BuildGlobalHitsArgs {
   documents: UnifiedDocument[];
   recipes: Recipe[];
   checklists: Checklist[];
+  shopperWants?: ShopperWant[];
 }
 
 /**
@@ -159,6 +167,7 @@ export function buildGlobalHits({
   documents,
   recipes,
   checklists,
+  shopperWants = [],
 }: BuildGlobalHitsArgs): GlobalHit[] {
   const hidden = new Set(hiddenSections);
   const hits: GlobalHit[] = [];
@@ -304,6 +313,22 @@ export function buildGlobalHits({
     }
   }
 
+  // ── Shopper ───────────────────────────────────────────────────────────────
+  if (!hidden.has('shopper')) {
+    for (const w of shopperWants) {
+      if (w.deleted) continue;
+      hits.push({
+        section: 'shopper',
+        sectionLabel: SECTION_LABELS.shopper,
+        id: w.id,
+        title: w.title,
+        subtitle: w.status === 'bought' ? 'Bought' : w.best_store ?? undefined,
+        keywords: [w.query, w.notes].filter(Boolean).join(' '),
+        href: `/shopper/${w.id}`,
+      });
+    }
+  }
+
   // ── Household Checklists ─────────────────────────────────────────────────
   if (!hidden.has('checklists')) {
     for (const c of checklists) {
@@ -336,6 +361,7 @@ export function useGlobalSearchIndex({
   checklistItems,
   recipes,
   checklists,
+  shopperWants,
   documentStoreRows,
 }: UseGlobalSearchIndexArgs): { index: GlobalHit[]; docsLoading: boolean } {
   const [documents, setDocuments] = useState<UnifiedDocument[]>([]);
@@ -373,8 +399,9 @@ export function useGlobalSearchIndex({
         documents,
         recipes,
         checklists,
+        shopperWants,
       }),
-    [hiddenSections, tasks, groceries, costItems, setupItems, appointments, apartments, checklistItems, documents, recipes, checklists]
+    [hiddenSections, tasks, groceries, costItems, setupItems, appointments, apartments, checklistItems, documents, recipes, checklists, shopperWants]
   );
 
   return { index, docsLoading };

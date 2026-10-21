@@ -27,6 +27,9 @@ export const STORE_MODULES = {
   recipe_ingredients: ['recipes'],
   events: ['calendar'],
   documents: ['documents'],
+  shopper_wants: ['shopper'],
+  shopper_offers: ['shopper'],
+  shopper_price_snapshots: ['shopper'],
   // Home Search: listings, agents, viewings and the listing checklist.
   apartments: ['search'],
   agents: ['search'],

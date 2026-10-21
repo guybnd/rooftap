@@ -26,6 +26,7 @@ export const TAB_ROUTES = [
   '/groceries',
   '/checklists',
   '/recipes',
+  '/shopper',
   '/documents',
   '/appointments',
   '/checklist',

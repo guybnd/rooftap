@@ -298,7 +298,8 @@ describe('server schema', () => {
 
     act(() => setServerSchema(null));
     expect(result.current.server('mcp.connected-apps')).toBe(false);
-    expect(result.current.serverUpdateAdds.map((f) => f.label)).toEqual(['connecting AI assistants by signing in']);
+    // Shopper is a module newer than the baseline, so it is listed too.
+    expect(result.current.serverUpdateAdds.map((f) => f.label)).toEqual(['Shopper', 'connecting AI assistants by signing in']);
 
     act(() => setServerSchema('20261020050000_mcp_oauth'));
     expect(result.current.server('mcp.connected-apps')).toBe(true);
@@ -316,7 +317,7 @@ describe('server schema', () => {
       act(() => setServerSchema('20261020050000_mcp_oauth'));
       expect(result.current.isEnabled('mcp')).toBe(false);
       expect(result.current.offered.some((m) => m.id === 'mcp')).toBe(false);
-      expect(result.current.serverUpdateAdds.map((f) => f.label)).toEqual(['AI assistants (MCP)']);
+      expect(result.current.serverUpdateAdds.map((f) => f.label)).toEqual(['Shopper', 'AI assistants (MCP)']);
     } finally {
       delete mcp.minSchema;
     }

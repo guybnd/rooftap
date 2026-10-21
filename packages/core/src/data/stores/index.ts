@@ -21,3 +21,4 @@ export * from './recipe-ingredients-store';
 export * from './recipes-store';
 export * from './saved-searches-store';
 export * from './setup-items-store';
+export * from './shopper-stores';

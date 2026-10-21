@@ -6,9 +6,24 @@
 // Each reads its section's existing store/data without leaving the hub.
 
 import { use$ } from '@legendapp/state/react';
-import { Hammer, LayoutDashboard, CalendarClock, Star } from 'lucide-react';
-import type { Group, SetupItem, ApartmentWithScore, Appointment } from '@homeup/core';
-import { formatRelativeDay, setupItems$, useReconnectSync, summarize } from '@homeup/core';
+import { Hammer, LayoutDashboard, CalendarClock, Star, ShoppingBag } from 'lucide-react';
+import type { Group, SetupItem, ApartmentWithScore, Appointment, ShopperWant, ShopperPriceSnapshot } from '@homeup/core';
+import {
+  formatRelativeDay,
+  setupItems$,
+  useReconnectSync,
+  summarize,
+  shopperWants$,
+  shopperPriceSnapshots$,
+  summarizeWants,
+  sortWatching,
+  isGoodNow,
+  formatMoney,
+  useHouseholdCurrency,
+  todayISO,
+  DEAL_META,
+  hitTarget,
+} from '@homeup/core';
 import { SegmentedBar } from '@/app/setup/segmented-bar';
 import { HubTile, TileHeader, formatTime12h, pad2 } from './hub-shared';
 
@@ -97,6 +112,56 @@ export function HomeSearchTile({
           )}
         </div>
       </div>
+    </HubTile>
+  );
+}
+
+// ── Shopper (HOUP-434) ──────────────────────────────────────────────────────────
+// How many watched items are at a good price now, and the best of them.
+export function ShopperTile({ group }: { group: Group }) {
+  const currency = useHouseholdCurrency();
+  const wants$ = shopperWants$(group.id);
+  const snaps$ = shopperPriceSnapshots$(group.id);
+  useReconnectSync(wants$);
+  useReconnectSync(snaps$);
+  const wants = use$(() =>
+    Object.values(wants$.get() ?? {}).filter((w): w is ShopperWant => !!w && !w.deleted && w.status === 'watching')
+  );
+  const snaps = use$(() =>
+    Object.values(snaps$.get() ?? {}).filter((s): s is ShopperPriceSnapshot => !!s && !s.deleted)
+  );
+  const rows = sortWatching(summarizeWants(wants, snaps, todayISO()));
+  const good = rows.filter(isGoodNow);
+  const top = good[0] ?? null;
+
+  return (
+    <HubTile href={top ? `/shopper/${top.want.id}` : '/shopper'} ariaLabel="Shopper">
+      <TileHeader sectionId="shopper" Icon={ShoppingBag} title="Shopper" />
+      {rows.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Nothing being watched.</p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          <div className="flex items-baseline gap-2">
+            <span className="font-heading text-2xl font-bold tracking-tight text-foreground tabular-nums">{good.length}</span>
+            <span className="text-xs text-muted-foreground">
+              {good.length === 1 ? 'good deal' : 'good deals'} · {rows.length} watching
+            </span>
+          </div>
+          {top && top.want.best_cents != null && (
+            <div className="min-w-0 text-sm">
+              <div className="truncate text-foreground">{top.want.title}</div>
+              <div className="text-xs text-muted-foreground tabular-nums">
+                <span className="text-success">
+                  {hitTarget(top.want) ? 'Hit target' : top.verdict.rating ? DEAL_META[top.verdict.rating].label : ''}
+                </span>
+                {' · '}
+                {formatMoney(top.want.best_cents, { currency })}
+                {top.want.best_store ? ` at ${top.want.best_store}` : ''}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </HubTile>
   );
 }
