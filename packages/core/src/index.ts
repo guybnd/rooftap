@@ -22,6 +22,7 @@ export * from './checklists';
 export * from './checklist-view';
 export * from './comments';
 export * from './costs';
+export * from './household-currency';
 export * from './currency';
 export * from './cost-items';
 export * from './cost-reminders';

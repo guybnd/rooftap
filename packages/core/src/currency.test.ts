@@ -1,14 +1,13 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { formatMoney } from './costs';
 import {
-  DEFAULT_CURRENCY,
   FOLLOW_REGION_CURRENCY,
   currencyPickerOptions,
   currencySymbol,
   getHouseholdCurrency,
-  householdCurrency,
   setHouseholdCurrency,
 } from './currency';
+import { DEFAULT_CURRENCY, householdCurrency } from './household-currency';
 
 afterEach(() => setHouseholdCurrency(DEFAULT_CURRENCY));
 

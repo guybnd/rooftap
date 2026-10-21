@@ -13,22 +13,15 @@
 
 import { useSyncExternalStore } from 'react';
 import type { PickerOption } from './types';
-import { CURRENCY_BY_COUNTRY, currencyForCountry } from './region/currency-by-country';
+import { CURRENCY_BY_COUNTRY } from './region/currency-by-country';
+import { DEFAULT_CURRENCY } from './household-currency';
 
-export const DEFAULT_CURRENCY = 'AUD';
 
 // Money reads in the app's English with the currency's own short symbol ("€",
 // "£", "₪"), not "EUR 12": en-AU's plain symbol for anything but AUD is the
 // ISO code. The household has one currency, so "$" for USD or CAD is not
 // ambiguous inside it.
 const LOCALE = 'en-AU';
-
-/** The currency a household's money is shown in: its explicit pick, else its region's. */
-export function householdCurrency(group: { region?: string | null; currency?: string | null } | null | undefined): string {
-  const explicit = group?.currency?.toUpperCase();
-  if (explicit && /^[A-Z]{3}$/.test(explicit)) return explicit;
-  return group?.region ? currencyForCountry(group.region.toUpperCase()) : DEFAULT_CURRENCY;
-}
 
 let current = DEFAULT_CURRENCY;
 let notified = DEFAULT_CURRENCY;
