@@ -52,6 +52,8 @@ import {
   listDocumentTags,
   listSetupStores,
   looksLikeQuestion,
+  openAssistantPopup,
+  useAssistantUnread,
   recipes$,
   shopperWants$,
   sectionHueSwatch,
@@ -282,8 +284,17 @@ export function CaptureSheet() {
   // One box: what's typed can also go to Rooftap as a quick ask.
   const canAsk = modules.isEnabled('assistant') && isOnline;
   const asking = canAsk && looksLikeQuestion(q);
+  const assistantUnread = useAssistantUnread();
+  // Both open the pop-up chat over this screen (the chat screen if it isn't mounted).
   const askRooftap = (text: string) => {
-    if (text.trim()) navigateTo(`/assistant/new?kind=quick&ask=${encodeURIComponent(text.trim())}`);
+    const ask = text.trim();
+    if (!ask) return;
+    closeCapture();
+    if (!openAssistantPopup({ ask })) openRoute(`/assistant/new?kind=quick&ask=${encodeURIComponent(ask)}`);
+  };
+  const openChat = () => {
+    closeCapture();
+    if (!openAssistantPopup()) openRoute('/assistant/new?kind=quick');
   };
 
   const openGroceryEdit = (g: GroceryItem) => {
@@ -474,6 +485,23 @@ export function CaptureSheet() {
               />
             </View>
           ) : (
+            <View className="gap-3">
+              {/* The chat, one tap from the + (holding or swiping up the + opens it directly). */}
+              {canAsk && (
+                <Pressable
+                  onPress={openChat}
+                  accessibilityRole="button"
+                  accessibilityLabel={assistantUnread > 0 ? 'Chat with Rooftap, new answer waiting' : 'Chat with Rooftap'}
+                  className="min-h-12 flex-row items-center gap-3 rounded-xl border border-border bg-card px-3 py-2"
+                >
+                  <LeadingTile sectionId="assistant" Icon={Sparkles} size="sm" />
+                  <Text className="min-w-0 flex-1 text-sm font-medium text-foreground">Chat with Rooftap</Text>
+                  {assistantUnread > 0 && (
+                    <View className="size-2 rounded-full" style={{ backgroundColor: sectionHueSwatch('assistant', scheme).glow }} />
+                  )}
+                  <Text className="text-xs text-muted-foreground">Hold + to jump in</Text>
+                </Pressable>
+              )}
             <View className="flex-row flex-wrap gap-2.5">
               {enabledActions.map((a) => {
                 const disabled = !!a.onlineOnly && !isOnline;
@@ -492,6 +520,7 @@ export function CaptureSheet() {
                   </Pressable>
                 );
               })}
+            </View>
             </View>
           )}
         </View>

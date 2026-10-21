@@ -6,7 +6,7 @@
 // apps/web/src/components/assistant-answers.tsx.
 import * as React from 'react';
 import { AppState } from 'react-native';
-import { conversationTitle, onAnswerElsewhere, replyPreview, useModules } from '@homeup/core';
+import { conversationTitle, onAnswerElsewhere, openAssistantPopup, replyPreview, useModules } from '@homeup/core';
 import { toast } from '@homeup/ui';
 import { useDataCache } from '@/lib/data-cache';
 import { useOpenRoute } from '@/lib/tab-routes';
@@ -33,7 +33,10 @@ export function AssistantAnswers() {
         description: replyPreview(reply.content, 90) || conversationTitle(conversation),
         duration: 8000,
         placement: 'top',
-        action: { label: 'Open', onPress: () => openRouteRef.current(`/assistant/${conversation.id}`) },
+        action: {
+          label: 'Open',
+          onPress: () => openAssistantPopup({ conversationId: conversation.id }) || openRouteRef.current(`/assistant/${conversation.id}`),
+        },
       });
     });
     return () => {

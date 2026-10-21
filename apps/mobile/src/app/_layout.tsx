@@ -7,6 +7,7 @@
 // of a tab navigator. `AnimatedSplashOverlay` is kept as-is (unrelated to nav)
 // — it owns the `SplashScreen.hideAsync()` call below.
 import { AssistantAnswers } from '@/features/assistant/assistant-answers';
+import { AssistantChatPopup } from '@/features/assistant/chat-popup';
 import '@/global.css';
 // HOUP-86: registers apps/mobile's StoreEnvironment (expo-sqlite persist,
 // NetInfo/AppState online+reconnect detection) before any Legend-State store
@@ -139,6 +140,8 @@ export default function RootLayout() {
                 <Stack screenOptions={{ headerShown: false }} />
                 {showTabBar && <PrimaryTabBar />}
                 <CaptureSheet />
+                {/* The pop-up chat that grows out of the + (features/assistant/chat-popup.tsx). */}
+                <AssistantChatPopup />
                 {/* First-run module picker for a new household's owner
                     (.docs/modules.md): above the tab bar, under the toasts. */}
                 <ModulePicker />

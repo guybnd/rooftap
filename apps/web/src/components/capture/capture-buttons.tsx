@@ -7,22 +7,26 @@
 // offline-capable quick-adds still work; the launcher disables only the
 // online-only tiles (Doc/Scan, Apartment) itself.
 
-// Hold the mobile "+" (assistant on): it fans out into Add and Ask, so the
-// assistant is one hold away from every screen. A tap still opens the sheet.
+// The mobile "+" (assistant on) is also the way into the pop-up chat
+// (components/assistant-chat-popup.tsx): swipe up from it, or hold it and the
+// slide's zipper ramps up into the pop that opens the chat. A tap still opens
+// the sheet. Native twin: apps/mobile/src/components/nav/capture-fab.tsx.
 
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
-import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { Plus, Sparkles } from "lucide-react";
-import { sectionHue, useAssistantUnread, useModules } from "@homeup/core";
+import { ASK_HOLD_MS, askHoldZipperMs, openAssistantPopup, sectionHue, useAssistantUnread, useModules } from "@homeup/core";
 import { cn } from "@/lib/utils";
-import { commit } from "@/lib/haptics";
+import { commit, pop, tick, zipper } from "@/lib/haptics";
 import { useDataCache } from "@/lib/data-cache";
 import { useCapture } from "@/components/capture/capture-context";
+import { RooftapMark } from "@/components/brand/rooftap-mark";
 
-// Same hold as the tab bar's slot picker (section-switcher.tsx).
-const ASK_HOLD_MS = 450;
 const HOLD_SLOP_PX = 10;
+/** How far up a swipe must travel to open the chat. */
+const SWIPE_OPEN_PX = 40;
+/** The + follows a swipe at this fraction of the finger, up to this far. */
+const SWIPE_FOLLOW = 0.6;
+const SWIPE_MAX_LIFT = 36;
 
 /** Desktop: a prominent "+ Capture" button in the sidebar, above the switcher. */
 export function DesktopCaptureButton() {
@@ -35,7 +39,7 @@ export function DesktopCaptureButton() {
         title="Add a cost, to-do, grocery, document and more"
         className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-[13px] font-semibold text-primary-foreground hover:bg-primary/90 active:translate-y-px disabled:opacity-50 disabled:pointer-events-none transition-all"
       >
-        <Plus className="h-4 w-4 shrink-0" />
+        <RooftapMark className="h-4 w-4 shrink-0" />
         Capture
       </button>
     </div>
@@ -55,147 +59,125 @@ export function MobileCaptureFab() {
   const { isOnline } = useDataCache();
   const canAsk = modules.isEnabled("assistant") && isOnline;
   const unread = useAssistantUnread();
-  const [fanOpen, setFanOpen] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const start = useRef<{ x: number; y: number } | null>(null);
-  const held = useRef(false);
+  // 0..1: how charged the hold is, or how far the swipe has climbed.
+  const [charge, setCharge] = useState(0);
+  const [lift, setLift] = useState(0);
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const start = useRef<{ x: number; y: number; at: number } | null>(null);
+  const swiping = useRef(false);
+  const armed = useRef(false);
+  const handled = useRef(false);
 
-  const cancel = () => {
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = null;
+  const stop = () => {
+    timers.current.forEach(clearTimeout);
+    timers.current = [];
+  };
+  const reset = () => {
+    stop();
     start.current = null;
+    swiping.current = false;
+    armed.current = false;
+    setCharge(0);
+    setLift(0);
   };
-  useEffect(() => cancel, []);
+  useEffect(() => stop, []);
 
-  const openFan = () => {
-    held.current = true;
-    cancel();
-    commit();
-    setFanOpen(true);
+  const openChat = () => {
+    handled.current = true;
+    reset();
+    if (!openAssistantPopup()) router.push("/assistant/new?kind=quick");
   };
 
-  const holdHandlers = canAsk
+  const gestureHandlers = canAsk
     ? {
-        onPointerDown: (e: ReactPointerEvent) => {
+        onPointerDown: (e: ReactPointerEvent<HTMLButtonElement>) => {
           if (e.pointerType === "mouse" && e.button !== 0) return;
-          held.current = false;
-          cancel();
-          start.current = { x: e.clientX, y: e.clientY };
-          timer.current = setTimeout(openFan, ASK_HOLD_MS);
+          reset();
+          handled.current = false;
+          start.current = { x: e.clientX, y: e.clientY, at: Date.now() };
+          e.currentTarget.setPointerCapture?.(e.pointerId);
+          setCharge(1);
+          timers.current = askHoldZipperMs().map((ms, step) => setTimeout(() => zipper(step), ms));
+          timers.current.push(
+            setTimeout(() => {
+              pop();
+              openChat();
+            }, ASK_HOLD_MS)
+          );
         },
         onPointerMove: (e: ReactPointerEvent) => {
           const s = start.current;
-          if (s && Math.hypot(e.clientX - s.x, e.clientY - s.y) > HOLD_SLOP_PX) cancel();
+          if (!s) return;
+          const dy = e.clientY - s.y;
+          if (!swiping.current && Math.hypot(e.clientX - s.x, dy) > HOLD_SLOP_PX) {
+            // Moving ends the hold; moving up turns it into the swipe.
+            stop();
+            setCharge(0);
+            if (dy < 0 && Math.abs(e.clientX - s.x) < Math.abs(dy)) swiping.current = true;
+            else start.current = null;
+          }
+          if (swiping.current) {
+            setLift(Math.max(-SWIPE_MAX_LIFT, Math.min(0, dy * SWIPE_FOLLOW)));
+            const past = dy < -SWIPE_OPEN_PX;
+            if (past !== armed.current) {
+              armed.current = past;
+              if (past) tick();
+            }
+          }
         },
-        onPointerUp: cancel,
-        onPointerCancel: cancel,
-        onPointerLeave: cancel,
-        onContextMenu: (e: ReactMouseEvent) => {
-          e.preventDefault();
-          openFan();
+        onPointerUp: () => {
+          if (swiping.current) {
+            if (armed.current) {
+              commit();
+              openChat();
+              return;
+            }
+            handled.current = true;
+          }
+          reset();
         },
+        onPointerCancel: reset,
+        onContextMenu: (e: ReactMouseEvent) => e.preventDefault(),
       }
     : {};
 
+  const glow = Math.max(charge, -lift / SWIPE_MAX_LIFT);
   return (
-    <>
-      <button
-        {...holdHandlers}
-        onClick={() => {
-          // The click that ends a hold belongs to the fan, not the sheet.
-          if (held.current) {
-            held.current = false;
-            return;
-          }
-          openCapture();
-        }}
-        aria-label={canAsk ? (unread > 0 ? "Add (hold to ask Rooftap, new answer waiting)" : "Add (hold to ask Rooftap)") : "Add"}
-        className={cn(
-          "md:hidden absolute left-1/2 -translate-x-1/2 -top-5 z-30 [view-transition-name:capture-fab] select-none [-webkit-touch-callout:none]",
-          "flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground",
-          "shadow-lg ring-4 ring-background active:scale-95 disabled:opacity-50 disabled:pointer-events-none transition"
-        )}
-      >
-        <Plus className="h-6 w-6" />
-        {/* A reply you haven't opened yet: the assistant's glow, in a small dose. */}
-        {canAsk && unread > 0 && (
-          <span
-            aria-hidden
-            data-hue={sectionHue("assistant")}
-            className="absolute right-0 top-0 size-3.5 rounded-full border-2 border-background bg-[var(--hue-glow)]"
-          />
-        )}
-      </button>
-      {fanOpen && (
-        <AskFan
-          onClose={() => setFanOpen(false)}
-          onAdd={() => {
-            setFanOpen(false);
-            openCapture();
-          }}
-          onAsk={() => {
-            setFanOpen(false);
-            router.push("/assistant/new?kind=quick");
-          }}
+    <button
+      {...gestureHandlers}
+      onClick={() => {
+        // The click that ends a hold or a swipe belongs to the chat, not the sheet.
+        if (handled.current) {
+          handled.current = false;
+          return;
+        }
+        openCapture();
+      }}
+      aria-label={canAsk ? (unread > 0 ? "Add (hold or swipe up to chat with Rooftap, new answer waiting)" : "Add (hold or swipe up to chat with Rooftap)") : "Add"}
+      data-hue={sectionHue("assistant")}
+      style={{
+        transform: `translateX(-50%) translateY(${lift}px) scale(${1 + 0.14 * charge - lift / 400})`,
+        // The assistant's glow gathers round the + as the hold charges or the swipe climbs.
+        ...(glow > 0 && {
+          boxShadow: `0 0 0 4px var(--background), 0 0 0 ${4 + 10 * glow}px color-mix(in oklch, var(--hue-glow) ${Math.round(85 * glow)}%, transparent)`,
+        }),
+      }}
+      className={cn(
+        "md:hidden absolute left-1/2 -top-5 z-30 [view-transition-name:capture-fab] select-none touch-none [-webkit-touch-callout:none]",
+        "flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground",
+        "shadow-lg ring-4 ring-background disabled:opacity-50 disabled:pointer-events-none motion-safe:transition-[transform,box-shadow]",
+        charge > 0 ? "duration-[560ms] ease-linear" : "duration-[var(--motion-fast)]"
+      )}
+    >
+      <RooftapMark className="h-6 w-6" />
+      {/* A reply you haven't opened yet: the assistant's glow, in a small dose. */}
+      {canAsk && unread > 0 && (
+        <span
+          aria-hidden
+          data-hue={sectionHue("assistant")}
+          className="absolute right-0 top-0 size-3.5 rounded-full border-2 border-background bg-[var(--hue-glow)]"
         />
       )}
-    </>
-  );
-}
-
-/** The two choices a held "+" offers, over a dimmed screen. */
-function AskFan({ onClose, onAdd, onAsk }: { onClose: () => void; onAdd: () => void; onAsk: () => void }) {
-  const askRef = useRef<HTMLButtonElement>(null);
-  const [shown, setShown] = useState(false);
-  useEffect(() => {
-    const frame = requestAnimationFrame(() => setShown(true));
-    askRef.current?.focus({ preventScroll: true });
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => {
-      cancelAnimationFrame(frame);
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [onClose]);
-
-  const choice =
-    "flex flex-col items-center gap-2 text-sm font-medium transition-[opacity,translate] duration-[var(--motion-base)] ease-[var(--motion-ease-out)]";
-  return createPortal(
-    <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-label="Add or ask">
-      <button
-        type="button"
-        aria-label="Close"
-        onClick={onClose}
-        className={cn(
-          "absolute inset-0 bg-black/60 transition-opacity duration-[var(--motion-base)]",
-          shown ? "opacity-100" : "opacity-0"
-        )}
-      />
-      <div className="pointer-events-none absolute inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+6.5rem)] flex justify-center gap-20">
-        <button
-          type="button"
-          onClick={onAdd}
-          className={cn(choice, "pointer-events-auto text-foreground", shown ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0")}
-        >
-          <span className="flex h-16 w-16 items-center justify-center rounded-full border border-border bg-card">
-            <Plus className="h-7 w-7" />
-          </span>
-          Add
-        </button>
-        <button
-          ref={askRef}
-          type="button"
-          data-hue={sectionHue("assistant")}
-          onClick={onAsk}
-          className={cn(choice, "pointer-events-auto text-[var(--hue-glyph)]", shown ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0")}
-        >
-          <span className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-[var(--hue-glow)] bg-[var(--hue-tile)]">
-            <Sparkles className="h-7 w-7" />
-          </span>
-          Ask
-        </button>
-      </div>
-    </div>,
-    document.body
+    </button>
   );
 }

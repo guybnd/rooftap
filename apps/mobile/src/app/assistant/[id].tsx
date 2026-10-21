@@ -5,40 +5,18 @@
 // proposal cards with one primary action (PC).
 // Web twin: apps/web/src/app/assistant/[id]/page.tsx.
 import * as React from 'react';
-import { AppState, Pressable, ScrollView, View } from 'react-native';
+import { AppState, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft, Pin, PinOff, Trash2 } from 'lucide-react-native';
 import { Text, ScreenBackground, toast } from '@homeup/ui';
-import {
-  AssistantApiError,
-  announceAnswer,
-  conversationTitle,
-  isConversationOpen,
-  minutesLeft,
-  type AssistantConversation,
-  type AssistantErrorCode,
-  type AssistantMessage,
-  type ConversationKind,
-} from '@homeup/core';
+import { conversationTitle, useAssistantThread } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
-import { assistantApi, refreshAssistantUnread } from '@/features/assistant/assistant-api';
-import { Composer, MessageBubble, Thinking } from '@/features/assistant/assistant-parts';
-import { AssistantNotice } from '@/features/assistant/assistant-notice';
+import { assistantApi } from '@/features/assistant/assistant-api';
+import { ThreadFooter, ThreadMessages } from '@/features/assistant/thread-body';
 
-function pendingMessage(text: string): AssistantMessage {
-  return {
-    id: `local-${Date.now()}`,
-    role: 'user',
-    content: text,
-    author: null,
-    channel: 'app',
-    created_at: new Date().toISOString(),
-    proposal: null,
-    cost_micros: null,
-  };
-}
+const screenToast = { error: (m: string) => toast.error(m), message: (m: string) => toast.message(m) };
 
 export default function AssistantThreadScreen() {
   const insets = useSafeAreaInsets();
@@ -46,17 +24,6 @@ export default function AssistantThreadScreen() {
   const params = useLocalSearchParams<{ id: string; kind?: string; ask?: string }>();
   const { isOnline } = useDataCache();
   const isNew = params.id === 'new';
-  const newKind: ConversationKind = params.kind === 'chat' ? 'chat' : 'quick';
-
-  const [conversation, setConversation] = React.useState<AssistantConversation | null>(null);
-  const [messages, setMessages] = React.useState<AssistantMessage[]>([]);
-  const [loading, setLoading] = React.useState(!isNew);
-  const [sending, setSending] = React.useState(false);
-  const [deciding, setDeciding] = React.useState<string | null>(null);
-  const [blocked, setBlocked] = React.useState<AssistantErrorCode | null>(null);
-  const [showCost, setShowCost] = React.useState(false);
-  const scrollRef = React.useRef<ScrollView>(null);
-  const sentAsk = React.useRef(false);
   // A reply that lands after this screen was left goes to the banner host instead.
   const mounted = React.useRef(true);
   React.useEffect(() => {
@@ -66,68 +33,18 @@ export default function AssistantThreadScreen() {
     };
   }, []);
 
-  const kind: ConversationKind = conversation?.kind ?? (params.id === 'household' ? 'household' : newKind);
-
-  const load = React.useCallback(async () => {
-    if (isNew) return;
-    try {
-      let id: string | undefined = params.id;
-      if (id === 'household') id = (await assistantApi.conversations()).find((c) => c.kind === 'household')?.id;
-      if (id) {
-        const res = await assistantApi.messages(id);
-        setConversation(res.conversation);
-        setMessages(res.messages);
-      }
-    } catch (err) {
-      if (err instanceof AssistantApiError && err.code) setBlocked(err.code);
-      else toast.error(err instanceof Error ? err.message : 'Could not load this conversation.');
-    } finally {
-      setLoading(false);
+  const thread = useAssistantThread(
+    { id: params.id, kind: params.kind === 'chat' ? 'chat' : 'quick' },
+    {
+      api: assistantApi,
+      presence: () => (!mounted.current ? 'away' : AppState.currentState === 'active' ? 'here' : 'background'),
+      toast: screenToast,
     }
-    // Opening it read it, so the + dot may go.
-    void refreshAssistantUnread();
-  }, [params.id, isNew]);
-
-  React.useEffect(() => {
-    void load();
-    assistantApi
-      .settings()
-      .then((s) => setShowCost(s.settings.showCostPerReply))
-      .catch(() => {});
-  }, [load]);
-
-  const send = React.useCallback(
-    async (text: string) => {
-      const local = pendingMessage(text);
-      setMessages((m) => [...m, local]);
-      setSending(true);
-      try {
-        const res = await assistantApi.send({ text, conversationId: conversation?.id ?? null, kind });
-        const reply = res.messages.filter((m) => m.role === 'assistant').pop();
-        if (!mounted.current) {
-          if (reply) announceAnswer({ conversation: res.conversation, reply });
-          return true;
-        }
-        // On screen with the app in front is read; in the background the push covers it.
-        if (AppState.currentState === 'active') void assistantApi.markRead(res.conversation.id).catch(() => {});
-        setConversation(res.conversation);
-        setMessages((m) => [...m.filter((x) => x.id !== local.id), ...res.messages]);
-        if (res.budget === 'warn') toast.message("The assistant is close to this month's budget.");
-        else if (res.budget === 'over') toast.message("The assistant is over this month's budget.");
-        return true;
-      } catch (err) {
-        setMessages((m) => m.filter((x) => x.id !== local.id));
-        if (err instanceof AssistantApiError && err.code) setBlocked(err.code);
-        else toast.error(err instanceof Error ? err.message : 'Could not send that.');
-        return false;
-      } finally {
-        setSending(false);
-      }
-    },
-    [conversation?.id, kind]
   );
+  const { conversation, kind, send } = thread;
 
   // An ask handed over from the list or the + sheet goes out once.
+  const sentAsk = React.useRef(false);
   React.useEffect(() => {
     if (!isNew || !params.ask || sentAsk.current) return;
     sentAsk.current = true;
@@ -144,54 +61,13 @@ export default function AssistantThreadScreen() {
     return () => sub.remove();
   }, [conversationId]);
 
-  const decide = async (messageId: string, decision: 'confirm' | 'decline') => {
-    setDeciding(messageId);
-    try {
-      const res = await assistantApi.decide(messageId, decision);
-      setMessages((m) => [...m.map((x) => (x.id === messageId ? res.message : x)), ...(res.outcome ? [res.outcome] : [])]);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not do that.');
-      void load();
-    } finally {
-      setDeciding(null);
-    }
-  };
-
-  const togglePin = async () => {
-    if (!conversation) return;
-    const pinned = !conversation.pinned;
-    try {
-      await assistantApi.updateConversation(conversation.id, { pinned });
-      setConversation({
-        ...conversation,
-        pinned,
-        kind: pinned && conversation.kind === 'quick' ? 'chat' : conversation.kind,
-        closes_at: pinned ? null : conversation.closes_at,
-      });
-      toast.message(pinned ? (conversation.kind === 'quick' ? 'Kept as a chat.' : 'Pinned.') : 'Unpinned.');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not change that.');
-    }
-  };
-
-  const remove = async () => {
-    if (!conversation) return;
-    try {
-      await assistantApi.updateConversation(conversation.id, { deleted: true });
-      router.back();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not delete that.');
-    }
-  };
-
-  const open = conversation ? isConversationOpen(conversation.kind, conversation.closes_at) : true;
-  const left = conversation ? minutesLeft(conversation) : null;
-  const title = conversation ? conversationTitle(conversation) : kind === 'household' ? 'Household' : kind === 'chat' ? 'New chat' : 'Quick ask';
+  const title = conversation ? conversationTitle(conversation) : kind === 'household' ? 'Household' : kind === 'chat' ? 'New chat' : isNew ? 'Quick ask' : '';
   const own = !!conversation && conversation.kind !== 'household';
 
   return (
     <ScreenBackground>
-      <KeyboardAvoidingView behavior="padding" className="flex-1" style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}>
+      {/* The tab bar below already clears the bottom inset. */}
+      <KeyboardAvoidingView behavior="padding" className="flex-1" style={{ paddingTop: insets.top }}>
         <View className="flex-row items-center gap-1 px-4 pt-2">
           <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Back" className="-ml-2 h-11 w-11 items-center justify-center rounded-lg">
             <ArrowLeft size={20} className="text-muted-foreground" />
@@ -202,69 +78,27 @@ export default function AssistantThreadScreen() {
           {own && (
             <>
               <Pressable
-                onPress={() => void togglePin()}
+                onPress={() => void thread.togglePin()}
                 accessibilityRole="button"
                 accessibilityLabel={conversation.kind === 'quick' ? 'Keep as a chat' : conversation.pinned ? 'Unpin' : 'Pin'}
                 className="h-11 w-11 items-center justify-center rounded-lg"
               >
                 {conversation.pinned ? <PinOff size={18} className="text-muted-foreground" /> : <Pin size={18} className="text-muted-foreground" />}
               </Pressable>
-              <Pressable onPress={() => void remove()} accessibilityRole="button" accessibilityLabel="Delete conversation" className="h-11 w-11 items-center justify-center rounded-lg">
+              <Pressable
+                onPress={() => void thread.remove().then((gone) => gone && router.back())}
+                accessibilityRole="button"
+                accessibilityLabel="Delete conversation"
+                className="h-11 w-11 items-center justify-center rounded-lg"
+              >
                 <Trash2 size={18} className="text-muted-foreground" />
               </Pressable>
             </>
           )}
         </View>
 
-        <ScrollView
-          ref={scrollRef}
-          className="flex-1"
-          contentContainerClassName="gap-5 px-4 py-4"
-          keyboardShouldPersistTaps="handled"
-          onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
-        >
-          {loading ? (
-            <Thinking />
-          ) : messages.length === 0 && !sending ? (
-            <Text className="px-1 py-10 text-center text-sm text-muted-foreground">
-              {kind === 'household'
-                ? 'The thread the whole household shares. Ask about the week, the list or the bills.'
-                : 'Ask about tasks, the calendar, the budget or the grocery list. Rooftap asks before it changes anything.'}
-            </Text>
-          ) : (
-            messages.map((m) => (
-              <MessageBubble
-                key={m.id}
-                message={m}
-                showAuthor={kind === 'household'}
-                showCost={showCost}
-                busy={deciding === m.id}
-                onDecide={(mid, d) => void decide(mid, d)}
-              />
-            ))
-          )}
-          {sending && <Thinking />}
-        </ScrollView>
-
-        <View className="gap-2 px-4 pb-3">
-          {blocked && <AssistantNotice code={blocked} />}
-          {!open ? (
-            <AssistantNotice code="assistant_conversation_closed" />
-          ) : (
-            <>
-              <Composer
-                placeholder={kind === 'household' ? 'Message the household thread' : 'Ask a follow-up'}
-                disabled={!isOnline || blocked === 'assistant_requires_plus' || blocked === 'assistant_not_configured'}
-                busy={sending}
-                autoFocus={isNew && !params.ask}
-                onSend={send}
-              />
-              {left != null && left > 0 && (
-                <Text className="px-2 text-[11px] text-muted-foreground">Takes follow-ups for {left} more min. Pin it to keep it as a chat.</Text>
-              )}
-            </>
-          )}
-        </View>
+        <ThreadMessages thread={thread} />
+        <ThreadFooter thread={thread} offline={!isOnline} autoFocus={isNew && !params.ask} />
       </KeyboardAvoidingView>
     </ScreenBackground>
   );

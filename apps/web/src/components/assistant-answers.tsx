@@ -8,7 +8,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { conversationTitle, onAnswerElsewhere, replyPreview, useModules } from "@homeup/core";
+import { conversationTitle, onAnswerElsewhere, openAssistantPopup, replyPreview, useModules } from "@homeup/core";
 import { useDataCache } from "@/lib/data-cache";
 import { assistantApi, refreshAssistantUnread } from "@/lib/assistant-client";
 
@@ -30,7 +30,7 @@ export function AssistantAnswers() {
       toast("Rooftap answered", {
         description: replyPreview(reply.content, 90) || conversationTitle(conversation),
         duration: 8000,
-        action: { label: "Open", onClick: () => router.push(href) },
+        action: { label: "Open", onClick: () => openAssistantPopup({ conversationId: conversation.id }) || router.push(href) },
       });
     });
     return () => {

@@ -7,6 +7,7 @@
 // this hook.
 import * as React from 'react';
 import * as Notifications from 'expo-notifications';
+import { assistantConversationFromUrl, openAssistantPopup } from '@homeup/core';
 import { useOpenRoute } from './tab-routes';
 
 Notifications.setNotificationHandler({
@@ -20,9 +21,12 @@ Notifications.setNotificationHandler({
 
 function routeFromResponse(openRoute: (href: string) => void, response: Notifications.NotificationResponse) {
   const url = response.notification.request.content.data?.url;
-  if (typeof url === 'string' && url.startsWith('/')) {
-    openRoute(url);
-  }
+  if (typeof url !== 'string' || !url.startsWith('/')) return;
+  // "Rooftap answered" opens the pop-up chat over the current screen, painting
+  // the thread at once when it's in memory, instead of a cold chat screen.
+  const conversationId = assistantConversationFromUrl(url);
+  if (conversationId && openAssistantPopup({ conversationId })) return;
+  openRoute(url);
 }
 
 export function usePushNotificationRouting(): void {

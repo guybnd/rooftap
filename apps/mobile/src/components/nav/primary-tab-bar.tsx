@@ -36,6 +36,7 @@ import {
   MOTION_DURATIONS_MS,
   assignTabSlot,
   initRecentSections,
+  openAssistantPopup,
   pickRecentSections,
   recordRecentSection,
   sectionHueSwatch,
@@ -297,7 +298,7 @@ export function PrimaryTabBar() {
         <View className="relative w-16 shrink-0">
           <CaptureFab
             onPress={() => { haptics.commit(); openCapture(); }}
-            onAsk={canAsk ? () => openRoute('/assistant/new?kind=quick') : undefined}
+            onAsk={canAsk ? () => openAssistantPopup() || openRoute('/assistant/new?kind=quick') : undefined}
             unread={canAsk && assistantUnread > 0}
           />
           {/* HOUP-171: the dock's meridian tick — anchored near the bottom of

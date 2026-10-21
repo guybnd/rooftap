@@ -6,40 +6,18 @@
 // Replies render core's Markdown subset; changes under "Ask first" arrive as
 // proposal cards with one primary action (PC). Native twin:
 // apps/mobile/src/app/(tabs)/assistant/[id].tsx.
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { ArrowLeft, Pin, PinOff, Trash2 } from 'lucide-react';
-import {
-  AssistantApiError,
-  announceAnswer,
-  conversationTitle,
-  isConversationOpen,
-  minutesLeft,
-  type AssistantConversation,
-  type AssistantErrorCode,
-  type AssistantMessage,
-  type ConversationKind,
-} from '@homeup/core';
+import { conversationTitle, useAssistantThread } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
-import { assistantApi, refreshAssistantUnread } from '@/lib/assistant-client';
+import { assistantApi } from '@/lib/assistant-client';
 import { navLinkClickHandler } from '@/lib/view-transitions';
-import { Composer, MessageBubble, Thinking } from '../assistant-parts';
-import { AssistantNotice } from '../assistant-notice';
+import { ThreadFooter, ThreadMessages } from '../thread-body';
 
-function pendingMessage(text: string): AssistantMessage {
-  return {
-    id: `local-${Date.now()}`,
-    role: 'user',
-    content: text,
-    author: null,
-    channel: 'app',
-    created_at: new Date().toISOString(),
-    proposal: null,
-    cost_micros: null,
-  };
-}
+const pageToast = { error: (m: string) => toast.error(m), message: (m: string) => toast(m) };
 
 export default function AssistantThreadPage() {
   const router = useRouter();
@@ -47,17 +25,6 @@ export default function AssistantThreadPage() {
   const search = useSearchParams();
   const { isOnline } = useDataCache();
   const isNew = id === 'new';
-  const newKind: ConversationKind = search.get('kind') === 'chat' ? 'chat' : 'quick';
-
-  const [conversation, setConversation] = useState<AssistantConversation | null>(null);
-  const [messages, setMessages] = useState<AssistantMessage[]>([]);
-  const [loading, setLoading] = useState(!isNew);
-  const [sending, setSending] = useState(false);
-  const [deciding, setDeciding] = useState<string | null>(null);
-  const [blocked, setBlocked] = useState<AssistantErrorCode | null>(null);
-  const [showCost, setShowCost] = useState(false);
-  const endRef = useRef<HTMLDivElement>(null);
-  const sentAsk = useRef(false);
   // A reply that lands after this page was left goes to the banner host instead.
   const mounted = useRef(true);
   useEffect(() => {
@@ -67,78 +34,25 @@ export default function AssistantThreadPage() {
     };
   }, []);
 
-  const kind: ConversationKind = conversation?.kind ?? (id === 'household' ? 'household' : newKind);
-
-  const load = useCallback(async () => {
-    if (isNew) return;
-    try {
-      if (id === 'household') {
-        const household = (await assistantApi.conversations()).find((c) => c.kind === 'household');
-        if (household) {
-          const res = await assistantApi.messages(household.id);
-          setConversation(res.conversation);
-          setMessages(res.messages);
-        }
-      } else {
-        const res = await assistantApi.messages(id);
-        setConversation(res.conversation);
-        setMessages(res.messages);
-      }
-    } catch (err) {
-      if (err instanceof AssistantApiError && err.code) setBlocked(err.code);
-      else toast.error(err instanceof Error ? err.message : 'Could not load this conversation.');
-    } finally {
-      setLoading(false);
+  const thread = useAssistantThread(
+    { id, kind: search.get('kind') === 'chat' ? 'chat' : 'quick' },
+    {
+      api: assistantApi,
+      // In view is read; a hidden tab gets the push and reads it on return.
+      presence: () => (!mounted.current ? 'away' : document.visibilityState === 'visible' ? 'here' : 'background'),
+      toast: pageToast,
     }
-    // Opening it read it, so the + dot may go.
-    void refreshAssistantUnread();
-  }, [id, isNew]);
-
-  useEffect(() => {
-    void load();
-    assistantApi
-      .settings()
-      .then((s) => setShowCost(s.settings.showCostPerReply))
-      .catch(() => {});
-  }, [load]);
-
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ block: 'end' });
-  }, [messages.length, sending]);
-
-  const send = useCallback(
-    async (text: string) => {
-      const local = pendingMessage(text);
-      setMessages((m) => [...m, local]);
-      setSending(true);
-      try {
-        const res = await assistantApi.send({ text, conversationId: conversation?.id ?? null, kind });
-        const reply = res.messages.filter((m) => m.role === 'assistant').pop();
-        if (!mounted.current) {
-          if (reply) announceAnswer({ conversation: res.conversation, reply });
-          return true;
-        }
-        // On screen and in view is read; a hidden tab gets the push and reads it on return.
-        if (document.visibilityState === 'visible') void assistantApi.markRead(res.conversation.id).catch(() => {});
-        setConversation(res.conversation);
-        setMessages((m) => [...m.filter((x) => x.id !== local.id), ...res.messages]);
-        if (res.budget === 'warn') toast("The assistant is close to this month's budget.");
-        else if (res.budget === 'over') toast("The assistant is over this month's budget.");
-        if (isNew) router.replace(`/assistant/${res.conversation.id}`, { scroll: false });
-        return true;
-      } catch (err) {
-        setMessages((m) => m.filter((x) => x.id !== local.id));
-        if (err instanceof AssistantApiError && err.code) setBlocked(err.code);
-        else toast.error(err instanceof Error ? err.message : 'Could not send that.');
-        return false;
-      } finally {
-        setSending(false);
-      }
-    },
-    [conversation?.id, kind, isNew, router]
   );
+  const { conversation, kind, send } = thread;
+
+  // A new conversation takes its id in the address once it has one.
+  const conversationId = conversation?.id;
+  useEffect(() => {
+    if (isNew && conversationId) router.replace(`/assistant/${conversationId}`, { scroll: false });
+  }, [isNew, conversationId, router]);
 
   // An ask handed over from the list or the + sheet goes out once.
+  const sentAsk = useRef(false);
   useEffect(() => {
     const ask = search.get('ask');
     if (!isNew || !ask || sentAsk.current) return;
@@ -147,7 +61,6 @@ export default function AssistantThreadPage() {
   }, [isNew, search, send]);
 
   // Coming back to a tab that got its answer while hidden reads it.
-  const conversationId = conversation?.id;
   useEffect(() => {
     if (!conversationId) return;
     const onVisible = () => {
@@ -157,44 +70,7 @@ export default function AssistantThreadPage() {
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [conversationId]);
 
-  const decide = async (messageId: string, decision: 'confirm' | 'decline') => {
-    setDeciding(messageId);
-    try {
-      const res = await assistantApi.decide(messageId, decision);
-      setMessages((m) => [...m.map((x) => (x.id === messageId ? res.message : x)), ...(res.outcome ? [res.outcome] : [])]);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not do that.');
-      void load();
-    } finally {
-      setDeciding(null);
-    }
-  };
-
-  const togglePin = async () => {
-    if (!conversation) return;
-    const pinned = !conversation.pinned;
-    try {
-      await assistantApi.updateConversation(conversation.id, { pinned });
-      setConversation({ ...conversation, pinned, kind: pinned && conversation.kind === 'quick' ? 'chat' : conversation.kind, closes_at: pinned ? null : conversation.closes_at });
-      toast(pinned ? (conversation.kind === 'quick' ? 'Kept as a chat.' : 'Pinned.') : 'Unpinned.');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not change that.');
-    }
-  };
-
-  const remove = async () => {
-    if (!conversation) return;
-    try {
-      await assistantApi.updateConversation(conversation.id, { deleted: true });
-      router.replace('/assistant');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not delete that.');
-    }
-  };
-
-  const open = conversation ? isConversationOpen(conversation.kind, conversation.closes_at) : true;
-  const left = conversation ? minutesLeft(conversation) : null;
-  const title = conversation ? conversationTitle(conversation) : kind === 'household' ? 'Household' : kind === 'chat' ? 'New chat' : 'Quick ask';
+  const title = conversation ? conversationTitle(conversation) : kind === 'household' ? 'Household' : kind === 'chat' ? 'New chat' : isNew ? 'Quick ask' : '';
   const own = conversation && conversation.kind !== 'household';
 
   return (
@@ -213,7 +89,7 @@ export default function AssistantThreadPage() {
           <>
             <button
               type="button"
-              onClick={() => void togglePin()}
+              onClick={() => void thread.togglePin()}
               aria-label={conversation.kind === 'quick' ? 'Keep as a chat' : conversation.pinned ? 'Unpin' : 'Pin'}
               className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
             >
@@ -221,7 +97,7 @@ export default function AssistantThreadPage() {
             </button>
             <button
               type="button"
-              onClick={() => void remove()}
+              onClick={() => void thread.remove().then((gone) => gone && router.replace('/assistant'))}
               aria-label="Delete conversation"
               className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-destructive"
             >
@@ -231,50 +107,9 @@ export default function AssistantThreadPage() {
         )}
       </div>
 
-      <div className="flex-1 space-y-5 py-4">
-        {loading ? (
-          <Thinking />
-        ) : messages.length === 0 && !sending ? (
-          <p className="px-1 py-10 text-center text-sm text-muted-foreground">
-            {kind === 'household'
-              ? 'The thread the whole household shares. Ask about the week, the list or the bills.'
-              : 'Ask about tasks, the calendar, the budget or the grocery list. Rooftap asks before it changes anything.'}
-          </p>
-        ) : (
-          messages.map((m) => (
-            <MessageBubble
-              key={m.id}
-              message={m}
-              showAuthor={kind === 'household'}
-              showCost={showCost}
-              busy={deciding === m.id}
-              onDecide={(mid, d) => void decide(mid, d)}
-            />
-          ))
-        )}
-        {sending && <Thinking />}
-        <div ref={endRef} />
-      </div>
+      <ThreadMessages thread={thread} className="flex-1" />
 
-      <div className="sticky bottom-20 space-y-2 md:bottom-4">
-        {blocked && <AssistantNotice code={blocked} />}
-        {!open ? (
-          <AssistantNotice code="assistant_conversation_closed" />
-        ) : (
-          <>
-            <Composer
-              placeholder={kind === 'household' ? 'Message the household thread' : 'Ask a follow-up'}
-              disabled={!isOnline || blocked === 'assistant_requires_plus' || blocked === 'assistant_not_configured'}
-              busy={sending}
-              autoFocus={isNew && !search.get('ask')}
-              onSend={send}
-            />
-            {left != null && left > 0 && (
-              <p className="px-2 text-[11px] text-muted-foreground">Takes follow-ups for {left} more min. Pin it to keep it as a chat.</p>
-            )}
-          </>
-        )}
-      </div>
+      <ThreadFooter thread={thread} offline={!isOnline} autoFocus={isNew && !search.get('ask')} className="sticky bottom-20 md:bottom-4" />
     </div>
   );
 }

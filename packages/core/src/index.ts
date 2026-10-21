@@ -125,3 +125,6 @@ export * from './assistant-view';
 export * from './assistant-usage';
 export * from './assistant-telegram';
 export * from './assistant-answers';
+export * from './assistant-popup';
+export * from './brand-mark';
+export * from './assistant-thread';

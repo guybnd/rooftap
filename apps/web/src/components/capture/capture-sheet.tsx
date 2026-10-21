@@ -25,7 +25,7 @@ import { useDataCache } from "@/lib/data-cache";
 import { useCapture } from "@/components/capture/capture-context";
 import { getCaptureLauncherCurrentKey } from "@/components/capture/launcher-current";
 import { useSectionSettings } from "@/lib/use-section";
-import { getEnabledModules, getEnabledSections, getSectionByPath, hiddenWithDisabledModules, isCaptureCategoryEnabled, isFeatureEnabled, looksLikeQuestion, listSetupStores, sectionHue, syncedGroupId, useModules, useReconnectSync, useStoreHelpers, householdTasks$, groceryItems$, costItems$, setupItems$, recipes$ as recipesStore$, checklists$ as checklistsStore$, shopperWants$, apartments$, appointments$, apartmentChecklistItems$ } from "@homeup/core";
+import { getEnabledModules, getEnabledSections, getSectionByPath, hiddenWithDisabledModules, isCaptureCategoryEnabled, isFeatureEnabled, looksLikeQuestion, listSetupStores, openAssistantPopup, useAssistantUnread, sectionHue, syncedGroupId, useModules, useReconnectSync, useStoreHelpers, householdTasks$, groceryItems$, costItems$, setupItems$, recipes$ as recipesStore$, checklists$ as checklistsStore$, shopperWants$, apartments$, appointments$, apartmentChecklistItems$ } from "@homeup/core";
 import { dialog } from "@homeup/core";
 import { useGlobalSearchIndex, resolveGlobalHitAction, type GlobalHit } from "@/hooks/use-global-search-index";
 import { useKeyboardInset } from "@/hooks/use-keyboard-inset";
@@ -389,8 +389,19 @@ export function CaptureSheet() {
   // One box: what's typed can also go to Rooftap as a quick ask.
   const canAsk = modules.isEnabled("assistant") && isOnline;
   const asking = canAsk && looksLikeQuestion(q);
+  const assistantUnread = useAssistantUnread();
+  // Both open the pop-up chat over this page (the chat page if it isn't mounted).
   const askRooftap = (text: string) => {
-    if (text.trim()) navigateTo(`/assistant/new?kind=quick&ask=${encodeURIComponent(text.trim())}`);
+    const ask = text.trim();
+    if (!ask) return;
+    if (!openAssistantPopup({ ask })) return navigateTo(`/assistant/new?kind=quick&ask=${encodeURIComponent(ask)}`);
+    suppressNextSheetTidy();
+    closeCapture();
+  };
+  const openChat = () => {
+    if (!openAssistantPopup()) return navigateTo("/assistant/new?kind=quick");
+    suppressNextSheetTidy();
+    closeCapture();
   };
 
   // "Add '{query}' as…" — mirrors home/page.tsx handleAddAs, but if an item with
@@ -974,6 +985,22 @@ export function CaptureSheet() {
                   )}
                 </div>
               ) : (
+                <div className="space-y-3">
+                {/* The chat, one tap from the + (holding or swiping up the mobile + opens it directly). */}
+                {canAsk && (
+                  <button
+                    type="button"
+                    onClick={openChat}
+                    aria-label={assistantUnread > 0 ? "Chat with Rooftap, new answer waiting" : "Chat with Rooftap"}
+                    data-hue={sectionHue("assistant")}
+                    className="flex min-h-12 w-full items-center gap-3 rounded-xl border border-border bg-card px-3 py-2 text-left transition hover:bg-muted/60 active:scale-[0.99]"
+                  >
+                    <LeadingTile sectionId="assistant" Icon={Sparkles} size="sm" />
+                    <span className="min-w-0 flex-1 text-sm font-medium">Chat with Rooftap</span>
+                    {assistantUnread > 0 && <span aria-hidden className="size-2 rounded-full bg-[var(--hue-glow)]" />}
+                    <span className="text-xs text-muted-foreground md:hidden">Hold + to jump in</span>
+                  </button>
+                )}
                 <div className="grid grid-cols-3 gap-2.5">
                   {enabledActions.map((a) => {
                     const current = a.key === currentLauncherActionKey;
@@ -1014,6 +1041,7 @@ export function CaptureSheet() {
                       </button>
                     );
                   })}
+                </div>
                 </div>
               )}
             </div>

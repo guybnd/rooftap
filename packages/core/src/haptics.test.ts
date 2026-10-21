@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ASK_HOLD_MS,
+  askHoldZipperMs,
   CELEBRATE_ROLL_MS,
   HAPTIC_PATTERNS_MS,
   HOLD_CHARGE_STEPS,
@@ -54,5 +56,15 @@ describe('slide zipper', () => {
     expect(pulses[0]).toBeLessThan(10);
     expect(slideZipperPulseMs(SLIDE_ZIPPER_STEPS.length)).toBe(40);
     expect(slideZipperStrength(SLIDE_ZIPPER_STEPS.length + 3)).toBe(1);
+  });
+});
+
+describe('hold + to ask', () => {
+  it('rides the zipper inside the hold, quiet for a tap and done before the pop', () => {
+    const at = askHoldZipperMs();
+    expect(at).toHaveLength(SLIDE_ZIPPER_STEPS.length);
+    expect(at[0]).toBeGreaterThanOrEqual(140);
+    expect(at[at.length - 1]).toBeLessThan(ASK_HOLD_MS);
+    expect(at.every((t, i) => i === 0 || t >= at[i - 1])).toBe(true);
   });
 });

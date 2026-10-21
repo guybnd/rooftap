@@ -193,6 +193,22 @@ export function slideZipperPulseMs(step: number): number {
   return Math.round(6 + 34 * Math.pow(slideZipperStrength(step), 1.4));
 }
 
+/** Hold + to ask: how long the hold takes before the pop-up chat opens. */
+export const ASK_HOLD_MS = 560;
+/** Hold + to ask: a tap stays silent this long before the ramp starts. */
+const ASK_HOLD_QUIET_MS = 140;
+/**
+ * Hold + to ask: when each step of the slide's zipper buzzes during the
+ * hold (ms after touch down). The same ramp as slide to finish, squeezed
+ * into the hold after a quiet start, so holding the + grinds up into the
+ * pop that opens the chat.
+ */
+export function askHoldZipperMs(holdMs: number = ASK_HOLD_MS): number[] {
+  const last = SLIDE_ZIPPER_STEPS[SLIDE_ZIPPER_STEPS.length - 1];
+  const span = holdMs - ASK_HOLD_QUIET_MS;
+  return SLIDE_ZIPPER_STEPS.map((at) => Math.round(ASK_HOLD_QUIET_MS + (at / last) * span * 0.94));
+}
+
 /** Celebrate: offsets (ms) of the rising roll (light, medium, heavy); success() lands after the last. */
 export const CELEBRATE_ROLL_MS = [0, 70, 140, 230] as const;
 
