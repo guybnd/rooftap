@@ -45,6 +45,9 @@ import { OfflineHint } from '@/components/offline-hint';
 import { WantRow } from './want-row';
 import { WantFormSheet } from './want-form-sheet';
 import { ScoutBriefSheet } from './scout-brief-sheet';
+import { useWideLayout } from '@/lib/desktop-layout';
+import { WideList } from '@/components/wide-list';
+import { cn } from '@/lib/utils';
 
 const TABS: { value: ShopperWantStatus; label: string }[] = [
   { value: 'watching', label: 'Watching' },
@@ -71,6 +74,7 @@ export default function ShopperPage() {
       .slice(0, 3),
   );
   const [scouting, setScouting] = useState(false);
+  const wide = useWideLayout();
   const storeLoaded = useStoreLoaded(wants$, snaps$);
 
   const wants = use$(() => Object.values(wants$.get() ?? {}).filter((w): w is ShopperWant => !!w && !w.deleted));
@@ -124,7 +128,7 @@ export default function ShopperPage() {
     .join(' · ');
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4 p-4 md:p-6 pb-24">
+    <div className={cn('mx-auto space-y-4 p-4 md:p-6 pb-24', wide ? 'max-w-[1400px] lg:px-8' : 'max-w-3xl')}>
       <HeroLede
         layout="inline"
         value={goodNow}
@@ -159,11 +163,11 @@ export default function ShopperPage() {
       {recentRuns.length > 0 && (
         <div className="space-y-1.5">
           <p className="px-1 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">Scout</p>
-          <ListGroup>
+          <WideList>
             {recentRuns.map((run) => (
               <ScoutRunRow key={run.id} run={run} />
             ))}
-          </ListGroup>
+          </WideList>
         </div>
       )}
 
@@ -176,17 +180,19 @@ export default function ShopperPage() {
         />
       ) : (
         <div className="space-y-3">
-          <SegmentedControl ariaLabel="Show" value={tab} onChange={setTab} options={TABS} />
+          <div className={cn(wide && 'max-w-xl')}>
+            <SegmentedControl ariaLabel="Show" value={tab} onChange={setTab} options={TABS} />
+          </div>
           {shown.length === 0 ? (
             <p className="px-1 py-8 text-center text-sm text-muted-foreground">
               {tab === 'watching' ? 'Nothing being watched.' : tab === 'idea' ? 'No ideas saved.' : 'Nothing bought yet.'}
             </p>
           ) : (
-            <ListGroup>
+            <WideList>
               {shown.map((row) => (
                 <WantRow key={row.want.id} row={row} currency={currency} />
               ))}
-            </ListGroup>
+            </WideList>
           )}
         </div>
       )}

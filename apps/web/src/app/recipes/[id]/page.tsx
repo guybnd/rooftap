@@ -39,6 +39,7 @@ import { IngredientQuickEditorSheet } from '../ingredient-quick-editor-sheet';
 import { useLongPress } from '@/hooks/use-long-press';
 import { PopMenu, MenuItem } from '@/app/setup/pop-menu';
 import { cn } from '@/lib/utils';
+import { useWideLayout } from '@/lib/desktop-layout';
 
 function nowISO(): string {
   return new Date().toISOString();
@@ -46,6 +47,7 @@ function nowISO(): string {
 
 export default function RecipeDetailPage() {
   const router = useRouter();
+  const wide = useWideLayout();
   const params = useParams<{ id: string }>();
   const recipeId = params.id;
   const { group, currentUserId, loading: cacheLoading } = useDataCache();
@@ -222,7 +224,7 @@ export default function RecipeDetailPage() {
   const hasStats = recipe.servings != null || recipe.prep_minutes != null || recipe.cook_minutes != null;
 
   return (
-    <div className="mx-auto max-w-2xl space-y-4 p-4 md:p-6 pb-24">
+    <div className={cn('mx-auto space-y-4 p-4 md:p-6 pb-24', wide ? 'max-w-6xl lg:px-8' : 'max-w-2xl')}>
       {/* Header */}
       <div className="flex items-center gap-2">
         <Link
@@ -311,6 +313,9 @@ export default function RecipeDetailPage() {
         </div>
       )}
 
+      {/* Hearth §13.7 "Desktop shell": on a wide screen the ingredients and
+          the method sit side by side, the method holding still as you scroll. */}
+      <div className={wide ? 'grid grid-cols-2 items-start gap-6' : 'space-y-4'}>
       {/* Ingredients: one list card with hairline rows (H4), not a card per row. */}
       <div className="space-y-2">
         <h2 className="px-1 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
@@ -335,6 +340,7 @@ export default function RecipeDetailPage() {
         )}
       </div>
 
+      <div className={cn('space-y-4', wide && 'sticky top-4')}>
       {/* Instructions — steps, one per line (FLUX-202: parsed and manual entry alike) */}
       {recipe.instructions && (
         <div className="rounded-3xl border border-border/60 bg-card p-4 shadow-[var(--card-shadow)]">
@@ -353,6 +359,8 @@ export default function RecipeDetailPage() {
       {recipe.source_type === 'photo' && (
         <EntityPhotoThumbnail entityType="recipe" entityId={recipe.id} label="View original photo" />
       )}
+      </div>
+      </div>
 
       <RecipeFormSheet
         key={isEditOpen ? 'edit-open' : 'edit-closed'}

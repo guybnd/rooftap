@@ -33,9 +33,12 @@ import { SettingsLabel } from '@/components/settings-panel';
 import { Composer } from './assistant-parts';
 import { AssistantNotice } from './assistant-notice';
 import { ConversationRow } from './conversation-row';
+import { useWideLayout } from '@/lib/desktop-layout';
+import { cn } from '@/lib/utils';
 
 export default function AssistantPage() {
   const router = useRouter();
+  const wide = useWideLayout();
   const { group, isOnline } = useDataCache();
   const [status, setStatus] = useState<AssistantStatus | null>(null);
   const [conversations, setConversations] = useState<AssistantConversation[] | null>(null);
@@ -79,7 +82,7 @@ export default function AssistantPage() {
     .join(' · ');
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4 p-4 md:p-6 pb-24">
+    <div className={cn('mx-auto space-y-4 p-4 md:p-6 pb-24', wide ? 'max-w-[1400px] lg:px-8' : 'max-w-3xl')}>
       <HeroLede
         layout="inline"
         value={status?.pending ?? 0}
@@ -103,6 +106,7 @@ export default function AssistantPage() {
         <AssistantNotice code={blocked} />
       ) : (
         <>
+          <div className={cn('space-y-4', wide && 'max-w-3xl')}>
           <Composer placeholder="Ask Rooftap anything" disabled={!isOnline} onSend={ask} />
           {error && <p className="px-1 text-sm text-destructive">{error}</p>}
           {blocked && <AssistantNotice code={blocked} />}
@@ -110,7 +114,11 @@ export default function AssistantPage() {
           <ListGroup>
             <ConversationRow conversation={groups.household} href="/assistant/household" />
           </ListGroup>
+          </div>
 
+          {/* Hearth §13.7 "Desktop shell": on a wide screen Chats, Quick asks
+              and Earlier sit side by side. */}
+          <div className={wide ? 'grid grid-cols-2 items-start gap-5 xl:grid-cols-3' : 'space-y-4'}>
           {groups.chats.length > 0 && (
             <div className="space-y-2">
               <SettingsLabel>Chats</SettingsLabel>
@@ -143,6 +151,7 @@ export default function AssistantPage() {
               </ListGroup>
             </div>
           )}
+          </div>
         </>
       )}
     </div>

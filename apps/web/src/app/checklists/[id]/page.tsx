@@ -53,6 +53,7 @@ import { SegmentedControl } from '@/components/ui/segmented-control';
 import { DateScrollField } from '@/components/date-scroll-field';
 import { ChecklistItemList } from '@/components/checklist-item-list';
 import { cn } from '@/lib/utils';
+import { useWideLayout } from '@/lib/desktop-layout';
 import { checklistTypeIcon, scheduledDateMeta, SCHEDULED_TONE_CLASS } from '../checklist-ui';
 
 // Hearth §7 (E3): every sub-panel opens with a way back to the property list
@@ -77,6 +78,7 @@ function PropertyValue({ children }: { children: ReactNode }) {
 
 export default function ChecklistDetailPage() {
   const router = useRouter();
+  const wide = useWideLayout();
   const params = useParams<{ id: string }>();
   const checklistId = params.id;
   const { group, currentUserId, memberProfiles, userSettings, loading: cacheLoading } = useDataCache();
@@ -372,7 +374,7 @@ export default function ChecklistDetailPage() {
   const TypeIcon = checklistTypeIcon(checklist.type);
 
   return (
-    <div className="mx-auto max-w-2xl space-y-4 p-4 md:p-6 pb-24">
+    <div className={cn('mx-auto space-y-4 p-4 md:p-6 pb-24', wide ? 'max-w-6xl lg:px-8' : 'max-w-2xl')}>
       {/* Header */}
       <div className="flex items-center gap-2">
         <Link
@@ -501,6 +503,10 @@ export default function ChecklistDetailPage() {
         </div>
       )}
 
+      {/* Hearth §13.7 "Desktop shell": on a wide screen the list's settings
+          hold still on the left and the items run down the right. */}
+      <div className={wide ? 'grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] items-start gap-6' : 'space-y-4'}>
+      <div className={cn(wide && 'sticky top-4')}>
       {/* Meta + progress: one v2 card, hairline dividers between its rows (H4). */}
       <div className="rounded-3xl border border-border/60 bg-card p-4 shadow-[var(--card-shadow)]">
         <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-xs text-muted-foreground">
@@ -622,7 +628,9 @@ export default function ChecklistDetailPage() {
           </div>
         )}
       </div>
+      </div>
 
+      <div className="space-y-4">
       {/* Items — HOUP-332: shared ChecklistItemList primitive (also used by
           the /tasks + home-hero inline panel) owns resting rows + the add
           well; the manual-sort move arrows stay detail-only via `onMove`. */}
@@ -651,6 +659,8 @@ export default function ChecklistDetailPage() {
           Start again
         </button>
       )}
+      </div>
+      </div>
     </div>
   );
 }

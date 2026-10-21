@@ -43,6 +43,8 @@ import { CardFace, MiniFace } from './card-face';
 import { CardSheet } from './card-sheet';
 import { CardFormSheet } from './card-form-sheet';
 import { SchemeSheet } from './scheme-sheet';
+import { useWideLayout } from '@/lib/desktop-layout';
+import { cn } from '@/lib/utils';
 
 type Tab = 'cards' | 'perks';
 const TABS: { value: Tab; label: string }[] = [
@@ -60,6 +62,7 @@ export default function RewardsPage() {
   const today = todayISO();
 
   const [tab, setTab] = useState<Tab>('cards');
+  const wide = useWideLayout();
   const [query, setQuery] = useState('');
   const [shownId, setShownId] = useState<string | null>(null);
   const [editing, setEditing] = useState<{ id: string | null } | null>(null);
@@ -130,7 +133,7 @@ export default function RewardsPage() {
   })();
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4 p-4 md:p-6 pb-24">
+    <div className={cn('mx-auto space-y-4 p-4 md:p-6 pb-24', wide ? 'max-w-[1400px] lg:px-8' : 'max-w-3xl')}>
       <HeroLede
         layout="inline"
         value={lede.value}
@@ -160,7 +163,9 @@ export default function RewardsPage() {
         />
       ) : (
         <div className="space-y-3">
-          <SegmentedControl ariaLabel="Show" value={tab} onChange={setTab} options={TABS} />
+          <div className={cn(wide && 'max-w-xl')}>
+            <SegmentedControl ariaLabel="Show" value={tab} onChange={setTab} options={TABS} />
+          </div>
 
           {tab === 'cards' && (
             <>
@@ -202,7 +207,8 @@ export default function RewardsPage() {
                   </>
                 )
               ) : query.trim().length === 1 ? null : (
-                <div className="grid gap-2.5">
+                // Hearth §13.7 "Desktop shell": card faces lay out like a wallet spread on a wide screen.
+                <div className={cn('grid gap-2.5', wide && 'grid-cols-2 gap-4 xl:grid-cols-3')}>
                   {wallet.map((card) => {
                     const scheme = rewards.schemeOf(card);
                     const stores = scheme ? storeCount(partners, new Set([scheme.id])) : 0;
@@ -327,6 +333,7 @@ function PerksList({
   today: string;
   onOpen: (perk: RewardPerk) => void;
 }) {
+  const wide = useWideLayout();
   if (perks.length === 0) {
     return (
       <div className="space-y-1 px-1 py-8 text-center">
@@ -365,7 +372,7 @@ function PerksList({
   };
 
   return (
-    <div className="space-y-4">
+    <div className={wide ? 'grid grid-cols-2 items-start gap-5 xl:grid-cols-3' : 'space-y-4'}>
       {ending.length > 0 && (
         <div className="space-y-1.5">
           <p className={MICRO}>Ending soon</p>

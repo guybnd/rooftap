@@ -20,11 +20,14 @@ import {
   buildLinkedTask,
 } from '@homeup/core';
 import { HeroLede } from '@/components/ui/hero-lede';
-import { ListGroup } from '@/components/ui/list-item';
 import { ChecklistRow } from './checklist-row';
+import { useWideLayout } from '@/lib/desktop-layout';
+import { WideList } from '@/components/wide-list';
+import { cn } from '@/lib/utils';
 
 export default function ChecklistsPage() {
   const router = useRouter();
+  const wide = useWideLayout();
   const { group, currentUserId, loading: cacheLoading } = useDataCache();
   // Modules: "Start again" re-links a dashboard to-do only with Tasks and
   // Checklists on (module-features.ts). Off: no task is read or written.
@@ -90,7 +93,7 @@ export default function ChecklistsPage() {
   if (!group) return <div className="p-6 text-muted-foreground">No group selected</div>;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4 p-4 md:p-6 pb-24">
+    <div className={cn('mx-auto space-y-4 p-4 md:p-6 pb-24', wide ? 'max-w-[1400px] lg:px-8' : 'max-w-3xl')}>
       {/* Hearth v2 (Pulse, H1): the active count is the page's Hero lede;
           New checklist sits beside it. Mirrors mobile's grammar. */}
       <div className="flex items-end justify-between gap-3 flex-wrap">
@@ -122,18 +125,18 @@ export default function ChecklistsPage() {
         </div>
       ) : (
         <>
-          <ListGroup>
+          <WideList>
             {active.map((l) => (
               <ChecklistRow key={l.id} list={l} items={itemsByList.get(l.id) ?? []} />
             ))}
-          </ListGroup>
+          </WideList>
 
           {completed.length > 0 && (
             <div className="pt-2">
               <h2 className="mb-2 px-1 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
                 Completed
               </h2>
-              <ListGroup>
+              <WideList>
                 {completed.map((l) => (
                   <ChecklistRow
                     key={l.id}
@@ -142,7 +145,7 @@ export default function ChecklistsPage() {
                     onStartAgain={() => startAgain(l)}
                   />
                 ))}
-              </ListGroup>
+              </WideList>
             </div>
           )}
         </>

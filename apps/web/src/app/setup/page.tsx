@@ -60,6 +60,8 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
+import { useWideLayout } from '@/lib/desktop-layout';
+import { cn } from '@/lib/utils';
 
 // FLUX-150 slice 3: Legend-State local-first migration
 
@@ -102,6 +104,7 @@ export default function SetupPage() {
   const docsOn = useModules().feature('documents.setup');
 
   const [stores, setStores] = useState<SetupStore[]>([]);
+  const wide = useWideLayout();
   const [commentSummaries, setCommentSummaries] = useState<Record<string, CommentSummary>>({});
   const [docLinksByItem, setDocLinksByItem] = useState<Record<string, SetupDocLink>>({});
   const [search, setSearch] = useState('');
@@ -378,7 +381,7 @@ export default function SetupPage() {
   const headerButtonClass = `flex ${CONTROL_H} items-center justify-center gap-1.5 rounded-xl border text-sm font-medium transition-colors`;
 
   return (
-    <div className="space-y-5 p-4 md:p-6 max-w-5xl mx-auto pb-24">
+    <div className={cn('space-y-5 p-4 md:p-6 mx-auto pb-24', wide ? 'max-w-[1400px] lg:px-8' : 'max-w-5xl')}>
       {/* Hearth v2 (Pulse, H1): what's still to get is the page's Hero lede,
           with its own meter once something is done (H3); the actions sit
           beside it. Title + tagline stay removed (FLUX-187/190): the nav
@@ -567,8 +570,9 @@ export default function SetupPage() {
         );
       })()}
 
-      {/* Items grouped by room */}
-      <div className="space-y-3">
+      {/* Items grouped by room. Hearth §13.7 "Desktop shell": on a wide
+          screen the rooms flow into columns, like Groceries' aisles. */}
+      <div className={wide && Object.keys(groupedByRoom).length > 0 ? 'columns-2 gap-5 xl:columns-3 [&>*]:mb-4 [&>*]:break-inside-avoid' : 'space-y-3'}>
         {Object.entries(groupedByRoom).length === 0 ? (
           <div className="space-y-3 rounded-3xl border border-border/60 bg-card p-10 text-center shadow-[var(--card-shadow)]">
             <p className="text-muted-foreground">
