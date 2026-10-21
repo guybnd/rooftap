@@ -432,6 +432,10 @@ export interface ChatInput {
   channel?: MessageChannel;
   /** Carry on a quick ask that has closed, with its history, instead of refusing. */
   reopen?: boolean;
+  /** When the request reached the server (Date.now()), so the log shows sign-in and the cold start too. */
+  receivedAt?: number;
+  /** How long the app waited for its previous reply, end to end, as it measured it. */
+  lastWaitMs?: number;
 }
 
 export type ChatOutcome =
@@ -718,6 +722,8 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
     conversation: conversation.id,
     model,
     totalMs: Date.now() - started,
+    ...(input.receivedAt ? { requestMs: Date.now() - input.receivedAt, authMs: started - input.receivedAt } : {}),
+    ...(input.lastWaitMs ? { lastAppWaitMs: input.lastWaitMs } : {}),
     readMs,
     contextMs,
     toolsMs,

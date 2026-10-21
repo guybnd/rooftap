@@ -153,6 +153,9 @@ export class AssistantApiError extends Error {
 
 export type AssistantCall = <T>(path: string, init?: { method?: string; body?: unknown }) => Promise<T>;
 
+/** How long the last chat send took, end to end, in this app session. */
+let lastWaitMs: number | null = null;
+
 export function createAssistantApi(call: AssistantCall) {
   return {
     status: () => call<AssistantStatus>('/api/assistant/status'),
@@ -172,8 +175,16 @@ export function createAssistantApi(call: AssistantCall) {
       call<{ prefs: AssistantNotifyPrefs }>('/api/assistant/notify-prefs', { method: 'PUT', body: patch }),
     updateConversation: (conversationId: string, patch: { title?: string; pinned?: boolean; deleted?: boolean }) =>
       call<{ ok: true }>(`/api/assistant/conversations/${encodeURIComponent(conversationId)}`, { method: 'PATCH', body: patch }),
-    send: (input: { text: string; conversationId?: string | null; kind?: ConversationKind; reopen?: boolean }) =>
-      call<ChatResponse>('/api/assistant/chat', { method: 'POST', body: input }),
+    /** Each send carries how long the previous reply took to arrive, so the server log shows the wait as the app saw it. */
+    send: async (input: { text: string; conversationId?: string | null; kind?: ConversationKind; reopen?: boolean }) => {
+      const started = Date.now();
+      const res = await call<ChatResponse>('/api/assistant/chat', {
+        method: 'POST',
+        body: lastWaitMs === null ? input : { ...input, lastWaitMs },
+      });
+      lastWaitMs = Date.now() - started;
+      return res;
+    },
     decide: (messageId: string, decision: 'confirm' | 'decline') =>
       call<{ message: AssistantMessage; outcome: AssistantMessage | null }>(
         `/api/assistant/proposals/${encodeURIComponent(messageId)}`,

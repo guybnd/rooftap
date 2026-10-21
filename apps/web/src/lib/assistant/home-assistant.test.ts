@@ -154,3 +154,20 @@ describe("an unreachable Home Assistant", () => {
     expect(listTools).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("the saved tool list", () => {
+  const saved = [{ name: "HassTurnOn", description: "Turn on", inputSchema: { type: "object", properties: {} } }];
+
+  it("answers a turn without waiting on Home Assistant, which is listed alongside", async () => {
+    listTools.mockReset();
+    listTools.mockReturnValue(new Promise(() => {}));
+    const ha = (await homeAssistantTools(adminWith(row({ tool_list: saved, tool_list_at: new Date().toISOString() })), "g1"))!;
+    expect(ha.tools.map((t) => t.name)).toEqual(["ha_HassTurnOn"]);
+    await vi.waitFor(() => expect(listTools).toHaveBeenCalledTimes(1));
+  });
+
+  it("isn't used once the connection changed after it was saved", async () => {
+    const ha = (await homeAssistantTools(adminWith(row({ tool_list: saved, tool_list_at: "2026-10-20T00:00:00Z" })), "g1"))!;
+    expect(ha.tools.map((t) => t.name)).toContain("ha_GetLiveContext");
+  });
+});
