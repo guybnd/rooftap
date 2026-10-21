@@ -51,6 +51,8 @@ export * from './document-fields';
 export * from './documents';
 export * from './document-storage';
 export * from './entitlements';
+export * from './assistant';
+export * from './assistant-prompt';
 export * from './document-folders';
 export * from './events';
 export * from './event-tickets';
