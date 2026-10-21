@@ -351,8 +351,11 @@ function PopupSurface({
       ],
     };
   });
-  // The +'s coral, fading into the glass as the card grows out of it.
-  const fabTintStyle = useAnimatedStyle(() => ({ opacity: still ? 0 : interpolate(progress.value, [0, 0.45], [1, 0], 'clamp') }));
+  // The +'s coral, fading into the glass while the card is still small. It is
+  // gone by a quarter of the way so a stalled first frame (the Modal's new
+  // window on Android, a busy thread right after the hold) never holds a
+  // full-size coral card.
+  const fabTintStyle = useAnimatedStyle(() => ({ opacity: still ? 0 : interpolate(progress.value, [0, 0.25], [1, 0], 'clamp') }));
 
   return (
     <Modal transparent visible={visible} animationType="none" onRequestClose={onMinimize} statusBarTranslucent navigationBarTranslucent>
@@ -388,7 +391,8 @@ function PopupSurface({
             </View>
           </GestureDetector>
           {children}
-          <Animated.View pointerEvents="none" className="absolute inset-0 bg-primary" style={fabTintStyle} />
+          {/* Hidden until the animated style lands: a Modal's first frame can draw before it does. */}
+          <Animated.View pointerEvents="none" className="absolute inset-0 bg-primary" style={[{ opacity: 0 }, fabTintStyle]} />
         </Animated.View>
       </GestureHandlerRootView>
     </Modal>
