@@ -126,8 +126,17 @@ function withTimeout<T>(work: Promise<T>, what: string): Promise<T> {
   return Promise.race([work, timeout]).finally(() => clearTimeout(timer));
 }
 
-/** Connects, runs `work`, and always closes the session. */
-async function withHomeAssistant<T>(base: string, token: string, what: string, work: (client: Client) => Promise<T>): Promise<T> {
+/** How long a connection is kept open after its last use, so the next call in a turn (or the next turn) skips the handshake. */
+const IDLE_CLOSE_MS = 60_000;
+
+interface Pooled {
+  client: Promise<Client>;
+  timer?: ReturnType<typeof setTimeout>;
+}
+
+const pool = new Map<string, Pooled>();
+
+async function connectTo(base: string, token: string): Promise<Client> {
   const client = new Client({ name: "rooftap-assistant", version: "1.0.0" });
   const transport = new StreamableHTTPClientTransport(new URL(homeAssistantMcpUrl(base)), {
     // No redirects: a hop could land on an address checkHomeAssistantHost refused.
@@ -135,11 +144,71 @@ async function withHomeAssistant<T>(base: string, token: string, what: string, w
   });
   try {
     await withTimeout(client.connect(transport), "connecting");
-    return await withTimeout(work(client), what);
   } catch (err) {
-    throw new Error(friendlyError(err));
-  } finally {
     await client.close().catch(() => {});
+    throw err;
+  }
+  return client;
+}
+
+function drop(key: string) {
+  const entry = pool.get(key);
+  if (!entry) return;
+  pool.delete(key);
+  if (entry.timer) clearTimeout(entry.timer);
+  void entry.client.then((c) => c.close()).catch(() => {});
+}
+
+/** A session Home Assistant answered on and then forgot (it restarted, or the session timed out): safe to retry, nothing ran. */
+function staleSession(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return /\b404\b|session/i.test(message);
+}
+
+/**
+ * Runs `work` on a connection to Home Assistant. Connections are kept open
+ * for a minute after use and shared, because the handshake is a round trip
+ * or two of its own, and a turn that looks something up and then switches
+ * a light would otherwise pay it twice. `fresh` connects just for this call
+ * (a new address or token being tried).
+ */
+async function withHomeAssistant<T>(
+  base: string,
+  token: string,
+  what: string,
+  work: (client: Client) => Promise<T>,
+  { fresh = false }: { fresh?: boolean } = {}
+): Promise<T> {
+  if (fresh) {
+    let client: Client | null = null;
+    try {
+      client = await connectTo(base, token);
+      return await withTimeout(work(client), what);
+    } catch (err) {
+      throw new Error(friendlyError(err));
+    } finally {
+      await client?.close().catch(() => {});
+    }
+  }
+  const key = `${base}\n${token}`;
+  for (let attempt = 0; ; attempt++) {
+    let entry = pool.get(key);
+    const reused = !!entry;
+    if (!entry) {
+      entry = { client: connectTo(base, token) };
+      pool.set(key, entry);
+    }
+    if (entry.timer) clearTimeout(entry.timer);
+    try {
+      const result = await withTimeout(work(await entry.client), what);
+      entry.timer = setTimeout(() => drop(key), IDLE_CLOSE_MS);
+      entry.timer.unref?.();
+      return result;
+    } catch (err) {
+      drop(key);
+      if (reused && attempt === 0 && staleSession(err)) continue;
+      throw new Error(friendlyError(err));
+    }
   }
 }
 
@@ -152,13 +221,13 @@ function friendlyError(err: unknown): string {
   return `Home Assistant: ${message.slice(0, 200)}`;
 }
 
-async function listTools(base: string, token: string): Promise<ListedTool[]> {
-  return withHomeAssistant(base, token, "listing tools", async (client) => (await client.listTools()).tools as ListedTool[]);
+async function listTools(base: string, token: string, opts?: { fresh?: boolean }): Promise<ListedTool[]> {
+  return withHomeAssistant(base, token, "listing tools", async (client) => (await client.listTools()).tools as ListedTool[], opts);
 }
 
-/** What Home Assistant offers, for the settings panel (and to check a new URL and token). */
-export async function homeAssistantToolInfo(base: string, token: string): Promise<HomeAssistantToolInfo[]> {
-  const tools = await listTools(base, token);
+/** What Home Assistant offers, for the settings panel (and to check a new URL and token, on a connection of its own). */
+export async function homeAssistantToolInfo(base: string, token: string, opts?: { fresh?: boolean }): Promise<HomeAssistantToolInfo[]> {
+  const tools = await listTools(base, token, opts);
   return tools.map((t) => ({ name: t.name, description: t.description ?? "", kind: homeAssistantToolKind(t.name, t.annotations) }));
 }
 
@@ -185,6 +254,8 @@ async function cachedTools(row: HomeAssistantRow, token: string): Promise<Listed
 /** Forgets a household's cached tool list (after a settings change). */
 export function forgetHomeAssistantTools(groupId: string): void {
   for (const k of listCache.keys()) if (k.startsWith(`${groupId}:`)) listCache.delete(k);
+  // Open connections go too: the address or token may have changed.
+  for (const k of [...pool.keys()]) drop(k);
 }
 
 function toToolResult(result: unknown): ToolResult {
@@ -226,7 +297,8 @@ export async function homeAssistantTools(
   }
   const tools = listed.flatMap((t): AssistantTool[] => {
     if (!homeAssistantToolAllowed(t.name, connection.allowedTools)) return [];
-    const gate = toolGate(homeAssistantToolKind(t.name, t.annotations), trust);
+    const kind = homeAssistantToolKind(t.name, t.annotations);
+    const gate = toolGate(kind, trust);
     if (gate === "hidden") return [];
     const schema = t.inputSchema && typeof t.inputSchema === "object" ? { ...t.inputSchema } : { type: "object", properties: {} };
     delete (schema as { $schema?: unknown }).$schema;
@@ -237,6 +309,7 @@ export async function homeAssistantTools(
         parameters: schema,
         module: HOME_ASSISTANT_SCOPE,
         gate,
+        lookup: kind === "read",
         run: async (args) => {
           try {
             return toToolResult(

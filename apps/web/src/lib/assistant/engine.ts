@@ -44,6 +44,8 @@ export interface TurnResult {
   steps: number;
   /** Tools that ran (not proposals), for the activity line and Undo. */
   ran: { tool: string; args: Record<string, unknown>; ok: boolean }[];
+  /** Where the time went: each model call, and each tool that ran, in milliseconds. */
+  timing: { llmMs: number[]; tools: { tool: string; ms: number }[] };
 }
 
 export const STEP_LIMIT_REPLY = "That took more steps than I can do in one go. Could you break it into smaller asks?";
@@ -59,7 +61,7 @@ function resultText(result: { content: { text: string }[] }): string {
 async function handleCall(
   call: ToolCall,
   byName: Map<string, AssistantTool>,
-  out: Pick<TurnResult, "proposals" | "ran">
+  out: Pick<TurnResult, "proposals" | "ran" | "timing">
 ): Promise<string> {
   const tool = byName.get(call.name);
   if (!tool) return JSON.stringify({ error: `No tool called ${call.name} is available.` });
@@ -67,6 +69,7 @@ async function handleCall(
     out.proposals.push({ toolCallId: call.id, tool: tool.name, module: tool.module, args: call.args });
     return JSON.stringify({ status: "proposed", note: "Held for the person's OK. Tell them what you proposed; it has not happened yet." });
   }
+  const started = Date.now();
   try {
     const result = await tool.run(call.args);
     out.ran.push({ tool: tool.name, args: call.args, ok: !result.isError });
@@ -74,7 +77,22 @@ async function handleCall(
   } catch (e) {
     out.ran.push({ tool: tool.name, args: call.args, ok: false });
     return JSON.stringify({ error: e instanceof Error ? e.message : "Tool failed" });
+  } finally {
+    out.timing.tools.push({ tool: tool.name, ms: Date.now() - started });
   }
+}
+
+/**
+ * Runs one step's calls. Lookups run side by side (a model often asks for
+ * several at once, and each may be a round trip to Home Assistant); changes
+ * run one after another, in the order asked, after the lookups.
+ */
+async function handleCalls(calls: ToolCall[], byName: Map<string, AssistantTool>, out: Pick<TurnResult, "proposals" | "ran" | "timing">) {
+  const contents = new Array<string>(calls.length);
+  const lookups = calls.flatMap((c, i) => (byName.get(c.name)?.lookup && byName.get(c.name)?.gate === "run" ? [i] : []));
+  await Promise.all(lookups.map(async (i) => (contents[i] = await handleCall(calls[i], byName, out))));
+  for (let i = 0; i < calls.length; i++) if (contents[i] === undefined) contents[i] = await handleCall(calls[i], byName, out);
+  return contents;
 }
 
 export async function runAssistantTurn(input: TurnInput): Promise<TurnResult> {
@@ -82,10 +100,12 @@ export async function runAssistantTurn(input: TurnInput): Promise<TurnResult> {
   const byName = new Map(input.tools.map((t) => [t.name, t]));
   const specs = input.tools.map(({ name, description, parameters }) => ({ name, description, parameters }));
   const conversation: ChatMessage[] = [...input.history, { role: "user", content: input.userText }];
-  const result: TurnResult = { reply: "", memories: [], messages: [], proposals: [], inputTokens: 0, outputTokens: 0, steps: 0, ran: [] };
+  const result: TurnResult = { reply: "", memories: [], messages: [], proposals: [], inputTokens: 0, outputTokens: 0, steps: 0, ran: [], timing: { llmMs: [], tools: [] } };
 
   for (let step = 0; step < maxSteps; step++) {
+    const asked = Date.now();
     const res = await input.llm({ model: input.model, system: input.system, messages: conversation, tools: specs });
+    result.timing.llmMs.push(Date.now() - asked);
     result.steps++;
     result.inputTokens += res.inputTokens;
     result.outputTokens += res.outputTokens;
@@ -102,12 +122,12 @@ export async function runAssistantTurn(input: TurnInput): Promise<TurnResult> {
     const assistant: ChatMessage = { role: "assistant", content: res.text, toolCalls: res.toolCalls };
     conversation.push(assistant);
     result.messages.push(assistant);
-    for (const call of res.toolCalls) {
-      const content = await handleCall(call, byName, result);
-      const toolMessage: ChatMessage = { role: "tool", toolCallId: call.id, name: call.name, content };
+    const contents = await handleCalls(res.toolCalls, byName, result);
+    res.toolCalls.forEach((call, i) => {
+      const toolMessage: ChatMessage = { role: "tool", toolCallId: call.id, name: call.name, content: contents[i] };
       conversation.push(toolMessage);
       result.messages.push(toolMessage);
-    }
+    });
   }
 
   result.reply = STEP_LIMIT_REPLY;

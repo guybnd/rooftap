@@ -20,6 +20,7 @@ export type SectionHue =
   | 'teal'
   | 'lime'
   | 'orchid'
+  | 'fern'
   | 'indigo'
   | 'slate';
 
@@ -43,6 +44,7 @@ export const SECTION_HUE_IDS: readonly SectionHue[] = [
   'teal',
   'lime',
   'orchid',
+  'fern',
   'indigo',
   'slate',
 ];
@@ -90,6 +92,11 @@ export const SECTION_HUES: Record<SectionHue, Record<ColorScheme, SectionHueSwat
     dark: { tile: '#3E1A4A', glyph: '#EBAAFF', glow: '#D58BFF' },
     light: { tile: '#F6E3FB', glyph: '#8A2FA6', glow: '#D58BFF' },
   },
+  // Rewards: the free gap on the wheel between lime and mint.
+  fern: {
+    dark: { tile: '#1C3A17', glyph: '#A8EE8E', glow: '#7FDB62' },
+    light: { tile: '#E2F6DA', glyph: '#2F7A1C', glow: '#7FDB62' },
+  },
   indigo: {
     dark: { tile: '#1B2152', glyph: '#A9B4FF', glow: '#7083FF' },
     light: { tile: '#E4E8FF', glyph: '#3A49B8', glow: '#7083FF' },
@@ -115,6 +122,7 @@ export const SECTION_HUE_BY_SECTION: Readonly<Record<string, SectionHue>> = {
   search: 'teal',
   checklists: 'lime',
   shopper: 'orchid',
+  rewards: 'fern',
   assistant: 'indigo',
   documents: 'slate',
   profile: 'slate',

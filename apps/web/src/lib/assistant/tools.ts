@@ -12,6 +12,8 @@ import type { ToolSpec } from "./llm";
 export interface AssistantTool extends ToolSpec {
   module: AssistantScope;
   gate: Exclude<ToolGate, "hidden">;
+  /** Only looks things up, so it may run alongside other lookups in the same step. */
+  lookup?: boolean;
   run: (args: Record<string, unknown>) => Promise<ToolResult>;
 }
 
@@ -42,6 +44,7 @@ export function assistantTools(ctx: HouseholdToolContext, { settings, readOnly =
         parameters: jsonSchema(t.inputSchema),
         module: meta.module,
         gate,
+        lookup: meta.kind === "read",
         // Model-written arguments are validated before they reach a handler.
         run: async (args) => {
           const parsed = schema ? schema.safeParse(args) : { success: true as const, data: {} };

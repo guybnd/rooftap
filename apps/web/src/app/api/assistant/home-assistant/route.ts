@@ -86,7 +86,7 @@ export async function PUT(request: Request) {
     const refused = await checkHomeAssistantHost(url);
     if (refused) return assistantErrorResponse(400, refused);
     try {
-      tools = await homeAssistantToolInfo(url, token);
+      tools = await homeAssistantToolInfo(url, token, { fresh: true });
     } catch (err) {
       return assistantErrorResponse(502, err instanceof Error ? err.message : "Couldn't reach Home Assistant.");
     }

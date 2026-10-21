@@ -28,6 +28,37 @@ function tool(name: string, gate: AssistantTool["gate"], text = '{"ok":true}'): 
 const base = { model: "m", system: "sys", history: [], userText: "add milk" };
 
 describe("runAssistantTurn", () => {
+  it("runs a step's lookups side by side, changes after them in order, and times each", async () => {
+    const order: string[] = [];
+    const slow = (name: string, ms: number, lookup: boolean): AssistantTool => ({
+      ...tool(name, "run"),
+      lookup,
+      run: vi.fn(async () => {
+        order.push(`start ${name}`);
+        await new Promise((r) => setTimeout(r, ms));
+        order.push(`end ${name}`);
+        return { content: [{ type: "text" as const, text: name }] };
+      }),
+    });
+    const llm = scripted(
+      {
+        toolCalls: [
+          { id: "1", name: "a", args: {} },
+          { id: "2", name: "w", args: {} },
+          { id: "3", name: "b", args: {} },
+        ],
+      },
+      { text: "Done." }
+    );
+    const r = await runAssistantTurn({ ...base, llm, tools: [slow("a", 20, true), slow("w", 1, false), slow("b", 5, true)] });
+    expect(order.slice(0, 2)).toEqual(["start a", "start b"]);
+    expect(order.slice(-2)).toEqual(["start w", "end w"]);
+    // The model still sees the results in the order it asked.
+    expect(r.messages.filter((m) => m.role === "tool").map((m) => m.content)).toEqual(["a", "w", "b"]);
+    expect(r.timing.llmMs).toHaveLength(2);
+    expect(r.timing.tools.map((t) => t.tool).sort()).toEqual(["a", "b", "w"]);
+  });
+
   it("answers directly when the model calls no tools, and strips memories", async () => {
     const llm = scripted({ text: "Sure.<remember>Noa is vegetarian</remember>" });
     const r = await runAssistantTurn({ ...base, llm, tools: [] });

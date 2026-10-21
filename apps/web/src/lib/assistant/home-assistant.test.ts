@@ -2,9 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const listTools = vi.fn();
 const callTool = vi.fn();
+const connect = vi.fn(async () => {});
 vi.mock("@modelcontextprotocol/sdk/client/index.js", () => ({
   Client: class {
-    connect = vi.fn(async () => {});
+    connect = connect;
     close = vi.fn(async () => {});
     listTools = listTools;
     callTool = callTool;
@@ -37,6 +38,8 @@ const row = (over: Partial<HomeAssistantRow> = {}): Partial<HomeAssistantRow> =>
 
 beforeEach(() => {
   forgetHomeAssistantTools("g1");
+  connect.mockClear();
+  callTool.mockReset();
   listTools.mockResolvedValue({
     tools: [
       { name: "GetLiveContext", description: "States", inputSchema: { type: "object", properties: {} } },
@@ -79,6 +82,32 @@ describe("homeAssistantTools", () => {
     const ha = (await homeAssistantTools(adminWith(row()), "g1"))!;
     expect(ha.tools).toEqual([]);
     expect(ha.unavailable).toMatch(/Couldn't reach/);
+  });
+});
+
+describe("the connection to Home Assistant", () => {
+  it("is kept open between the listing and the calls, so a turn pays the handshake once", async () => {
+    const ha = (await homeAssistantTools(adminWith(row({ trust: "act" })), "g1"))!;
+    await ha.tools[0].run({});
+    await ha.tools[1].run({ name: "Kitchen light" });
+    expect(connect).toHaveBeenCalledTimes(1);
+    expect(callTool).toHaveBeenCalledTimes(2);
+  });
+
+  it("reconnects once when Home Assistant forgot the session", async () => {
+    const ha = (await homeAssistantTools(adminWith(row({ trust: "act" })), "g1"))!;
+    callTool.mockRejectedValueOnce(new Error("Error POSTing to endpoint (HTTP 404): Session not found"));
+    const res = await ha.tools[1].run({ name: "Kitchen light" });
+    expect(res.content[0].text).toBe("done");
+    expect(connect).toHaveBeenCalledTimes(2);
+  });
+
+  it("doesn't repeat a change that failed some other way", async () => {
+    const ha = (await homeAssistantTools(adminWith(row({ trust: "act" })), "g1"))!;
+    callTool.mockRejectedValueOnce(new Error("fetch failed"));
+    const res = await ha.tools[1].run({ name: "Kitchen light" });
+    expect(res.isError).toBe(true);
+    expect(callTool).toHaveBeenCalledTimes(1);
   });
 });
 

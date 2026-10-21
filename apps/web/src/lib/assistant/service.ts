@@ -454,9 +454,20 @@ export interface ChatDeps {
   now?: Date;
 }
 
+/**
+ * One line per turn in the server log, so "it feels slow" can be answered
+ * from the logs: the reads before the turn, the conversation and history,
+ * gathering tools (Home Assistant's listing), each model call, each tool
+ * that ran, and the whole request. Search the logs for "[assistant] timing".
+ */
+function logTurnTiming(t: Record<string, unknown>) {
+  console.info(`[assistant] timing ${JSON.stringify(t)}`);
+}
+
 export async function runChat(ctx: AssistantContext, input: ChatInput, deps: ChatDeps = {}): Promise<ChatOutcome> {
   const text = input.text.trim();
   if (!text) return { ok: false, status: 400, error: "Say something first." };
+  const started = Date.now();
   // Everything a turn needs before the model runs is read in two parallel
   // rounds, not one query after another: each read is a database round trip.
   const [brain, settings, limits, usage, found] = await Promise.all([
@@ -471,6 +482,14 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
   if (budget.action === "stop") {
     return { ok: false, status: 402, error: "This month's assistant budget is used up.", code: "assistant_budget_reached" };
   }
+  const readMs = Date.now() - started;
+
+  // The tools (Home Assistant's may be a round trip away) are gathered while
+  // the conversation and its history are read.
+  const toolsStarted = Date.now();
+  const gathering = turnTools(ctx, settings, limits.readOnly).then((r) => ({ ...r, ms: Date.now() - toolsStarted }));
+  // Settled here so a failed read below can't leave it rejecting unheard.
+  gathering.catch(() => {});
 
   const now = deps.now ?? new Date();
   let conversation: ConversationRow;
@@ -501,7 +520,8 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
   ]);
   const history = toHistory(((recent ?? []) as MessageRow[]).reverse()).slice(-settings.contextMessages * 3);
 
-  const { tools, homeAssistant } = await turnTools(ctx, settings, limits.readOnly);
+  const contextMs = Date.now() - started - readMs;
+  const { tools, homeAssistant, ms: toolsMs } = await gathering;
   const reachable = [...new Set(tools.map((t) => t.module))].filter((m): m is ModuleId => m !== HOME_ASSISTANT_SCOPE);
   const system = buildAssistantSystemPrompt({
     now: formatNow(timeZone, now),
@@ -551,6 +571,7 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
     return { ok: false, status: 502, error: `The AI model didn't answer. Try again in a moment.${reason}` };
   }
 
+  const turnMs = Date.now() - started - readMs - contextMs;
   const { data: userRow, error: userErr } = await savingUser;
   if (userErr || !userRow) return { ok: false, status: 500, error: userErr?.message ?? "Could not save the message" };
 
@@ -615,6 +636,19 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
     // A reply sent to Telegram was read there.
     channel !== "app" ? markConversationRead(ctx, conversation.id, { at: new Date(touched.last_active_at) }) : null,
   ]);
+
+  logTurnTiming({
+    conversation: conversation.id,
+    model,
+    totalMs: Date.now() - started,
+    readMs,
+    contextMs,
+    toolsMs,
+    turnMs,
+    llmMs: turn.timing.llmMs,
+    tools: turn.timing.tools,
+    proposals: items.length,
+  });
 
   // This month's usage as read before the turn, plus the turn itself.
   const after = budgetFor(
@@ -745,20 +779,28 @@ export async function decideProposal(ctx: AssistantContext, messageId: string, d
     .select("id");
   if (!claimed?.length) return { ok: false, status: 409, error: "Already decided." };
 
-  const names = await memberNames(ctx.admin, ctx.groupId);
+  const started = Date.now();
+  // What a confirmed change needs is read in one round, not one query after another.
+  const [names, settings, limits] = await Promise.all([
+    memberNames(ctx.admin, ctx.groupId),
+    decision === "confirm" ? loadSettings(ctx.admin, ctx.groupId) : null,
+    decision === "confirm" ? loadMemberLimits(ctx.admin, ctx.groupId, ctx.userId) : null,
+  ]);
   const who = names.get(ctx.userId) ?? "Someone";
   let note: string;
-  if (decision === "decline") {
+  let toolsMs = 0;
+  let runMs = 0;
+  if (decision === "decline" || !settings || !limits) {
     note = `${who} said not now, so nothing was changed.`;
   } else {
-    const settings = await loadSettings(ctx.admin, ctx.groupId);
-    const limits = await loadMemberLimits(ctx.admin, ctx.groupId, ctx.userId);
     const { tools } = await turnTools(ctx, settings, limits.readOnly);
+    toolsMs = Date.now() - started;
     const items = proposalItems(row);
     const outcomes = await executeProposals(
       (row.proposal?.items ?? []).map((p) => ({ toolCallId: p.toolCallId, tool: p.tool, module: p.module, args: p.args })),
       tools
     );
+    runMs = Date.now() - started - toolsMs;
     const done = items.filter((_, i) => outcomes[i]?.ok).map((i) => i.summary);
     const failed = items.filter((_, i) => !outcomes[i]?.ok).map((i) => i.summary);
     note = [
@@ -770,12 +812,15 @@ export async function decideProposal(ctx: AssistantContext, messageId: string, d
   }
 
   // A plain assistant line, so the next turn's model knows what happened.
-  const { data: outcomeRow } = await ctx.admin
-    .from("assistant_messages")
-    .insert({ conversation_id: row.conversation_id, group_id: ctx.groupId, user_id: ctx.userId, role: "assistant", content: note, channel: row.channel })
-    .select("*")
-    .single();
-  await ctx.admin.from("assistant_conversations").update({ last_active_at: new Date().toISOString() }).eq("id", row.conversation_id);
+  const [{ data: outcomeRow }] = await Promise.all([
+    ctx.admin
+      .from("assistant_messages")
+      .insert({ conversation_id: row.conversation_id, group_id: ctx.groupId, user_id: ctx.userId, role: "assistant", content: note, channel: row.channel })
+      .select("*")
+      .single(),
+    ctx.admin.from("assistant_conversations").update({ last_active_at: new Date().toISOString() }).eq("id", row.conversation_id),
+  ]);
+  if (decision === "confirm") logTurnTiming({ conversation: row.conversation_id, confirm: true, totalMs: Date.now() - started, toolsMs, runMs });
 
   const updated = toMessage({ ...row, proposal_state: next }, names)!;
   return { ok: true, message: updated, outcome: outcomeRow ? toMessage(outcomeRow as MessageRow, names) : null };
