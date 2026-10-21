@@ -12,6 +12,7 @@ import type {
   TrustLevel,
 } from './assistant';
 import type { UsageSummary } from './assistant-usage';
+import type { AiModelChoices } from './ai-providers';
 import type { ModuleId } from './modules';
 import {
   HOME_ASSISTANT_SCOPE,
@@ -178,7 +179,8 @@ export function createAssistantApi(call: AssistantCall) {
         `/api/assistant/proposals/${encodeURIComponent(messageId)}`,
         { method: 'POST', body: { decision } }
       ),
-    settings: () => call<{ settings: AssistantSettings; isOwner: boolean }>('/api/assistant/settings'),
+    /** `models` is missing on servers older than the AI providers settings; the apps then show free-text model fields. */
+    settings: () => call<{ settings: AssistantSettings; isOwner: boolean; models?: AiModelChoices }>('/api/assistant/settings'),
     saveSettings: (patch: Partial<AssistantSettings>) =>
       call<{ settings: AssistantSettings }>('/api/assistant/settings', { method: 'PUT', body: patch }),
     usage: (month?: string) =>

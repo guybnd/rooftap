@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { resolveServerKey, type ParsingProvider } from "@/lib/admin-config";
+import { resolveReadsModel, resolveServerKey, type ParsingProvider } from "@/lib/admin-config";
 
 // HOUP-43: a single adapter interface over the four selectable parsing
 // providers. Each parse function in `parser.ts` builds a canonical JSON
@@ -35,15 +35,16 @@ const PROVIDER_KEY_PLACEHOLDERS: Record<ParsingProvider, string> = {
   anthropic: "your-anthropic-key",
 };
 
-const DEFAULT_MODELS: Record<ParsingProvider, string> = {
-  openai: "gpt-4o-mini",
-  openrouter: "openai/gpt-4o-mini",
-  // Pinned model (not a floating `-latest` alias): Google hot-swaps aliases on
-  // every release, and one such swap caused schema-constrained decoding to
-  // degenerate (a repetition loop inside a string field).
-  gemini: "gemini-3.1-flash-lite",
-  anthropic: "claude-haiku-4-5-20251001",
-};
+// Each provider's model for reads comes from core's AI_CATALOG (defaults.reads)
+// or the operator's pick (resolveReadsModel). Gemini's is pinned (not a
+// floating `-latest` alias): Google hot-swaps aliases on every release, and
+// one such swap caused schema-constrained decoding to degenerate (a
+// repetition loop inside a string field).
+
+/** OpenAI's reasoning models (GPT-5 on, o-series) take max_completion_tokens and no temperature. */
+export function isOpenAIReasoningModel(model: string): boolean {
+  return /^(gpt-[5-9]|o[1-9])/.test(model.replace(/^openai\//, ""));
+}
 
 async function withRetry<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
   for (let i = 0; i <= retries; i++) {
@@ -161,7 +162,7 @@ async function callOpenAICompatible(
       type: "json_schema",
       json_schema: { name: req.schemaName, strict: isFullyRequiredSchema(req.schema), schema: req.schema },
     },
-    temperature: 0,
+    ...(isOpenAIReasoningModel(model) ? {} : { temperature: 0 }),
   });
 
   const content = response.choices[0]?.message?.content;
@@ -169,14 +170,14 @@ async function callOpenAICompatible(
   return JSON.parse(content) as Record<string, unknown>;
 }
 
-async function callGemini(apiKey: string, req: StructuredParseRequest): Promise<Record<string, unknown>> {
+async function callGemini(apiKey: string, model: string, req: StructuredParseRequest): Promise<Record<string, unknown>> {
   const imageParts = (req.images ?? []).map((dataUrl) => {
     const { mimeType, data } = parseDataUrl(dataUrl);
     return { inline_data: { mime_type: mimeType, data } };
   });
 
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${DEFAULT_MODELS.gemini}:generateContent`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
     {
       method: "POST",
       headers: {
@@ -224,7 +225,7 @@ async function callGemini(apiKey: string, req: StructuredParseRequest): Promise<
   }
 }
 
-async function callAnthropic(apiKey: string, req: StructuredParseRequest): Promise<Record<string, unknown>> {
+async function callAnthropic(apiKey: string, model: string, req: StructuredParseRequest): Promise<Record<string, unknown>> {
   const imageBlocks = (req.images ?? []).map((dataUrl) => {
     const { mimeType, data } = parseDataUrl(dataUrl);
     return {
@@ -241,7 +242,7 @@ async function callAnthropic(apiKey: string, req: StructuredParseRequest): Promi
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: DEFAULT_MODELS.anthropic,
+      model,
       max_tokens: 4096,
       system: req.systemPrompt,
       messages: [
@@ -274,6 +275,8 @@ async function callAnthropic(apiKey: string, req: StructuredParseRequest): Promi
 export interface AiCallKey {
   provider: ParsingProvider;
   apiKey: string;
+  /** The model to read with; unset uses resolveReadsModel. */
+  model?: string;
 }
 
 /** The server's key for a provider, or undefined when unset or still the .env.example placeholder. */
@@ -285,23 +288,25 @@ export async function serverProviderKey(provider: ParsingProvider): Promise<stri
 export async function runStructuredParse(
   provider: ParsingProvider,
   req: StructuredParseRequest,
-  key?: string
+  key?: string,
+  model?: string
 ): Promise<Record<string, unknown>> {
   const apiKey = key ?? (await serverProviderKey(provider));
   if (!apiKey) {
     throw new Error(`${PROVIDER_KEY_NAMES[provider]} is not configured`);
   }
+  const use = model ?? (await resolveReadsModel(provider));
 
   return withRetry(() => {
     switch (provider) {
       case "openai":
-        return callOpenAICompatible(apiKey, undefined, DEFAULT_MODELS.openai, req);
+        return callOpenAICompatible(apiKey, undefined, use, req);
       case "openrouter":
-        return callOpenAICompatible(apiKey, "https://openrouter.ai/api/v1", DEFAULT_MODELS.openrouter, req);
+        return callOpenAICompatible(apiKey, "https://openrouter.ai/api/v1", use, req);
       case "gemini":
-        return callGemini(apiKey, req);
+        return callGemini(apiKey, use, req);
       case "anthropic":
-        return callAnthropic(apiKey, req);
+        return callAnthropic(apiKey, use, req);
     }
   });
 }

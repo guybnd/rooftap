@@ -30,7 +30,8 @@ import * as React from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { KeyRound } from 'lucide-react-native';
 import { Text, Button, FieldRow, FormSection, Input, cn } from '@homeup/ui';
-import { KEY_VALIDATORS, testGoogleOAuthPair, type TestResult } from '@homeup/core';
+import { AI_CATALOG, KEY_VALIDATORS, testGoogleOAuthPair, type TestResult } from '@homeup/core';
+import { hasAiProvidersPanel } from '../ai-keys-api';
 import { useDataCache } from '@/lib/data-cache';
 import { getStoredServer } from '@/lib/server-config';
 import { getCurrentSupabaseClient } from '@/lib/supabase-client';
@@ -75,6 +76,9 @@ const KEY_ROWS: KeyRow[] = [
   { key: 'ANTHROPIC_API_KEY', label: 'Anthropic API key', purpose: 'Alternate parsing provider for listings, receipts, and recipes.' },
   { key: 'SCRAPER_API_KEY', label: 'ScraperAPI key', purpose: 'Fetches listing pages that block direct requests.' },
 ];
+
+// The AI providers panel owns the AI keys on servers that have it.
+const AI_KEY_NAMES = new Set(Object.values(AI_CATALOG).map((p) => p.keyName));
 
 // Build-time keys are inlined at `next build` and rejected by the PUT route
 // (BUILD_TIME_KEY_NAMES), so this row is test-and-view only, never savable.
@@ -150,6 +154,11 @@ export function ApiKeysSettings() {
   const [results, setResults] = React.useState<Record<string, TestResult>>({});
   const [testingKey, setTestingKey] = React.useState<string | null>(null);
   const [savingKey, setSavingKey] = React.useState<string | null>(null);
+  const [aiPanel, setAiPanel] = React.useState(false);
+
+  React.useEffect(() => {
+    if (isOperator) void hasAiProvidersPanel().then(setAiPanel);
+  }, [isOperator]);
 
   const loadKeys = React.useCallback(async () => {
     try {
@@ -243,7 +252,7 @@ export function ApiKeysSettings() {
       )}
 
       <FormSection>
-        {KEY_ROWS.map((row) => (
+        {KEY_ROWS.filter((row) => !(aiPanel && AI_KEY_NAMES.has(row.key))).map((row) => (
           <FieldRow
             key={row.key}
             label={row.label}

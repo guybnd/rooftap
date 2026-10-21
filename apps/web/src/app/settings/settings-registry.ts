@@ -12,6 +12,7 @@ import { AppointmentSettings } from "@/components/appointment-settings";
 import { SavedSearchesSettings } from "@/components/saved-searches-settings";
 import { AgentsManager } from "@/components/agents-manager";
 import { PatSettings } from "@/components/pat-settings";
+import { AiProvidersSettings } from "@/components/ai-providers-settings";
 import { ApiKeysSettings } from "@/components/api-keys-settings";
 import { HouseholdAiKeys } from "@/components/household-ai-keys";
 import { McpSettings } from "@/components/mcp-settings";
@@ -43,7 +44,7 @@ export const globalMenus: GlobalMenu[] = [
   { key: "users", label: "Users", panels: [GroupManager, UsersManager] },
   { key: "appearance", label: "Appearance", panels: [AppearanceSettings] },
   { key: "notifications", label: "Notifications", panels: [NotificationsSettings] },
-  { key: "integrations", label: "Integrations & keys", panels: [HouseholdAiKeys, ApiKeysSettings, PatSettings, McpSettings] },
+  { key: "integrations", label: "Integrations & keys", panels: [HouseholdAiKeys, AiProvidersSettings, ApiKeysSettings, PatSettings, McpSettings] },
   { key: "whats-new", label: "What's new", panels: [WhatsNewHistory] },
 ];
 

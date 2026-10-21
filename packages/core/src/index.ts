@@ -60,6 +60,7 @@ export * from './document-storage';
 export * from './entitlements';
 export * from './assistant';
 export * from './ai-keys';
+export * from './ai-providers';
 export * from './assistant-prompt';
 export * from './assistant-api';
 export * from './home-assistant';

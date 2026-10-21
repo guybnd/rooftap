@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { aiAccess, aiBlockedMessage, aiUsageMonth, decideAiKey, type AiErrorCode, type AiKeyProvider } from "@homeup/core";
-import { resolveParsingProvider, type ParsingType } from "@/lib/admin-config";
+import { loadAiServerSettings, resolveParsingProvider, resolveReadsModel, type ParsingType } from "@/lib/admin-config";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { billingMode, householdTier } from "@/lib/billing";
 import { householdKeys } from "./household-keys";
@@ -37,7 +37,8 @@ export async function monthReads(admin: SupabaseClient, groupId: string, month =
 /** Whose key a person's AI read of this kind uses. Throws AiBlockedError when there is none they may use. */
 export async function resolveAiKey(userId: string, type: ParsingType, admin: SupabaseClient = createAdminClient()): Promise<ResolvedAiKey> {
   const groupId = await memberGroupId(admin, userId);
-  const preferred = (await resolveParsingProvider(type)) as AiKeyProvider;
+  const settings = await loadAiServerSettings();
+  const preferred = (await resolveParsingProvider(type, settings)) as AiKeyProvider;
   const own = groupId ? await householdKeys(admin, groupId) : new Map<AiKeyProvider, string>();
   const access = aiAccess(groupId ? await householdTier(admin, groupId) : "free", billingMode());
   const serverKey = await serverProviderKey(preferred);
@@ -45,10 +46,11 @@ export async function resolveAiKey(userId: string, type: ParsingType, admin: Sup
 
   const decision = decideAiKey({ preferred, householdKeys: new Set(own.keys()), serverKey: !!serverKey, access, usedThisMonth });
   if ("blocked" in decision) throw new AiBlockedError(decision.blocked);
+  const model = await resolveReadsModel(decision.provider, settings);
   if (decision.source === "household") {
-    return { provider: decision.provider, apiKey: own.get(decision.provider)!, source: "household", groupId };
+    return { provider: decision.provider, apiKey: own.get(decision.provider)!, model, source: "household", groupId };
   }
-  return { provider: decision.provider, apiKey: serverKey!, source: "server", groupId };
+  return { provider: decision.provider, apiKey: serverKey!, model, source: "server", groupId };
 }
 
 /** Counts one finished read against the household's month when it used the server's key. Never fails the read. */

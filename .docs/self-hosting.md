@@ -298,8 +298,28 @@ Plus plan or spending cap unless an owner sets one.
 
 It needs a model. Any one of `GEMINI_API_KEY`, `OPENROUTER_API_KEY`,
 `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` is enough (Gemini Flash is the
-cheapest default). To keep everything on your own box, run Ollama or LM
-Studio and set:
+cheapest default).
+
+**Settings → Integrations & keys → AI providers** (server operators, listed in
+`SERVER_OPERATOR_EMAILS`) manages all of this from the app instead of the
+environment:
+
+- paste or replace each provider's key;
+- add a **custom provider**: any server that speaks OpenAI's chat API (Ollama,
+  LM Studio, vLLM, a company gateway), with its address, an optional key and
+  its model names;
+- add extra model names on any provider (unverified: Rooftap can't vouch for
+  their tool calling or price);
+- pick the model for each job: assistant chats, quick asks, and AI reads
+  (receipts, recipes, listings, events);
+- choose which models households may pick in Settings → Assistant. A
+  household with its own key for a provider can always pick that provider's
+  verified models.
+
+The settings are stored in `admin_config` (`AI_SETTINGS`), so no restart is
+needed. Anything left unset falls back to the environment settings below,
+which keep working. To keep everything on your own box with environment
+settings only, run Ollama or LM Studio and set:
 
 ```
 ASSISTANT_PROVIDER=compatible

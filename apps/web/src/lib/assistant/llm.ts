@@ -165,7 +165,10 @@ export function openAIClient(conn: LlmConnection, fetchImpl?: typeof fetch): Llm
             })),
           }
         : {}),
-      max_tokens: req.maxTokens ?? 1024,
+      // OpenAI's reasoning models (GPT-5 on) refuse max_tokens.
+      ...(/^(gpt-[5-9]|o[1-9])/.test(req.model.replace(/^openai\//, ""))
+        ? { max_completion_tokens: req.maxTokens ?? 1024 }
+        : { max_tokens: req.maxTokens ?? 1024 }),
       // Gemini 3 thinks before answering by default, which is most of a
       // reply's wait; household questions don't need deep thought. Only
       // Gemini gets this: other OpenAI-compatible servers may reject it.

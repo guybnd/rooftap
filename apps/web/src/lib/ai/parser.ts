@@ -84,7 +84,7 @@ export async function parseListingFromHtml(html: string, url: string, key?: AiCa
     userText: `Parse this apartment listing from ${url}:\n\n${cleanHtml}`,
     schema: LISTING_SCHEMA,
     schemaName: LISTING_SCHEMA_NAME,
-  }, key?.apiKey);
+  }, key?.apiKey, key?.model);
 
   return extractListingResult(parsed);
 }
@@ -98,7 +98,7 @@ export async function parseListingFromImages(dataUrls: string[], url?: string, k
     images: dataUrls,
     schema: LISTING_SCHEMA,
     schemaName: LISTING_SCHEMA_NAME,
-  }, key?.apiKey);
+  }, key?.apiKey, key?.model);
 
   return extractListingResult(parsed);
 }
@@ -166,7 +166,7 @@ export async function parseReceiptFromImages(dataUrls: string[], key?: AiCallKey
     images: dataUrls,
     schema: RECEIPT_SCHEMA,
     schemaName: RECEIPT_SCHEMA_NAME,
-  }, key?.apiKey);
+  }, key?.apiKey, key?.model);
 
   const result: ParsedReceipt = {};
   if (parsed.retailer) result.retailer = String(parsed.retailer);
@@ -279,7 +279,7 @@ export async function parseRecipeFromImages(dataUrls: string[], libraryNames: st
     images: dataUrls,
     schema: RECIPE_SCHEMA,
     schemaName: RECIPE_SCHEMA_NAME,
-  }, key?.apiKey);
+  }, key?.apiKey, key?.model);
 
   const result: ParsedRecipe = {};
   if (parsed.title) {
@@ -394,5 +394,5 @@ export async function parseEventDetails(
     images: "images" in input ? input.images : undefined,
     schema: EVENT_SCHEMA,
     schemaName: EVENT_SCHEMA_NAME,
-  }, key?.apiKey);
+  }, key?.apiKey, key?.model);
 }

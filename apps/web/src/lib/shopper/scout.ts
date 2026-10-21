@@ -22,7 +22,8 @@ import {
 } from "@homeup/core";
 import { billingMode, householdTier } from "@/lib/billing";
 import { householdKeys } from "@/lib/ai/household-keys";
-import { resolveHouseholdBrain, resolveServerBrain, type AssistantBrain } from "@/lib/assistant/provider";
+import { SERVER_BRAIN_KEYS, resolveAssistantBrain, type AssistantBrain } from "@/lib/assistant/provider";
+import { resolveServerKeys } from "@/lib/admin-config";
 import { llmClient, type ChatMessage, type LlmClient, type ToolSpec } from "@/lib/assistant/llm";
 import { sendPushToUsers, type PushPayload } from "@/lib/push";
 import { applicableSources, householdDisabledSources, sourceContext } from "./lookup";
@@ -75,11 +76,12 @@ export async function monthServerRuns(admin: SupabaseClient, groupId: string, no
  * hosted Plus. Same order and codes as HOUP-436's single-shot reads.
  */
 export async function scoutBrain(admin: SupabaseClient, groupId: string): Promise<ScoutBrainResult> {
-  const own = resolveHouseholdBrain(await householdKeys(admin, groupId));
-  if (own) return { brain: own };
+  const [keys, lookup] = await Promise.all([householdKeys(admin, groupId), resolveServerKeys(SERVER_BRAIN_KEYS)]);
+  const brain = await resolveAssistantBrain({ lookup, householdKeys: keys });
+  if (brain?.keySource === "household") return { brain };
   const access = aiAccess(await householdTier(admin, groupId), billingMode());
   if (access === "none") return { blocked: "ai_requires_plus" };
-  const server = await resolveServerBrain();
+  const server = brain;
   if (!server) return { blocked: "ai_not_configured" };
   if (access === "allowance" && (await monthServerRuns(admin, groupId)) >= PLUS_SCOUT_RUNS_PER_MONTH) return { blocked: "ai_allowance_used" };
   return { brain: server };

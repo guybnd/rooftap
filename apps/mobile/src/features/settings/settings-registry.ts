@@ -16,6 +16,7 @@ import { AssistantSpending } from './panels/assistant-spending';
 import { AssistantTelegram } from './panels/assistant-telegram';
 import { AssistantHomeAssistant } from './panels/assistant-home-assistant';
 import { NotificationsSettings } from './panels/notifications-settings';
+import { AiProvidersSettings } from './panels/ai-providers-settings';
 import { ApiKeysSettings } from './panels/api-keys-settings';
 import { HouseholdAiKeys } from './panels/household-ai-keys';
 import { PatSettings } from './panels/pat-settings';
@@ -47,7 +48,7 @@ export const globalMenus: GlobalMenu[] = [
   { key: 'users', label: 'Users', panels: [GroupManager, UsersManager] },
   { key: 'appearance', label: 'Appearance', panels: [AppearanceSettings, HapticsSettings] },
   { key: 'notifications', label: 'Notifications', panels: [NotificationsSettings] },
-  { key: 'integrations', label: 'Integrations & keys', panels: [HouseholdAiKeys, ApiKeysSettings, PatSettings, McpSettings] },
+  { key: 'integrations', label: 'Integrations & keys', panels: [HouseholdAiKeys, AiProvidersSettings, ApiKeysSettings, PatSettings, McpSettings] },
   { key: 'about', label: 'About & updates', panels: [AppUpdates] },
 ];
 

@@ -7,7 +7,11 @@ vi.mock("./household-keys", () => ({ householdKeys: async () => keys }));
 let tier = "free";
 let billing = "on";
 vi.mock("@/lib/billing", () => ({ householdTier: async () => tier, billingMode: () => billing }));
-vi.mock("@/lib/admin-config", () => ({ resolveParsingProvider: async () => "gemini" }));
+vi.mock("@/lib/admin-config", () => ({
+  resolveParsingProvider: async () => "gemini",
+  loadAiServerSettings: async () => ({ custom: [], extraModels: [], offered: null, defaults: {} }),
+  resolveReadsModel: async (p: string) => `${p}-model`,
+}));
 let serverKey: string | undefined = "server-gemini";
 vi.mock("./providers", () => ({ serverProviderKey: async () => serverKey }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({}) }));
@@ -38,7 +42,7 @@ describe("resolveAiKey", () => {
     keys.set("openai", "sk-household");
     const { recordAiRead, resolveAiKey } = await import("./access");
     const key = await resolveAiKey("u1", "receipt", admin());
-    expect(key).toEqual({ provider: "openai", apiKey: "sk-household", source: "household", groupId: "g1" });
+    expect(key).toEqual({ provider: "openai", apiKey: "sk-household", model: "openai-model", source: "household", groupId: "g1" });
     await recordAiRead(key, admin());
     expect(rpc).not.toHaveBeenCalled();
   });

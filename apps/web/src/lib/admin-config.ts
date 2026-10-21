@@ -1,3 +1,4 @@
+import { AI_CATALOG, AI_SETTINGS_KEY, cleanAiServerSettings, isBuiltInProvider, parseModelRef, type AiServerSettings } from "@homeup/core";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 // HOUP-25: owner-editable third-party API keys, stored server-side in the
@@ -60,7 +61,29 @@ const LEGACY_PROVIDER: Record<ParsingType, ParsingProvider> = {
   event: "gemini",
 };
 
-export async function resolveParsingProvider(type: ParsingType): Promise<ParsingProvider> {
+/** The server's AI settings (Settings > AI providers); empty when never saved. */
+export async function loadAiServerSettings(): Promise<AiServerSettings> {
+  return cleanAiServerSettings(await getAdminConfigValue(AI_SETTINGS_KEY));
+}
+
+/** The operator's model for AI reads, when it is a built-in one that can do them. */
+export function readsModelRef(settings: AiServerSettings): { provider: ParsingProvider; model: string } | null {
+  const ref = parseModelRef(settings.defaults.reads);
+  if (!ref || !isBuiltInProvider(ref.provider)) return null;
+  const model = AI_CATALOG[ref.provider].models.find((m) => m.id === ref.model);
+  return model?.reads ? { provider: ref.provider, model: model.id } : null;
+}
+
+/** Which model an AI read on this provider uses: the operator's pick when it is on that provider, else the provider's default. */
+export async function resolveReadsModel(provider: ParsingProvider, settings?: AiServerSettings): Promise<string> {
+  const picked = readsModelRef(settings ?? (await loadAiServerSettings()));
+  return picked?.provider === provider ? picked.model : AI_CATALOG[provider].defaults.reads;
+}
+
+export async function resolveParsingProvider(type: ParsingType, settings?: AiServerSettings): Promise<ParsingProvider> {
+  // The AI providers panel's pick for AI reads wins over the older single switch.
+  const picked = readsModelRef(settings ?? (await loadAiServerSettings()));
+  if (picked) return picked.provider;
   const configured = await getAdminConfigValue("AI_PARSING_PROVIDER");
   if (configured && KNOWN_PROVIDERS.has(configured)) return configured as ParsingProvider;
   return LEGACY_PROVIDER[type];

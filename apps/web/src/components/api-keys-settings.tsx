@@ -7,7 +7,11 @@ import { Input } from "@/components/ui/input";
 import { KeyRound, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import type { TestResult } from '@homeup/core';
+import { AI_CATALOG, type TestResult } from '@homeup/core';
+import { hasAiProvidersPanel } from "@/components/ai-providers-settings";
+
+// The AI providers panel owns the AI keys and the parsing provider on servers that have it.
+const AI_KEY_NAMES = new Set(Object.values(AI_CATALOG).map((p) => p.keyName));
 
 interface KeyStatus {
   key: string;
@@ -96,6 +100,7 @@ export function ApiKeysSettings() {
   const [parsingProvider, setParsingProvider] = useState<ParsingProviderId | "">("");
   const [providerStatuses, setProviderStatuses] = useState<ParsingProviderStatus[] | null>(null);
   const [providerBusy, setProviderBusy] = useState(false);
+  const [aiPanel, setAiPanel] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -130,9 +135,11 @@ export function ApiKeysSettings() {
   }, [load]);
 
   useEffect(() => {
-    if (isOperator) {
-      loadParsingProvider();
-    }
+    if (!isOperator) return;
+    void hasAiProvidersPanel().then((has) => {
+      setAiPanel(has);
+      if (!has) loadParsingProvider();
+    });
   }, [isOperator, loadParsingProvider]);
 
   const saveParsingProvider = useCallback(async (provider: ParsingProviderId | "") => {
@@ -208,7 +215,7 @@ export function ApiKeysSettings() {
 
   if (isOperator === false) return null;
 
-  const runtimeKeys = keys?.filter((k) => k.class === "runtime") ?? [];
+  const runtimeKeys = keys?.filter((k) => k.class === "runtime" && !(aiPanel && AI_KEY_NAMES.has(k.key))) ?? [];
   const buildTimeKeys = keys?.filter((k) => k.class === "build-time") ?? [];
 
   return (
@@ -218,7 +225,7 @@ export function ApiKeysSettings() {
       description="Third-party keys this household's server uses. A saved key works from the next request, no restart needed."
     >
 
-        {providerStatuses && (
+        {providerStatuses && !aiPanel && (
           <div className="space-y-2">
             <SettingsLabel id="parsing-provider-label">Parsing provider</SettingsLabel>
             {/* Five choices overflow a segmented control at phone width, so

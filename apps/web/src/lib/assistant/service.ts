@@ -44,7 +44,7 @@ import { getEnabledModules } from "@/lib/server-modules";
 import { billingMode } from "@/lib/billing";
 import { TurnTimeoutError, executeProposals, failureReason, runAssistantTurn, type Proposal } from "./engine";
 import { isProviderBusy, llmClient, withFallbackModel, type ChatMessage, type LlmClient } from "./llm";
-import { SERVER_BRAIN_KEYS, resolveBackupBrain, resolveHouseholdBrain, resolveServerBrain, type AssistantBrain } from "./provider";
+import { SERVER_BRAIN_KEYS, resolveAssistantBrain, resolveBackupBrain, type AssistantBrain } from "./provider";
 import { resolveServerKeys } from "@/lib/admin-config";
 import { householdKeys } from "@/lib/ai/household-keys";
 import { assistantTools } from "./tools";
@@ -452,15 +452,22 @@ function priceTable(): Record<string, { input: number; output: number }> {
 }
 
 /** Spend for one turn in micro-dollars: listed price, else free for a local server, else the fallback price. */
-export function turnCost(brain: Pick<AssistantBrain, "free">, model: string, input: number, output: number): number {
-  const prices = priceTable();
+export function turnCost(brain: Pick<AssistantBrain, "free" | "extraPrices">, model: string, input: number, output: number): number {
+  const prices = { ...priceTable(), ...brain.extraPrices };
   return costMicros(model, input, output, prices) ?? (brain.free ? 0 : costMicros(model, input, output, { [model]: FALLBACK_MODEL_PRICE })!);
 }
 
-/** The household's own key first (HOUP-436), then the server's. */
-export async function assistantBrain(admin: SupabaseClient, groupId: string): Promise<AssistantBrain | null> {
-  const [keys, lookup] = await Promise.all([householdKeys(admin, groupId), resolveServerKeys(SERVER_BRAIN_KEYS)]);
-  return resolveHouseholdBrain(keys) ?? (await resolveServerBrain(lookup));
+/**
+ * The household's models (provider.ts resolveAssistantBrain): its picks when
+ * allowed, its own key (HOUP-436) when it has one, else the server's.
+ */
+export async function assistantBrain(
+  admin: SupabaseClient,
+  groupId: string,
+  choice?: Promise<{ chat: string | null; quick: string | null }> | { chat: string | null; quick: string | null }
+): Promise<AssistantBrain | null> {
+  const [keys, lookup, picked] = await Promise.all([householdKeys(admin, groupId), resolveServerKeys(SERVER_BRAIN_KEYS), choice]);
+  return resolveAssistantBrain({ lookup, householdKeys: keys, choice: picked });
 }
 
 export interface ChatDeps {
@@ -494,9 +501,12 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
   const started = Date.now();
   // Everything a turn needs before the model runs is read in two parallel
   // rounds, not one query after another: each read is a database round trip.
+  const loadingSettings = loadSettings(ctx.admin, ctx.groupId);
   const [brain, settings, limits, usage, found] = await Promise.all([
-    deps.brain === undefined ? assistantBrain(ctx.admin, ctx.groupId) : Promise.resolve(deps.brain),
-    loadSettings(ctx.admin, ctx.groupId),
+    deps.brain === undefined
+      ? assistantBrain(ctx.admin, ctx.groupId, loadingSettings.then((s) => ({ chat: s.chatModel, quick: s.quickModel })))
+      : Promise.resolve(deps.brain),
+    loadingSettings,
     loadMemberLimits(ctx.admin, ctx.groupId, ctx.userId),
     monthUsage(ctx.admin, ctx.groupId),
     input.conversationId ? findConversation(ctx, input.conversationId) : Promise.resolve(null),
@@ -581,21 +591,24 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
   });
 
   const useCheap = budget.action === "cheap" || conversation.kind === "quick";
-  const quickModel = settings.quickModel ?? brain.quickModel;
-  const chatModel = settings.chatModel ?? brain.chatModel;
-  const chosenModel = useCheap ? quickModel : chatModel;
+  // The quick model may live on another provider or key (brain.quickBrain).
+  const active = useCheap && brain.quickBrain ? brain.quickBrain : brain;
+  const other = useCheap ? brain : brain.quickBrain ?? brain;
+  const chosenModel = useCheap ? active.quickModel : brain.chatModel;
+  const otherModel = useCheap ? brain.chatModel : other.quickModel;
   const channel = input.channel ?? "app";
   // A busy model (the provider's 503 after its own retries) hands the turn to
   // the household's other model, or to another provider the server has a key for.
-  const otherModel = useCheap ? chatModel : quickModel;
   const llm = withFallbackModel(
-    deps.llm ?? llmClient(brain.connection),
-    otherModel !== chosenModel
-      ? otherModel
-      : async () => {
-          const backup = deps.llm ? null : await resolveBackupBrain(brain);
-          return backup ? { llm: llmClient(backup.connection), model: useCheap ? backup.quickModel : backup.chatModel } : null;
-        }
+    deps.llm ?? llmClient(active.connection),
+    other === active
+      ? otherModel !== chosenModel
+        ? otherModel
+        : async () => {
+            const backup = deps.llm ? null : await resolveBackupBrain(active);
+            return backup ? { llm: llmClient(backup.connection), model: useCheap ? backup.quickModel : backup.chatModel } : null;
+          }
+      : async () => (deps.llm ? null : { llm: llmClient(other.connection), model: otherModel })
   );
 
   // The person's message is saved while the model works on it.
@@ -639,7 +652,7 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
 
   // The model that answered, which is the fallback if the first was busy.
   const model = llm.model() ?? chosenModel;
-  const cost = turnCost(brain, model, turn.inputTokens, turn.outputTokens);
+  const cost = turnCost(active, model, turn.inputTokens, turn.outputTokens);
   // Steps before the final answer are stored for the model's memory of the
   // turn; only the last one carries the proposals, tokens and cost.
   const steps = turn.messages.slice(0, -1).map((m) => ({
@@ -691,7 +704,7 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
       p_month: usageMonth(now),
       p_feature: channel === "telegram" ? "telegram" : conversation.kind === "quick" ? "quick" : conversation.kind,
       p_model: model,
-      p_key_source: brain.keySource,
+      p_key_source: active.keySource,
       p_input_tokens: turn.inputTokens,
       p_output_tokens: turn.outputTokens,
       p_cost_micros: cost,
@@ -716,12 +729,12 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
 
   // This month's usage as read before the turn, plus the turn itself.
   const after = budgetFor(
-    [...usage, { user_id: ctx.userId, key_source: brain.keySource, cost_micros: cost }],
+    [...usage, { user_id: ctx.userId, key_source: active.keySource, cost_micros: cost }],
     ctx.userId,
     settings,
     limits.budgetCents,
     ctx.access,
-    brain.keySource
+    active.keySource
   );
   const messages = [userRow as MessageRow, replyRow as MessageRow].flatMap((r) => (r ? toMessage(r, names, ctx.userId) ?? [] : []));
   return {
@@ -732,10 +745,10 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
     budget: after.status,
     afterReply: () =>
       foldOlderMessages(ctx, conversation, {
-        llm: deps.llm ?? llmClient(brain.connection),
-        model: settings.quickModel ?? brain.quickModel,
+        llm: deps.llm ?? llmClient((brain.quickBrain ?? brain).connection),
+        model: (brain.quickBrain ?? brain).quickModel,
         window: settings.contextMessages * 3,
-        brain,
+        brain: brain.quickBrain ?? brain,
         feature: channel === "telegram" ? "telegram" : conversation.kind,
         names,
       }).catch((e) => console.error("[assistant] summary fold failed", e)),

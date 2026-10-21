@@ -13,6 +13,9 @@ import { Bell, Brain, Cpu, ShieldCheck, Trash2 } from "lucide-react";
 import {
   DEFAULT_TRUST,
   TRUST_OPTIONS,
+  aiModelPickerOptions,
+  shownModelPick,
+  type AiModelChoices,
   assistantModules,
   useModules,
   type AssistantMemory,
@@ -23,6 +26,7 @@ import {
 } from "@homeup/core";
 import { assistantApi } from "@/lib/assistant-client";
 import { Input } from "@/components/ui/input";
+import { SearchablePicker } from "@/components/ui/searchable-picker";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { SettingsInset, SettingsPanel, SettingsSwitchRow } from "@/components/settings-panel";
 
@@ -33,6 +37,8 @@ export function AssistantSettings() {
   const [memories, setMemories] = useState<AssistantMemory[]>([]);
   const [draft, setDraft] = useState("");
   const [models, setModels] = useState({ chat: "", quick: "" });
+  // The server's model choices; missing on a server from before them, which keeps the free-text fields.
+  const [choices, setChoices] = useState<AiModelChoices | null>(null);
 
   useEffect(() => {
     assistantApi
@@ -41,6 +47,7 @@ export function AssistantSettings() {
         setSettings(res.settings);
         setIsOwner(res.isOwner);
         setModels({ chat: res.settings.chatModel ?? "", quick: res.settings.quickModel ?? "" });
+        setChoices(res.models ?? null);
       })
       .catch(() => {});
     assistantApi.memories().then(setMemories).catch(() => {});
@@ -114,29 +121,62 @@ export function AssistantSettings() {
         )}
       </SettingsPanel>
 
-      <SettingsPanel icon={Cpu} title="Models" description="Leave blank to use the server's default. Quick asks use the cheaper model.">
+      <SettingsPanel
+        icon={Cpu}
+        title="Models"
+        description={
+          choices
+            ? "Pick from the models this server offers, or any model on your household's own AI key. Quick asks suit a cheaper model."
+            : "Leave blank to use the server's default. Quick asks use the cheaper model."
+        }
+      >
         {settings && (
           <div className="space-y-3">
-            <label className="block space-y-1">
-              <span className="px-1 text-xs text-muted-foreground">Chats and the household thread</span>
-              <Input
-                value={models.chat}
-                disabled={!isOwner}
-                placeholder="Server default"
-                onChange={(e) => setModels((m) => ({ ...m, chat: e.target.value }))}
-                onBlur={() => models.chat.trim() !== (settings.chatModel ?? "") && void save({ chatModel: models.chat.trim() || null })}
-              />
-            </label>
-            <label className="block space-y-1">
-              <span className="px-1 text-xs text-muted-foreground">Quick asks</span>
-              <Input
-                value={models.quick}
-                disabled={!isOwner}
-                placeholder="Server default"
-                onChange={(e) => setModels((m) => ({ ...m, quick: e.target.value }))}
-                onBlur={() => models.quick.trim() !== (settings.quickModel ?? "") && void save({ quickModel: models.quick.trim() || null })}
-              />
-            </label>
+            {choices ? (
+              (["chat", "quick"] as const).map((job) => {
+                const field = job === "chat" ? "chatModel" : "quickModel";
+                const shown = shownModelPick(settings[field], choices[job]);
+                const fallback = choices.defaults[job];
+                const options = aiModelPickerOptions(choices[job], fallback ? `Server default (${fallback.label})` : "Server default");
+                if (shown.extra) options.push(shown.extra);
+                return (
+                  <label key={job} className="block space-y-1">
+                    <span className="px-1 text-xs text-muted-foreground">{job === "chat" ? "Chats and the household thread" : "Quick asks"}</span>
+                    <SearchablePicker
+                      ariaLabel={job === "chat" ? "Model for chats" : "Model for quick asks"}
+                      options={options}
+                      value={shown.value}
+                      disabled={!isOwner}
+                      searchPlaceholder="Search models"
+                      onChange={(ref) => void save({ [field]: ref || null })}
+                    />
+                  </label>
+                );
+              })
+            ) : (
+              <>
+                <label className="block space-y-1">
+                  <span className="px-1 text-xs text-muted-foreground">Chats and the household thread</span>
+                  <Input
+                    value={models.chat}
+                    disabled={!isOwner}
+                    placeholder="Server default"
+                    onChange={(e) => setModels((m) => ({ ...m, chat: e.target.value }))}
+                    onBlur={() => models.chat.trim() !== (settings.chatModel ?? "") && void save({ chatModel: models.chat.trim() || null })}
+                  />
+                </label>
+                <label className="block space-y-1">
+                  <span className="px-1 text-xs text-muted-foreground">Quick asks</span>
+                  <Input
+                    value={models.quick}
+                    disabled={!isOwner}
+                    placeholder="Server default"
+                    onChange={(e) => setModels((m) => ({ ...m, quick: e.target.value }))}
+                    onBlur={() => models.quick.trim() !== (settings.quickModel ?? "") && void save({ quickModel: models.quick.trim() || null })}
+                  />
+                </label>
+              </>
+            )}
             <SettingsInset>
               <SettingsSwitchRow
                 title="Show cost under each reply"

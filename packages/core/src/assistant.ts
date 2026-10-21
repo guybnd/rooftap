@@ -10,6 +10,7 @@
 
 import type { EntitlementTier } from './entitlements';
 import type { ModuleId } from './modules';
+import { catalogModelPrices } from './ai-providers';
 
 // ── Trust ────────────────────────────────────────────────────────────────
 
@@ -276,20 +277,13 @@ export interface ModelPrice {
 }
 
 /**
- * List prices for the default models, used to turn token counts into spend.
+ * List prices for the verified models (ai-providers.ts), used to turn token counts into spend.
  * Prices change: an operator can override or add models with the
  * ASSISTANT_MODEL_PRICES env var (see parseModelPrices). A model that isn't
  * listed counts as unknown rather than free, so budgets still see its tokens
  * in usage; local models (Ollama and the like) should be listed at 0.
  */
-export const MODEL_PRICES: Record<string, ModelPrice> = {
-  'gemini-3.1-flash-lite': { input: 0.25, output: 1.5 },
-  'gemini-2.5-flash-lite': { input: 0.1, output: 0.4 },
-  'gemini-2.5-flash': { input: 0.3, output: 2.5 },
-  'gpt-4o-mini': { input: 0.15, output: 0.6 },
-  'claude-haiku-4-5-20251001': { input: 1, output: 5 },
-  'claude-haiku-5-5': { input: 0.1, output: 0.5 },
-};
+export const MODEL_PRICES: Record<string, ModelPrice> = catalogModelPrices();
 
 /**
  * Used for a cloud model with no listed price, so a budget errs on the safe

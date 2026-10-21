@@ -1,6 +1,6 @@
 // HOUP-436: native calls to /api/ai-keys (Settings > AI keys). Same
 // authedFetch pattern as features/shopper/shopper-api.ts.
-import type { AiKeyProvider, HouseholdAiKeysStatus } from '@homeup/core';
+import type { AiKeyProvider, AiProvidersStatus, HouseholdAiKeysStatus } from '@homeup/core';
 import { getCurrentSupabaseClient } from '@/lib/supabase-client';
 import { getStoredServer } from '@/lib/server-config';
 
@@ -19,7 +19,7 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
     },
   });
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error((body as { error?: string }).error ?? `Request failed (${res.status})`);
+  if (!res.ok) throw Object.assign(new Error((body as { error?: string }).error ?? `Request failed (${res.status})`), { status: res.status });
   return body as T;
 }
 
@@ -33,4 +33,24 @@ export function saveHouseholdAiKey(provider: AiKeyProvider, key: string): Promis
 
 export function removeHouseholdAiKey(provider: AiKeyProvider): Promise<void> {
   return call(`/api/ai-keys?provider=${provider}`, { method: 'DELETE' });
+}
+
+/** Settings > AI providers (server operators only); a 403 or 404 hides the panel. */
+export function aiProviders(): Promise<AiProvidersStatus> {
+  return call('/api/admin/ai-providers');
+}
+
+/** `{ settings }` or `{ key: { provider, value } }`; answers the new status. */
+export function saveAiProviders(body: unknown): Promise<AiProvidersStatus> {
+  return call('/api/admin/ai-providers', { method: 'PUT', body: JSON.stringify(body) });
+}
+
+/** Whether this server has the AI providers panel, so the API keys panel can step aside. */
+export async function hasAiProvidersPanel(): Promise<boolean> {
+  try {
+    await aiProviders();
+    return true;
+  } catch {
+    return false;
+  }
 }
