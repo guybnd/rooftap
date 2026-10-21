@@ -611,6 +611,14 @@ function DocumentsView() {
     await load();
   };
 
+  // A single delete leaves the list at once, like a batch delete: the
+  // storage removal, reminder cleanup and reload run behind it, and a
+  // failure puts the row back through that reload.
+  const dropNow = (doc: UnifiedDocument) => {
+    setDocs((prev) => prev.filter((d) => d.key !== doc.key));
+    void deleteDocuments([doc]);
+  };
+
   const selectedDocs = useMemo(() => docs.filter((d) => selectedKeys.has(d.key)), [docs, selectedKeys]);
 
   const startSelect = (doc: UnifiedDocument) => {
@@ -823,6 +831,7 @@ function DocumentsView() {
       onAddToCalendar={calendarOn ? (storeId) => setCalendarDoc({ id: storeId, title: doc.title, filename: doc.filename }) : undefined}
       motion={leavingKey === doc.key ? 'leaving' : 'idle'}
       onChanged={load}
+      onDelete={() => dropNow(doc)}
       onSelect={() => startSelect(doc)}
       selecting={selecting}
       selected={selectedKeys.has(doc.key)}
@@ -1102,7 +1111,7 @@ function DocumentsView() {
 }
 
 function DocumentCard({
-  doc, docLinks, costItems, costNames, memberProfiles, reminderTaskId, onOpenReminder, onOpenLink, onToggleTag, onMoveToFolder, onAddToCalendar, onChanged, motion,
+  doc, docLinks, costItems, costNames, memberProfiles, reminderTaskId, onOpenReminder, onOpenLink, onToggleTag, onMoveToFolder, onAddToCalendar, onChanged, onDelete, motion,
   onSelect, selecting, selected, onToggleSelect,
 }: {
   doc: UnifiedDocument;
@@ -1120,6 +1129,8 @@ function DocumentCard({
   /** Documents' "Add to calendar" (calendar.event-documents); undefined hides it. Called with the store id. */
   onAddToCalendar?: (storeId: string) => void;
   onChanged: () => Promise<void> | void;
+  /** Takes the document off the list now and deletes it behind that. */
+  onDelete: () => void;
   motion: RowMotion;
   /** Starts select mode with this document ticked. */
   onSelect: () => void;
@@ -1155,14 +1166,10 @@ function DocumentCard({
     .filter(Boolean)
     .join(' · ');
 
-  const remove = async () => {
+  const remove = () => {
     if (!doc.storeId) return;
     if (!confirm(`Delete "${doc.title || doc.filename}"? This removes it from the store.`)) return;
-    setBusy(true);
-    const supabase = createClient();
-    await deleteDocument(supabase, { id: doc.storeId, storage_path: doc.storagePath, source: doc.source, group_id: doc.groupId });
-    await deleteDocumentReminder(supabase, doc.groupId, doc.storeId);
-    await onChanged();
+    onDelete();
   };
 
   // Legacy files (bill attachments, grocery receipts) have no store row to
@@ -1189,12 +1196,9 @@ function DocumentCard({
     }
   };
 
-  const removeLegacy = async () => {
+  const removeLegacy = () => {
     if (!confirm(`Delete "${doc.title || doc.filename}"? This removes the file from ${SOURCE_LABEL[doc.source] ?? 'its source'}.`)) return;
-    setBusy(true);
-    const supabase = createClient();
-    await deleteLegacyDocument(supabase, doc);
-    await onChanged();
+    onDelete();
   };
 
   // FLUX-234: Web Share API when available (with the file itself, so the OS
@@ -1440,7 +1444,7 @@ function DocumentCard({
                   Preview
                 </MenuItem>
                 <MenuDivider />
-                <MenuItem danger disabled={busy} icon={<Trash2 className="h-3.5 w-3.5" />} onClick={() => { close(); void (doc.storeId ? remove() : removeLegacy()); }}>
+                <MenuItem danger disabled={busy} icon={<Trash2 className="h-3.5 w-3.5" />} onClick={() => { close(); if (doc.storeId) remove(); else removeLegacy(); }}>
                   Delete
                 </MenuItem>
               </>

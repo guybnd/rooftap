@@ -45,6 +45,8 @@ Copy bans (app UI): no em-dash anywhere in UI copy; no emoji in chrome (grocery 
 
 Retired patterns: whole-card ownership tints (`cardAccent` in `task-row.tsx`) and colored rails; priority pills using warning/destructive fills; filled resting-state pills ("Needed"); **v2:** per-type tint rings in feed rows (`TYPE_STYLE` / `HERO_TYPE_STYLE`), replaced by the section tile. Identity of *people* lives in the trailing avatar (accent ring = you, or gilt/`--axis` ring under Axis Mundi; dashed amber empty seat = unassigned). Priority is a tinted word in meta, not a pill.
 
+**Chart series.** Category series in a chart (the Costs month bars and breakdown, the Home Budget Space) take one saturated hue each, spread evenly round the wheel (core `CATEGORY_COLOR`: blue, yellow, cyan, violet, pink, lime, orange, fuchsia, sky, slate) so neighbouring segments stay distinct. A series always sits next to its legend, so yellow or lime there never reads as warning or success; the series hues never leave the chart and its legend dots.
+
 Data/score tints (e.g. apartment scoring) map onto the same roles: >= 80% success, 60-79% warning, < 60% or dealbreaker danger.
 
 ## 4. Surface ladder

@@ -32,14 +32,14 @@ import { TileHeader } from './section-tiles';
 
 const CATEGORY_BAR_FILL: Record<CostCategory | 'rest', string> = {
   rent: 'bg-blue-500',
-  utilities: 'bg-sky-500',
-  internet: 'bg-cyan-500',
-  insurance: 'bg-teal-500',
-  subscription: 'bg-violet-500',
-  grocery_estimate: 'bg-indigo-500',
-  moving: 'bg-fuchsia-500',
-  purchase: 'bg-pink-500',
-  outing: 'bg-purple-500',
+  utilities: 'bg-yellow-400',
+  internet: 'bg-cyan-400',
+  insurance: 'bg-violet-500',
+  subscription: 'bg-pink-500',
+  grocery_estimate: 'bg-lime-500',
+  moving: 'bg-orange-400',
+  purchase: 'bg-fuchsia-500',
+  outing: 'bg-sky-300',
   other: 'bg-slate-500',
   rest: 'bg-foreground/45',
 };

@@ -840,12 +840,9 @@ export default function DocumentsSectionScreen() {
       {
         text: 'Delete',
         style: 'destructive',
-        onPress: async () => {
+        onPress: () => {
           haptics.remove();
-          const supabase = getCurrentSupabaseClient();
-          await deleteDocument(supabase, { id: doc.storeId!, storage_path: doc.storagePath, source: doc.source, group_id: doc.groupId });
-          await deleteDocumentReminder(supabase, doc.groupId, doc.storeId!);
-          await load();
+          dropNow(doc);
         },
       },
     ]);
@@ -885,10 +882,9 @@ export default function DocumentsSectionScreen() {
       {
         text: 'Delete',
         style: 'destructive',
-        onPress: async () => {
+        onPress: () => {
           haptics.remove();
-          await deleteLegacyDocument(getCurrentSupabaseClient(), doc);
-          await load();
+          dropNow(doc);
         },
       },
     ]);
@@ -916,6 +912,14 @@ export default function DocumentsSectionScreen() {
       toast.error(failed === 1 ? "Couldn't delete one document" : `Couldn't delete ${failed} documents`);
     }
     await load();
+  };
+
+  // A single delete leaves the list at once, like a batch delete: the
+  // storage removal, reminder cleanup and reload run behind it, and a
+  // failure puts the row back through that reload.
+  const dropNow = (doc: UnifiedDocument) => {
+    setDocs((prev) => prev.filter((d) => d.key !== doc.key));
+    void deleteDocuments([doc]);
   };
 
   const selectedDocs = React.useMemo(() => docs.filter((d) => selectedKeys.has(d.key)), [docs, selectedKeys]);

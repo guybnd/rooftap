@@ -81,22 +81,25 @@ export const CATEGORY_META: Record<CostCategory, { label: string; color: string 
 // i.e. Object.keys order above). The markers were added for e-ink's grayscale
 // overrides (FLUX-252 review); since HOUP-295 retired that theme no CSS rule
 // targets them — they're inert hooks kept for any future theme-scoped
-// per-category override. Hearth v2 (H2): the hues stay clear of the status
-// colours (green, amber, red) and the coral accent, so a bar never reads as state.
+// per-category override. The hues sit evenly round the wheel (blue, yellow,
+// cyan, violet, pink, lime, orange, fuchsia, sky, slate) so neighbouring
+// segments never blur. They key a chart series next to a legend, so yellow
+// and lime don't read as warning or success, and none is the coral accent.
+// One swatch holds on both grounds (Hearth §3, chart series).
 export const CATEGORY_COLOR: Record<
   CostCategory,
   { fill: string; border: string; dot: string; text: string }
 > = {
-  rent: { fill: "bg-blue-500 cat-idx-0", border: "border-l-blue-500/60 cat-idx-0", dot: "bg-blue-400 cat-idx-0", text: "text-blue-300 cat-idx-0" },
-  utilities: { fill: "bg-sky-500 cat-idx-1", border: "border-l-sky-500/60 cat-idx-1", dot: "bg-sky-400 cat-idx-1", text: "text-sky-300 cat-idx-1" },
-  internet: { fill: "bg-cyan-500 cat-idx-2", border: "border-l-cyan-500/60 cat-idx-2", dot: "bg-cyan-400 cat-idx-2", text: "text-cyan-300 cat-idx-2" },
-  insurance: { fill: "bg-teal-500 cat-idx-3", border: "border-l-teal-500/60 cat-idx-3", dot: "bg-teal-400 cat-idx-3", text: "text-teal-300 cat-idx-3" },
-  subscription: { fill: "bg-violet-500 cat-idx-4", border: "border-l-violet-500/60 cat-idx-4", dot: "bg-violet-400 cat-idx-4", text: "text-violet-300 cat-idx-4" },
-  grocery_estimate: { fill: "bg-indigo-500 cat-idx-5", border: "border-l-indigo-500/60 cat-idx-5", dot: "bg-indigo-400 cat-idx-5", text: "text-indigo-300 cat-idx-5" },
-  moving: { fill: "bg-fuchsia-500 cat-idx-6", border: "border-l-fuchsia-500/60 cat-idx-6", dot: "bg-fuchsia-400 cat-idx-6", text: "text-fuchsia-300 cat-idx-6" },
-  purchase: { fill: "bg-pink-500 cat-idx-7", border: "border-l-pink-500/60 cat-idx-7", dot: "bg-pink-400 cat-idx-7", text: "text-pink-300 cat-idx-7" },
-  outing: { fill: "bg-purple-500 cat-idx-8", border: "border-l-purple-500/60 cat-idx-8", dot: "bg-purple-400 cat-idx-8", text: "text-purple-300 cat-idx-8" },
-  other: { fill: "bg-slate-500 cat-idx-9", border: "border-l-slate-500/60 cat-idx-9", dot: "bg-slate-400 cat-idx-9", text: "text-slate-300 cat-idx-9" },
+  rent: { fill: "bg-blue-500 cat-idx-0", border: "border-l-blue-500/60 cat-idx-0", dot: "bg-blue-500 cat-idx-0", text: "text-blue-500 cat-idx-0" },
+  utilities: { fill: "bg-yellow-400 cat-idx-1", border: "border-l-yellow-400/60 cat-idx-1", dot: "bg-yellow-400 cat-idx-1", text: "text-yellow-400 cat-idx-1" },
+  internet: { fill: "bg-cyan-400 cat-idx-2", border: "border-l-cyan-400/60 cat-idx-2", dot: "bg-cyan-400 cat-idx-2", text: "text-cyan-400 cat-idx-2" },
+  insurance: { fill: "bg-violet-500 cat-idx-3", border: "border-l-violet-500/60 cat-idx-3", dot: "bg-violet-500 cat-idx-3", text: "text-violet-500 cat-idx-3" },
+  subscription: { fill: "bg-pink-500 cat-idx-4", border: "border-l-pink-500/60 cat-idx-4", dot: "bg-pink-500 cat-idx-4", text: "text-pink-500 cat-idx-4" },
+  grocery_estimate: { fill: "bg-lime-500 cat-idx-5", border: "border-l-lime-500/60 cat-idx-5", dot: "bg-lime-500 cat-idx-5", text: "text-lime-500 cat-idx-5" },
+  moving: { fill: "bg-orange-400 cat-idx-6", border: "border-l-orange-400/60 cat-idx-6", dot: "bg-orange-400 cat-idx-6", text: "text-orange-400 cat-idx-6" },
+  purchase: { fill: "bg-fuchsia-500 cat-idx-7", border: "border-l-fuchsia-500/60 cat-idx-7", dot: "bg-fuchsia-500 cat-idx-7", text: "text-fuchsia-500 cat-idx-7" },
+  outing: { fill: "bg-sky-300 cat-idx-8", border: "border-l-sky-300/60 cat-idx-8", dot: "bg-sky-300 cat-idx-8", text: "text-sky-300 cat-idx-8" },
+  other: { fill: "bg-slate-500 cat-idx-9", border: "border-l-slate-500/60 cat-idx-9", dot: "bg-slate-500 cat-idx-9", text: "text-slate-500 cat-idx-9" },
 };
 
 /** Monthly-equivalent of a recurring cost (minor units). One-off → 0. */

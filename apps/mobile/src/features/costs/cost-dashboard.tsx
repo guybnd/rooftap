@@ -12,8 +12,8 @@
 // of reading `CATEGORY_COLOR` from `@homeup/core` dynamically: NativeWind
 // statically extracts className strings at build time and can't resolve a
 // runtime `CATEGORY_COLOR[c].fill` lookup into an external module. The hue
-// family mirrors `CATEGORY_COLOR` exactly (blue/sky/cyan/teal/violet/
-// indigo/fuchsia/pink/slate) so a category reads the same color on both
+// family mirrors `CATEGORY_COLOR` exactly (blue/yellow/cyan/violet/pink/lime/
+// orange/fuchsia/sky/slate) so a category reads the same color on both
 // platforms. Hues key the chart series only; rows lead with a neutral glyph
 // chip (cost-card.tsx `CategoryChip`, H2).
 import * as React from 'react';
@@ -32,14 +32,14 @@ const PROJECTED_OPACITY = 'opacity-40';
 
 const CATEGORY_BAR_FILL: Record<CostCategory, string> = {
   rent: 'bg-blue-500',
-  utilities: 'bg-sky-500',
-  internet: 'bg-cyan-500',
-  insurance: 'bg-teal-500',
-  subscription: 'bg-violet-500',
-  grocery_estimate: 'bg-indigo-500',
-  moving: 'bg-fuchsia-500',
-  purchase: 'bg-pink-500',
-  outing: 'bg-purple-500',
+  utilities: 'bg-yellow-400',
+  internet: 'bg-cyan-400',
+  insurance: 'bg-violet-500',
+  subscription: 'bg-pink-500',
+  grocery_estimate: 'bg-lime-500',
+  moving: 'bg-orange-400',
+  purchase: 'bg-fuchsia-500',
+  outing: 'bg-sky-300',
   other: 'bg-slate-500',
 };
 
