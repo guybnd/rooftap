@@ -78,3 +78,9 @@ backups/
 
 # What's new: generated from whats-new/*.md by scripts/whats-new.mjs
 packages/core/src/whats-new.generated.ts
+
+# Signing keys never belong in the repo (apps/mobile/android/ is generated
+# and ignored as a whole).
+*.p12
+*.jks
+*.keystore

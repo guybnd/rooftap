@@ -8,6 +8,8 @@ Each change people would notice gets a `whats-new/` entry (see `whats-new/README
 
 ## Unreleased
 
+- The Android APK is signed with Rooftap's own key. Uninstall the old app once before you install the next release: Android refuses the update because the key changed. Your household data stays on the server, so you only sign in again.
+
 ## 1.1.0 (2026-10-21)
 
 This release ships a new APK: the widget fixes are native.

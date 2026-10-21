@@ -23,3 +23,4 @@ npm run test -w mobile
 
 - A change to JavaScript only ships as an EAS update when it merges to `main`.
 - A new or changed native dependency changes the runtime fingerprint. It needs a new APK: `npx eas-cli build --profile preview`.
+- A local release build signs the APK with the key in the Gradle properties `ROOFTAP_UPLOAD_STORE_FILE`, `ROOFTAP_UPLOAD_STORE_PASSWORD`, `ROOFTAP_UPLOAD_KEY_ALIAS` and `ROOFTAP_UPLOAD_KEY_PASSWORD`. Put them in `~/.gradle/gradle.properties`, outside the repo. Without them the build uses the public debug key. That APK works, but it cannot update or be updated by an APK signed with another key.

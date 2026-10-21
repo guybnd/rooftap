@@ -67,7 +67,7 @@ const config: ExpoConfig = {
   ...(IS_DEV
     ? {}
     : {
-        runtimeVersion: '57.2',
+        runtimeVersion: '57.3',
         updates: {
           url: 'https://u.expo.dev/4a9e9340-0bd0-451a-bfbf-593a88495d82',
           checkAutomatically: 'ON_LOAD',
@@ -81,6 +81,9 @@ const config: ExpoConfig = {
       }),
   plugins: [
     'expo-router',
+    // Signs release APKs with the private upload key when the build machine
+    // has one configured, else with the debug key. See the plugin header.
+    './plugins/release-signing',
     [
       'expo-splash-screen',
       {
