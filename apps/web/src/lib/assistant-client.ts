@@ -1,3 +1,5 @@
+"use client";
+
 // HOUP-443: the web app's calls to /api/assistant, through core's shared
 // client so request shapes match native. Native twin:
 // apps/mobile/src/features/assistant/assistant-api.ts.

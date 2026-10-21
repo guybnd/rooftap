@@ -1,3 +1,5 @@
+'use client';
+
 // Rooftap Assistant: replies that land while the person is somewhere else in
 // the app, and the unread count the + wears. Both apps share this so the
 // chat screen, the banner host and the tab bar agree without a store.
