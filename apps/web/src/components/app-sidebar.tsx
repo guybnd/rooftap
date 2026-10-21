@@ -23,7 +23,7 @@ import { WhatsNewDialog } from "@/components/whats-new";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { OfflineIndicator } from "@/components/offline-indicator";
 import { RevalidatingIndicator } from "@/components/revalidating-indicator";
-import { clearThreadCache, sections, assignTabSlot, getSectionByPath, getEnabledSections, getModuleIdForPath, orderSections, tabTravelDirection, useModules } from "@homeup/core";
+import { clearThreadCache, sections, assignTabSlot, reorderVisibleSections, getSectionByPath, getEnabledSections, getModuleIdForPath, orderSections, tabTravelDirection, useModules } from "@homeup/core";
 import { sectionIcons } from "@/lib/section-icons";
 import { globalMenus, sectionPanels, visiblePanels } from "@/app/settings/settings-registry";
 import { SectionSwitcherGrid, SectionTabBar } from "@/components/section-switcher";
@@ -277,6 +277,18 @@ export function AppSidebar({ children }: { children: React.ReactNode }) {
     if (next.order === ids) return;
     updateSectionOrder(next.order);
     if (next.hidden.length !== hiddenSections.length) updateHiddenSections(next.hidden);
+  };
+
+  // The More sheet's rearrange mode hands back every visible section in its
+  // new order; hidden ones keep their places (core reorderVisibleSections).
+  const handleReorder = (visibleIds: string[]) => {
+    const ids = enabledSections.map((s) => s.id);
+    const next = reorderVisibleSections(
+      ids,
+      visibleSections.map((s) => s.id),
+      visibleIds
+    );
+    if (next !== ids) updateSectionOrder(next);
   };
 
   return (
@@ -562,6 +574,7 @@ export function AppSidebar({ children }: { children: React.ReactNode }) {
             allSections={enabledSections}
             hiddenSectionIds={hiddenSections}
             onChooseForSlot={handleChooseForSlot}
+            onReorder={handleReorder}
             currentSectionId={currentSection.id}
             onSelect={handleSectionChange}
             overdueCount={overdueCount}

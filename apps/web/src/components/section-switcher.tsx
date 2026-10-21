@@ -12,11 +12,19 @@ import {
 import Link from "next/link";
 import { Check, Settings, MoreHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
+import * as haptics from "@/lib/haptics";
 import {
+  REARRANGE_HOLD_MS,
+  SPACE_GRID_CELL_HEIGHT,
+  SPACE_GRID_COLUMNS,
   initRecentSections,
+  moveItem,
   pickRecentSections,
   recordRecentSection,
   sectionHue,
+  spaceGridCellOrigin,
+  spaceGridRows,
+  spaceGridSlotAt,
   splitTabBar,
   useRecentSectionIds,
   type Section,
@@ -92,11 +100,10 @@ interface TabBarProps extends SwitcherProps {
   allSections: Section[];
   hiddenSectionIds: string[];
   onChooseForSlot: (slotId: string, chosenId: string) => void;
+  /** Saves the More sheet's rearranged grid: every visible id, in order. */
+  onReorder: (visibleIds: string[]) => void;
   overdueCount: number;
 }
-
-// Settings > Global settings holds the Navigation panel (bar order, hidden).
-const EDIT_BAR_HREF = "/settings/global";
 
 const MICRO_LABEL = "px-1 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground";
 
@@ -156,6 +163,338 @@ function useTabHold(onHold: (section: Section) => void) {
   });
 }
 
+interface SpaceGridProps {
+  /** Every visible section, in order; the first ones are the bar's (splitTabBar). */
+  sections: Section[];
+  currentSectionId: string;
+  overdueCount: number;
+  editing: boolean;
+  onEditingChange: (editing: boolean) => void;
+  /** Saves a rearranged grid: every visible section's id, in its new order. */
+  onReorder: (ids: string[]) => void;
+  onOpen: (section: Section) => void;
+}
+
+// A finger or mouse that travels this far while rearranging is dragging.
+const DRAG_SLOP_PX = 4;
+
+interface Press {
+  id: string;
+  pointerId: number;
+  /** Where the pointer went down, and where it is now. */
+  x0: number;
+  y0: number;
+  x: number;
+  y: number;
+  /** The tile's cell origin when it was picked up. */
+  ox: number;
+  oy: number;
+  dragging: boolean;
+  slot: number;
+}
+
+/**
+ * The More sheet's All spaces grid (twin of apps/mobile's
+ * section-switcher-sheet.tsx). Hold a tile to rearrange (Guy, Oct 21: "like
+ * iPhone home screen"): the grid jiggles and any tile drags to a new spot.
+ * The grid is the section order, so its first slots are the tab bar; while
+ * rearranging they sit on a dock. Tiles sit in their cells by transform, so
+ * a reorder glides them at base and the dragged one follows the pointer 1:1
+ * (Hearth §8 "Rearrange"). The hold is timed off the pointer, like a tab's
+ * (iOS Safari has no long-press event); contextmenu (a right click) starts
+ * it too.
+ */
+function SpaceGrid({
+  sections,
+  currentSectionId,
+  overdueCount,
+  editing,
+  onEditingChange,
+  onReorder,
+  onOpen,
+}: SpaceGridProps) {
+  // The grid's order while it differs from what's saved (a drag in
+  // progress, or a save on its way back).
+  const [draft, setDraft] = useState<Section[] | null>(null);
+  const grid = draft ?? sections;
+  const barCount = splitTabBar(grid).primary.length;
+  const savedKey = sections.map((s) => s.id).join(",");
+  useEffect(() => {
+    setDraft((d) => (d && d.map((s) => s.id).join(",") === savedKey ? null : d));
+  }, [savedKey]);
+  useEffect(() => {
+    if (!editing) setDraft(null);
+  }, [editing]);
+
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [cellWidth, setCellWidth] = useState(0);
+  useLayoutEffect(() => {
+    const el = gridRef.current;
+    if (!el) return;
+    const measure = () => setCellWidth(el.clientWidth / SPACE_GRID_COLUMNS);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  const orderRef = useRef(grid);
+  orderRef.current = grid;
+  const editingRef = useRef(editing);
+  editingRef.current = editing;
+  const press = useRef<Press | null>(null);
+  const [drag, setDrag] = useState<{ id: string; x: number; y: number } | null>(null);
+  const [holding, setHolding] = useState<string | null>(null);
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The click that ends a hold or a drag doesn't open the space.
+  const eatClick = useRef(false);
+
+  const clearHold = () => {
+    if (holdTimer.current) clearTimeout(holdTimer.current);
+    holdTimer.current = null;
+    setHolding(null);
+  };
+  useEffect(() => clearHold, []);
+
+  const pickUp = (p: Press) => {
+    p.dragging = true;
+    eatClick.current = true;
+    setDrag({ id: p.id, x: p.ox, y: p.oy });
+  };
+
+  const moveTo = (p: Press) => {
+    const x = p.ox + p.x - p.x0;
+    const y = p.oy + p.y - p.y0;
+    setDrag({ id: p.id, x, y });
+    const list = orderRef.current;
+    const over = spaceGridSlotAt(x + cellWidth / 2, y + SPACE_GRID_CELL_HEIGHT / 2, cellWidth, list.length);
+    if (over === p.slot) return;
+    p.slot = over;
+    const from = list.findIndex((s) => s.id === p.id);
+    if (from === -1 || from === over) return;
+    haptics.tick();
+    const next = moveItem(list, from, over);
+    orderRef.current = next;
+    setDraft(next);
+  };
+
+  const drop = () => {
+    const p = press.current;
+    press.current = null;
+    clearHold();
+    if (!p?.dragging) return;
+    haptics.commit();
+    setDrag(null);
+    const list = orderRef.current;
+    if (list.map((s) => s.id).join(",") !== savedKey) {
+      setDraft(list);
+      onReorder(list.map((s) => s.id));
+    }
+  };
+
+  // A held touch that starts to move is a drag, not a scroll, and not a pull
+  // on the sheet: keep both out of it (non-passive, so it can say no).
+  useEffect(() => {
+    const el = gridRef.current;
+    if (!el) return;
+    const onTouchMove = (e: TouchEvent) => {
+      if (!press.current?.dragging && !editingRef.current) return;
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+    return () => el.removeEventListener("touchmove", onTouchMove);
+  }, []);
+
+  const tileHandlers = (section: Section, index: number) => ({
+    onPointerDown: (e: ReactPointerEvent<HTMLButtonElement>) => {
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      eatClick.current = false;
+      clearHold();
+      const origin = spaceGridCellOrigin(index, cellWidth);
+      const p: Press = {
+        id: section.id,
+        pointerId: e.pointerId,
+        x0: e.clientX,
+        y0: e.clientY,
+        x: e.clientX,
+        y: e.clientY,
+        ox: origin.x,
+        oy: origin.y,
+        dragging: false,
+        slot: index,
+      };
+      press.current = p;
+      try {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      } catch {
+        // A pointer the browser already let go of: nothing to follow.
+      }
+      if (editingRef.current) return;
+      setHolding(section.id);
+      holdTimer.current = setTimeout(() => {
+        holdTimer.current = null;
+        setHolding(null);
+        if (press.current !== p) return;
+        haptics.commit();
+        onEditingChange(true);
+        pickUp(p);
+      }, REARRANGE_HOLD_MS);
+    },
+    onPointerMove: (e: ReactPointerEvent<HTMLButtonElement>) => {
+      const p = press.current;
+      if (!p || p.pointerId !== e.pointerId) return;
+      p.x = e.clientX;
+      p.y = e.clientY;
+      if (p.dragging) {
+        moveTo(p);
+        return;
+      }
+      if (Math.hypot(p.x - p.x0, p.y - p.y0) <= (editingRef.current ? DRAG_SLOP_PX : HOLD_SLOP_PX)) return;
+      if (editingRef.current) {
+        haptics.tick();
+        pickUp(p);
+        moveTo(p);
+      } else {
+        // Moved before the hold landed: a scroll, not a hold.
+        clearHold();
+        press.current = null;
+      }
+    },
+    onPointerUp: drop,
+    onPointerCancel: drop,
+    onContextMenu: (e: ReactMouseEvent) => {
+      e.preventDefault();
+      if (editingRef.current || press.current?.dragging) return;
+      clearHold();
+      press.current = null;
+      eatClick.current = true;
+      haptics.commit();
+      onEditingChange(true);
+    },
+    onClick: () => {
+      if (eatClick.current) {
+        eatClick.current = false;
+        return;
+      }
+      // While rearranging a tap does nothing (Done ends it).
+      if (!editingRef.current) onOpen(section);
+    },
+    onKeyDown: (e: React.KeyboardEvent) => {
+      // Keyboard rearranging: arrows step the focused tile one place.
+      if (!editingRef.current) return;
+      const step = e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : 0;
+      if (!step) return;
+      e.preventDefault();
+      const list = orderRef.current;
+      const to = index + step;
+      if (to < 0 || to >= list.length) return;
+      const next = moveItem(list, index, to);
+      setDraft(next);
+      onReorder(next.map((s) => s.id));
+    },
+  });
+
+  return (
+    <div
+      ref={gridRef}
+      className="relative"
+      style={{ height: spaceGridRows(grid.length) * SPACE_GRID_CELL_HEIGHT }}
+    >
+      {/* While rearranging, the bar's slots sit on a dock, like a phone's
+          home screen: drop a space here to put it in the bar. */}
+      {editing && cellWidth > 0 && barCount < grid.length && (
+        <div
+          aria-hidden
+          className="absolute left-0 top-0 rounded-3xl bg-secondary animate-in fade-in duration-[var(--motion-fast)]"
+          style={{ width: cellWidth * barCount, height: SPACE_GRID_CELL_HEIGHT }}
+        />
+      )}
+      {cellWidth > 0 &&
+        grid.map((section, index) => {
+          const active = section.id === currentSectionId;
+          const inBar = index < barCount;
+          const Icon = sectionIcons[section.iconId];
+          const showBadge = overdueCount > 0 && section.navItems.some((i) => i.badge === "overdueTasks");
+          const dragged = drag?.id === section.id;
+          const origin = dragged ? drag : spaceGridCellOrigin(index, cellWidth);
+          // Same language as the tab bar: each section leads with its own
+          // identity tile; the current one names itself in its glyph hue.
+          // §13.0: the tile never carries a badge, so the count trails the
+          // label (as on native).
+          return (
+            <button
+              key={section.id}
+              data-hue={sectionHue(section.id)}
+              aria-current={active ? "page" : undefined}
+              aria-label={[section.label, inBar ? "in bar" : null, showBadge ? `${overdueCount} overdue` : null]
+                .filter(Boolean)
+                .join(", ")}
+              {...tileHandlers(section, index)}
+              className={cn(
+                "absolute left-0 top-0 select-none [-webkit-touch-callout:none]",
+                editing && "touch-none",
+                dragged
+                  ? "z-10"
+                  : "transition-transform duration-[var(--motion-base)] ease-[var(--motion-ease-out)] motion-reduce:transition-none"
+              )}
+              style={{
+                width: cellWidth,
+                height: SPACE_GRID_CELL_HEIGHT,
+                transform: `translate(${origin.x}px, ${origin.y}px)`,
+              }}
+            >
+              <span
+                className={cn(
+                  "flex h-full flex-col items-center gap-2 rounded-xl px-1 py-1.5 transition-transform",
+                  dragged
+                    ? "scale-[1.12] duration-[var(--motion-fast)]"
+                    : holding === section.id
+                      ? "scale-[0.94] duration-[450ms]"
+                      : "duration-[var(--motion-fast)] active:scale-[0.95]"
+                )}
+              >
+                <span
+                  className={cn(
+                    "flex flex-col items-center gap-2",
+                    editing && !dragged && "space-jiggle motion-reduce:animate-none",
+                    editing && index % 2 === 1 && "space-jiggle-alt"
+                  )}
+                >
+                  <LeadingTile
+                    sectionId={section.id}
+                    Icon={Icon}
+                    size="xl"
+                    className={cn(inBar && "!bg-transparent ring-[1.5px] ring-inset ring-[var(--hue-glyph)]")}
+                  />
+                  <span className="flex items-center gap-1">
+                    <span
+                      className={cn(
+                        "line-clamp-2 text-center text-xs leading-tight",
+                        active
+                          ? "font-semibold text-[var(--hue-glyph)]"
+                          : inBar
+                            ? "font-medium text-muted-foreground"
+                            : "font-medium text-foreground"
+                      )}
+                    >
+                      {section.label}
+                    </span>
+                    {showBadge && (
+                      <span className="inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold tabular-nums leading-none text-white">
+                        {overdueCount}
+                      </span>
+                    )}
+                  </span>
+                </span>
+              </span>
+            </button>
+          );
+        })}
+    </div>
+  );
+}
+
 /**
  * Mobile: bottom tab bar with balanced 2·+·2 layout.
  * Primary = first 3 visible sections (or all 4, if exactly 4 are visible); any
@@ -168,11 +507,16 @@ export function SectionTabBar({
   allSections,
   hiddenSectionIds,
   onChooseForSlot,
+  onReorder,
   currentSectionId,
   onSelect,
   overdueCount,
 }: TabBarProps) {
   const [moreOpen, setMoreOpen] = useState(false);
+  const [rearranging, setRearranging] = useState(false);
+  useEffect(() => {
+    if (!moreOpen) setRearranging(false);
+  }, [moreOpen]);
   const [slotPick, setSlotPick] = useState<Section | null>(null);
   const hold = useTabHold(setSlotPick);
 
@@ -367,15 +711,21 @@ export function SectionTabBar({
       {overflow.length > 0 && (
         <Sheet open={moreOpen} onOpenChange={setMoreOpen}>
           <SheetContent side="bottom" open={moreOpen} onOpenChange={setMoreOpen}>
-            <SheetHeader className="flex-row items-center justify-between">
+            {/* pr-12 keeps the hint and Done clear of the sheet's close button. */}
+            <SheetHeader className="flex-row items-center justify-between pr-12">
               <SheetTitle>More</SheetTitle>
-              <Link
-                href={EDIT_BAR_HREF}
-                onClick={() => setMoreOpen(false)}
-                className="text-[13px] font-medium text-primary hover:underline"
-              >
-                Edit bar
-              </Link>
+              {rearranging ? (
+                <button
+                  onClick={() => setRearranging(false)}
+                  className="text-[13px] font-semibold text-primary hover:underline"
+                >
+                  Done
+                </button>
+              ) : (
+                enabledSections.length > 1 && (
+                  <span className="text-xs text-muted-foreground">Hold an icon to rearrange</span>
+                )
+              )}
             </SheetHeader>
             <div className="px-4 pb-4">
               {/* Guy's pick (Oct 21), twin of apps/mobile's
@@ -407,65 +757,25 @@ export function SectionTabBar({
                 </div>
               )}
               {recentSections.length > 0 && <p className={MICRO_LABEL}>All spaces</p>}
-              <div className="grid grid-cols-4 gap-x-1 gap-y-2">
-                {enabledSections.map((section) => {
-                  const active = section.id === currentSectionId;
-                  const inBar = barSectionIds.has(section.id);
-                  const Icon = sectionIcons[section.iconId];
-                  const showBadge =
-                    overdueCount > 0 && section.navItems.some((i) => i.badge === "overdueTasks");
-                  // Same language as the tab bar: each section leads with its
-                  // own identity tile; the current one names itself in its
-                  // glyph hue. §13.0: the tile never carries a badge, so the
-                  // count trails the label (as on native).
-                  return (
-                    <button
-                      key={section.id}
-                      data-hue={sectionHue(section.id)}
-                      aria-current={active ? "page" : undefined}
-                      aria-label={[section.label, inBar ? "in bar" : null, showBadge ? `${overdueCount} overdue` : null]
-                        .filter(Boolean)
-                        .join(", ")}
-                      onClick={() => {
-                        onSelect(section.id);
-                        suppressNextSheetTidy();
-                        setMoreOpen(false);
-                      }}
-                      className="flex min-h-[92px] flex-col items-center gap-2 rounded-xl px-1 py-1.5 transition-transform active:scale-[0.95]"
-                    >
-                      <LeadingTile
-                        sectionId={section.id}
-                        Icon={Icon}
-                        size="xl"
-                        className={cn(inBar && "!bg-transparent ring-[1.5px] ring-inset ring-[var(--hue-glyph)]")}
-                      />
-                      <span className="flex items-center gap-1">
-                        <span
-                          className={cn(
-                            "line-clamp-2 text-center text-xs leading-tight",
-                            active
-                              ? "font-semibold text-[var(--hue-glyph)]"
-                              : inBar
-                                ? "font-medium text-muted-foreground"
-                                : "font-medium text-foreground"
-                          )}
-                        >
-                          {section.label}
-                        </span>
-                        {showBadge && (
-                          <span className="inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold tabular-nums leading-none text-white">
-                            {overdueCount}
-                          </span>
-                        )}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
+              <SpaceGrid
+                sections={enabledSections}
+                currentSectionId={currentSectionId}
+                overdueCount={overdueCount}
+                editing={rearranging}
+                onEditingChange={setRearranging}
+                onReorder={onReorder}
+                onOpen={(section) => {
+                  onSelect(section.id);
+                  suppressNextSheetTidy();
+                  setMoreOpen(false);
+                }}
+              />
               {/* Settings always lands on the settings menu (HOUP-50 bug 2),
                   matching the sidebar/drawer's menu-first behaviour. */}
               <div className="mt-3 flex items-center justify-between gap-3 border-t border-border pt-3">
-                {hasBarTiles ? (
+                {rearranging ? (
+                  <span className="text-xs text-muted-foreground">Drag a space onto the dock to put it in your bar</span>
+                ) : hasBarTiles ? (
                   <span className="flex items-center gap-2 text-xs text-muted-foreground">
                     <span aria-hidden className="size-3.5 rounded-[5px] border-[1.5px] border-muted-foreground" />
                     Outlined: already in your bar

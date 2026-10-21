@@ -807,6 +807,20 @@
     }
   }
 
+  /* Hearth §8 "Rearrange": while the More sheet rearranges, each space's
+     tile tips a little either way, one swing per fast; every other tile
+     starts on the opposite swing so the grid doesn't sway as one. */
+  .space-jiggle {
+    animation: space-jiggle calc(var(--motion-fast) * 2) ease-in-out infinite alternate;
+  }
+  .space-jiggle-alt {
+    animation-delay: calc(var(--motion-fast) * -1);
+  }
+  @keyframes space-jiggle {
+    from { transform: rotate(-1.6deg); }
+    to { transform: rotate(1.6deg); }
+  }
+
   /* Hearth §8 "Tab glide": the glyph of the tab just arrived at pops once,
      up to ~1.14 at fast and back at base, like the slide-to-finish check. */
   .tab-arrive {

@@ -18,7 +18,8 @@
 //
 // Holding a tab opens TabSlotPickerSheet to choose what sits in that slot
 // (core assignTabSlot, saved as the same section_order Settings > Navigation
-// edits). The More sheet lists every section, the bar's ones marked.
+// edits). The More sheet lists every section, the bar's ones marked, and
+// holding one there rearranges them (section-switcher-sheet.tsx).
 import * as React from 'react';
 import { Pressable, View, type LayoutRectangle } from 'react-native';
 import Animated, {
@@ -39,6 +40,7 @@ import {
   openAssistantPopup,
   pickRecentSections,
   recordRecentSection,
+  reorderVisibleSections,
   sectionHueSwatch,
   splitTabBar,
   useAssistantUnread,
@@ -207,6 +209,18 @@ export function PrimaryTabBar() {
     );
   };
 
+  // The More sheet's rearrange mode hands back every visible section in its
+  // new order; hidden ones keep their places in the saved order.
+  const reorderSpaces = (visibleIds: string[]) => {
+    const ids = orderedSections.map((s) => s.id);
+    const next = reorderVisibleSections(
+      ids,
+      enabledSections.map((s) => s.id),
+      visibleIds
+    );
+    if (next !== ids) void updateUserSettings({ section_order: next });
+  };
+
   // Hearth §8 "Tab glide": one pebble behind the bar travels to whichever
   // tab is active (a primary tab, or More when the active section lives
   // behind it). Tabs report their boxes relative to their group, the groups
@@ -336,7 +350,7 @@ export function PrimaryTabBar() {
           open={moreOpen}
           onOpenChange={setMoreOpen}
           sections={enabledSections}
-          barSectionIds={barSectionIds}
+          onReorder={reorderSpaces}
           recentSections={recentSections}
           currentSectionId={currentSectionId}
           onSelect={(section) => {

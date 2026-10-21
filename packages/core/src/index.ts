@@ -124,6 +124,7 @@ export * from './data/use-rewards';
 
 export * from './tokens';
 export * from './tab-glide';
+export * from './space-rearrange';
 export * from './theme-preference';
 export * from './dialog-store';
 export * from './section-hues';
