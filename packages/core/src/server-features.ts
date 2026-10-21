@@ -41,6 +41,10 @@ export const SERVER_FEATURES = {
     minSchema: '20261021061000_household_ai_keys',
     label: "using your household's own AI key",
   },
+  'shopper.scout': {
+    minSchema: '20261021080000_shopper_scout',
+    label: 'Scout, AI research for things you want to buy',
+  },
 } as const satisfies Record<string, ServerFeatureDef>;
 
 export type ServerFeatureId = keyof typeof SERVER_FEATURES;

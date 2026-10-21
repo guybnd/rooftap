@@ -30,6 +30,8 @@ export const STORE_MODULES = {
   shopper_wants: ['shopper'],
   shopper_offers: ['shopper'],
   shopper_price_snapshots: ['shopper'],
+  shopper_searches: ['shopper'],
+  shopper_picks: ['shopper'],
   // Home Search: listings, agents, viewings and the listing checklist.
   apartments: ['search'],
   agents: ['search'],

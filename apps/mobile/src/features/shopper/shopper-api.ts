@@ -3,7 +3,7 @@
 // Same authedFetch pattern as features/recipes/parse-recipe-api.ts: an
 // absolute-origin fetch with the Supabase session as `Authorization: Bearer`.
 // Web twin: apps/web/src/lib/shopper-api.ts.
-import type { SourceDeal } from '@homeup/core';
+import type { ScoutBrief, ShopperPick, ShopperSearch, ShopperWant, SourceDeal } from '@homeup/core';
 import { getCurrentSupabaseClient } from '@/lib/supabase-client';
 import { getStoredServer } from '@/lib/server-config';
 
@@ -23,6 +23,17 @@ export interface ShopperSourceInfo {
   enabled: boolean;
 }
 
+/** A failed call, with the server's stable code when it sent one (HOUP-436's ai_* codes). */
+export class ShopperApiError extends Error {
+  constructor(
+    message: string,
+    readonly code: string | null,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
+
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
   const server = await getStoredServer();
   if (!server) throw new Error('No server configured.');
@@ -37,8 +48,8 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
       ...init?.headers,
     },
   });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error((body as { error?: string }).error ?? `Request failed (${res.status})`);
+  const body = (await res.json().catch(() => ({}))) as { error?: string; code?: string };
+  if (!res.ok) throw new ShopperApiError(body.error ?? `Request failed (${res.status})`, body.code ?? null, res.status);
   return body as T;
 }
 
@@ -84,4 +95,20 @@ export async function lookupWhenSynced(wantId: string, tries = 4): Promise<Shopp
     }
   }
   return null;
+}
+
+// HOUP-435: Scout. Starting a run answers at once; the research carries on
+// on the server and lands in the synced run and pick tables.
+
+export async function startScout(id: string, brief: ScoutBrief): Promise<ShopperSearch> {
+  return (await call<{ search: ShopperSearch }>('/api/shopper/scout', { method: 'POST', body: JSON.stringify({ id, ...brief }) })).search;
+}
+
+export function scoutRun(id: string): Promise<{ search: ShopperSearch | null; picks: ShopperPick[] }> {
+  return call(`/api/shopper/scout/${encodeURIComponent(id)}`);
+}
+
+/** Puts a pick on the watchlist and checks its prices; answers with the new item. */
+export async function watchScoutPick(pickId: string): Promise<ShopperWant> {
+  return (await call<{ want: ShopperWant }>(`/api/shopper/scout/picks/${encodeURIComponent(pickId)}`, { method: 'POST', body: JSON.stringify({ action: 'watch' }) })).want;
 }

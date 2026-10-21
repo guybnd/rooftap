@@ -28,6 +28,8 @@ export interface ShopperWant {
   best_store: string | null;
   last_checked_at: string | null;
   bought_at: string | null;
+  /** The Scout run it was watched from (HOUP-435), if any. */
+  search_id?: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;

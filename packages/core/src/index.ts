@@ -34,6 +34,7 @@ export * from './recipes';
 export * from './shopper';
 export * from './shopper-sources';
 export * from './shopper-relevance';
+export * from './shopper-scout';
 export * from './setup';
 export * from './setup-templates';
 export * from './sections';

@@ -1,0 +1,47 @@
+import { after, NextResponse } from "next/server";
+import { parseScoutBrief, type ShopperSearch } from "@homeup/core";
+import { AiBlockedError, aiBlockedResponse } from "@/lib/ai/access";
+import { shopperRequest } from "@/lib/shopper/route-helpers";
+import { completeScout, hasOfferSources, scoutBrain } from "@/lib/shopper/scout";
+
+// HOUP-435: start a Scout run. Checks the household may use AI (its own key,
+// else the server's within the plan) and has a price source to search, saves
+// the run as running and answers straight away; the research carries on
+// after the response, and the run and its picks reach the apps through sync
+// (GET /scout/:id reads one on demand). The app may pass the run's id so it
+// can open the results screen before the answer arrives.
+export const maxDuration = 60;
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export async function POST(request: Request) {
+  const body = (await request.json().catch(() => null)) as { id?: unknown } | null;
+  const parsed = parseScoutBrief(body);
+  if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
+  const req = await shopperRequest();
+  if ("error" in req) return req.error;
+
+  const decided = await scoutBrain(req.admin, req.group.id);
+  if ("blocked" in decided) return aiBlockedResponse(new AiBlockedError(decided.blocked));
+  if (!(await hasOfferSources(req.group))) {
+    return NextResponse.json({ error: "No price sources are set up on this server yet, so Scout has nothing to search." }, { status: 503 });
+  }
+
+  const { data, error } = await req.admin
+    .from("shopper_searches")
+    .insert({
+      ...(typeof body?.id === "string" && UUID.test(body.id) ? { id: body.id } : {}),
+      group_id: req.group.id,
+      brief: parsed.brief,
+      status: "running",
+      key_source: decided.brain.keySource,
+      created_by: req.userId,
+    })
+    .select("*")
+    .single();
+  if (error || !data) return NextResponse.json({ error: "Could not start Scout. Try again." }, { status: 500 });
+  const search = data as ShopperSearch;
+
+  after(() => completeScout(req.admin, search, req.group, decided.brain));
+  return NextResponse.json({ search }, { status: 202 });
+}

@@ -8,10 +8,17 @@
 import { useEffect, useMemo, useState } from 'react';
 import { use$ } from '@legendapp/state/react';
 import { toast } from 'sonner';
-import { Plus, ShoppingBag } from 'lucide-react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { Plus, ShoppingBag, Sparkles } from 'lucide-react';
 import {
   shopperWants$,
   shopperPriceSnapshots$,
+  shopperSearches$,
+  useModules,
+  scoutRunStatus,
+  scoutTitle,
+  timeAgo,
   useReconnectSync,
   useStoreHelpers,
   useStoreLoaded,
@@ -24,16 +31,20 @@ import {
   type ShopperWant,
   type ShopperWantStatus,
   type ShopperPriceSnapshot,
+  type ShopperSearch,
 } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
 import { lookupWhenSynced, shopperSources } from '@/lib/shopper-api';
 import { HeroLede } from '@/components/ui/hero-lede';
-import { ListGroup } from '@/components/ui/list-item';
+import { ListGroup, ListItem, ListItemContent, ListItemMeta, ListItemTitle } from '@/components/ui/list-item';
+import { LeadingTile } from '@/components/ui/leading-tile';
+import { navLinkClickHandler } from '@/lib/view-transitions';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { EmptyState } from '@/components/ui/empty-state';
 import { OfflineHint } from '@/components/offline-hint';
 import { WantRow } from './want-row';
 import { WantFormSheet } from './want-form-sheet';
+import { ScoutBriefSheet } from './scout-brief-sheet';
 
 const TABS: { value: ShopperWantStatus; label: string }[] = [
   { value: 'watching', label: 'Watching' },
@@ -49,6 +60,17 @@ export default function ShopperPage() {
   useReconnectSync(wants$);
   useReconnectSync(snaps$);
   const { writeRow } = useStoreHelpers(wants$, currentUserId);
+  // HOUP-435: Scout needs a server with its tables.
+  const scoutOn = useModules().server('shopper.scout');
+  const searches$ = shopperSearches$(scoutOn ? group?.id : undefined);
+  useReconnectSync(searches$);
+  const recentRuns = use$(() =>
+    Object.values(searches$.get() ?? {})
+      .filter((s): s is ShopperSearch => !!s && !s.deleted)
+      .sort((a, b) => b.created_at.localeCompare(a.created_at))
+      .slice(0, 3),
+  );
+  const [scouting, setScouting] = useState(false);
   const storeLoaded = useStoreLoaded(wants$, snaps$);
 
   const wants = use$(() => Object.values(wants$.get() ?? {}).filter((w): w is ShopperWant => !!w && !w.deleted));
@@ -111,6 +133,17 @@ export default function ShopperPage() {
         trailing={
           <>
             {!isOnline && <OfflineHint />}
+            {scoutOn && (
+              <button
+                type="button"
+                onClick={() => setScouting(true)}
+                disabled={!isOnline}
+                className="inline-flex h-11 items-center gap-1.5 rounded-xl bg-muted px-3.5 text-sm font-medium text-foreground hover:bg-accent disabled:opacity-40"
+              >
+                <Sparkles className="h-4 w-4" />
+                Scout
+              </button>
+            )}
             <button
               type="button"
               onClick={() => setAdding(true)}
@@ -122,6 +155,17 @@ export default function ShopperPage() {
           </>
         }
       />
+
+      {recentRuns.length > 0 && (
+        <div className="space-y-1.5">
+          <p className="px-1 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">Scout</p>
+          <ListGroup>
+            {recentRuns.map((run) => (
+              <ScoutRunRow key={run.id} run={run} />
+            ))}
+          </ListGroup>
+        </div>
+      )}
 
       {wants.length === 0 ? (
         <EmptyState
@@ -147,6 +191,8 @@ export default function ShopperPage() {
         </div>
       )}
 
+      {scouting && <ScoutBriefSheet isOpen currency={currency} onClose={() => setScouting(false)} />}
+
       {adding && (
         <WantFormSheet
           isOpen
@@ -157,5 +203,28 @@ export default function ShopperPage() {
         />
       )}
     </div>
+  );
+}
+
+function ScoutRunRow({ run }: { run: ShopperSearch }) {
+  const router = useRouter();
+  const href = `/shopper/scout/${run.id}`;
+  const status = scoutRunStatus(run);
+  const meta =
+    status === 'running' ? 'Researching…' : status === 'failed' ? "Didn't finish" : [timeAgo(run.finished_at ?? run.created_at)].filter(Boolean).join(' · ');
+  return (
+    <ListItem asChild>
+      <Link href={href} onClick={navLinkClickHandler('descend', router, href)}>
+        <LeadingTile sectionId="shopper" Icon={Sparkles} size="md" />
+        <ListItemContent>
+          <ListItemTitle>
+            <span className="truncate">{scoutTitle(run.brief)}</span>
+          </ListItemTitle>
+          <ListItemMeta>
+            <span>{meta}</span>
+          </ListItemMeta>
+        </ListItemContent>
+      </Link>
+    </ListItem>
   );
 }
