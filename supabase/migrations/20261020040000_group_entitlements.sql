@@ -1,5 +1,4 @@
--- Household plan and comp flag (Plus tier plan, slice 1:
--- /mnt/project-files/analysis/plus-tier-and-ai-gating.md). Read by the server
+-- Household plan and comp flag (Plus tier, slice 1). Read by the server
 -- to size per-file upload caps (packages/core/src/entitlements.ts).
 --
 -- A separate table rather than columns on `groups`: group owners may update

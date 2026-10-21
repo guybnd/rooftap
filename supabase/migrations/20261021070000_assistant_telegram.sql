@@ -1,5 +1,4 @@
--- HOUP-446: the Rooftap Assistant on Telegram (design:
--- /mnt/project-files/design/ai-agent/tickets.md, card 7).
+-- HOUP-446: the Rooftap Assistant on Telegram.
 --
 -- - assistant_telegram_links: one Telegram account per member. The bot knows
 --   who is speaking, so it applies that person's private items, trust and
@@ -12,8 +11,8 @@
 --
 -- Only the server touches these (the webhook route and the link routes, with
 -- the service role), so RLS is on with no policies and only service_role is
--- granted (CLAUDE.md migration rule 6). Additive and safe ahead of code: new
--- tables only.
+-- granted (apps/web/src/lib/migration-grants.test.ts checks every new public
+-- table has a grant). Additive and safe ahead of code: new tables only.
 
 create table if not exists assistant_telegram_links (
   user_id uuid primary key references auth.users(id) on delete cascade,

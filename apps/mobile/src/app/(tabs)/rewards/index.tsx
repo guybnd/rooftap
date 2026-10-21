@@ -3,7 +3,6 @@
 // that question (a store search) over the wallet; typing a store swaps the
 // Hero to the answer, best perk first (H1). The Perks tab lists what the
 // cards get you, ending soon first. Tapping a card opens it ready to scan.
-// Proposal: /mnt/project-files/design/rewards/proposal.html.
 // Web twin: apps/web/src/app/rewards/page.tsx.
 import * as React from 'react';
 import { ActivityIndicator, ScrollView, View } from 'react-native';

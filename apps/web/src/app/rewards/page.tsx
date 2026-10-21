@@ -5,7 +5,6 @@
 // that question (a store search) over the wallet; typing a store swaps the
 // Hero to the answer, best perk first (H1). The Perks tab lists what the
 // cards get you, ending soon first. Tapping a card opens it ready to scan.
-// Proposal: /mnt/project-files/design/rewards/proposal.html.
 // Native twin: apps/mobile/src/app/(tabs)/rewards/index.tsx.
 import { useMemo, useState } from 'react';
 import { Plus, Search, WalletCards } from 'lucide-react';

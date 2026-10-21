@@ -4,8 +4,7 @@
 # This file configures local dev and the CLI (`supabase db diff --linked`,
 # `supabase db push` in CI) only. It does NOT describe the hosted production
 # project's actual auth/API/storage settings -- never run `supabase config
-# push`, which would overwrite production with these local-dev defaults
-# (see .docs/deployment.md).
+# push`, which would overwrite production with these local-dev defaults.
 #
 # A string used to distinguish different Supabase projects on the same host. Defaults to the
 # working directory name when running `supabase init`.

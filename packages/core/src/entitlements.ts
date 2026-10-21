@@ -1,5 +1,4 @@
-// Household plans and what each one allows (Plus tier plan:
-// /mnt/project-files/analysis/plus-tier-and-ai-gating.md). Plans are per
+// Household plans and what each one allows. Plans are per
 // household, stored in `group_entitlements` (service-role writes only); a
 // household with no row is on Free. Only document limits are wired up so far:
 // the /api/storage route checks both when signing an R2 upload.

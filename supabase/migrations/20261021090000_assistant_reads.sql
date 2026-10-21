@@ -1,5 +1,4 @@
--- Rooftap Assistant: "it answered" notifications (follow-up to HOUP-443;
--- mockups https://claude.ai/artifact/D75BBdptD4T3MKBvisdKZE).
+-- Rooftap Assistant: "it answered" notifications (follow-up to HOUP-443).
 --
 -- - assistant_reads: how far each member has read each conversation. A
 --   conversation whose last_active_at is past read_at shows an unread dot.
@@ -12,8 +11,9 @@
 --
 -- Only the server reads and writes these (the /api/assistant routes, with
 -- the service role), so RLS is on with no policies and only service_role is
--- granted (CLAUDE.md migration rule 6). Additive and safe ahead of code: new
--- tables only, and code that predates them never touches them.
+-- granted (apps/web/src/lib/migration-grants.test.ts checks every new public
+-- table has a grant). Additive and safe ahead of code: new tables only, and
+-- code that predates them never touches them.
 
 create table if not exists assistant_reads (
   user_id uuid not null references auth.users(id) on delete cascade,

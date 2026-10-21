@@ -1,7 +1,7 @@
 // Shopper (HOUP-434): things the household wants to buy, the offers sources
-// find for them, and the price history behind the deal rating. Mockups:
-// /mnt/project-files/design/shopper/. Money is integer minor units (cents),
-// like Costs. Everything here is pure so web, mobile and the server agree.
+// find for them, and the price history behind the deal rating. Money is
+// integer minor units (cents), like Costs. Everything here is pure so web,
+// mobile and the server agree.
 
 import type { CostItem, HouseholdTask } from './types';
 

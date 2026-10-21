@@ -1,5 +1,4 @@
--- HOUP-441: Rooftap Assistant data (design: /mnt/project-files/design/ai-agent/,
--- rules: packages/core/src/assistant.ts).
+-- HOUP-441: Rooftap Assistant data (rules: packages/core/src/assistant.ts).
 --
 -- - assistant_settings: one row per household, owners write (trust per
 --   module, models, context size, quick-ask idle window, budget).

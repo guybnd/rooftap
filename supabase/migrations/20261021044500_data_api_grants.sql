@@ -11,7 +11,7 @@
 -- far. On the hosted project, and any install that already has the tables,
 -- it's a no-op. Row access is still decided by RLS, which every public table
 -- has enabled. Tables created after this migration carry their own grants in
--- the migration that creates them (CLAUDE.md migration rule 6, checked by
+-- the migration that creates them (checked by
 -- apps/web/src/lib/migration-grants.test.ts).
 
 grant select, insert, update, delete on all tables in schema public to anon, authenticated, service_role;

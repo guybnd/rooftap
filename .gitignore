@@ -63,15 +63,6 @@ Thumbs.db
 # secrets
 .docs/secrets.md
 
-# claude
-.claude/settings.local.json
-
-# flux-data orphan mode
-.flux/*.md
-.flux/config.json
-.flux/assets/
-.flux/read-state.json
-.flux-store/
 
 # turborepo local cache
 .turbo/

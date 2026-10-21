@@ -1,6 +1,6 @@
 # Document storage on Cloudflare R2
 
-> **TL;DR** — Hosted Rooftap keeps documents-store files in Cloudflare R2 (free up to 10 GB, no download fees, per-file cap by household plan). Supabase Storage stays the fallback: for self-hosted servers, for files not copied yet, and whenever R2 or the API can't be reached. Existing files are copied by a script that never deletes anything.
+> **TL;DR** Hosted Rooftap keeps documents-store files in Cloudflare R2 (free up to 10 GB, no download fees, per-file cap by household plan). Supabase Storage stays the fallback: for self-hosted servers, for files not copied yet, and whenever R2 or the API can't be reached. Existing files are copied by a script that never deletes anything.
 
 ## How it works
 

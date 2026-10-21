@@ -89,7 +89,7 @@ delete and re-run the seed).
 ### 4. Deploy
 
 On hosted Supabase, CI deploys every function here on each merge to `main`
-that touches `supabase/functions/` (the `functions` job, `.docs/deployment.md`),
+that touches `supabase/functions/` (the `functions` job),
 and a manual dispatch of the CI workflow on `main` redeploys them. By hand:
 
 ```bash

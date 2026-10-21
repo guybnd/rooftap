@@ -4,7 +4,7 @@ import { sendPushToUsers, type PushDeps, type PushPayload } from "@/lib/push";
 
 // "It answered" for the assistant: how far each member has read each
 // conversation (assistant_reads), and the push that goes out when a reply
-// lands after they left. Mockups: https://claude.ai/artifact/D75BBdptD4T3MKBvisdKZE.
+// lands after they left.
 //
 // A reply counts as noticed when the app marks the conversation read (the
 // reply rendered on screen) or seen (it showed a banner elsewhere in the

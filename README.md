@@ -2,9 +2,9 @@
 
 [![License: ELv2](https://img.shields.io/badge/license-ELv2-blue.svg)](LICENSE)
 
-Rooftap is a household management app: shared tasks and chores, groceries, recipes, a family calendar, costs and budget, loyalty cards, price tracking, and an assistant that can talk to Home Assistant. Each household switches on only the modules it uses.
+Rooftap is a household app. It holds shared tasks and chores, groceries, recipes, a family calendar, costs and a budget, loyalty cards and price tracking. An optional assistant can also talk to Home Assistant. Each household switches on only the modules it uses.
 
-This repository is everything you need to run your own Rooftap server. Your household's data stays on your machine. Rooftap is source-available under the [Elastic License 2.0](#license): free to self-host and modify, but you may not offer it to others as a hosted service.
+This repository has everything you need to run your own Rooftap server, so your household's data stays on your machine. Rooftap is source-available under the [Elastic License 2.0](#license). You can self-host it and change it, but you cannot offer it to others as a hosted service.
 
 **[Try the demo](https://guybnd.github.io/rooftap/demo/?live=1&theme=ember-night)** (runs in your browser on sample data, no account) · [Website](https://guybnd.github.io/rooftap/) · [Android APK](https://github.com/guybnd/rooftap/releases)
 
@@ -33,6 +33,8 @@ This repository is everything you need to run your own Rooftap server. Your hous
 | Assistant | A household agent you can ask or talk to. It asks before it changes anything. It can use Home Assistant through HA's MCP Server integration, and you can talk to it from Telegram. Needs your own AI provider key. |
 | AI assistants (MCP) | Lets an outside AI assistant, such as Claude, read and update your household through MCP. |
 
+Everything works with no AI and no AI key. The Assistant and MCP modules stay off until a household owner turns them on.
+
 ## Quick start
 
 You need Docker with Docker Compose.
@@ -43,33 +45,34 @@ cp .env.example .env
 ./scripts/self-host-init.sh -d
 ```
 
-The first run generates every secret into `.env` (back that file up), builds the app, starts the stack and applies the database migrations. Then open http://localhost:3000. The first visit creates the owner account; after that, registration is closed and the owner adds household members from **Settings → Users**.
+The first run writes every secret into `.env`, builds the app, starts the stack and applies the database migrations. Back up `.env`. Then open http://localhost:3000. The first visit creates the owner account. After that, registration closes, and the owner adds household members in **Settings → Users**.
 
-Everything else is optional and documented in `.env.example`:
-- a [Mapbox token](https://account.mapbox.com/access-tokens/) for maps, geocoding and directions;
-- an OpenAI, Anthropic, Gemini or OpenRouter key for the AI parsing features;
-- `HOMEUP_MODULES` to limit which modules your server offers.
+Everything else is optional. `.env.example` explains each setting:
 
-The full guide covers HTTPS for the phone app, backups, upgrades and recovering a locked-out owner: **[.docs/self-hosting.md](.docs/self-hosting.md)**.
+- a [Mapbox token](https://account.mapbox.com/access-tokens/) for maps, geocoding and directions
+- an OpenAI, Anthropic, Gemini or OpenRouter key for the AI features
+- `HOMEUP_MODULES` to limit the modules that your server offers
+
+The full guide covers HTTPS for the phone app, backups, upgrades and how to recover a locked-out owner: **[.docs/self-hosting.md](.docs/self-hosting.md)**.
 
 ## Phone app
 
-Use the Rooftap app from the store and point it at your server. Android release builds only talk to HTTPS servers. The easiest way with nothing to install on the phone and no open ports is the bundled Tailscale Funnel or Cloudflare Tunnel profile; a public domain with the Caddy profile works too (see "Mobile access" in the self-hosting guide).
+Install the Android app from [Releases](https://github.com/guybnd/rooftap/releases) and point it at your server. Android release builds talk only to HTTPS servers. The easiest way is the bundled Tailscale Funnel or Cloudflare Tunnel profile: the phone needs nothing extra and your router needs no open ports. A public domain with the Caddy profile also works. "Mobile access" in the self-hosting guide has the steps.
 
 ## Web app (PWA)
 
-The web app installs like an app on Android, iPhone, iPad and desktop: open your server in the browser and choose **Install app** (Chrome, Edge) or **Add to Home Screen** (Safari). It opens in its own window and keeps working offline. Browsers only install over HTTPS, so set up the same HTTPS front door as for the phone app, then point `NEXT_PUBLIC_SUPABASE_URL` at that `https://` address and rebuild. Step by step: "Installing the web app (PWA)" in the self-hosting guide.
+The web app installs like an app on Android, iPhone, iPad and desktop. Open your server in the browser and choose **Install app** (Chrome, Edge) or **Add to Home Screen** (Safari). It opens in its own window and works offline. Browsers install only over HTTPS. Set up the same HTTPS address as for the phone app, set `NEXT_PUBLIC_SUPABASE_URL` to that `https://` address and rebuild. "Installing the web app (PWA)" in the self-hosting guide has the steps.
 
 ## What's in the stack
 
-`docker-compose.yml` runs Postgres, Supabase's auth, REST, realtime, storage and edge-function services behind a Kong gateway, plus the Rooftap web app (Next.js). The server needs outbound internet access for public services such as Open-Meteo weather and OpenStreetMap's Overpass API.
+`docker-compose.yml` runs Postgres and the Supabase services (auth, REST, realtime, storage and edge functions) behind a Kong gateway, plus the Rooftap web app (Next.js). The server needs outbound internet access for public services such as Open-Meteo weather and the OpenStreetMap Overpass API.
 
 ## Known rough edges
 
 - No iOS app yet. iPhone and iPad use the web app (PWA).
 - The Android app is not on Google Play yet. Install the APK from [Releases](https://github.com/guybnd/rooftap/releases).
 - No in-app account deletion yet.
-- One maintainer. Issues get read, but expect some delay.
+- One maintainer reads every issue, but answers can take a few days.
 
 ## Development
 
@@ -78,7 +81,8 @@ npm ci
 npm run check   # typecheck, lint and tests in every workspace
 ```
 
-It's a Turborepo monorepo:
+It is a Turborepo monorepo:
+
 - `apps/web`: the Next.js web app and API routes
 - `apps/mobile`: the Expo app
 - `packages/core`: shared, platform-agnostic logic and data access
@@ -89,10 +93,10 @@ Design and architecture notes are in [.docs/](.docs/INDEX.md).
 
 ## Contributing
 
-This repository is a published snapshot of Rooftap's main development repository, synced on every release. Issues and pull requests are welcome here. Accepted changes are applied upstream and come back in the next sync, so a merged PR may show as closed rather than merged. [CONTRIBUTING.md](CONTRIBUTING.md) has the details.
+This repository is a published snapshot of Rooftap's main development repository. Issues and pull requests are welcome here. We apply an accepted change upstream, and the next sync brings it back, so GitHub shows the PR as closed, not merged. [CONTRIBUTING.md](CONTRIBUTING.md) has the details.
 
-Please report security problems privately; see [SECURITY.md](SECURITY.md).
+Report security problems privately, as [SECURITY.md](SECURITY.md) says.
 
 ## License
 
-[Elastic License 2.0](LICENSE). You may run, modify and self-host Rooftap for yourself, your household or your organization. You may not offer Rooftap to others as a hosted or managed service. ELv2 is source-available, not an OSI open-source license.
+[Elastic License 2.0](LICENSE). You can run, change and self-host Rooftap for yourself, your household or your organization. You cannot offer Rooftap to others as a hosted or managed service. ELv2 is a source-available license, not an OSI open-source license.

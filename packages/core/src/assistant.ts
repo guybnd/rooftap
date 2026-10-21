@@ -1,5 +1,4 @@
-// Rooftap Assistant: the rules both apps and the server share (design:
-// /mnt/project-files/design/ai-agent/notes.md, tickets HOUP-440..449).
+// Rooftap Assistant: the rules both apps and the server share (HOUP-440..449).
 //
 // The assistant is a household agent that reads and changes switched-on
 // modules through the same tool handlers as the public MCP server. This file

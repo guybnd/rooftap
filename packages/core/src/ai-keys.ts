@@ -1,5 +1,4 @@
-// HOUP-436: whose AI key pays for a household's AI calls (Plus tier plan:
-// /mnt/project-files/analysis/plus-tier-and-ai-gating.md, section 3).
+// HOUP-436: whose AI key pays for a household's AI calls.
 //
 // 1. The household's own key: no cap, nothing charged to the server.
 // 2. Else the server's key, when the plan allows it: always with billing off

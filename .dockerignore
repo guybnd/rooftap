@@ -1,7 +1,3 @@
-# Event Horizon ticket storage — never ships in the image
-.flux/
-.flux-store/
-.eh-worktrees/
 
 # VCS
 .git

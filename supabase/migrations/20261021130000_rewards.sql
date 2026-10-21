@@ -6,7 +6,7 @@
 -- Three new group-scoped tables with the full Legend-State sync contract
 -- (created_at/updated_at + handle_times(), (group_id, updated_at) index,
 -- deleted tombstone, replica identity full + realtime publication), each
--- granted to the Data API roles (CLAUDE.md migration rule 6).
+-- granted to the Data API roles (apps/web/src/lib/migration-grants.test.ts).
 --
 -- Additive and safe ahead of code: new tables, new nullable or defaulted
 -- columns, and a select policy that hides only rows marked private, which

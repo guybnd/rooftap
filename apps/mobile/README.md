@@ -1,17 +1,13 @@
 # Rooftap mobile (Expo)
 
-The Android/iOS app. Shared logic lives in `packages/core`, shared UI in
-`packages/ui`; this workspace holds screens and platform glue only (see the
-platform-parity contract in the root `CLAUDE.md`).
+This workspace is the Android and iOS app. Shared logic lives in `packages/core`, and shared UI lives in `packages/ui`. This workspace holds the screens and the platform code only. A screen change lands on web and mobile together.
 
 ## Layout
 
-- `src/app/` is the Expo Router tree. Tabbed sections live under
-  `src/app/(tabs)/<section>/`; full-screen routes (login, server picker,
-  settings, detail pages) sit beside it.
-- `src/features/<section>/` holds section components and hooks used by those
-  screens. `src/components/` is cross-section UI not yet promoted to
-  `packages/ui`. `src/lib/` is app-level glue (server config, sync, auth).
+- `src/app/` is the Expo Router tree. Tabbed sections live under `src/app/(tabs)/<section>/`. Full-screen routes (login, server picker, settings, detail pages) sit beside it.
+- `src/features/<section>/` holds the section components and hooks for those screens.
+- `src/components/` holds UI that more than one section uses and that is not in `packages/ui` yet.
+- `src/lib/` holds app-level code: server config, sync and auth.
 - `src/widgets/` is the Android home-screen widget.
 
 ## Checks
@@ -21,16 +17,9 @@ npm run typecheck -w mobile
 npm run test -w mobile
 ```
 
-`test` first runs `scripts/check-router-dir.mjs`: **never put a test file under
-`src/app/`**. Expo Router bundles every file there into the native build, and a
-test file breaks every Android build (see that script's header). Tests are
-vitest in a node environment, logic only; mock native modules per test.
+`test` first runs `scripts/check-router-dir.mjs`. **Never put a test file under `src/app/`.** Expo Router bundles every file there into the native build, so a test file there breaks every Android build. The script header explains the details. Tests run in vitest in a node environment and test logic only. Mock native modules in each test.
 
 ## Builds and updates
 
-- JS-only changes ship as an EAS OTA update from CI on merge to `main`.
-- A new or changed native dependency changes the runtime fingerprint and needs
-  a fresh APK. Local builds go through `scripts/build-android.ps1` (Windows);
-  cloud builds use `npx eas-cli build --profile preview`.
-- Agents: don't run Gradle, `expo prebuild` or device installs yourself; state
-  the on-device step in the ticket or PR (see the root `CLAUDE.md`).
+- A change to JavaScript only ships as an EAS update when it merges to `main`.
+- A new or changed native dependency changes the runtime fingerprint. It needs a new APK: `npx eas-cli build --profile preview`.

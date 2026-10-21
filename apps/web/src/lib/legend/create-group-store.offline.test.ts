@@ -19,9 +19,8 @@ import { syncState } from "@legendapp/state";
 // so persistence semantics are genuine.
 //
 // This is the spike's "Recommended Tests" offline-loop / idempotency /
-// group-isolation assertions, made runnable in this sandbox (no browser or
-// Android emulator available — see .docs/offline-sync-engine-decision.md
-// for why an Android-device/RNW-browser run is out of scope here).
+// group-isolation assertions, runnable under vitest with no browser or
+// Android emulator.
 
 type Row = Record<string, unknown>;
 

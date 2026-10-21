@@ -2,8 +2,7 @@
 // new public tables, including when migrations replay onto a fresh project, so
 // a table without an explicit grant answers "permission denied" through the
 // Data API. Every migration after the backfill must grant each public table it
-// creates (CLAUDE.md migration rule 6). Lives in apps/web because core can't
-// use Node's fs.
+// creates. Lives in apps/web because core can't use Node's fs.
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";

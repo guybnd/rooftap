@@ -1,332 +1,130 @@
 # Self-hosting Rooftap
 
-> **TL;DR** — `./scripts/self-host-init.sh -d` brings up Rooftap plus a bundled
-> self-hosted Supabase stack on your own machine. No cloud account, no
-> external signup. Sign in with a local email/password account — Google
-> sign-in and Calendar sync are optional add-ons, not required.
+> **TL;DR** Run `./scripts/self-host-init.sh -d`. It starts Rooftap and a bundled Supabase stack on your own machine, with no cloud account and no outside sign-up. You sign in with a local account. Google sign-in, Calendar sync and AI are optional.
 
 ## Quick start
 
 ```bash
-git clone <this repo> && cd homeup
+git clone <this repo> rooftap && cd rooftap
 cp .env.example .env
 # Optional: set NEXT_PUBLIC_MAPBOX_TOKEN (https://account.mapbox.com/access-tokens/)
-# for maps, geocoding and directions; without it those views are hidden.
-# Secrets (POSTGRES_PASSWORD, JWT keys, ...) are generated on first run, and
-# everything else has a working default or is optional, see .env.example.
+# for maps, geocoding and directions. Without it, the app hides those views.
+# The first run generates the secrets (POSTGRES_PASSWORD, JWT keys and so on).
+# Every other setting has a working default or is optional, see .env.example.
 ./scripts/self-host-init.sh -d
 ```
 
-Then open <http://localhost:3000>, create an account (email/password), and
-you're in — zero external accounts required.
+Then open <http://localhost:3000> and create the owner account. You need no outside accounts.
 
-**Always run `./scripts/self-host-init.sh`, not `docker compose up` directly.**
-The script fixes up first-boot secrets in `.env` *before* any container
-starts; running `docker compose up` on its own would start every service with
-empty secrets baked in (see "First-boot provisioning" below for why this has
-to happen outside a compose service).
+**Always start the stack with `./scripts/self-host-init.sh`, not with `docker compose up`.** The script writes the first-boot secrets into `.env` before any container starts. A plain `docker compose up` starts every service with empty secrets. "First-boot secrets" below explains why.
 
-## What's in the stack
+## What is in the stack
 
-One `docker-compose.yml` brings up:
+One `docker-compose.yml` starts these services:
 
 | Service | Image | What it does |
 |---|---|---|
-| `app` | built from the repo's `Dockerfile` | The Next.js app itself |
-| `db` | `supabase/postgres` | Postgres, with `pg_cron` + Vault preinstalled |
-| `auth` | `supabase/gotrue` | Email/password + OAuth sessions |
-| `rest` | `postgrest/postgrest` | Auto-generated REST API over Postgres |
-| `realtime` | `supabase/realtime` | Live UI updates (Postgres replication) |
+| `app` | built from the repo's `Dockerfile` | The Next.js app |
+| `db` | `supabase/postgres` | Postgres, with `pg_cron` and Vault |
+| `auth` | `supabase/gotrue` | Email and password sessions, and optional OAuth |
+| `rest` | `postgrest/postgrest` | The REST API over Postgres |
+| `realtime` | `supabase/realtime` | Live updates in the open apps |
 | `storage` | `supabase/storage-api` | File storage (photos, attachments) |
-| `kong` | `kong` | API gateway — routes `/auth`, `/rest`, `/realtime`, `/storage`, `/functions` |
-| `edge-runtime` | `supabase/edge-runtime` | Runs the Deno edge functions under `supabase/functions/` (notifications, calendar sync) |
-| `migrate` | one-shot | Applies all `supabase/migrations/*.sql` against `db`, then exits |
+| `kong` | `kong` | The API gateway for `/auth`, `/rest`, `/realtime`, `/storage` and `/functions` |
+| `edge-runtime` | `supabase/edge-runtime` | The Deno edge functions in `supabase/functions/` (notifications, calendar sync) |
+| `migrate` | one-shot | Applies `supabase/migrations/*.sql` to `db`, then stops |
 
-This is the same self-hosted Supabase topology Supabase itself documents and
-ships (trimmed here to the pieces Rooftap actually uses — no Studio dashboard,
-pg-meta, image transforms, or Supavisor pooler; single-operator scale doesn't
-need a connection pooler in front of Postgres).
+This is the self-hosted Supabase layout that Supabase documents, cut down to the parts Rooftap uses. It has no Studio dashboard, no pg-meta, no image transforms and no Supavisor pooler. One household does not need a connection pooler.
 
-## First-boot provisioning
+## First-boot secrets
 
-On the very first `./scripts/self-host-init.sh` run, it generates:
-- `JWT_SECRET`, `ANON_KEY`, `SERVICE_ROLE_KEY` — the signing key and derived
-  API keys hosted Supabase normally hands you from a dashboard.
-- `POSTGRES_PASSWORD` — the database superuser password.
-- `SECRET_KEY_BASE` — the Realtime (Phoenix) session-signing secret.
-- `REALTIME_DB_ENC_KEY` — Realtime's fixed-width (16-char) encryption key.
+On the first run, `./scripts/self-host-init.sh` generates these values and writes them into `.env` at the repo root:
 
-All six are written into the `.env` file at the repo root.
+- `JWT_SECRET`, `ANON_KEY` and `SERVICE_ROLE_KEY`: the signing key and the API keys made from it
+- `POSTGRES_PASSWORD`: the database superuser password
+- `SECRET_KEY_BASE`: the Realtime session-signing secret
+- `REALTIME_DB_ENC_KEY`: the Realtime encryption key (16 characters)
+- `HOUSEHOLD_KEYS_SECRET`: the key that encrypts households' saved AI keys and Home Assistant tokens
 
-**These are never regenerated on a later boot.** Every session cookie and
-every RLS-signed request is cryptographically tied to `JWT_SECRET`; every
-Postgres role's password is tied to `POSTGRES_PASSWORD`; every live Realtime
-connection is tied to `SECRET_KEY_BASE`/`REALTIME_DB_ENC_KEY`. Regenerating
-any of these on an existing install would invalidate every session and lock
-every service out of the database (or Realtime). `./scripts/self-host-init.sh`
-checks whether these are already set before generating anything — a normal
-`down && up` (or re-running the script) reuses what's already there and does
-nothing.
+**The script never generates them again.** Every session and every database request depends on `JWT_SECRET`. Every Postgres role depends on `POSTGRES_PASSWORD`, and every Realtime connection depends on the two Realtime values. New values would end every session and lock the services out of the database. The script checks each value first and keeps a value that is already set, so a restart changes nothing.
 
-**Back up your `.env` file** along with the Postgres volume (see "Backups"
-below) — losing it means losing access to existing sessions and the ability
-for services to re-authenticate to `db`.
+**Back up `.env`** together with the Postgres volume ("Backing up your data" below). Without `.env`, the services cannot sign in to `db` again and every session ends.
 
-Why this can't be a step inside `docker-compose.yml` itself: Compose expands
-`${VAR}` references in the compose file exactly once, before any container
-starts. Generating these values from inside a container (e.g. an `init`
-service) would be too late — every other service would already have started
-with the empty placeholder values baked in. `scripts/self-host-init.sh` fixes
-`.env` up on the host first, then execs `docker compose up` for you.
+Compose cannot do this step itself. It reads the `${VAR}` values in the compose file once, before any container starts. A container that generates the values starts too late, because every other service already has the empty values. So the script writes `.env` on the host first, then runs `docker compose up` for you.
 
-## Migrations and edge functions — fully automatic
+## Migrations and edge functions
 
-The `migrate` service applies every file in `supabase/migrations/` against
-`db` on every `docker compose up`, tracking what's already applied so
-re-running against an existing data volume is a no-op. It also seeds the two
-Supabase Vault secrets (`project_url`, `service_role_key`) the push-notification
-triggers and cron job need — see "Push notifications" below. `edge-runtime`
-serves every edge function under `supabase/functions/` (`calendar-push`,
-`calendar-sync`, `main`, `notify-due-tasks`, `notify-task-assigned`,
-`notify-task-comment` — see `supabase/functions/README.md`) directly from the
-repo. No manual operator step, no `supabase db push`, no `supabase functions
-deploy`, no manual Vault SQL — normal migration count vs. a squashed baseline
-makes no difference here (see FLUX-1561 for why the migrations stay
-unsquashed; a separate ticket, HOUP-16, tracks squashing them for unrelated
-maintenance reasons).
+The `migrate` service applies every file in `supabase/migrations/` on each start. It records what it applied, so a second run on the same data volume changes nothing. It also writes the two Vault secrets (`project_url`, `service_role_key`) that the notification triggers need ("Push notifications" below).
 
-## Push notifications — auto-seeded Vault secrets (HOUP-309)
+`edge-runtime` serves every edge function in `supabase/functions/` straight from the repo: `calendar-push`, `calendar-sync`, `main` and the `notify-*` functions. `supabase/functions/README.md` describes them. You do not run `supabase db push`, `supabase functions deploy` or any Vault SQL by hand.
 
-`public.notify_edge_function` (the trigger/cron path that calls the
-`notify-*` edge functions) reads its target URL and auth key from Supabase
-Vault, not from `.env` — Postgres runs inside the `db` container, so it needs
-the in-network gateway address (`http://kong:8000`), not the browser-facing
-`NEXT_PUBLIC_SUPABASE_URL`. `scripts/apply-migrations.sh` seeds both
-`vault.decrypted_secrets` rows (`project_url`, `service_role_key`)
-automatically on first boot, after migrations apply; re-running on an
-existing volume is a no-op (check-then-create). A seed failure logs a warning
-in the `migrate` service's logs and names the manual SQL fallback in
-`supabase/functions/README.md` — it never blocks the container from starting.
+## Push notifications
 
-## Auth: first user, then locked
+`public.notify_edge_function` calls the `notify-*` edge functions from database triggers and from cron. It reads the target URL and the key from Supabase Vault, not from `.env`. Postgres runs inside the `db` container, so it needs the gateway address inside the Docker network (`http://kong:8000`), not the browser address.
 
-The bundled `auth` service has Supabase's Email provider enabled, but
-registration is **open only until the first account exists, then closed at
-the auth server itself** (`GOTRUE_DISABLE_SIGNUP` defaults to `true` in
-`docker-compose.yml`). `src/app/(auth)/login/page.tsx` is sign-in only — it
-has no signup form. Since there's no SMTP server configured (a
-zero-external-account install has nowhere to send confirmation emails from),
-that first account is auto-confirmed and gets a session immediately.
+`scripts/apply-migrations.sh` writes both Vault rows on the first boot, after the migrations. On a later run, it finds them and does nothing. If the step fails, the `migrate` logs show a warning and name the manual SQL in `supabase/functions/README.md`. The failure never stops the stack.
 
-**First-run welcome screen:** a fresh install with zero accounts is routed to
-`src/app/(auth)/welcome/page.tsx` instead of the bare login form (checked via
-the unauthenticated `GET /api/setup/status`, which reports only whether any
-account exists). It calls the service-role-backed `POST /api/setup/first-user`
-to create that first account and signs the operator in; once any account
-exists, `/welcome` redirects to `/login`, and the route itself returns `409`
-for any further attempt — so the first-run door can't be reused, even by a
-direct request. Every account after that is minted by the owner from the
-**Settings → Users** admin screen (`POST /api/admin/users`, gated on
-`requireOwner`), which still works with signup disabled — it goes through
-the service-role admin client, not the public signup endpoint GoTrue closes.
+## Sign-in: the first account, then closed
 
-**Reopening registration:** set `GOTRUE_DISABLE_SIGNUP=false` in `.env` and
-restart the `auth` container (`docker compose up -d auth`). This is a
-deliberate, host-level decision — there is no in-app toggle, so a compromised
-admin session can't reopen registration on its own.
+Registration is open until the first account exists. Then the auth server closes it (`GOTRUE_DISABLE_SIGNUP` is `true` by default in `docker-compose.yml`). The login page has no sign-up form. The stack has no mail server, so the first account is confirmed at once and signed in.
 
-**Upgrading an existing install:** if you deployed Rooftap before this change,
-your instance had open signup by default. Pulling this update **closes
-signup on the next `auth` container restart** — anyone who hasn't already
-created an account will need one minted by the owner afterward. If you
-*want* to keep registration open (e.g. a trusted household still onboarding
-people), set `GOTRUE_DISABLE_SIGNUP=false` in `.env` before restarting.
+**The welcome screen.** A new install with no accounts opens a welcome screen in place of the login form. The screen asks `GET /api/setup/status`, which only says whether an account exists. It then creates the owner with `POST /api/setup/first-user`. When an account exists, the welcome page sends you to the login page, and the route answers `409`, so nobody can use it again.
 
-**Sole-owner password recovery:** there's no mailer, so the owner account has
-no "forgot password" email flow. If the owner is locked out, reset the
-password directly against the database with the Supabase CLI/`auth.admin`
-API (e.g. `admin.auth.admin.updateUserById(ownerId, { password })` run from a
-one-off script with the service-role key) or, in the worst case, connect to
-the `db` container's Postgres directly. There is no UI path for this by
-design — it requires host/database access, matching who is actually trusted
-to recover a sole owner's account.
+**More members.** The owner adds every later account in **Settings → Users**. This works with sign-up closed, because it uses the service-role admin client, not the public sign-up endpoint.
 
-**Local username login:** GoTrue always requires an email, even for
-local-only accounts, so an identifier typed with no `@` is treated as a
-username and mapped to `<username>@homeup.local` before it ever reaches
-Supabase auth (see `packages/core/src/auth/identifier.ts`). The operator only
-ever types/sees the username; a real email still works unchanged.
-`@homeup.local` is never routable and used only as an internal auth
-identifier.
+**Open registration again.** Set `GOTRUE_DISABLE_SIGNUP=false` in `.env` and restart `auth` (`docker compose up -d auth`). The app has no switch for this on purpose: a stolen admin session cannot open registration.
 
-**Google sign-in** stays optional, but closing signup changes what it can do:
-configure `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` in `.env` **and**
-uncomment the matching `GOTRUE_EXTERNAL_GOOGLE_*` lines in
-`docker-compose.yml`'s `auth` service, and Google sign-in works for **an
-account that already exists** — it can no longer create a new one, since
-GoTrue's external-provider new-user path is gated by the same
-`GOTRUE_DISABLE_SIGNUP` flag as public signup. Skip Google entirely and the
-app works with zero Google config.
+**A locked-out owner.** The stack has no mailer, so there is no "forgot password" email. To reset the owner password, use the service-role key from a one-off script (`admin.auth.admin.updateUserById(ownerId, { password })`), or connect to Postgres in the `db` container. The app has no path for this on purpose: only a person with access to the host can recover the owner.
 
-**Onboarding a household member who wants to use Google:** the owner creates
-that person's account from **Settings → Users**, using their **real Google
-email address** as the identifier (not a username). At sign-in, GoTrue
-matches the existing account by email instead of attempting a new signup, so
-"Continue with Google" signs them straight in. This repo has no identity
-linking (a Google account attaching to an already-existing password account)
-— that's a Phase 2 item — so the email match above is the only route in; it
-has not been verified against a running stack as part of this change, so
-treat it as expected-but-unconfirmed behavior until checked live.
+**Usernames.** The auth server needs an email address for every account. When you type a name with no `@`, the app turns it into `<username>@homeup.local` before it signs in (`packages/core/src/auth/identifier.ts`). You only see the username. A real email address also works. `@homeup.local` is never a real address.
 
-**Calendar sync caveat:** connecting Google Calendar only works while signed
-in *as* that same Google account — the `calendar-callback` route's
-`account_mismatch` guard blocks linking a Google Calendar to an
-email/password-authenticated session. Identity-linking to lift this is a
-Phase 2 item, not part of this self-hosting work.
+**Google sign-in (optional).** Create your own OAuth client in Google Cloud. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env`, and uncomment the `GOTRUE_EXTERNAL_GOOGLE_*` lines of the `auth` service in `docker-compose.yml`. Google sign-in then works for an account that already exists. It cannot create a new account, because `GOTRUE_DISABLE_SIGNUP` also closes that path. Your client can stay in Google's "Testing" mode for a household: add each member as a test user.
 
-**Dev/bypass login:** the existing "Dev access" toggle on the login page stays
-available as an opt-in escape hatch. It's hardened — set both
-`BYPASS_USERNAME` and `BYPASS_PASSWORD` in `.env` to enable it; unset (the
-default), the route refuses with a `503`. **This applies to the existing
-Vercel-hosted deployment too** — if it relies on the bypass route, set both
-env vars there or that login path stops working after this change.
+**A member who wants Google sign-in.** The owner creates the account in **Settings → Users** with the member's real Google address, not a username. At sign-in, the auth server finds the account by its email, so "Continue with Google" signs the member in. Rooftap cannot link a Google identity to an existing password account yet.
 
-**Seeded `@homeup.local` accounts and mobile (HOUP-180):** `/api/auth/bypass`
-(web-only) mints a real Supabase Auth password on the seeded
-`<BYPASS_USERNAME>@homeup.local` account via `auth.admin.createUser({
-password: BYPASS_PASSWORD, ... })` on first creation — it does **not**
-rotate the password on subsequent calls if the account already exists, so
-changing `BYPASS_PASSWORD` after the account was first created has no effect
-until the account is deleted and recreated, or the password is reset
-directly via `auth.admin.updateUserById`. There is no separate mobile bypass
-path; the same `<username>@homeup.local` + `BYPASS_PASSWORD` credentials work
-through mobile's normal password sign-in (`apps/mobile/src/app/login.tsx`) —
-confirmed via live device repro (HOUP-176/HOUP-180) that the seeded account
-authenticates fine. A prior report of this account landing on a dead
-"No group selected" screen on mobile was **not** an auth/password problem —
-it was mobile's data cache never refetching after login (fixed by HOUP-177/
-HOUP-178, the persistent auth guard + `onAuthStateChange`-driven refetch).
+**Google Calendar.** You can connect Google Calendar only while you are signed in with the same Google account. The `calendar-callback` route refuses to link a calendar to an email-and-password session.
 
-## Setting API keys from the UI
+**Dev access.** The login page has a "Dev access" option. It works only when `.env` sets both `BYPASS_USERNAME` and `BYPASS_PASSWORD`. Without them, the route answers `503`. The first sign-in creates the account `<BYPASS_USERNAME>@homeup.local` with `BYPASS_PASSWORD`. A later change to `BYPASS_PASSWORD` does not change the password of that account. The same name and password also work in the phone app's normal sign-in.
 
-**Server operators only (HOUP-242):** this config is server-global — it
-changes behavior for every household on this deployment, not just the
-caller's own group — so it's gated on server-operator identity, not group
-ownership. A group owner is not automatically a server operator. Set
-`SERVER_OPERATOR_EMAILS` (comma-separated) in `.env`/`.env.local` to name
-which signed-in emails may manage it; unset means no one can, and the panel
-is hidden. This allowlist is deploy-time-only — it is never readable or
-settable from any in-app UI, admin API, or database row, so a user signing
-into someone else's instance and adding their own email in-app has no path
-to becoming an operator of that instance.
+## Keys and settings in the app
 
-Operators can enter optional third-party keys (`OPENAI_API_KEY`, `GEMINI_API_KEY`,
-`OPENROUTER_API_KEY`, `ANTHROPIC_API_KEY`, `SCRAPER_API_KEY`,
-`GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`) from **Settings → API keys** instead
-of hand-editing `.env` and restarting. A saved key is stored in the
-service-role-only `admin_config` table and takes effect on the very next
-request; leaving a key unset falls back to its `.env` value exactly as before.
-`NEXT_PUBLIC_MAPBOX_TOKEN` and `NEXT_PUBLIC_VAPID_PUBLIC_KEY` appear in the
-same panel read-only, since Next.js inlines them into the browser bundle at
-`next build` (see the trade-off below).
+**Server operators.** Some settings change the server for every household, so only a server operator can see them. Being a household owner is not enough. List the operators' emails in `SERVER_OPERATOR_EMAILS` in `.env` (comma-separated). If you leave it unset, nobody gets these panels. Only `.env` sets this list: no screen, API or database row can change it.
 
-**Testing a key (HOUP-46):** each row has a "Test" button that calls a free,
-non-billable metadata endpoint for that provider (`POST /api/admin/keys/test`,
-validators in `src/lib/key-validation.ts`) and reports Valid, Invalid, No
-credit, or Unreachable. The test resolves the key the same way a real request
-would — the stored `admin_config` row first, then `.env` — so it catches a
-stale stored key that's silently shadowing a key you just corrected in
-`.env`. Tests are on-demand only, never run automatically on page load.
+**API keys.** In **Settings → API keys**, an operator can enter the optional keys (`OPENAI_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `ANTHROPIC_API_KEY`, `SCRAPER_API_KEY`, `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`) with no restart. The app stores them in the service-role-only `admin_config` table and uses them from the next request. A key left empty falls back to `.env`. The panel also shows `NEXT_PUBLIC_MAPBOX_TOKEN` and `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, read-only, because the build puts them into the browser bundle ("Build-time settings" below).
 
-**Parsing provider (HOUP-43):** the same panel has a "Parsing provider"
-selector — OpenAI / OpenRouter / Gemini / Anthropic — that routes **all**
-parsing (listings, receipts, recipes) through one provider, stored as the
-`AI_PARSING_PROVIDER` row in `admin_config` (`src/lib/admin-config.ts`
-`resolveParsingProvider`). Left on Default (unset), behavior is unchanged:
-listings/receipts use OpenAI and recipes use Gemini. The four adapters and the
-canonical-schema-to-native-dialect translation live in `src/lib/ai/providers.ts`.
+**Test a key.** Each row has a **Test** button. It calls a free metadata endpoint of that provider and answers Valid, Invalid, No credit or Unreachable. The test reads the key in the same order as a real request: the stored value first, then `.env`. So it also finds an old stored key that hides the key you just changed in `.env`. A test runs only when you press the button.
 
-**Edge-function caveat:** the `edge-runtime` service's Deno functions
-(`calendar-sync`, `calendar-push`, etc.) read their **own** `.env`-sourced
-environment directly, not `admin_config`. A Google key set from this UI only
-takes effect on the Next.js app's own server routes — concretely, the
-access-token refresh path in `src/lib/google-calendar.ts`. The initial OAuth
-code-exchange step, if it runs inside an edge function, is unaffected by a
-UI-set key and still needs the value in `.env` and `docker-compose.yml`.
+**Parsing provider.** The same panel has a **Parsing provider** setting (OpenAI, OpenRouter, Gemini or Anthropic). It sends all AI reads (listings, receipts, recipes) to one provider. On **Default**, listings and receipts use OpenAI and recipes use Gemini.
 
-**Households' own AI keys (HOUP-436):** separate from the operator keys
-above, any household owner can save their own Gemini, OpenAI, Anthropic or
-OpenRouter key in **Settings → Integrations & keys → Household AI keys**. AI reads
-(receipts, recipes, listings, events) and the assistant then use the
-household's key first, with no monthly limit, and fall back to the server's
-key only when the household has none. Keys are encrypted with
-`HOUSEHOLD_KEYS_SECRET` (AES-256-GCM, `src/lib/ai/household-keys.ts`) before
-they reach the service-role-only `household_ai_keys` table, and only the last
-four characters are ever shown again. `self-host-init.sh` generates the
-secret on first boot; without it households can't save keys. Changing it makes
-every saved key unreadable.
+**Edge functions read `.env` only.** The Deno functions in `edge-runtime` (`calendar-sync`, `calendar-push` and the others) do not read `admin_config`. A Google key that you set in the app works for the app's own routes, for example the token refresh in `src/lib/google-calendar.ts`. An edge function still needs the key in `.env` and in `docker-compose.yml`.
 
-The panel only shows where a household key adds something. A server operator
-never sees it (the server's keys already cover them; a key saved earlier stays
-listed with Remove until it's gone), and on a self-hosted server with
-`SERVER_OPERATOR_EMAILS` set nobody does, since the operator manages the
-server's keys in **AI providers**. A self-hosted server with no operator named
-keeps the panel, the only way to add a key from the app there.
+**Households' own AI keys.** A household owner can save their own Gemini, OpenAI, Anthropic or OpenRouter key in **Settings → Integrations & keys → Household AI keys**. AI reads and the assistant then use that key first, with no monthly limit. The app encrypts the key with `HOUSEHOLD_KEYS_SECRET` (AES-256-GCM) before it stores it, and it shows only the last four characters again. Without that secret, households cannot save keys. A new secret makes every saved key unreadable.
 
-With `ROOFTAP_BILLING` unset (every self-hosted server), every household may
-use the server's key with no cap. Hosted Rooftap sets `ROOFTAP_BILLING=on`:
-there a Free household needs its own key, Plus gets 300 reads a month on the
-server's key (`PLUS_AI_READS_PER_MONTH`, counted in `ai_usage`), and a comped
-household (`group_entitlements.billing_exempt`) has no limit. A blocked read
-answers `402` with `code` `ai_requires_plus` or `ai_allowance_used`, and a
-message that points at Settings → AI keys. The rule is core's `decideAiKey`
-(`packages/core/src/ai-keys.ts`).
+The panel shows only where a household key adds something. On a self-hosted server with `SERVER_OPERATOR_EMAILS` set, nobody sees it, because the operator manages the server's keys in **AI providers**. On a server with no operator, the panel stays, because it is then the only way to add a key in the app.
+
+On a self-hosted server, `ROOFTAP_BILLING` is unset, so every household can use the server's key with no limit.
 
 ## Choosing which modules your server offers
 
-Every feature (Tasks, Calendar, Groceries, Home Search and so on) is a module
-([modules.md](modules.md)). By default a server offers all of them, and each
-household's owner turns them on or off in **Settings → Modules**. To offer
-fewer, set `HOMEUP_MODULES` in `.env` to a comma-separated list of ids
-(`household,calendar,checklists,documents,groceries,recipes,costs,setup,search`)
-and restart the `app` and `edge-runtime` services (the edge functions read it
-too, so notifications skip modules the server doesn't offer). A module left out
-can't be switched on by any household. The list is read at runtime and reaches the native app through
-`/api/public-config`, so the same store app works against every server and
-nothing needs rebuilding.
+Each feature (Tasks, Calendar, Groceries, Home Search and so on) is a module ([modules.md](modules.md)). By default, the server offers all of them, and each household owner turns them on or off in **Settings → Modules**.
 
-## The household assistant (HOUP-443)
+To offer fewer, set `HOMEUP_MODULES` in `.env` to a comma-separated list of ids, for example `household,calendar,checklists,documents,groceries,recipes,costs,setup,search`. Then restart `app` and `edge-runtime`. The edge functions also read the list, so notifications skip the modules that the server does not offer. No household can turn on a module that is not on the list. The app reads the list at runtime, and the phone app gets it from `/api/public-config`, so you rebuild nothing.
 
-Switch on the **Assistant** module (Settings → Modules) to give the household
-a chat agent that reads and, with your OK, changes tasks, the calendar, the
-budget, groceries, recipes and checklists (it also reads Home Setup and the
-Shopper watchlist). Self-hosted servers always include it, with no
-Plus plan or spending cap unless an owner sets one.
+## The household assistant
 
-It needs a model. Any one of `GEMINI_API_KEY`, `OPENROUTER_API_KEY`,
-`OPENAI_API_KEY` or `ANTHROPIC_API_KEY` is enough (Gemini Flash is the
-cheapest default).
+Turn on the **Assistant** module in **Settings → Modules**. The household then gets a chat agent. It reads tasks, the calendar, the budget, groceries, recipes and checklists, and it changes them when you agree. It also reads Home Setup and the Shopper watchlist. On a self-hosted server, it needs no paid plan and has no spending cap unless an owner sets one.
 
-**Settings → Integrations & keys → AI providers** (server operators, listed in
-`SERVER_OPERATOR_EMAILS`) manages all of this from the app instead of the
-environment:
+It needs a model. One of `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` is enough. Gemini Flash is the cheapest default.
 
-- paste or replace each provider's key;
-- add a **custom provider**: any server that speaks OpenAI's chat API (Ollama,
-  LM Studio, vLLM, a company gateway), with its address, an optional key and
-  its model names;
-- add extra model names on any provider (unverified: Rooftap can't vouch for
-  their tool calling or price);
-- pick the model for each job: assistant chats, quick asks, and AI reads
-  (receipts, recipes, listings, events);
-- choose which models households may pick in Settings → Assistant. A
-  household with its own key for a provider can always pick that provider's
-  verified models.
+**Settings → Integrations & keys → AI providers** is for the operators in `SERVER_OPERATOR_EMAILS`. There you can:
 
-The settings are stored in `admin_config` (`AI_SETTINGS`), so no restart is
-needed. Anything left unset falls back to the environment settings below,
-which keep working. To keep everything on your own box with environment
-settings only, run Ollama or LM Studio and set:
+- add or replace each provider's key
+- add a **custom provider**: any server with OpenAI's chat API (Ollama, LM Studio, vLLM, a company gateway), with its address, an optional key and its model names
+- add more model names to a provider. Rooftap marks them unverified, because it cannot check their tool calls or their price.
+- choose the model for each job: assistant chats, quick asks and AI reads (receipts, recipes, listings, events)
+- choose the models that households can pick in **Settings → Assistant**. A household with its own key for a provider can always pick that provider's verified models.
+
+The app stores these settings in `admin_config` (`AI_SETTINGS`), so you need no restart. A setting left empty falls back to the environment. To keep everything on your own machine with environment settings only, run Ollama or LM Studio and set:
 
 ```
 ASSISTANT_PROVIDER=compatible
@@ -334,144 +132,73 @@ ASSISTANT_BASE_URL=http://ollama:11434/v1
 ASSISTANT_MODEL=llama3.1:8b
 ```
 
-A local model needs tool calling for the assistant to reach your data (the
-Llama 3.1+, Qwen 2.5+ and Mistral families have it). `ASSISTANT_MODEL_PRICES`
-lets usage tracking price a model Rooftap doesn't know; local models count as
-free. Each household then picks what the assistant may do per module (Read,
-Ask first, Act) in Settings → Assistant.
+A local model needs tool calls to reach your data. Llama 3.1 and later, Qwen 2.5 and later, and the Mistral models have them. `ASSISTANT_MODEL_PRICES` gives the usage tracking a price for a model that Rooftap does not know. Local models count as free. Each household then chooses what the assistant can do in each module (Read, Ask first, Act) in **Settings → Assistant**.
 
-### Assistant on Telegram (HOUP-446)
+### The assistant on Telegram
 
-Your household can talk to the assistant from Telegram, privately or in a
-family group. Everything said there is stored like any other message, so the
-chat history stays on your server and shows in the app too.
+Your household can talk to the assistant on Telegram, in a private chat or in a family group. The server stores every message like any other, so the history stays on your server and also shows in the app.
 
-1. Make a bot with [@BotFather](https://t.me/BotFather) (`/newbot`) and copy
-   its token. For group use, also send BotFather `/setprivacy` → Disable if you
-   want the bot to see replies to it without a mention (mentions and commands
-   work either way).
-2. In `.env`, set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_SECRET` (any long
-   random string, e.g. `openssl rand -hex 32`). `TELEGRAM_BOT_USERNAME` is
-   optional; the app looks it up from the token.
-3. Get updates to the app, one of two ways:
-   - **No public address** (the usual home server): run the poller,
-     `docker compose --profile telegram up -d`. It long-polls Telegram from
-     your box and forwards each update to the app on localhost. No open ports.
-   - **Public HTTPS** (a domain or a tunnel from "Mobile access"): point
-     Telegram at the webhook instead, and don't run the poller:
+1. Make a bot with [@BotFather](https://t.me/BotFather) (`/newbot`) and copy its token. For a group, you can also send BotFather `/setprivacy` → Disable. The bot then sees replies to it without a mention. Mentions and commands work in both cases.
+2. In `.env`, set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_SECRET` (a long random string, for example from `openssl rand -hex 32`). `TELEGRAM_BOT_USERNAME` is optional, because the app reads it from the token.
+3. Choose how updates reach the app:
+   - **No public address** (most home servers): run the poller with `docker compose --profile telegram up -d`. It asks Telegram for updates from your machine and passes each one to the app on localhost. You open no ports.
+   - **Public HTTPS** (a domain, or a tunnel from "Mobile access"): send Telegram to the webhook, and do not run the poller:
      ```
      curl "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" \
        -d url=https://<your-domain>/api/assistant/telegram/webhook \
        -d secret_token=$TELEGRAM_WEBHOOK_SECRET \
        -d 'allowed_updates=["message","callback_query"]'
      ```
-4. Each person links their own account in Settings → Assistant → Telegram
-   (Link Telegram gives a code to send the bot as `/start CODE`). The bot then
-   answers as that person, with their private items, the household's trust
-   levels and their allowance.
+4. Each person links their own Telegram account in **Settings → Assistant → Telegram**. **Link Telegram** gives a code to send to the bot as `/start CODE`. The bot then answers as that person, with their private items, the household's trust levels and their allowance.
 
-In a private chat the bot talks in the household thread unless the person
-starts their own chat (`/new <question>`, `/chats`, `/switch <n>`,
-`/household`). In a group it answers when mentioned, replied to or sent a
-command, always in the household thread, so only add it to groups whose
-members should see household answers. Changes under "Ask first" come with Do
-it / Not now buttons.
+In a private chat, the bot talks in the household thread until the person starts their own chat (`/new <question>`, `/chats`, `/switch <n>`, `/household`). In a group, it answers a mention, a reply or a command, always in the household thread. So add it only to groups whose members can see household answers. A change under "Ask first" comes with **Do it** and **Not now** buttons.
 
-### Assistant and Home Assistant (HOUP-449)
+### The assistant and Home Assistant
 
-The assistant can check and control your home through Home Assistant's own
-MCP server. Nothing extra runs in the Rooftap stack.
+The assistant can check and control your home through Home Assistant's own MCP server. Nothing extra runs in the Rooftap stack.
 
-1. In Home Assistant, add the **Model Context Protocol Server** integration
-   (Settings → Devices & services → Add integration). Expose the entities you
-   want the assistant to reach to Assist (Settings → Voice assistants →
-   Expose); it sees nothing else.
-2. On your Home Assistant profile page (Security tab), make a **long-lived
-   access token**.
-3. In Rooftap, an owner opens Settings → Assistant → Home Assistant, pastes
-   the address (for example `http://homeassistant.local:8123` or
-   `http://192.168.1.20:8123`) and the token, and taps Connect. Rooftap tries
-   the connection before saving it.
+1. In Home Assistant, add the **Model Context Protocol Server** integration (Settings → Devices & services → Add integration). Expose to Assist the entities that the assistant can reach (Settings → Voice assistants → Expose). It sees nothing else.
+2. On your Home Assistant profile page (Security tab), make a **long-lived access token**.
+3. In Rooftap, an owner opens **Settings → Assistant → Home Assistant**, enters the address (for example `http://homeassistant.local:8123` or `http://192.168.1.20:8123`) and the token, and taps **Connect**. Rooftap tries the connection before it saves it.
 
-The token is stored encrypted with `HOUSEHOLD_KEYS_SECRET`, so that must be
-set. A self-hosted server may reach Home Assistant on your own network. The
-hosted Rooftap server only connects over public HTTPS (Nabu Casa, a Cloudflare
-tunnel or Tailscale Funnel) and refuses private addresses.
+The app encrypts the token with `HOUSEHOLD_KEYS_SECRET`, so that secret must be set. A self-hosted server can reach Home Assistant on your own network. The hosted Rooftap server connects only over public HTTPS (Nabu Casa, a Cloudflare tunnel or Tailscale Funnel) and refuses private addresses.
 
-Owners pick one trust level for Home Assistant (Read, Ask first, Act) and can
-switch single tools off. Reads (`GetLiveContext`) always run; turning things
-on or off, setting lights and the like follow the trust level, and can't be
-undone from Rooftap.
+Owners choose one trust level for Home Assistant (Read, Ask first, Act) and can turn off single tools. Reads (`GetLiveContext`) always run. Actions such as switching a device or setting a light obey the trust level, and Rooftap cannot undo them.
 
-## The `NEXT_PUBLIC_*` build-time trade-off
+## Build-time settings (`NEXT_PUBLIC_*`)
 
-Next.js inlines `NEXT_PUBLIC_*` env vars into the JS bundle at `next build`
-time — they can't be changed at runtime without rebuilding the image. This
-creates a real wrinkle for self-hosting: `NEXT_PUBLIC_SUPABASE_URL` is used by
-**both** the browser bundle and the app's own server-side code (middleware,
-API routes), but a container on Docker's default bridge network can reach the
-Supabase gateway at `http://kong:8000` while the browser (running on your
-actual machine, not in a container) can only reach it at
-`http://localhost:8000` — two different values for the one build-time var.
+Next.js writes the `NEXT_PUBLIC_*` values into the JavaScript bundle when it builds. To change one, you rebuild the image.
 
-**Phase 1 fix (this ticket):** the `app` service runs with Docker's **host
-networking** (`network_mode: host` in `docker-compose.yml`) instead of the
-default bridge network. That makes `localhost:8000` resolve to the same place
-for both the browser and the app's own server code, because "host networking"
-means the container shares the host's network stack directly. This is exactly
-suited to what self-hosting is here — one operator, one machine, nothing that
-needs to reach the app from elsewhere on the network.
+This matters for `NEXT_PUBLIC_SUPABASE_URL`. The browser bundle and the app's own server code both use it. On Docker's default bridge network, a container reaches the gateway at `http://kong:8000`, but the browser on your machine reaches it at `http://localhost:8000`. One build-time value cannot hold both.
 
-- **Linux:** works natively, no extra setup.
-- **Mac/Windows (Docker Desktop):** enable **Settings → Resources → Network →
-  Enable host networking** first, or the `app` container won't come up with
-  working ports.
+So the `app` service uses Docker's **host networking** (`network_mode: host` in `docker-compose.yml`). The container then shares the host's network, and `localhost:8000` is the same place for the browser and for the server code.
 
-**Phase 2 (not built here):** a runtime env-injection shim (writing
-`NEXT_PUBLIC_*` values into a script tag or config endpoint at request time
-instead of baking them into the JS bundle) would let client and server use
-different origins and drop the host-networking requirement — letting the app
-run on the default bridge network like every other service. Out of scope for
-this ticket; tracked as follow-up work if self-hosting needs to grow beyond
-"my own machine" (e.g. LAN access from other devices).
+- **Linux:** this works with no extra setup.
+- **Mac and Windows (Docker Desktop):** first turn on **Settings → Resources → Network → Enable host networking**. Without it, the `app` ports do not work.
 
-## Mobile access (HOUP-69)
+A later version can inject these values at request time in place of the build. The app can then run on the bridge network like the other services.
 
-The store app has a first-run picker: "Official" or "my own server". It reads
-`GET /api/public-config` from the server you enter to learn which Supabase
-gateway and modules to use, so no custom app build is needed. Two things have
-to be true for a phone to use it:
+## Mobile access
 
-- **HTTPS.** Android release builds refuse plain `http://` to anything but
-  localhost, so a LAN address like `http://192.168.1.20:3000` won't work.
-- **One reachable origin.** `SUPABASE_PUBLIC_URL` is what the phone talks to
-  for auth, data, realtime and storage. Left unset it falls back to
-  `http://localhost:8000`, which on a phone is the phone itself.
+The phone app asks on first start: "Official" or "my own server". It reads `GET /api/public-config` from the server you enter. That tells it the Supabase address and the modules to use, so you need no custom app build. A phone needs two things:
 
-The compose file ships three optional ways to solve both: one hostname, a
-real certificate, Supabase's API paths (`/auth/v1`, `/rest/v1`,
-`/realtime/v1`, `/storage/v1`, `/functions/v1`) routed to Kong and everything
-else to the web app.
+- **HTTPS.** Android release builds refuse plain `http://` to any host but localhost. A LAN address like `http://192.168.1.20:3000` does not work.
+- **One address that the phone can reach.** The phone sends auth, data, realtime and storage to `SUPABASE_PUBLIC_URL`. If you leave it unset, it is `http://localhost:8000`, which on a phone is the phone itself.
 
-| Option | Profile | Needs | Phone needs |
+The compose file has four optional ways to get both. Each gives one hostname with a real certificate. It sends Supabase's API paths (`/auth/v1`, `/rest/v1`, `/realtime/v1`, `/storage/v1`, `/functions/v1`) to Kong and everything else to the web app.
+
+| Option | Profile | You need | The phone needs |
 |---|---|---|---|
 | Tailscale Funnel | `tailscale-funnel` | a free Tailscale account | nothing |
 | Cloudflare Tunnel | `cloudflare-tunnel` | a domain on Cloudflare | nothing |
 | Public domain | `https` | a domain, ports 80 and 443 open | nothing |
 | Private Tailscale | `https` | a Tailscale account | the Tailscale app |
 
-The two tunnels open no ports on your router. The tunnel runs on the server,
-takes care of HTTPS, and forwards to a small plain-HTTP Caddy on
-`127.0.0.1:8088` (`docker/volumes/caddy/Caddyfile.tunnel`). Both put your
-server on the public internet: the login page protects it, and registration
-closes once the owner account exists.
+The two tunnels open no ports on your router. The tunnel runs on the server, handles HTTPS and forwards to a small plain-HTTP Caddy on `127.0.0.1:8088` (`docker/volumes/caddy/Caddyfile.tunnel`). Both tunnels put your server on the public internet. The login page protects it, and registration closes when the owner account exists.
 
 ### With Tailscale Funnel (no domain, no open ports)
 
-1. In the [Tailscale admin console](https://login.tailscale.com/admin), turn
-   on HTTPS certificates (DNS page) and make sure your access controls allow
-   Funnel (new tailnets do by default; otherwise add the `funnel` node
-   attribute).
+1. In the [Tailscale admin console](https://login.tailscale.com/admin), turn on HTTPS certificates (DNS page). Make sure your access controls allow Funnel. New tailnets allow it. Otherwise, add the `funnel` node attribute.
 2. Create an auth key (Settings, Keys). In `.env`:
 
    ```bash
@@ -482,19 +209,14 @@ closes once the owner account exists.
    ```
 
    `<tailnet>` is your tailnet's DNS name from the DNS page.
-3. `docker compose --profile tailscale-funnel up -d`. This adds its own
-   Tailscale node named `rooftap`, separate from any Tailscale already
-   running on the host. The auth key is only used on first start; the node
-   is kept in the `tailscale-state` volume.
+3. Run `docker compose --profile tailscale-funnel up -d`. This adds a Tailscale node named `rooftap`, separate from any Tailscale on the host. It uses the auth key only on the first start and keeps the node in the `tailscale-state` volume.
 
 In the app, choose "my own server" and enter `https://rooftap.<tailnet>.ts.net`.
 
 ### With Cloudflare Tunnel (your domain, no open ports)
 
-1. In the Cloudflare dashboard (Zero Trust, Networks, Tunnels), create a
-   tunnel of type Cloudflared and copy its token.
-2. Add a public hostname to the tunnel, for example `rooftap.example.com`,
-   with service type `HTTP` and URL `127.0.0.1:8088`.
+1. In the Cloudflare dashboard (Zero Trust, Networks, Tunnels), create a tunnel of type Cloudflared and copy its token.
+2. Add a public hostname to the tunnel, for example `rooftap.example.com`, with service type `HTTP` and URL `127.0.0.1:8088`.
 3. In `.env`:
 
    ```bash
@@ -503,7 +225,7 @@ In the app, choose "my own server" and enter `https://rooftap.<tailnet>.ts.net`.
    SITE_URL=https://rooftap.example.com
    ```
 
-4. `docker compose --profile cloudflare-tunnel up -d`.
+4. Run `docker compose --profile cloudflare-tunnel up -d`.
 
 In the app, choose "my own server" and enter `https://rooftap.example.com`.
 
@@ -512,18 +234,16 @@ In the app, choose "my own server" and enter `https://rooftap.example.com`.
 Point a DNS record at the host and open ports 80 and 443. In `.env`:
 
 ```bash
-HOMEUP_DOMAIN=homeup.example.com
-SUPABASE_PUBLIC_URL=https://homeup.example.com
-SITE_URL=https://homeup.example.com
+HOMEUP_DOMAIN=rooftap.example.com
+SUPABASE_PUBLIC_URL=https://rooftap.example.com
+SITE_URL=https://rooftap.example.com
 ```
 
-Then `docker compose --profile https up -d`. Caddy gets a Let's Encrypt
-certificate on first start. In the app, choose "my own server" and enter
-`https://homeup.example.com`.
+Then run `docker compose --profile https up -d`. Caddy gets a Let's Encrypt certificate on the first start. In the app, choose "my own server" and enter `https://rooftap.example.com`.
 
 ### With Tailscale, private to your tailnet
 
-Turn on HTTPS certificates for your tailnet (admin console, DNS page), then:
+Turn on HTTPS certificates for your tailnet (admin console, DNS page). Then set:
 
 ```bash
 HOMEUP_DOMAIN=<machine>.<tailnet>.ts.net
@@ -531,145 +251,58 @@ SUPABASE_PUBLIC_URL=https://<machine>.<tailnet>.ts.net
 SITE_URL=https://<machine>.<tailnet>.ts.net
 ```
 
-Uncomment the `tailscaled.sock` volume on the `caddy` service so Caddy can
-fetch the `*.ts.net` certificate from the local Tailscale daemon, then
-`docker compose --profile https up -d`. Every phone needs the Tailscale app
-running; use Funnel above if you'd rather it didn't.
+Uncomment the `tailscaled.sock` volume on the `caddy` service, so that Caddy can get the `*.ts.net` certificate from the local Tailscale daemon. Then run `docker compose --profile https up -d`. Every phone needs the Tailscale app. If you do not want that, use Funnel.
 
 ### Installing the web app (PWA)
 
-The `app` image is a production build, so it ships the web app manifest and
-the offline service worker. Any browser that supports installable web apps can
-add Rooftap to the home screen or desktop, where it opens in its own window,
-keeps working offline from its cache, and shows up as a share target for
-photos, PDFs and calendar files on Android.
+The `app` image is a production build, so it has the web app manifest and the offline service worker. A browser that can install web apps can add Rooftap to the home screen or the desktop. It then opens in its own window, works offline from its cache, and on Android accepts shared photos, PDFs and calendar files.
 
-Browsers only install a web app (and only run its service worker) on HTTPS.
-`http://localhost:3000` counts as secure on the server itself, but every other
-device needs the HTTPS setup above:
+Browsers install a web app, and run its service worker, only over HTTPS. `http://localhost:3000` counts as secure on the server itself. Every other device needs the HTTPS setup above:
 
-1. Bring up the `https` profile with a public domain or Tailscale name.
-2. Set `NEXT_PUBLIC_SUPABASE_URL` to that same `https://` origin and rebuild
-   with `./scripts/self-host-init.sh -d --build` (see the notes below). An
-   `http://` value is blocked as mixed content inside the installed app.
+1. Start the `https` profile with a public domain or a Tailscale name.
+2. Set `NEXT_PUBLIC_SUPABASE_URL` to the same `https://` address and rebuild with `./scripts/self-host-init.sh -d --build`. The installed app blocks an `http://` value as mixed content.
 3. Open `https://<your domain>` and install it:
-   - **Android (Chrome, Edge, Samsung Internet):** menu, then **Install app**
-     or **Add to Home screen**.
+   - **Android (Chrome, Edge, Samsung Internet):** menu, then **Install app** or **Add to Home screen**.
    - **iPhone and iPad (Safari):** Share, then **Add to Home Screen**.
-   - **Desktop (Chrome, Edge):** the install icon at the right of the address
-     bar. Firefox on desktop doesn't install web apps.
+   - **Desktop (Chrome, Edge):** the install icon at the right of the address bar. Firefox on desktop cannot install web apps.
 
-Browser push notifications are optional and need VAPID keys (see
-`.env.example`). On iPhone they only work from the installed app, iOS 16.4 or
-later.
+Browser push notifications are optional and need VAPID keys (`.env.example` explains them). On iPhone, they work only in the installed app, on iOS 16.4 or later.
 
 ### Notes
 
-- **What was tested:** the compose stack ran with `HOMEUP_DOMAIN=localhost`
-  (Caddy's own local CA). Through Caddy, on one origin:
-  - `/api/public-config` returned `https://localhost` as the Supabase URL
-  - a password sign-in worked
-  - REST and storage calls worked with the user's token
-  - realtime websockets connected
-  - plain `http://` redirected to HTTPS
+- **What we tested.** We ran the stack with `HOMEUP_DOMAIN=localhost` (Caddy's own local certificate authority) and the web app on the host (`next start`). Through Caddy, on one address, `/api/public-config` returned `https://localhost`, a password sign-in worked, REST and storage calls worked, realtime connected, and `http://` redirected to HTTPS. We did not test Let's Encrypt, Tailscale or a real phone.
+- **The tunnel profiles.** We ran the tunnel Caddyfile against stub services. API paths reached Kong, everything else reached the app, it accepted any public host, and it passed on the tunnel's `X-Forwarded-Proto: https`. We did not run the Funnel or Cloudflare connectors.
+- **The web app on other devices** also needs `NEXT_PUBLIC_SUPABASE_URL` set to the same `https://` address and a rebuild (`./scripts/self-host-init.sh -d --build`), because the build writes it into the bundle. The phone app does not need this, because it reads the value at runtime.
+- **Push notifications** to the phone app go through Expo's push service (`exp.host`) under the official app's Expo project. This works from a self-hosted server with no Expo account of your own.
+- **Google sign-in on the phone** redirects to `mobile://callback`. Add it to `ADDITIONAL_REDIRECT_URLS` in `.env`. Also add it, and `https://<your domain>/auth/v1/callback`, to the allowed redirect URIs of your Google OAuth client.
+- **Without Caddy.** Any reverse proxy works if it serves the web app and Kong on one HTTPS address with the path split above. Kong listens on `${KONG_HTTP_PORT:-8000}` and the app on `${APP_PORT:-3000}` on the host. Postgres listens on `127.0.0.1` unless you set `POSTGRES_BIND`.
 
-  That run used the web app on the host (`next start`), not the `app`
-  container. Let's Encrypt, Tailscale and a real phone were not tested.
-- **Tunnel profiles, what was tested:** the tunnel origin's Caddyfile was run
-  against stub upstreams: API paths reached Kong, everything else the app,
-  any public Host was accepted, and the tunnel's `X-Forwarded-Proto: https`
-  was passed through. The Funnel and Cloudflare connectors themselves were
-  not run.
-- **The web UI from other devices** also needs `NEXT_PUBLIC_SUPABASE_URL` set
-  to the same `https://` origin, followed by a rebuild
-  (`./scripts/self-host-init.sh -d --build`). It's baked into the web bundle
-  at build time (see "The `NEXT_PUBLIC_*` build-time trade-off" above). The
-  phone doesn't need this, because it reads the runtime value.
-- **Push notifications** to the store app go through Expo's push service
-  (`exp.host`) under the official app's Expo project. That works from a
-  self-hosted server with no account of your own.
-- **Google sign-in on the phone** redirects to `mobile://callback`. Add it to
-  `ADDITIONAL_REDIRECT_URLS` in `.env`, and to the Google OAuth client's
-  allowed redirect URIs, along with
-  `https://<your domain>/auth/v1/callback`.
-- **Without Caddy:** any reverse proxy works if it serves the web app and
-  Kong on one HTTPS origin with the path split above. Kong publishes
-  `${KONG_HTTP_PORT:-8000}` and the app listens on `${APP_PORT:-3000}` on the
-  host. Postgres binds to `127.0.0.1` unless you set `POSTGRES_BIND`.
+### App updates
 
-### OTA JS updates (HOUP-168)
+The official APK gets JavaScript updates from Rooftap's `production` EAS Update channel. An update replaces only the app's JavaScript. The app still chooses its server at runtime with `GET /api/public-config`, so an update never changes which server your phone uses.
 
-The official release APK ships with `expo-updates` and fetches JS-only bundle
-updates from our `production` EAS Update channel (`apps/mobile/eas.json`
-`preview` build profile). This is **independent of backend selection** — an
-OTA JS update only replaces the app's JavaScript bundle, and the app still
-picks its Supabase backend at runtime via `GET /api/public-config` as
-described above, so pushing a JS fix does not change or pin which backend a
-self-hoster's phone talks to.
+If you build your own APK, it gets no updates. `apps/mobile/app.config.ts` sets `updates.url`, `owner` and `extra.eas.projectId` only for the official EAS project. Leave those fields unset, or point them at your own EAS project. Your build then runs only the JavaScript it was built with.
 
-If you build your own APK from this repo instead of installing the official
-one, your build has no updates URL to opt into: `apps/mobile/app.config.ts`
-only sets `updates.url`/`owner`/`extra.eas.projectId` for the values tied to
-this project's own EAS account. To opt out entirely, don't set those fields
-(or point them at your own EAS project) — your binary then never checks any
-update channel and only ever runs the JS bundle it was built with.
-
-**Publishing is automatic (HOUP-270).** The `ota` job in
-`.github/workflows/ci.yml` publishes to the `production` channel on every push
-to `main`, with no manual `eas update` step:
-- It only runs after the `check` job (typecheck + test) passes — a failing
-  push publishes nothing.
-- It skips merges that touch only `apps/web/**`, `supabase/**`, `.docs/**`, or
-  `.github/**` — OTA only has something to deliver when `apps/mobile/**`,
-  `packages/core/**`, or `packages/ui/**` changed.
-- The update message embeds the commit SHA, so a published update group
-  traces back to the exact commit that produced it.
-
-**Native/dependency changes are never OTA-deliverable.** A change that adds or
-upgrades a native module (or otherwise moves the Expo runtime-version
-fingerprint) cannot ship through this job or through a manual `eas update` —
-installed apps won't pick up a bundle built for a different fingerprint. That
-kind of change needs a fresh APK build and reinstall instead.
+An update cannot carry a native change. A change that adds or upgrades a native module needs a new APK.
 
 ## Backing up your data
 
-Everything that matters lives in two places:
-- The `db-data` Docker volume (all your household data) — back it up with
-  `docker compose exec db pg_dump -U postgres postgres > backup.sql`, or by
-  archiving the volume directly (`docker run --rm -v homeup_db-data:/data -v
-  $(pwd):/backup alpine tar czf /backup/db-data.tar.gz /data`).
-- The `.env` file at the repo root (your generated secrets — see "First-boot
-  provisioning"). Losing this without a `db-data` backup means the data is
-  unrecoverable; losing it *with* a `db-data` backup still requires
-  regenerating secrets, which invalidates all existing sessions.
+Two places hold everything that matters:
 
-The `db-config` volume holds pgsodium's root key, which Vault needs to
-decrypt the seeded push-notification secrets. Back it up alongside
-`db-data`. If the key is lost anyway, the next `up` re-encrypts both
-secrets from `.env` (the `migrate` step updates them on every run).
+- The `db-data` Docker volume holds all household data. Back it up with `docker compose exec db pg_dump -U postgres postgres > backup.sql`, or archive the volume (`docker run --rm -v homeup_db-data:/data -v $(pwd):/backup alpine tar czf /backup/db-data.tar.gz /data`).
+- The `.env` file at the repo root holds your generated secrets ("First-boot secrets"). Without `.env` and without a `db-data` backup, the data is lost. With a `db-data` backup but no `.env`, you must generate new secrets, and every session ends.
 
-The `storage-data` volume holds uploaded files (photos, attachments) — back it
-up the same way as `db-data` if you use file uploads.
+The `db-config` volume holds the pgsodium root key, which Vault needs to decrypt the push-notification secrets. Back it up with `db-data`. If you lose the key, the next start encrypts both secrets again from `.env`, because `migrate` updates them on every run.
+
+The `storage-data` volume holds uploaded files (photos, attachments). Back it up like `db-data` if you upload files.
 
 ### Encryption at rest
 
-Rooftap doesn't encrypt your data or uploaded files itself: Postgres and the
-storage service write them to the Docker volumes as they are. Anyone who gets
-the disk, or a copy of a backup, can read passports, receipts and everything
-else people upload. So:
+Rooftap does not encrypt your data or your uploaded files itself. Postgres and the storage service write them to the Docker volumes as they are. A person with the disk, or with a copy of a backup, can read passports, receipts and every other upload. So:
 
-- **Encrypt the disk** that holds Docker's data (`/var/lib/docker` by
-  default): LUKS on Linux (most installers offer it), FileVault on a Mac,
-  BitLocker on Windows. A NAS usually has an encrypted-volume option.
-- **Encrypt your backups**, including the `backups/pre-migrate-*.dump` files
-  `migrate` writes into the repo folder, before they leave the machine. For
-  example `restic` or `borg` (both encrypt by default), or
-  `gpg -c backup.sql` for a one-off file.
-- **Keep `.env` out of the same unencrypted place as the backups.** It holds
-  the service-role key and database password.
-
-The hosted service's storage providers (Supabase Storage, Cloudflare R2)
-encrypt at rest on their side.
+- **Encrypt the disk** that holds Docker's data (`/var/lib/docker` by default): LUKS on Linux (most installers offer it), FileVault on a Mac, BitLocker on Windows. A NAS usually has an encrypted-volume option.
+- **Encrypt your backups** before they leave the machine. This includes the `backups/pre-migrate-*.dump` files that `migrate` writes into the repo folder. For example, use `restic` or `borg` (both encrypt by default), or `gpg -c backup.sql` for one file.
+- **Keep `.env` away from unencrypted backups.** It holds the service-role key and the database password.
 
 ## Upgrading Rooftap
 
@@ -678,58 +311,23 @@ git pull
 ./scripts/self-host-init.sh -d --build
 ```
 
-`--build` matters: the `app` image is built from source, so without it the
-web app stays on the old code. New migrations apply automatically on `up`
-(the `migrate` service tracks what has run), and edge functions are a bind
-mount, so they pick up the new code when `edge-runtime` restarts.
+You need `--build`, because the build makes the `app` image from source. Without it, the web app keeps the old code. New migrations apply on start (the `migrate` service records what it applied). The edge functions are a bind mount, so they use the new code when `edge-runtime` restarts.
 
-Before applying new migrations to an install that already has data, the
-`migrate` service saves a backup of the database to
-`backups/pre-migrate-<UTC time>.dump` in the repo folder and keeps the newest
-five (`MIGRATE_BACKUP_KEEP` in `.env` changes that, `MIGRATE_BACKUP=off` turns
-it off). If the backup fails, nothing is migrated and `migrate` exits with an
-error; `docker compose logs migrate` says why. Each migration runs in one
-transaction together with the row that records it, so a migration that fails
-is rolled back completely: fix the cause (or pull the fix) and run the upgrade
-again, and it retries from a clean slate.
+Before `migrate` applies new migrations to an install with data, it saves a backup of the database to `backups/pre-migrate-<UTC time>.dump` in the repo folder. It keeps the newest five. `MIGRATE_BACKUP_KEEP` in `.env` changes the number, and `MIGRATE_BACKUP=off` turns the backup off. If the backup fails, `migrate` applies nothing and stops with an error. `docker compose logs migrate` shows why.
 
-The phone app updates itself as soon as we ship, so it can be newer than
-your server. It asks the server which version it runs and hides features that
-need a newer one; Settings > Modules lists what updating would add.
+Each migration runs in one transaction with the row that records it. So a migration that fails rolls back completely. Fix the cause, or pull the fix, and run the upgrade again. It starts again from a clean state.
 
-To undo an upgrade, check out the version you were running and restore the
-backup taken just before it:
+The phone app updates as soon as we ship, so it can be newer than your server. It asks the server for its version and hides the features that need a newer one. **Settings → Modules** lists what an update adds.
+
+To undo an upgrade, check out the version you ran before and restore the backup from just before the upgrade:
 
 ```bash
 git checkout <the version you came from>
 ./scripts/restore-backup.sh backups/pre-migrate-<time>.dump
 ```
 
-The script checks that the checkout matches the backup, asks you to confirm,
-then deletes the database volume, rebuilds the schema from that version's
-migrations and loads the backup's rows (app data, accounts and file records).
-Uploaded files, `.env` and the other volumes are left alone. Anything written
-after the backup was taken is lost.
+The script checks that the checkout matches the backup and asks you to confirm. It then deletes the database volume, builds the schema from that version's migrations and loads the rows from the backup (app data, accounts and file records). It does not touch uploaded files, `.env` or the other volumes. You lose anything written after the backup.
 
 ## Upgrading stack images
 
-The Supabase service images (`auth`, `rest`, `realtime`, `storage`, `kong`,
-`edge-runtime`, `db`) are pinned to specific versions in `docker-compose.yml`
-— no `:latest` tags, so upgrades are a deliberate, reviewable step rather than
-something that happens silently on a restart. To upgrade: bump the image tag
-for the service you want to update, then `docker compose pull && docker
-compose up -d`. Read that service's own release notes first — `db` in
-particular carries your actual schema, so treat a Postgres major-version bump
-with the same care you would for any production database upgrade.
-
-## Existing Vercel-hosted deployment — unaffected
-
-This work doesn't change how the existing Vercel + hosted-Supabase deployment
-runs; `vercel.json` and that deployment path stay as-is. The one thing that
-*does* apply there too: the bypass-hardening change above means the Vercel
-deployment must also set `BYPASS_USERNAME`/`BYPASS_PASSWORD` if it uses that
-login path — it's no longer implicitly `admin`/a hardcoded default.
-
-See [deployment.md](./deployment.md) for how that Vercel + hosted-Supabase
-path applies migrations on merge (a CI `migrate` job, added by HOUP-334) —
-unlike here, that path did not automatically apply schema changes.
+`docker-compose.yml` pins each Supabase image (`auth`, `rest`, `realtime`, `storage`, `kong`, `edge-runtime`, `db`) to a version, with no `:latest` tag. So an image never changes on a restart. To upgrade one, change its tag, then run `docker compose pull && docker compose up -d`. Read that service's release notes first. `db` holds your schema and data, so plan a Postgres major-version upgrade as carefully as any production database upgrade.
