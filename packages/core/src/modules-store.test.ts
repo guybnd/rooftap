@@ -303,6 +303,7 @@ describe('server schema', () => {
       'Shopper',
       'Assistant',
       'connecting AI assistants by signing in',
+      'switching Shopper price sources on and off',
     ]);
 
     act(() => setServerSchema('20261020050000_mcp_oauth'));
@@ -321,7 +322,12 @@ describe('server schema', () => {
       act(() => setServerSchema('20261020050000_mcp_oauth'));
       expect(result.current.isEnabled('mcp')).toBe(false);
       expect(result.current.offered.some((m) => m.id === 'mcp')).toBe(false);
-      expect(result.current.serverUpdateAdds.map((f) => f.label)).toEqual(['Shopper', 'Assistant', 'AI assistants (MCP)']);
+      expect(result.current.serverUpdateAdds.map((f) => f.label)).toEqual([
+        'Shopper',
+        'Assistant',
+        'AI assistants (MCP)',
+        'switching Shopper price sources on and off',
+      ]);
     } finally {
       delete mcp.minSchema;
     }

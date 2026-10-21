@@ -42,8 +42,8 @@ The private repo's workflows (`ci.yml`, `expo-doctor.yml`, `public-mirror.yml`,
 `release.yml`) run on self-hosted Windows runners on Guy's PC
 (`runs-on: [self-hosted, windows, homeup]`), not GitHub-hosted ones, so CI
 isn't capped by the private repo's Actions minutes. `scripts/setup-ci-runner.ps1`
-(elevated PowerShell) installs two of them as Windows services under
-`E:ctions-runner`; two so `migrate` never queues behind a `check` job. Their
+(elevated PowerShell) installs four of them as Windows services under
+`E:\actions-runner`, so `migrate` rarely queues behind PR jobs. Their
 `.env` puts Git Bash ahead of WSL's `bash`, adds `jq`, and turns off
 `core.autocrlf`. If the PC is off, jobs wait in the queue until it's back,
 and GitHub cancels anything still queued after 24 hours.

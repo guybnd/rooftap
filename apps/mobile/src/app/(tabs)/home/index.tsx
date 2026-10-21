@@ -38,6 +38,7 @@ import {
   ExternalLink,
   LayoutGrid,
   ShoppingCart,
+  ShoppingBag,
   CloudRain,
   CloudSnow,
   Sun,
@@ -105,6 +106,13 @@ import {
   costItems$,
   setupItems$,
   groceryItems$,
+  shopperWants$,
+  shopperPriceSnapshots$,
+  summarizeWants,
+  shopperShortcutValue,
+  todayISO,
+  type ShopperWant,
+  type ShopperPriceSnapshot,
   checklists$,
   checklistItems$,
   hiddenWithDisabledModules,
@@ -354,6 +362,11 @@ export default function HomeSectionScreen() {
   useReconnectSync(costs$);
   useReconnectSync(setup$);
   useReconnectSync(groceries$);
+  // HOUP-434: the Shopper shortcut's figure (ShopperTile reads its own copy).
+  const shopperWantsStore$ = shopperWants$(syncedGroup(shopperWants$));
+  const shopperSnapsStore$ = shopperPriceSnapshots$(syncedGroup(shopperPriceSnapshots$));
+  useReconnectSync(shopperWantsStore$);
+  useReconnectSync(shopperSnapsStore$);
 
   // HOUP-223: apartment score (feeds HomeSearchTile's "top listing" row) —
   // same derivation as apps/mobile/src/app/(tabs)/homesearch/index.tsx and web's
@@ -432,6 +445,16 @@ export default function HomeSectionScreen() {
   const setupItemsList = use$(() => Object.values(setup$.get() ?? {}).filter((s): s is SetupItem => !!s && !s.deleted));
   const groceryList = use$(() => Object.values(groceries$.get() ?? {}).filter((g): g is GroceryItem => !!g && !g.deleted));
   const groceryToBuyCount = countNeeded(groceryList);
+  const shopperWantsList = use$(() =>
+    Object.values(shopperWantsStore$.get() ?? {}).filter((w): w is ShopperWant => !!w && !w.deleted && w.status === 'watching')
+  );
+  const shopperSnapsList = use$(() =>
+    Object.values(shopperSnapsStore$.get() ?? {}).filter((x): x is ShopperPriceSnapshot => !!x && !x.deleted)
+  );
+  const shopperShortcut = React.useMemo(
+    () => shopperShortcutValue(summarizeWants(shopperWantsList, shopperSnapsList, todayISO())),
+    [shopperWantsList, shopperSnapsList]
+  );
 
   const apartmentsWithScore = React.useMemo<ApartmentWithScore[]>(() => {
     const responsesByApartment = new Map<string, Record<string, boolean | null>>();
@@ -611,7 +634,7 @@ export default function HomeSectionScreen() {
       // As above.
     }
     setAllClearOpen(true);
-    // The finish already landed success(); the moment answers with the roll.
+    // The finish already landed pop(); the moment answers with the roll.
     haptics.celebrate();
   };
 
@@ -747,6 +770,7 @@ export default function HomeSectionScreen() {
   const nextBill = soonestBills[0] ?? null;
   const showBillsTile = heroOn('billsDue') && !!nextBill;
   const showGroceriesTile = heroOn('shoppingList') && groceryToBuyCount > 0;
+  const showShopperTile = heroOn('shopperWatch') && shopperShortcut != null;
   const showSetupTile = heroOn('setupProgress') && setup.total > 0 && setup.done < setup.total;
   const countdownDisplayValue = countdownDisplay(countdown, todayISOStr);
   const showCountdownTile = heroOn('countdown') && countdownDisplayValue !== null;
@@ -807,6 +831,20 @@ export default function HomeSectionScreen() {
               label="Groceries"
               Icon={ShoppingCart}
               value={`${groceryToBuyCount} to buy`}
+              className={shortcutClass}
+            />
+          ),
+        }
+      : null,
+    showShopperTile && shopperShortcut
+      ? {
+          key: 'shopperWatch',
+          node: (
+            <PulseTile
+              {...lensTap('shopperWatch')}
+              label="Shopper"
+              Icon={ShoppingBag}
+              value={shopperShortcut}
               className={shortcutClass}
             />
           ),
@@ -1296,6 +1334,7 @@ export default function HomeSectionScreen() {
             <BillsSpace costItems={costItemsList} expanded={shownLens === 'billsDue'} now={now} />
           </View>
         )}
+        {shownLens === 'shopperWatch' && <ShopperTile group={group} expanded />}
         <View className="flex-row flex-wrap gap-3" style={showIf(!shownLens)}>
           {!hidden.includes('setup') && <SetupTile group={group} />}
           {searchVisible && <HomeSearchTile apartments={apartmentsWithScore} appointments={appointmentsList} />}

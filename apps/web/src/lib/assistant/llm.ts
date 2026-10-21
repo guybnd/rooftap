@@ -68,6 +68,47 @@ function callId(id: string | undefined | null): string {
 
 // ── OpenAI wire ───────────────────────────────────────────────────────────
 
+/**
+ * Tool schemas in the subset every OpenAI-compatible server accepts. zod's
+ * JSON Schema has `{type: "null"}` branches, `additionalProperties` and
+ * `exclusiveMinimum`, which Gemini's compatible endpoint rejects outright
+ * (the whole request fails), so: nullable unions become `nullable: true`,
+ * exclusive bounds become inclusive ones, and the rest is dropped.
+ */
+export function portableSchema(schema: unknown): unknown {
+  if (Array.isArray(schema)) return schema.map(portableSchema);
+  if (!schema || typeof schema !== "object") return schema;
+  const src = schema as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(src)) {
+    if (key === "additionalProperties" || key === "$schema" || key === "exclusiveMaximum") continue;
+    if (key === "exclusiveMinimum" && typeof value === "number") {
+      out.minimum = src.type === "integer" ? Math.floor(value) + 1 : value;
+      continue;
+    }
+    if (key === "properties" && value && typeof value === "object") {
+      out.properties = Object.fromEntries(Object.entries(value).map(([k, v]) => [k, portableSchema(v)]));
+      continue;
+    }
+    out[key] = portableSchema(value);
+  }
+  if (typeof src.exclusiveMaximum === "number" && out.maximum === undefined) {
+    out.maximum = src.type === "integer" ? Math.ceil(src.exclusiveMaximum) - 1 : src.exclusiveMaximum;
+  }
+  const union = (out.anyOf ?? out.oneOf) as Record<string, unknown>[] | undefined;
+  if (Array.isArray(union)) {
+    const rest = union.filter((b) => b?.type !== "null");
+    if (rest.length < union.length) {
+      delete out.anyOf;
+      delete out.oneOf;
+      if (rest.length === 1) Object.assign(out, rest[0]);
+      else out.anyOf = rest;
+      out.nullable = true;
+    }
+  }
+  return out;
+}
+
 export function toOpenAIMessages(system: string, messages: ChatMessage[]): OpenAI.Chat.Completions.ChatCompletionMessageParam[] {
   const out: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [{ role: "system", content: system }];
   for (const m of messages) {
@@ -101,7 +142,7 @@ export function openAIClient(conn: LlmConnection): LlmClient {
         ? {
             tools: req.tools.map((t) => ({
               type: "function" as const,
-              function: { name: t.name, description: t.description, parameters: t.parameters },
+              function: { name: t.name, description: t.description, parameters: portableSchema(t.parameters) as Record<string, unknown> },
             })),
           }
         : {}),

@@ -16,11 +16,14 @@ export async function getAdminConfigValue(key: string): Promise<string | undefin
   return data?.value ?? undefined;
 }
 
+// Throws when the write fails, so a caller never reports a key as saved that
+// the database refused (a missing table, a bad service-role key).
 export async function setAdminConfigValue(key: string, value: string): Promise<void> {
   const admin = createAdminClient();
-  await admin
+  const { error } = await admin
     .from("admin_config")
     .upsert({ key, value, updated_at: new Date().toISOString() });
+  if (error) throw new Error(error.message);
 }
 
 export async function resolveServerKey(key: string): Promise<string | undefined> {

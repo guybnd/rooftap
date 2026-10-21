@@ -281,6 +281,7 @@ export const HERO_MODULE_FEATURES: Readonly<Partial<Record<string, ModuleFeature
   billsDue: 'hub.budget',
   shoppingList: 'hub.shopping',
   setupProgress: 'hub.setup-progress',
+  shopperWatch: 'hub.shopper',
 };
 
 /** Whether a summary-hero module can show at all: it needs no feature, or its feature is on. */

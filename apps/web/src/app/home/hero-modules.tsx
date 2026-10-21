@@ -16,7 +16,7 @@
 
 import { type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { Flame, ShoppingCart, Sun, Sunset, Wind, type LucideIcon } from 'lucide-react';
+import { Flame, ShoppingBag, ShoppingCart, Sun, Sunset, Wind, type LucideIcon } from 'lucide-react';
 import type { CostItem, HomeLensKey, HouseholdTask, ModuleFeatureId } from '@homeup/core';
 import {
   isHeroModuleAvailable,
@@ -54,6 +54,8 @@ export interface HeroModuleContext {
   costItems: CostItem[];
   groceryToBuyCount: number;
   setup: { done: number; total: number };
+  /** HOUP-434: the Shopper shortcut's figure (core shopperShortcutValue), null with nothing watched. */
+  shopperShortcut: string | null;
   /** FLUX-258: the countdown module's single pinned event, or null when nothing is pinned. */
   countdown: { label: string; date: string } | null;
   /** Hearth v2: the shortcut Home is filtered to, if any (its Space, expanded). */
@@ -483,6 +485,25 @@ export const HERO_MODULES: HeroModule[] = [
           label="Groceries"
           Icon={ShoppingCart}
           value={`${ctx.groceryToBuyCount} to buy`}
+        />
+      );
+    },
+  },
+  {
+    key: 'shopperWatch',
+    group: 'home',
+    label: 'Shopper',
+    description: 'How many things you watch are at a good price. Tap it to show just your Shopper space.',
+    defaultOn: false,
+    render: (ctx) => {
+      if (!ctx.shopperShortcut) return null;
+      return (
+        <PulseTile
+          {...lensTap(ctx, 'shopperWatch', '/shopper')}
+          ariaLabel="Shopper"
+          label="Shopper"
+          Icon={ShoppingBag}
+          value={ctx.shopperShortcut}
         />
       );
     },

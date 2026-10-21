@@ -15,6 +15,8 @@ export interface ShopperSourceInfo {
   capabilities: string[];
   attribution: string;
   homepage: string;
+  /** The household's Settings > Shopper switch (HOUP-437). */
+  enabled: boolean;
 }
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
@@ -42,6 +44,11 @@ export async function wantDeals(wantId: string): Promise<(SourceDeal & { source:
 
 export async function shopperSources(): Promise<ShopperSourceInfo[]> {
   return (await call<{ sources: ShopperSourceInfo[] }>("/api/shopper/sources")).sources;
+}
+
+/** Switches one source on or off for the household (Settings > Shopper). */
+export function setSourceEnabled(id: string, enabled: boolean): Promise<void> {
+  return call("/api/shopper/sources", { method: "PUT", body: JSON.stringify({ id, enabled }) });
 }
 
 /**

@@ -88,6 +88,8 @@ export function ApiKeysSettings() {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // A failed save shows under its own row, where the person is looking.
+  const [saveError, setSaveError] = useState<{ key: string; message: string } | null>(null);
   const [testResults, setTestResults] = useState<Record<string, TestResult>>({});
   const [testingKey, setTestingKey] = useState<string | null>(null);
 
@@ -160,6 +162,7 @@ export function ApiKeysSettings() {
       const value = drafts[key]?.trim();
       if (!value) return;
       setError(null);
+      setSaveError(null);
       setBusyKey(key);
       try {
         const res = await fetch("/api/admin/keys", {
@@ -167,13 +170,15 @@ export function ApiKeysSettings() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ key, value }),
         });
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error ?? `Server responded ${res.status}`);
         setDrafts((prev) => ({ ...prev, [key]: "" }));
         toast.success("Key saved");
         await load();
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Could not save key.");
+        const message = err instanceof Error ? err.message : "Could not save key.";
+        setSaveError({ key, message });
+        toast.error("Key not saved", { description: message });
       } finally {
         setBusyKey(null);
       }
@@ -298,6 +303,9 @@ export function ApiKeysSettings() {
                         </Button>
                       </div>
                     ))}
+                    {saveError && GOOGLE_FIELDS.some((f) => f.key === saveError.key) && (
+                      <p className="text-xs text-destructive">{saveError.message}</p>
+                    )}
                   </div>
                 ) : (
                   <div className="flex items-center gap-2">
@@ -320,6 +328,7 @@ export function ApiKeysSettings() {
                     </Button>
                   </div>
                 )}
+                {saveError?.key === status.key && <p className="text-xs text-destructive">{saveError.message}</p>}
               </div>
             ))}
           </SettingsInset>

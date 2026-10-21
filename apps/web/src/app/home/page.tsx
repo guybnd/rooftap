@@ -39,6 +39,7 @@ import type {
 } from '@homeup/core';
 import { upcomingWindowDays, completion, completionLabel, hasVisibleReminders, hiddenWithDisabledModules, useModules, type TaskSnooze } from '@homeup/core';
 import { ALL_CLEAR_MOMENT_STORAGE_KEY, HOME_LENS_META, earnedAllClear, heroItemOpenTarget, type HomeLensKey } from '@homeup/core';
+import { shopperWants$, shopperPriceSnapshots$, shopperShortcutValue, summarizeWants, type ShopperWant, type ShopperPriceSnapshot } from '@homeup/core';
 import { setGlowOverride } from '@/lib/glow-override';
 import { toastUndoAction } from '@/lib/undo-toast';
 import { EventModal } from '@/app/calendar/event-modal';
@@ -133,6 +134,22 @@ export default function HomeHubPage() {
   );
   // FLUX-255: summary-hero shoppingList module reads the live "needed" count.
   const groceryToBuyCount = groceryList.filter((g) => g.status === 'needed').length;
+
+  // ── Shopper stores (HOUP-434): the Shopper shortcut's figure ─────────────
+  const shopperWantsStore$ = shopperWants$(syncedGroup(shopperWants$));
+  const shopperSnapsStore$ = shopperPriceSnapshots$(syncedGroup(shopperPriceSnapshots$));
+  useReconnectSync(shopperWantsStore$);
+  useReconnectSync(shopperSnapsStore$);
+  const shopperWantsList = use$(() =>
+    Object.values(shopperWantsStore$.get() ?? {}).filter((w): w is ShopperWant => !!w && !w.deleted && w.status === 'watching')
+  );
+  const shopperSnapsList = use$(() =>
+    Object.values(shopperSnapsStore$.get() ?? {}).filter((x): x is ShopperPriceSnapshot => !!x && !x.deleted)
+  );
+  const shopperShortcut = useMemo(
+    () => shopperShortcutValue(summarizeWants(shopperWantsList, shopperSnapsList, todayISO())),
+    [shopperWantsList, shopperSnapsList]
+  );
 
   // ── Costs store ───────────────────────────────────────────────────────────
   const costs$ = costItems$(syncedGroup(costItems$));
@@ -627,6 +644,7 @@ export default function HomeHubPage() {
             costItems={costItemsList}
             groceryToBuyCount={groceryToBuyCount}
             setup={setupSummary}
+            shopperShortcut={shopperShortcut}
             today={today}
             onOpenItem={onNowOpen}
             onCompleteItem={onNowComplete}
@@ -689,7 +707,9 @@ export default function HomeHubPage() {
         )}
         {!lens && !isHidden('setup') && <SetupTile group={group} />}
         {!lens && searchVisible && <HomeSearchTile apartments={apartments} appointments={appointments} />}
-        {!lens && !isHidden('shopper') && <ShopperTile group={group} />}
+        {!isHidden('shopper') && (!lens || lens === 'shopperWatch') && (
+          <ShopperTile group={group} expanded={lens === 'shopperWatch'} />
+        )}
         {!lens && !isHidden('assistant') && <AssistantTile />}
       </div>
 

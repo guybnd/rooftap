@@ -14,8 +14,9 @@ import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { use$ } from '@legendapp/state/react';
 import { Hammer, LayoutDashboard, CalendarClock, Star, ChevronRight, ShoppingBag, Sparkles } from 'lucide-react-native';
-import { Text, Card, LeadingTile } from '@homeup/ui';
+import { Text, Card, LeadingTile, ListGroup } from '@homeup/ui';
 import { assistantApi } from '@/features/assistant/assistant-api';
+import { WantRow } from '@/features/shopper/want-row';
 import {
   summarize,
   useReconnectSync,
@@ -166,7 +167,9 @@ export function HomeSearchTile({
 
 // ── Shopper (HOUP-434) ──────────────────────────────────────────────────────────
 // How many watched items are at a good price now, and the best of them.
-export function ShopperTile({ group }: { group: Group }) {
+// Expanded (Home's Shopper shortcut filters Home to it), the Space lists every
+// watched item, good prices first, each opening its own page.
+export function ShopperTile({ group, expanded = false }: { group: Group; expanded?: boolean }) {
   const router = useRouter();
   const currency = useHouseholdCurrency();
   const wants$ = shopperWants$(group.id);
@@ -183,6 +186,45 @@ export function ShopperTile({ group }: { group: Group }) {
   const good = rows.filter(isGoodNow);
   const top = good[0] ?? null;
 
+  const counts =
+    rows.length > 0 ? (
+      <View className="flex-row items-baseline gap-2">
+        <Text className="text-title font-semibold text-foreground" style={{ fontVariant: ['tabular-nums'] }}>
+          {good.length}
+        </Text>
+        <Text className="text-caption text-muted-foreground">
+          {good.length === 1 ? 'good deal' : 'good deals'} · {rows.length} watching
+        </Text>
+      </View>
+    ) : (
+      <Text className="text-caption text-muted-foreground">Nothing being watched.</Text>
+    );
+
+  if (expanded) {
+    return (
+      <Card size="sm">
+        <View className="gap-2.5 px-4">
+          <Pressable onPress={() => router.push('/shopper')} accessibilityRole="button" accessibilityLabel="Open Shopper">
+            <TileHeader Icon={ShoppingBag} sectionId="shopper" title="Shopper" />
+          </Pressable>
+          {counts}
+        </View>
+        {rows.length > 0 && (
+          <ListGroup bordered={false} className="mx-2">
+            {rows.map((row) => (
+              <WantRow
+                key={row.want.id}
+                row={row}
+                currency={currency}
+                onPress={() => router.push(`/shopper/${row.want.id}`)}
+              />
+            ))}
+          </ListGroup>
+        )}
+      </Card>
+    );
+  }
+
   return (
     <View className="min-w-[47%] flex-1">
       <Pressable
@@ -194,17 +236,10 @@ export function ShopperTile({ group }: { group: Group }) {
           <View className="gap-2 px-4">
             <TileHeader Icon={ShoppingBag} sectionId="shopper" title="Shopper" />
             {rows.length === 0 ? (
-              <Text className="text-caption text-muted-foreground">Nothing being watched.</Text>
+              counts
             ) : (
               <View className="gap-2">
-                <View className="flex-row items-baseline gap-2">
-                  <Text className="text-title font-semibold text-foreground" style={{ fontVariant: ['tabular-nums'] }}>
-                    {good.length}
-                  </Text>
-                  <Text className="text-caption text-muted-foreground">
-                    {good.length === 1 ? 'good deal' : 'good deals'} · {rows.length} watching
-                  </Text>
-                </View>
+                {counts}
                 {top && top.want.best_cents != null && (
                   <View className="min-w-0">
                     <Text numberOfLines={1} className="text-caption text-foreground">

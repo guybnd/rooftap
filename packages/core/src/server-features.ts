@@ -33,6 +33,10 @@ export const SERVER_FEATURES = {
     minSchema: '20261020050000_mcp_oauth',
     label: 'connecting AI assistants by signing in',
   },
+  'shopper.source-switches': {
+    minSchema: '20261021050000_shopper_source_switches',
+    label: 'switching Shopper price sources on and off',
+  },
 } as const satisfies Record<string, ServerFeatureDef>;
 
 export type ServerFeatureId = keyof typeof SERVER_FEATURES;

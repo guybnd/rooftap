@@ -1,14 +1,14 @@
 // Hearth v2 (Pulse): slide-to-finish, the Now card's M3 gesture. Drag the
 // coral thumb to the end of the track to finish the item; let go short of
-// the end and it springs back. The thumb zips as it travels (a click at each
-// quarter, each firmer), a tick() marks the threshold and success() lands
-// the finish (HA). Screen readers get a plain "Finish" action, and the
+// the end and it springs back. The thumb zips as it travels: clicks that come
+// closer together and firmer the further it goes, the firmest marking the
+// threshold, then pop() lands the finish (HA, "Zipper"). Screen readers get a plain "Finish" action, and the
 // card around it keeps tap = open (M3 always has a tap path).
 //
 // Finishing celebrates once: as the thumb lands its check pops and a small
 // coral burst (a ring and a few sparks) leaves it, over slow. One shot,
 // transform and opacity only (MO), and none of it under reduced motion,
-// where the check simply shows. The haptic is the same success() either way.
+// where the check simply shows. The haptic is the same pop() either way.
 import * as React from 'react';
 import { Text, View, type LayoutChangeEvent, type ViewProps } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -25,21 +25,22 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import { ArrowRight, Check } from 'lucide-react-native';
-import { MOTION_DURATIONS_MS, SLIDE_ZIPPER_STEPS } from '@homeup/core';
+import { MOTION_DURATIONS_MS, SLIDE_FINISH_AT, SLIDE_ZIPPER_STEPS } from '@homeup/core';
 import { cn } from '../lib/cn';
-import { success, tick, zipper } from '../lib/haptics';
+import { pop as popHaptic, zipper } from '../lib/haptics';
 
 const THUMB = 48;
 const INSET = 4;
 const TRACK = 56;
-/** Fraction of the travel past which a release finishes the item. */
-const FINISH_AT = 0.82;
+const FINISH_AT = SLIDE_FINISH_AT;
 const SWIFT_OUT = Easing.bezier(0.16, 1, 0.3, 1);
 /** Sparks around the landed thumb: angle (deg) and size (px), alternating so the burst doesn't read as a stamp. */
 const SPARKS = [0, 45, 90, 135, 180, 225, 270, 315].map((deg, i) => ({ deg: deg + 22.5, size: i % 2 ? 5 : 7 }));
 const SPARK_FROM = THUMB / 2 - 2;
 const SPARK_TO = THUMB / 2 + 26;
 const ZIPPER_AT = [...SLIDE_ZIPPER_STEPS];
+/** The zipper step the threshold clicks as: one past the last, so its firmest tier. */
+const ARM_STEP = ZIPPER_AT.length;
 
 export interface SlideToCompleteProps extends ViewProps {
   onComplete: () => void;
@@ -60,11 +61,10 @@ export function SlideToComplete({ onComplete, label = 'Slide to finish', disable
   const burst = useSharedValue(0);
   const travel = Math.max(0, trackWidth - THUMB - INSET * 2);
 
-  const fireTick = React.useCallback(() => tick(), []);
   const fireZip = React.useCallback((step: number) => zipper(step), []);
   const finish = React.useCallback(() => {
     setFinished(true);
-    success();
+    popHaptic();
     if (!reduceMotion) {
       // The thumb lands at fast; the check pops and the burst leaves it as it does.
       pop.value = withDelay(
@@ -87,16 +87,20 @@ export function SlideToComplete({ onComplete, label = 'Slide to finish', disable
       'worklet';
       const next = Math.max(0, Math.min(travel, event.translationX));
       offset.value = next;
+      // One click per frame at most: a fast flick crossing several steps
+      // clicks the furthest one, and arming outranks a zipper step.
+      let click = -1;
       for (let i = zipped.value + 1; i < ZIPPER_AT.length; i++) {
         if (next < travel * ZIPPER_AT[i]) break;
         zipped.value = i;
-        runOnJS(fireZip)(i);
+        click = i;
       }
       const past = next >= travel * FINISH_AT ? 1 : 0;
       if (past !== armed.value) {
         armed.value = past;
-        if (past) runOnJS(fireTick)();
+        if (past) click = ARM_STEP;
       }
+      if (click >= 0) runOnJS(fireZip)(click);
     })
     .onEnd(() => {
       'worklet';

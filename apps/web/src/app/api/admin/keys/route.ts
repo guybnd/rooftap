@@ -66,6 +66,12 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: "Unknown key" }, { status: 400 });
   }
 
-  await setAdminConfigValue(key, value.trim());
+  try {
+    await setAdminConfigValue(key, value.trim());
+  } catch (err) {
+    console.error("[admin/keys] save failed", err);
+    const reason = err instanceof Error ? err.message : "unknown error";
+    return NextResponse.json({ error: `The server couldn't store the key: ${reason}` }, { status: 500 });
+  }
   return NextResponse.json({ ok: true });
 }

@@ -392,3 +392,16 @@ function shiftDay(day: string, delta: number): string {
   const dt = new Date(Date.UTC(y, m - 1, d + delta));
   return dt.toISOString().slice(0, 10);
 }
+
+/**
+ * Home's Shopper shortcut (a summary-hero `home` module): how many watched
+ * items are at a good price, or how many are watched when none is. Null with
+ * nothing watched, so the shortcut takes no slot.
+ */
+export function shopperShortcutValue(rows: readonly ShopperRowSummary[]): string | null {
+  const watching = rows.filter((r) => r.want.status === 'watching');
+  if (!watching.length) return null;
+  const good = watching.filter(isGoodNow).length;
+  if (good > 0) return `${good} good ${good === 1 ? 'deal' : 'deals'}`;
+  return `${watching.length} watching`;
+}

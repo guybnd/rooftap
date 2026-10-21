@@ -20,7 +20,7 @@ import {
   type SourceQueryContext,
 } from "@homeup/core";
 import { resolveServerKey } from "@/lib/admin-config";
-import { SHOPPER_SOURCES, type ShopperSource, type SourceCallContext } from "./sources";
+import { allSources, type ShopperSource, type SourceCallContext } from "./sources";
 
 // HOUP-434: runs a want through every Shopper source that applies to its
 // household and stores what they find. Offers and snapshots are written with
@@ -64,14 +64,24 @@ interface ReadySource {
   ctx: SourceCallContext;
 }
 
-/** Sources that apply to this household, with their keys resolved. */
+/** The sources a household switched off in Settings > Shopper (HOUP-437). */
+export function householdDisabledSources(group: Pick<Group, "shopper_disabled_sources">): Set<string> {
+  return new Set(group.shopper_disabled_sources ?? []);
+}
+
+/**
+ * Sources that apply to this household, with their keys resolved. Pass the
+ * household's switched-off sources to leave those out too; Settings leaves
+ * them in so they can be switched back on.
+ */
 export async function applicableSources(
   ctx: SourceQueryContext,
   capability?: ShopperSourceCapability,
+  disabledByHousehold?: ReadonlySet<string>,
 ): Promise<ReadySource[]> {
   const disabledByServer = parseSourceIds(process.env.SHOPPER_SOURCES_DISABLED);
   const ready: ReadySource[] = [];
-  for (const source of SHOPPER_SOURCES) {
+  for (const source of allSources()) {
     const { manifest } = source;
     if (capability && !manifest.capabilities.includes(capability)) continue;
     const keys: Record<string, string> = {};
@@ -79,13 +89,13 @@ export async function applicableSources(
       const value = await resolveServerKey(name);
       if (value) keys[name] = value;
     }
-    if (!isSourceApplicable(manifest, { region: ctx.region, configuredKeys: new Set(Object.keys(keys)), disabledByServer })) continue;
+    if (!isSourceApplicable(manifest, { region: ctx.region, configuredKeys: new Set(Object.keys(keys)), disabledByServer, disabledByHousehold })) continue;
     ready.push({ source, ctx: { ...ctx, keys, fetch: rateLimitedFetch(manifest) } });
   }
   return ready;
 }
 
-/** Applicable sources' manifests, for attribution in the apps. */
+/** Applicable sources' manifests, for attribution in the apps and the Settings switches. */
 export async function applicableManifests(ctx: SourceQueryContext): Promise<ShopperSourceManifest[]> {
   return (await applicableSources(ctx)).map((s) => s.source.manifest);
 }
@@ -101,8 +111,9 @@ export interface LookupResult {
 
 export async function runLookup(admin: SupabaseClient, want: ShopperWant, group: Group): Promise<LookupResult> {
   const ctx = sourceContext(group);
+  const off = householdDisabledSources(group);
   const query = wantQuery(want);
-  const offerSources = await applicableSources(ctx, "offers");
+  const offerSources = await applicableSources(ctx, "offers", off);
   const failed: string[] = [];
 
   const found: FoundOffer[] = [];
@@ -124,13 +135,15 @@ export async function runLookup(admin: SupabaseClient, want: ShopperWant, group:
   );
 
   const merged = sortOffers(mergeSourceOffers(found));
-  await addDistances(merged, ctx);
+  await addDistances(merged, ctx, off);
 
   const now = new Date().toISOString();
   const today = todayISO();
 
-  // Replace this want's source offers; manual offers stay until removed.
-  if (offerSources.length) {
+  // Replace this want's source offers; manual offers stay until removed. With
+  // no source to ask, old prices stay rather than vanish, unless the household
+  // switched sources off, which says it doesn't want theirs any more.
+  if (offerSources.length || off.size) {
     await admin
       .from("shopper_offers")
       .update({ deleted: true })
@@ -180,7 +193,7 @@ export async function addManualOffer(
     source_id: "manual",
     distance_m: null,
   };
-  await addDistances([offer], ctx);
+  await addDistances([offer], ctx, householdDisabledSources(group));
   const now = new Date().toISOString();
   // One manual offer per store: a new price replaces the old one.
   await admin
@@ -212,7 +225,7 @@ export async function addManualOffer(
 export async function findDeals(want: ShopperWant, group: Group): Promise<(SourceDeal & { source: string })[]> {
   const ctx = sourceContext(group);
   const out: (SourceDeal & { source: string })[] = [];
-  for (const { source, ctx: callCtx } of await applicableSources(ctx, "deals")) {
+  for (const { source, ctx: callCtx } of await applicableSources(ctx, "deals", householdDisabledSources(group))) {
     try {
       for (const d of (await source.deals?.(wantQuery(want), callCtx)) ?? []) out.push({ ...d, source: source.manifest.attribution });
     } catch (err) {
@@ -222,10 +235,10 @@ export async function findDeals(want: ShopperWant, group: Group): Promise<(Sourc
   return out.sort((a, b) => (b.posted_at ?? "").localeCompare(a.posted_at ?? ""));
 }
 
-async function addDistances(offers: FoundOffer[], ctx: SourceQueryContext): Promise<void> {
+async function addDistances(offers: FoundOffer[], ctx: SourceQueryContext, off: ReadonlySet<string>): Promise<void> {
   const near = ctx.near;
   if (!near) return;
-  const storeSources = await applicableSources(ctx, "stores");
+  const storeSources = await applicableSources(ctx, "stores", off);
   if (!storeSources.length) return;
   const names = Array.from(new Set(offers.map((o) => o.store))).slice(0, STORE_LOOKUPS);
   const nearest = new Map<string, number>();

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { anthropicClient, toAnthropicMessages, toOpenAIMessages, type ChatMessage } from "./llm";
+import { anthropicClient, portableSchema, toAnthropicMessages, toOpenAIMessages, type ChatMessage } from "./llm";
 
 const convo: ChatMessage[] = [
   { role: "user", content: "add milk" },
@@ -52,6 +52,31 @@ describe("wire formats", () => {
       toolCalls: [{ id: "t1", name: "get_tasks", args: { done: false } }],
       inputTokens: 120,
       outputTokens: 8,
+    });
+  });
+});
+
+describe("portableSchema", () => {
+  it("rewrites zod's JSON Schema into the subset Gemini accepts", () => {
+    expect(
+      portableSchema({
+        type: "object",
+        additionalProperties: false,
+        required: ["days"],
+        properties: {
+          days: { type: "integer", exclusiveMinimum: 0, maximum: 90 },
+          note: { anyOf: [{ type: "string", minLength: 1 }, { type: "null" }] },
+          tags: { type: "array", items: { type: "object", additionalProperties: false, properties: { additionalProperties: { type: "string" } } } },
+        },
+      })
+    ).toEqual({
+      type: "object",
+      required: ["days"],
+      properties: {
+        days: { type: "integer", minimum: 1, maximum: 90 },
+        note: { type: "string", minLength: 1, nullable: true },
+        tags: { type: "array", items: { type: "object", properties: { additionalProperties: { type: "string" } } } },
+      },
     });
   });
 });

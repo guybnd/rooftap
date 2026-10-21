@@ -6,6 +6,8 @@
  * motion does NOT disable haptics; they're feedback, not animation.
  */
 
+import { HAPTIC_PATTERNS_MS, SLIDE_ZIPPER_PATTERNS_MS, slideZipperTier } from "@homeup/core"
+
 function canVibrate(): boolean {
   return typeof navigator !== "undefined" && typeof navigator.vibrate === "function"
 }
@@ -28,4 +30,14 @@ export function success(): void {
 /** A destructive or confirm-before-proceeding moment. */
 export function warn(): void {
   if (canVibrate()) navigator.vibrate([10, 50, 10])
+}
+
+/** Slide to finish: one click of the zipper, longer each third (core SLIDE_ZIPPER_STEPS). */
+export function zipper(step: number): void {
+  if (canVibrate()) navigator.vibrate([...SLIDE_ZIPPER_PATTERNS_MS[slideZipperTier(step)]])
+}
+
+/** Slide to finish landing: one firm hit and a short echo. */
+export function pop(): void {
+  if (canVibrate()) navigator.vibrate(HAPTIC_PATTERNS_MS.pop)
 }

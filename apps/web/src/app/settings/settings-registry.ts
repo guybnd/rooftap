@@ -23,6 +23,7 @@ import { SetupStoresSettings } from "@/components/setup-stores-settings";
 import { ModulesSettings } from "@/components/modules-settings";
 import { AssistantSettings } from "@/components/assistant-settings";
 import { AssistantSpending } from "@/components/assistant-spending";
+import { ShopperSettings } from "@/components/shopper-settings";
 
 export interface GlobalMenu {
   key: string;
@@ -51,6 +52,7 @@ export const sectionPanels: Record<string, ComponentType[]> = {
   checklists: [ChecklistsSettings],
   calendar: [CalendarSetup],
   assistant: [AssistantSettings, AssistantSpending],
+  shopper: [ShopperSettings],
 };
 
 // Modules (.docs/modules.md): a panel for an integration module shows only

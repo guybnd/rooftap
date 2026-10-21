@@ -147,7 +147,7 @@ export function motionEaseOut(t: number): number {
 // `navigator.vibrate` call stays in apps/web/src/lib/haptics.ts (browser-only,
 // Android-only; iOS Safari no-ops). RN's haptic engine (Expo Haptics or
 // similar) maps its own feedback styles to these same named moments.
-export type HapticPulse = 'select' | 'tick' | 'commit' | 'success' | 'warn' | 'error' | 'remove' | 'celebrate';
+export type HapticPulse = 'select' | 'tick' | 'commit' | 'success' | 'warn' | 'error' | 'remove' | 'celebrate' | 'pop';
 
 export const HAPTIC_PATTERNS_MS: Record<HapticPulse, number[]> = {
   select: [6],
@@ -158,13 +158,36 @@ export const HAPTIC_PATTERNS_MS: Record<HapticPulse, number[]> = {
   error: [16, 40, 16, 40, 16],
   remove: [22],
   celebrate: [8, 60, 10, 60, 14, 90, 12, 60, 12],
+  pop: [28, 70, 10],
 };
 
 // Effects: sequences that ride a gesture instead of answering one event.
 /** Hold to edit: fill fractions where the charge buzzes (soft, then light), before commit() lands it. */
 export const HOLD_CHARGE_STEPS = [0.4, 0.72] as const;
-/** Slide to finish: track fractions that click on the way out, each a little firmer. */
-export const SLIDE_ZIPPER_STEPS = [0.25, 0.5, 0.75] as const;
+/** Slide to finish: fraction of the travel past which a release finishes the item. */
+export const SLIDE_FINISH_AT = 0.82;
+/**
+ * Slide to finish: track fractions that click on the way out. The gaps
+ * tighten as the thumb travels (10% of the track at first, 2.5% near the
+ * end) and the clicks firm up tier by tier (`slideZipperTier`), so the
+ * zipper winds up into the threshold click and the finish pop.
+ */
+export const SLIDE_ZIPPER_STEPS = [0.1, 0.2, 0.29, 0.37, 0.44, 0.5, 0.555, 0.605, 0.65, 0.69, 0.725, 0.755, 0.78] as const;
+/** How many strengths the zipper climbs through; the threshold click is the top one. */
+export const SLIDE_ZIPPER_TIERS = 3;
+
+/**
+ * Which strength (0 = lightest .. SLIDE_ZIPPER_TIERS - 1) zipper step `step`
+ * clicks at: thirds of the steps, climbing. Any step at or past the last
+ * (the threshold) clicks at the top tier.
+ */
+export function slideZipperTier(step: number): number {
+  const tier = Math.floor((Math.max(0, step) * SLIDE_ZIPPER_TIERS) / SLIDE_ZIPPER_STEPS.length);
+  return Math.min(SLIDE_ZIPPER_TIERS - 1, tier);
+}
+
+/** Web: vibration (ms) for each zipper tier; a motor can't grade strength, so length stands in. */
+export const SLIDE_ZIPPER_PATTERNS_MS = [[4], [7], [11]] as const;
 /** Celebrate: offsets (ms) of the rising roll (light, medium, heavy); success() lands after the last. */
 export const CELEBRATE_ROLL_MS = [0, 70, 140, 230] as const;
 

@@ -3,8 +3,9 @@
 // haptic *moment* (not the web's raw vibration-pattern ms) to Expo's nearest
 // feedback style — see @homeup/core's HAPTIC_PATTERNS_MS doc comment: "RN's
 // haptic engine ... maps its own feedback styles to these same named moments."
+import { Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { CELEBRATE_ROLL_MS } from '@homeup/core';
+import { CELEBRATE_ROLL_MS, slideZipperTier } from '@homeup/core';
 
 let enabled = true;
 
@@ -66,10 +67,43 @@ export function charge(step: number): void {
   impact(CHARGE[Math.min(step, CHARGE.length - 1)]);
 }
 
-const ZIPPER = [Haptics.ImpactFeedbackStyle.Soft, Haptics.ImpactFeedbackStyle.Light, Haptics.ImpactFeedbackStyle.Medium];
-/** Slide to finish: one click of the zipper as the thumb travels (core SLIDE_ZIPPER_STEPS). */
+/**
+ * Android's system haptic primitives (View.performHapticFeedback): short,
+ * crisp, tuned per phone. Expo's impactAsync on Android is a 43-60ms buzz at
+ * a fifth of full strength, too soft and too long to ramp with, so the
+ * effects that need a felt climb use these. They follow the phone's own
+ * Touch feedback setting as well as ours.
+ */
+function android(type: Haptics.AndroidHaptics): void {
+  if (enabled) void Haptics.performAndroidHapticsAsync(type).catch(() => {});
+}
+
+// Climbing strength per zipper tier (core slideZipperTier): texture tick, tick, click.
+const ZIPPER_ANDROID = [Haptics.AndroidHaptics.Clock_Tick, Haptics.AndroidHaptics.Context_Click, Haptics.AndroidHaptics.Virtual_Key];
+const ZIPPER_IOS = [Haptics.ImpactFeedbackStyle.Soft, Haptics.ImpactFeedbackStyle.Light, Haptics.ImpactFeedbackStyle.Medium];
+/**
+ * Slide to finish: one click of the zipper as the thumb travels (core
+ * SLIDE_ZIPPER_STEPS, tightening as it goes). Each third clicks firmer; the
+ * step past the last is the threshold and clicks at the top tier.
+ */
 export function zipper(step: number): void {
-  impact(ZIPPER[Math.min(step, ZIPPER.length - 1)]);
+  const tier = slideZipperTier(step);
+  if (Platform.OS === 'android') android(ZIPPER_ANDROID[tier]);
+  else impact(ZIPPER_IOS[tier]);
+}
+
+/** Pop's echo lands as the visual pop settles back, after the heavy hit. */
+const POP_ECHO_MS = 90;
+/** Slide to finish landing: the zipper's payoff. One heavy hit, then a lighter echo as the check settles. */
+export function pop(): void {
+  if (!enabled) return;
+  if (Platform.OS === 'android') {
+    android(Haptics.AndroidHaptics.Long_Press);
+    setTimeout(() => android(Haptics.AndroidHaptics.Virtual_Key), POP_ECHO_MS);
+  } else {
+    impact(Haptics.ImpactFeedbackStyle.Heavy);
+    setTimeout(() => impact(Haptics.ImpactFeedbackStyle.Light), POP_ECHO_MS);
+  }
 }
 
 const ROLL = [Haptics.ImpactFeedbackStyle.Light, Haptics.ImpactFeedbackStyle.Medium, Haptics.ImpactFeedbackStyle.Heavy];

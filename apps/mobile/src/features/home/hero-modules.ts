@@ -96,6 +96,13 @@ export const HERO_MODULES: HeroModuleMeta[] = [
     defaultOn: false,
   },
   {
+    key: 'shopperWatch',
+    group: 'home',
+    label: 'Shopper',
+    description: 'How many things you watch are at a good price. Tap it to show just your Shopper space.',
+    defaultOn: false,
+  },
+  {
     key: 'setupProgress',
     group: 'home',
     label: 'Setup',

@@ -42,6 +42,7 @@ function baseCtx(weather: WeatherData | null): HeroModuleContext {
     groceryToBuyCount: 0,
     setup: { done: 0, total: 0 },
     countdown: null,
+    shopperShortcut: null,
   };
 }
 
@@ -120,6 +121,7 @@ describe("hero modules behind a module", () => {
     costs: ["budgetPulse", "billsDue"],
     groceries: ["shoppingList"],
     setup: ["setupProgress"],
+    shopper: ["shopperWatch"],
   };
 
   it("everything on lists and shows every module", () => {

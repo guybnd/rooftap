@@ -468,7 +468,9 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
     turn = await runAssistantTurn({ llm: deps.llm ?? llmClient(brain.connection), model, system, history, userText: text, tools });
   } catch (e) {
     console.error("[assistant] turn failed", e);
-    return { ok: false, status: 502, error: "The AI model didn't answer. Try again in a moment." };
+    // Owners see the provider's reason, so a bad key or model name can be fixed without the server logs.
+    const reason = ctx.isOwner && e instanceof Error ? ` (${e.message.slice(0, 200)})` : "";
+    return { ok: false, status: 502, error: `The AI model didn't answer. Try again in a moment.${reason}` };
   }
 
   const cost = turnCost(brain, model, turn.inputTokens, turn.outputTokens);

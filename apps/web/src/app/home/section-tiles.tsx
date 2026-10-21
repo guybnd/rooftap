@@ -28,6 +28,8 @@ import {
 import { SegmentedBar } from '@/app/setup/segmented-bar';
 import { assistantApi } from '@/lib/assistant-client';
 import { HubTile, TileHeader, formatTime12h, pad2 } from './hub-shared';
+import Link from 'next/link';
+import { WantRow } from '@/app/shopper/want-row';
 
 // ── Home Setup ──────────────────────────────────────────────────────────────────
 export function SetupTile({ group }: { group: Group }) {
@@ -120,7 +122,9 @@ export function HomeSearchTile({
 
 // ── Shopper (HOUP-434) ──────────────────────────────────────────────────────────
 // How many watched items are at a good price now, and the best of them.
-export function ShopperTile({ group }: { group: Group }) {
+// Expanded (Home's Shopper shortcut filters Home to it), the Space lists every
+// watched item, good prices first, each opening its own page.
+export function ShopperTile({ group, expanded = false }: { group: Group; expanded?: boolean }) {
   const currency = useHouseholdCurrency();
   const wants$ = shopperWants$(group.id);
   const snaps$ = shopperPriceSnapshots$(group.id);
@@ -135,6 +139,31 @@ export function ShopperTile({ group }: { group: Group }) {
   const rows = sortWatching(summarizeWants(wants, snaps, todayISO()));
   const good = rows.filter(isGoodNow);
   const top = good[0] ?? null;
+
+  if (expanded) {
+    return (
+      <section className="flex flex-col gap-3 rounded-3xl border border-border/60 bg-card p-4 shadow-[var(--card-shadow)] lg:col-span-3">
+        <Link href="/shopper" className="block">
+          <TileHeader sectionId="shopper" Icon={ShoppingBag} title="Shopper" />
+        </Link>
+        {rows.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Nothing being watched.</p>
+        ) : (
+          <>
+            <p className="text-xs text-muted-foreground tabular-nums">
+              {good.length} {good.length === 1 ? 'good deal' : 'good deals'} · {rows.length} watching
+            </p>
+            {/* One border level (Hearth): the rows sit on the Space's card, divided by hairlines. */}
+            <div className="-mx-2 flex flex-col divide-y divide-border">
+              {rows.map((row) => (
+                <WantRow key={row.want.id} row={row} currency={currency} />
+              ))}
+            </div>
+          </>
+        )}
+      </section>
+    );
+  }
 
   return (
     <HubTile href={top ? `/shopper/${top.want.id}` : '/shopper'} ariaLabel="Shopper">

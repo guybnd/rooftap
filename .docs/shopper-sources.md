@@ -2,6 +2,8 @@
 
 Shopper (HOUP-434) watches what a household wants to buy. The prices, nearby stores and shared deals it shows come from **sources**: small server-side connectors in `apps/web/src/lib/shopper/sources/`. Sources are how Shopper works in different countries. Anyone can add one for their region, and nothing else in the app changes when they do.
 
+There are two ways to add one: a file in the repo (a pull request), or an **external source** that runs anywhere, in any language, and that a server operator points their server at without changing Rooftap at all.
+
 The app never talks to a source. A source runs on the household's server (the hosted one, or a self-hosted one). It writes offers and daily price snapshots into `shopper_offers` and `shopper_price_snapshots`, and both apps read those through normal sync. A server with no sources still works: people add prices by hand, and the history, deal rating and alerts all work from those.
 
 ## The contract
@@ -37,8 +39,61 @@ What each capability means:
 
 1. Add one file to `apps/web/src/lib/shopper/sources/` that exports the source.
 2. Add it to `SHOPPER_SOURCES` in `index.ts`.
-3. Add a block to `sources.test.ts` that replays a recorded response through `ctx.fetch`, with no network, and passes the result through `checkSourceOffers`. The registry test there also checks the manifest.
+3. Add a test that runs the shared conformance suite over a recorded response, with no network. `runSourceConformance` (in `sources/conformance.ts`) replays each fixture to every fetch the source makes, then checks the manifest and everything returned against the contract:
+
+   ```ts
+   import { runSourceConformance } from "./conformance";
+   import { priceSpyNz } from "./pricespy-nz";
+
+   it("passes the conformance suite", async () => {
+     const { problems, calls } = await runSourceConformance(priceSpyNz, {
+       ctx: { region: "NZ", currency: "NZD", near: { lat: -36.85, lng: 174.76 } },
+       offers: { input: "sony bravia 65", body: recordedSearchResponse },
+     });
+     expect(problems).toEqual([]);
+     expect(calls[0]).toContain("q=sony");
+   });
+   ```
+
+   It also fails a source that claims a capability without a fixture to prove it, or that returns nothing from its fixture.
 4. If it needs a key, add it to `.env.example` and to the runtime keys in `apps/web/src/lib/admin-keys.ts`, so an admin can set it from Settings.
+
+## External sources (no pull request)
+
+An external source is a small web service that answers three JSON calls. The server operator lists it in `SHOPPER_HTTP_SOURCES`, a JSON list of `{ url, token, manifest }`:
+
+```json
+[{
+  "url": "https://prices.example.nz",
+  "token": "a-long-random-secret",
+  "manifest": {
+    "id": "pricespy-nz",
+    "name": "PriceSpy",
+    "regions": ["NZ"],
+    "capabilities": ["offers", "stores"],
+    "attribution": "Prices from PriceSpy",
+    "homepage": "https://pricespy.co.nz",
+    "ratePerMinute": 30
+  }
+}]
+```
+
+`kind` defaults to `api`, and `ratePerMinute` to 30. An external source can't declare `env` keys, because its own secrets stay on its own server. A bad entry is logged and skipped, and so is an id that clashes with a built-in source. The rest still load. Use `https`, since the token travels with every call. Plain `http` is accepted only so a connector on the same private network (a Docker sidecar, say) can work.
+
+The server sends each request as a `POST` with `Content-Type: application/json`, plus `Authorization: Bearer <token>` when a token is set. A connector implements only the calls for the capabilities it lists.
+
+| Call | Body | Answer |
+|---|---|---|
+| `POST {url}/offers` | `{ "query", "region", "currency", "near" }` | `{ "offers": SourceOffer[] }` |
+| `POST {url}/stores` | `{ "store", "region", "near" }` | `{ "stores": SourceStore[] }`, nearest first |
+| `POST {url}/deals` | `{ "query", "region", "currency" }` | `{ "deals": SourceDeal[] }` |
+
+`near` is `{ "lat", "lng" }`, rounded to about 1 km, or `null` when the household hasn't set a home location. The server doesn't call `/stores` without it. The shapes are the ones in `packages/core/src/shopper-sources.ts`:
+- **`SourceOffer`**: `store`, `title`, `url` (https or null), `price_cents` (a positive integer), `currency`, `in_stock` (true, false or null).
+- **`SourceStore`**: `name`, `lat`, `lng`, `address`, `hours`.
+- **`SourceDeal`**: `title`, `url`, `price_cents`, `currency`, `posted_at` (ISO date or null).
+
+The server checks everything that comes back against the same rules as an in-repo source, and drops anything that breaks them. A non-2xx answer counts as "didn't answer" for that check.
 
 ## Rules a source must follow
 
@@ -58,7 +113,9 @@ For each lookup, the server uses every source that meets all of these:
 - Every key in `env` is set.
 - It is not named in `SHOPPER_SOURCES_DISABLED`, a comma-separated list of ids.
 
-`GET /api/shopper/sources` lists the sources that apply to the caller's household. The list screen uses it to say "prices by hand on this server" when nothing can search.
+- The household hasn't switched it off in **Settings > Shopper**. Every applicable source starts switched on. Switching one off stops Shopper asking it for prices, stores or deals. Prices it already found stay until the next check replaces them. The choice is kept in `groups.shopper_disabled_sources` (migration `20261021050000_shopper_source_switches`).
+
+`GET /api/shopper/sources` lists the sources that apply to the caller's household, each with `enabled`. `PUT` with `{ "id", "enabled" }` flips a source. The list screen uses it to say "prices by hand on this server" when no enabled source can search.
 
 The bundled sources:
 

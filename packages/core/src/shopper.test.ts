@@ -20,6 +20,11 @@ import {
   type ShopperWant,
 } from './shopper';
 import {
+  checkSourceManifest,
+  checkSourceStores,
+  checkSourceDeals,
+  parseHttpSources,
+  sourceCapabilityLabel,
   checkSourceOffers,
   cleanOfferUrl,
   isSourceApplicable,
@@ -249,5 +254,59 @@ describe('sources', () => {
     expect(priceTextToCents('A$ 899')).toBe(89900);
     expect(priceTextToCents(12.5)).toBe(1250);
     expect(priceTextToCents('call us')).toBeNull();
+  });
+});
+
+describe('source manifest and external sources (HOUP-437)', () => {
+  const good = {
+    id: 'pricespy-nz',
+    name: 'PriceSpy',
+    regions: ['NZ'],
+    capabilities: ['offers'],
+    kind: 'api',
+    env: [],
+    attribution: 'Prices from PriceSpy',
+    homepage: 'https://pricespy.co.nz',
+    ratePerMinute: 30,
+  } as const;
+
+  it('passes a sound manifest and names what is wrong with a bad one', () => {
+    expect(checkSourceManifest({ ...good })).toEqual([]);
+    const problems = checkSourceManifest({ ...good, id: 'Manual Prices', regions: ['nz'], attribution: ' ', kind: 'page', ratePerMinute: 60 });
+    expect(problems.join('\n')).toMatch(/kebab-case/);
+    expect(problems.join('\n')).toMatch(/regions/);
+    expect(problems.join('\n')).toMatch(/attribution/);
+    expect(problems.join('\n')).toMatch(/page source/);
+  });
+
+  it('reads SHOPPER_HTTP_SOURCES, keeping good entries and reporting bad ones', () => {
+    const raw = JSON.stringify([
+      { url: 'https://prices.example.nz/api/', token: 'abc', manifest: { ...good, regions: ['nz'] } },
+      { url: 'ftp://nope', manifest: good },
+      { url: 'https://two.example', manifest: { ...good } },
+      { url: 'https://three.example', manifest: { id: 'x' } },
+    ]);
+    const { sources, problems } = parseHttpSources(raw);
+    expect(sources).toHaveLength(1);
+    expect(sources[0]).toMatchObject({ url: 'https://prices.example.nz/api', token: 'abc' });
+    expect(sources[0].manifest.regions).toEqual(['NZ']);
+    expect(problems.some((p) => p.startsWith('entry 1'))).toBe(true);
+    expect(problems.some((p) => p.includes('listed twice'))).toBe(true);
+    expect(problems.some((p) => p.startsWith('entry 3'))).toBe(true);
+    expect(parseHttpSources('not json').problems).toEqual(['SHOPPER_HTTP_SOURCES is not valid JSON']);
+    expect(parseHttpSources(undefined)).toEqual({ sources: [], problems: [] });
+  });
+
+  it('checks stores and deals', () => {
+    expect(checkSourceStores([{ name: 'JB', lat: -37.9, lng: 145, address: null, hours: null }])).toEqual([]);
+    expect(checkSourceStores([{ name: '', lat: 200, lng: 0, address: null, hours: null }])).toHaveLength(2);
+    expect(checkSourceDeals([{ title: 'TV', url: 'https://x.example/1', price_cents: 100, currency: 'AUD', posted_at: null }])).toEqual([]);
+    expect(checkSourceDeals([{ title: 'TV', url: 'http://x', price_cents: 1.5, currency: null, posted_at: 'soon' }])).toHaveLength(3);
+  });
+
+  it('words what a source gives', () => {
+    expect(sourceCapabilityLabel(['offers'])).toBe('Prices');
+    expect(sourceCapabilityLabel(['offers', 'stores', 'deals'])).toBe('Prices, nearby stores and shared deals');
+    expect(sourceCapabilityLabel([])).toBe('');
   });
 });

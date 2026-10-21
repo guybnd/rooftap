@@ -81,4 +81,15 @@ describe("PUT /api/admin/keys", () => {
     expect(json).toEqual({ ok: true });
     expect(setAdminConfigValueMock).toHaveBeenCalledWith("OPENAI_API_KEY", "sk-new");
   });
+
+  it("reports a failed write instead of saying the key was saved", async () => {
+    setAdminConfigValueMock.mockRejectedValue(new Error('relation "admin_config" does not exist'));
+    const { PUT } = await import("./route");
+
+    const res = await PUT(req({ key: "OPENAI_API_KEY", value: "sk-new" }));
+    const json = await res.json();
+
+    expect(res.status).toBe(500);
+    expect(json.error).toContain('relation "admin_config" does not exist');
+  });
 });

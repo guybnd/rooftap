@@ -96,6 +96,7 @@ export function SummaryHero({
   costItems,
   groceryToBuyCount,
   setup,
+  shopperShortcut,
   today,
   onOpenItem,
   onCompleteItem,
@@ -117,6 +118,8 @@ export function SummaryHero({
   costItems: CostItem[];
   groceryToBuyCount: number;
   setup: { done: number; total: number };
+  /** HOUP-434: the Shopper shortcut's figure, null with nothing watched. */
+  shopperShortcut: string | null;
   /** 'YYYY-MM-DD', for picking the Now card's item. */
   today: string;
   /** Opens a hub item (core heroItemOpenTarget: checklist, reminder owner, task editor, listing, calendar event). */
@@ -150,6 +153,7 @@ export function SummaryHero({
     costItems,
     groceryToBuyCount,
     setup,
+    shopperShortcut,
     countdown,
     lens,
     // Tapping the open lens's shortcut again returns to Today.

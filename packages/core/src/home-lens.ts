@@ -14,14 +14,15 @@ import {
   totalForPeriod,
 } from './costs';
 
-/** The shortcuts that open a lens. Setup and countdown keep their plain behaviour. */
-export type HomeLensKey = 'budgetPulse' | 'billsDue' | 'shoppingList';
+/** The shortcuts that open a lens. Setup and countdown keep their plain behaviour. Shopper's (HOUP-434) shows its watched items. */
+export type HomeLensKey = 'budgetPulse' | 'billsDue' | 'shoppingList' | 'shopperWatch';
 
 /** The section each shortcut filters Home to: its glow hue and full page. */
 export const HOME_LENS_META: Record<HomeLensKey, { sectionId: string; href: string }> = {
   budgetPulse: { sectionId: 'costs', href: '/costs' },
   billsDue: { sectionId: 'costs', href: '/costs' },
   shoppingList: { sectionId: 'groceries', href: '/groceries' },
+  shopperWatch: { sectionId: 'shopper', href: '/shopper' },
 };
 
 /** Rows and bars a Space shows on the dashboard; filtered to it, it shows them all. */

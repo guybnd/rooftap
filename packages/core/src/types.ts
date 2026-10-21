@@ -17,6 +17,8 @@ export interface Group {
   /** Days of notice the lease needs before lease_end_date to renew or leave. */
   lease_notice_days?: number | null;
   chosen_apartment_id: string | null;
+  /** Shopper sources this household switched off (HOUP-437); null or absent on servers before it. */
+  shopper_disabled_sources?: string[] | null;
 }
 
 export interface GroupMember {

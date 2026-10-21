@@ -81,6 +81,10 @@ export const MODULE_FEATURES = {
     modules: ['setup'],
     what: 'Home setup progress in the summary hero.',
   },
+  'hub.shopper': {
+    modules: ['shopper'],
+    what: 'Shopper good-deal count in the summary hero.',
+  },
 
   // ── Tasks and checklists ─────────────────────────────────────────────────
   'tasks.checklists': {

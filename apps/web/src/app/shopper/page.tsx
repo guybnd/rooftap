@@ -64,7 +64,7 @@ export default function ShopperPage() {
   useEffect(() => {
     if (!isOnline) return;
     shopperSources()
-      .then((sources) => setCanSearch(sources.some((s) => s.capabilities.includes('offers'))))
+      .then((sources) => setCanSearch(sources.some((s) => s.enabled !== false && s.capabilities.includes('offers'))))
       .catch(() => setCanSearch(null));
   }, [isOnline]);
 

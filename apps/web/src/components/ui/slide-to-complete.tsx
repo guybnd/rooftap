@@ -2,26 +2,29 @@
 
 // Hearth v2 (Pulse): slide-to-finish — web twin of packages/ui's
 // SlideToComplete, the Now card's M3 gesture. Drag the coral thumb to the
-// end of the track to finish; let go short and it slides back. tick() marks
-// the threshold and success() lands the finish (HA). The thumb is a real
-// button, so a keyboard or screen-reader user finishes with Enter or Space.
+// end of the track to finish; let go short and it slides back. The thumb
+// zips as it travels, clicks closer together and firmer the further it goes,
+// the firmest marking the threshold, and pop() lands the finish (HA). The
+// thumb is a real button, so a keyboard or screen-reader user finishes with
+// Enter or Space.
 //
 // Finishing celebrates once: as the thumb lands its check pops and a small
 // coral burst (a ring and a few sparks) leaves it, over slow. One shot,
 // transform and opacity only (MO), and none of it under reduced motion,
-// where the check simply shows. The haptic is the same success() either way.
+// where the check simply shows. The haptic is the same pop() either way.
 
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { ArrowRight, Check } from "lucide-react";
-import { MOTION_DURATIONS_MS, MOTION_EASE } from "@homeup/core";
+import { MOTION_DURATIONS_MS, MOTION_EASE, SLIDE_FINISH_AT, SLIDE_ZIPPER_STEPS } from "@homeup/core";
 import { cn } from "@/lib/utils";
-import { success, tick } from "@/lib/haptics";
+import { pop, zipper } from "@/lib/haptics";
 
 const THUMB = 48;
 const INSET = 4;
 const TRACK = 56;
-/** Fraction of the travel past which a release finishes the item. */
-const FINISH_AT = 0.82;
+const FINISH_AT = SLIDE_FINISH_AT;
+/** The zipper step the threshold clicks as: one past the last, so its firmest tier. */
+const ARM_STEP = SLIDE_ZIPPER_STEPS.length;
 /** Sparks around the landed thumb: angle (deg) and size (px), alternating so the burst doesn't read as a stamp. */
 const SPARKS = [0, 45, 90, 135, 180, 225, 270, 315].map((deg, i) => ({ deg: deg + 22.5, size: i % 2 ? 5 : 7 }));
 const SPARK_FROM = THUMB / 2 - 2;
@@ -45,7 +48,7 @@ export function SlideToComplete({
   const trackRef = useRef<HTMLDivElement>(null);
   const thumbRef = useRef<HTMLButtonElement>(null);
   const burstRef = useRef<HTMLSpanElement>(null);
-  const drag = useRef<{ startX: number; pointerId: number; armed: boolean } | null>(null);
+  const drag = useRef<{ startX: number; pointerId: number; armed: boolean; zipped: number } | null>(null);
   const [offset, setOffset] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [finished, setFinished] = useState(false);
@@ -105,7 +108,7 @@ export function SlideToComplete({
     const max = travel();
     setFinished(true);
     setOffset(max);
-    success();
+    pop();
     if (!prefersReducedMotion()) setBurstAt(INSET + max + THUMB / 2);
     onComplete();
   };
@@ -113,7 +116,7 @@ export function SlideToComplete({
   const onPointerDown = (e: ReactPointerEvent<HTMLButtonElement>) => {
     if (disabled || finished) return;
     e.currentTarget.setPointerCapture(e.pointerId);
-    drag.current = { startX: e.clientX - offset, pointerId: e.pointerId, armed: false };
+    drag.current = { startX: e.clientX - offset, pointerId: e.pointerId, armed: false, zipped: -1 };
     setDragging(true);
   };
 
@@ -122,9 +125,13 @@ export function SlideToComplete({
     if (!d || d.pointerId !== e.pointerId) return;
     const max = travel();
     const next = Math.max(0, Math.min(max, e.clientX - d.startX));
+    // One click per move at most: the furthest step crossed, and arming outranks it.
+    let click = -1;
+    while (d.zipped + 1 < SLIDE_ZIPPER_STEPS.length && next >= max * SLIDE_ZIPPER_STEPS[d.zipped + 1]) click = ++d.zipped;
     const armed = next >= max * FINISH_AT;
-    if (armed && !d.armed) tick();
+    if (armed && !d.armed) click = ARM_STEP;
     d.armed = armed;
+    if (click >= 0) zipper(click);
     setOffset(next);
   };
 

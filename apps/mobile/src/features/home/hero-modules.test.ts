@@ -29,6 +29,7 @@ describe('hero modules behind a module', () => {
     costs: ['budgetPulse', 'billsDue'],
     groceries: ['shoppingList'],
     setup: ['setupProgress'],
+    shopper: ['shopperWatch'],
   };
 
   it('everything on lists and shows every module', () => {

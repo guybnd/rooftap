@@ -290,7 +290,7 @@ describe("buildHeroItems module gates", () => {
 describe("isHeroModuleAvailable", () => {
   const HERO_KEYS = [
     "weather", "count", "nextUp", "whosOnHook", "unassignedNudge", "streak",
-    "budgetPulse", "billsDue", "shoppingList", "setupProgress", "countdown",
+    "budgetPulse", "billsDue", "shoppingList", "shopperWatch", "setupProgress", "countdown",
     "tipRain", "tipUv", "tipDrying", "tipSunset",
   ];
   const availableWith = (enabled: ReadonlySet<string>) =>
@@ -312,6 +312,7 @@ describe("isHeroModuleAvailable", () => {
     costs: ["budgetPulse", "billsDue"],
     groceries: ["shoppingList"],
     setup: ["setupProgress"],
+    shopper: ["shopperWatch"],
   };
 
   it.each(ALL_MODULE_IDS)("turning %s off removes only its hero modules", (off) => {
