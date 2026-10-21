@@ -238,13 +238,14 @@ export function ApiKeysSettings() {
     }
   }, [drafts]);
 
-  if (isOperator === false) return null;
+  // Only a confirmed operator sees the panel, so nobody else glimpses it while it loads.
+  if (isOperator !== true) return null;
 
   return (
     <SettingsPanel
       icon={KeyRound}
       title="API keys"
-      description="Third-party keys this household's server uses. A saved key works from the next request, no restart needed."
+      description="Third-party keys for the whole server, shared by every household on it. Only server operators see this. A saved key works from the next request, no restart needed."
     >
       {loadError && <Text className="px-1 text-caption text-destructive">{loadError}</Text>}
       {!isOnline && (

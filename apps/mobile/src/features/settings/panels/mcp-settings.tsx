@@ -152,7 +152,12 @@ export function McpSettings() {
       description="What an outside agent using your API key can do through Rooftap's MCP server."
     >
       <SettingsInset>
-        <SettingsSwitchRow title="Server" checked={enabled} onChange={toggleEnabled} />
+        <SettingsSwitchRow
+          title="MCP access"
+          description="Off blocks your API key and connected apps. It only affects you."
+          checked={enabled}
+          onChange={toggleEnabled}
+        />
         <SettingsSwitchRow
           title="Read-only"
           description="The agent can read, never create, update or delete."

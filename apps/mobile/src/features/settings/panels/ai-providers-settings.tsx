@@ -24,7 +24,7 @@ import {
   type AiServerSettings,
 } from '@homeup/core';
 import { aiProviders, saveAiProviders } from '../ai-keys-api';
-import { SettingsCheckbox, SettingsInset, SettingsLabel, SettingsPanel, SettingsSwitchRow } from './settings-panel';
+import { SettingsCheckbox, SettingsChoiceRow, SettingsInset, SettingsLabel, SettingsPanel } from './settings-panel';
 
 function StatusWord({ isSet }: { isSet: boolean }) {
   return (
@@ -125,7 +125,7 @@ export function AiProvidersSettings() {
             <View key={p.id} className="gap-2 px-3.5 py-3">
               <View className="flex-row items-center justify-between gap-2">
                 <View className="min-w-0 flex-1">
-                  <Text className="text-sm font-medium">{p.label}</Text>
+                  <Text className="text-sm font-medium text-foreground">{p.label}</Text>
                   {p.builtIn && p.keyUrl ? (
                     <Pressable accessibilityRole="link" onPress={() => void Linking.openURL(p.keyUrl!)}>
                       <Text className="text-xs text-muted-foreground underline">Get a key</Text>
@@ -165,7 +165,7 @@ export function AiProvidersSettings() {
 
         {adding ? (
           <SettingsInset className="gap-2 p-3.5">
-            <Text className="text-sm font-medium">Custom provider</Text>
+            <Text className="text-sm font-medium text-foreground">Custom provider</Text>
             <Text className="text-xs text-muted-foreground">Any server that speaks OpenAI&apos;s chat API, such as Ollama, LM Studio or a company gateway.</Text>
             <Input className="h-11" placeholder="Name, e.g. Home Ollama" value={custom.label} onChangeText={(label) => setCustom((c) => ({ ...c, label }))} />
             <Input
@@ -206,7 +206,7 @@ export function AiProvidersSettings() {
           <Button variant="ghost" size="sm" className="self-start" onPress={() => setAdding(true)}>
             <View className="flex-row items-center gap-1.5">
               <Plus size={16} className="text-foreground" />
-              <Text className="text-sm font-medium">Add a custom provider</Text>
+              <Text className="text-sm font-medium text-foreground">Add a custom provider</Text>
             </View>
           </Button>
         )}
@@ -217,7 +217,7 @@ export function AiProvidersSettings() {
         <SettingsInset>
           {AI_FEATURES.map((f) => (
             <View key={f.id} className="gap-1.5 px-3.5 py-3">
-              <Text className="text-sm font-medium">{f.label}</Text>
+              <Text className="text-sm font-medium text-foreground">{f.label}</Text>
               <Text className="text-xs text-muted-foreground">{f.hint}</Text>
               <SearchablePicker
                 ariaLabel={f.label}
@@ -233,32 +233,42 @@ export function AiProvidersSettings() {
 
       <View className="gap-2">
         <SettingsLabel>What households can choose</SettingsLabel>
-        <SettingsInset>
-          <SettingsSwitchRow
-            title="Any model with a key"
-            description="Off: households choose from the models ticked below. A household with its own key can always use that provider's verified models."
-            checked={settings.offered === null}
-            onChange={(all) => void saveSettings(withOfferedAll(settings, all, ready))}
+        <SettingsInset role="radiogroup">
+          <SettingsChoiceRow
+            selected={settings.offered === null}
+            onSelect={() => settings.offered !== null && void saveSettings(withOfferedAll(settings, true, ready))}
+            title="Every model this server has a key for"
+            description={`${ready.length} ${ready.length === 1 ? 'model' : 'models'} right now, and new ones as you add keys.`}
           />
-          {ready.length === 0 ? <Text className="px-3.5 py-3 text-xs text-muted-foreground">Add a key above to see its models.</Text> : null}
-          {ready.map((m) => (
-            <View key={m.ref} className="flex-row items-center">
-              <View className="flex-1">
-                <SettingsCheckbox
-                  checked={settings.offered === null || settings.offered.includes(m.ref)}
-                  disabled={settings.offered === null}
-                  onChange={() => void saveSettings(withOfferedToggled(settings, m.ref))}
-                >
-                  <Text className="text-sm font-medium">{m.label}</Text>
-                  <Text className="text-xs text-muted-foreground">
-                    {m.providerLabel} · {aiModelPriceLine(m)}
-                  </Text>
-                </SettingsCheckbox>
-              </View>
-              {!m.verified && <RemoveButton label={`Remove ${m.label}`} onPress={() => void saveSettings(withoutExtraModel(settings, m.ref))} />}
-            </View>
-          ))}
+          <SettingsChoiceRow
+            selected={settings.offered !== null}
+            onSelect={() => settings.offered === null && void saveSettings(withOfferedAll(settings, false, ready))}
+            title="Only the models I tick"
+            description="Pick them from the list below."
+          />
         </SettingsInset>
+        {settings.offered !== null && (
+          <SettingsInset>
+            {ready.length === 0 ? <Text className="px-3.5 py-3 text-xs text-muted-foreground">Add a key above to see its models.</Text> : null}
+            {ready.map((m) => (
+              <View key={m.ref} className="flex-row items-center">
+                <View className="flex-1">
+                  <SettingsCheckbox checked={settings.offered!.includes(m.ref)} onChange={() => void saveSettings(withOfferedToggled(settings, m.ref))}>
+                    <Text className="text-sm font-medium text-foreground">{m.label}</Text>
+                    <Text className="text-xs text-muted-foreground">
+                      {m.providerLabel} · {aiModelPriceLine(m)}
+                    </Text>
+                  </SettingsCheckbox>
+                </View>
+                {!m.verified && <RemoveButton label={`Remove ${m.label}`} onPress={() => void saveSettings(withoutExtraModel(settings, m.ref))} />}
+              </View>
+            ))}
+          </SettingsInset>
+        )}
+        <Text className="px-1 text-xs text-muted-foreground">
+          A household with its own key for a provider can always pick that provider&apos;s verified models.
+        </Text>
+        <SettingsLabel className="pt-2">Add a model by name</SettingsLabel>
         <SearchablePicker
           ariaLabel="Provider for the new model"
           placeholder="Provider for a new model"

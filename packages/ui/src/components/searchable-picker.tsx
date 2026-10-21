@@ -109,7 +109,7 @@ export function SearchablePicker({
         onPress={() => setOpen(true)}
         className="h-8 flex-row items-center justify-between gap-2 rounded-lg border border-input bg-transparent px-2.5 py-1 disabled:opacity-50"
       >
-        <Text numberOfLines={1} className={cn('flex-1 text-body', !selected && 'text-muted-foreground')}>
+        <Text numberOfLines={1} className={cn('flex-1 text-body', selected ? 'text-foreground' : 'text-muted-foreground')}>
           {selected ? selected.primary : placeholder}
         </Text>
         <ChevronsUpDown size={16} className="shrink-0 text-muted-foreground" />

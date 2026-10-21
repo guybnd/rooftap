@@ -244,6 +244,8 @@ async function callAnthropic(apiKey: string, model: string, req: StructuredParse
     body: JSON.stringify({
       model,
       max_tokens: 4096,
+      // Haiku 5.5 thinks by default; a forced tool call skips it anyway, so say so and save the tokens.
+      ...(/^claude-haiku-5/.test(model) ? { thinking: { type: "disabled" } } : {}),
       system: req.systemPrompt,
       messages: [
         {

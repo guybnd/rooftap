@@ -91,12 +91,11 @@ export const AI_CATALOG: Record<AiKeyProvider, AiBuiltInProvider> = {
     keyName: 'ANTHROPIC_API_KEY',
     keyUrl: 'https://console.anthropic.com/settings/keys',
     models: [
-      // Reads force a tool call, which Haiku 5.5's thinking doesn't allow.
-      { id: 'claude-haiku-5-5', label: 'Claude Haiku 5.5', input: 0.1, output: 0.5, reads: false },
+      { id: 'claude-haiku-5-5', label: 'Claude Haiku 5.5', input: 0.1, output: 0.5, reads: true },
       { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5', input: 1, output: 5, reads: true },
       { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', input: 3, output: 15, reads: true },
     ],
-    defaults: { chat: 'claude-haiku-5-5', quick: 'claude-haiku-5-5', reads: 'claude-haiku-4-5-20251001' },
+    defaults: { chat: 'claude-haiku-5-5', quick: 'claude-haiku-5-5', reads: 'claude-haiku-5-5' },
   },
   openrouter: {
     id: 'openrouter',

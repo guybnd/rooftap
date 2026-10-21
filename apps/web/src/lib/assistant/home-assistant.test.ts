@@ -18,7 +18,7 @@ vi.mock("node:dns/promises", () => ({
 }));
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { checkHomeAssistantHost, forgetHomeAssistantTools, homeAssistantTools, type HomeAssistantRow } from "./home-assistant";
+import { checkHomeAssistantHost, forgetHomeAssistantTools, homeAssistantTools, privateAddress, type HomeAssistantRow } from "./home-assistant";
 
 function adminWith(row: Partial<HomeAssistantRow> | null) {
   const chain = { select: () => chain, eq: () => chain, maybeSingle: async () => ({ data: row, error: null }) };
@@ -123,6 +123,25 @@ describe("checkHomeAssistantHost", () => {
     expect(await checkHomeAssistantHost("https://192.168.1.5")).toMatch(/home network/);
     expect(await checkHomeAssistantHost("https://lan.example.com")).toMatch(/home network/);
     expect(await checkHomeAssistantHost("https://homeassistant.local")).toMatch(/home network/);
+    // IPv4 hidden in an IPv6 literal (the URL parser rewrites it as hex).
+    expect(await checkHomeAssistantHost("https://[::ffff:169.254.169.254]")).toMatch(/home network/);
+    expect(await checkHomeAssistantHost("https://[::ffff:7f00:1]")).toMatch(/home network/);
+  });
+});
+
+describe("privateAddress", () => {
+  it("refuses everything that isn't the public internet", () => {
+    for (const ip of [
+      "10.1.2.3", "127.0.0.1", "0.0.0.0", "169.254.169.254", "172.20.0.1", "192.168.0.1", "100.100.1.1", "198.18.0.5",
+      "224.0.0.1", "255.255.255.255", "::1", "::", "fd00::1", "fe80::1", "fec0::1", "ff02::1",
+      "::ffff:10.0.0.1", "::ffff:a9fe:a9fe", "::ffff:7f00:1", "64:ff9b::a9fe:a9fe", "2002:c0a8:0101::1", "not an ip",
+    ]) expect([ip, privateAddress(ip)]).toEqual([ip, true]);
+  });
+
+  it("lets public addresses through", () => {
+    for (const ip of ["93.184.216.34", "1.1.1.1", "2606:4700:4700::1111", "::ffff:5db8:d822", "2002:5db8:d822::1"]) {
+      expect([ip, privateAddress(ip)]).toEqual([ip, false]);
+    }
   });
 });
 

@@ -73,7 +73,9 @@ describe('which models households see', () => {
 
   it('keeps AI reads to models that can do them', () => {
     const refs = householdAiModels(settings, new Set(['gemini']), new Set(['anthropic']), 'reads').map((m) => m.ref);
-    expect(refs).not.toContain('anthropic:claude-haiku-5-5');
+    expect(refs).toContain('anthropic:claude-haiku-5-5');
+    const custom = cleanAiServerSettings({ ...settings, extraModels: [{ provider: 'anthropic', id: 'claude-next' }], offered: null });
+    expect(householdAiModels(custom, new Set(['anthropic']), new Set(), 'reads').map((m) => m.ref)).not.toContain('anthropic:claude-next');
     expect(refs).toContain('anthropic:claude-haiku-4-5-20251001');
   });
 });

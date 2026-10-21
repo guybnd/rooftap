@@ -213,7 +213,8 @@ export function ApiKeysSettings() {
     }
   }, []);
 
-  if (isOperator === false) return null;
+  // Only a confirmed operator sees the panel, so nobody else glimpses it while it loads.
+  if (isOperator !== true) return null;
 
   const runtimeKeys = keys?.filter((k) => k.class === "runtime" && !(aiPanel && AI_KEY_NAMES.has(k.key))) ?? [];
   const buildTimeKeys = keys?.filter((k) => k.class === "build-time") ?? [];
@@ -222,7 +223,7 @@ export function ApiKeysSettings() {
     <SettingsPanel
       icon={KeyRound}
       title="API keys"
-      description="Third-party keys this household's server uses. A saved key works from the next request, no restart needed."
+      description="Third-party keys for the whole server, shared by every household on it. Only server operators see this. A saved key works from the next request, no restart needed."
     >
 
         {providerStatuses && !aiPanel && (

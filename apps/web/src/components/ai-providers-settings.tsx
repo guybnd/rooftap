@@ -28,7 +28,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SearchablePicker } from "@/components/ui/searchable-picker";
-import { SettingsCheckbox, SettingsInset, SettingsLabel, SettingsPanel, SettingsSwitchRow } from "@/components/settings-panel";
+import { SettingsCheckbox, SettingsChoiceRow, SettingsInset, SettingsLabel, SettingsPanel } from "@/components/settings-panel";
 import { cn } from "@/lib/utils";
 
 async function request(body?: unknown): Promise<AiProvidersStatus> {
@@ -112,14 +112,8 @@ export function AiProvidersSettings() {
   const keyed = useMemo(() => new Set(status?.providers.filter((p) => p.isSet || !p.builtIn).map((p) => p.id) ?? []), [status]);
   const ready = useMemo(() => status?.models.filter((m) => keyed.has(m.provider)) ?? [], [status, keyed]);
 
-  if (hidden) return null;
-  if (!status) {
-    return (
-      <SettingsPanel icon={Cpu} title="AI providers" description="Loading…">
-        {null}
-      </SettingsPanel>
-    );
-  }
+  // Operators only: nothing shows until the server says this person is one.
+  if (hidden || !status) return null;
   const { settings } = status;
 
   const addCustom = async () => {
@@ -242,39 +236,47 @@ export function AiProvidersSettings() {
 
       <div className="space-y-2">
         <SettingsLabel>What households can choose</SettingsLabel>
-        <SettingsInset>
-          <SettingsSwitchRow
-            title="Any model with a key"
-            description="Off: households choose from the models ticked below. A household with its own key can always use that provider's verified models."
-            checked={settings.offered === null}
-            onChange={(all) => void saveSettings(withOfferedAll(settings, all, ready))}
+        <SettingsInset role="radiogroup">
+          <SettingsChoiceRow
+            selected={settings.offered === null}
+            onSelect={() => settings.offered !== null && void saveSettings(withOfferedAll(settings, true, ready))}
+            title="Every model this server has a key for"
+            description={`${ready.length} ${ready.length === 1 ? "model" : "models"} right now, and new ones as you add keys.`}
           />
-          {ready.length === 0 && <p className="px-3.5 py-3 text-xs text-muted-foreground">Add a key above to see its models.</p>}
-          {ready.map((m) => (
-            <div key={m.ref} className="flex items-center">
-              <SettingsCheckbox
-                checked={settings.offered === null || settings.offered.includes(m.ref)}
-                disabled={settings.offered === null}
-                onChange={() => void saveSettings(withOfferedToggled(settings, m.ref))}
-              >
-                <span className="font-medium">{m.label}</span>
-                <span className="ml-2 text-xs text-muted-foreground">
-                  {m.providerLabel} · {aiModelPriceLine(m)}
-                </span>
-              </SettingsCheckbox>
-              {!m.verified && (
-                <button
-                  type="button"
-                  aria-label={`Remove ${m.label}`}
-                  onClick={() => void saveSettings(withoutExtraModel(settings, m.ref))}
-                  className="mr-2 inline-flex size-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-destructive"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              )}
-            </div>
-          ))}
+          <SettingsChoiceRow
+            selected={settings.offered !== null}
+            onSelect={() => settings.offered === null && void saveSettings(withOfferedAll(settings, false, ready))}
+            title="Only the models I tick"
+            description="Pick them from the list below."
+          />
         </SettingsInset>
+        {settings.offered !== null && (
+          <SettingsInset>
+            {ready.length === 0 && <p className="px-3.5 py-3 text-xs text-muted-foreground">Add a key above to see its models.</p>}
+            {ready.map((m) => (
+              <div key={m.ref} className="flex items-center">
+                <SettingsCheckbox checked={settings.offered!.includes(m.ref)} onChange={() => void saveSettings(withOfferedToggled(settings, m.ref))}>
+                  <span className="font-medium text-foreground">{m.label}</span>
+                  <span className="ml-2 text-xs text-muted-foreground">
+                    {m.providerLabel} · {aiModelPriceLine(m)}
+                  </span>
+                </SettingsCheckbox>
+                {!m.verified && (
+                  <button
+                    type="button"
+                    aria-label={`Remove ${m.label}`}
+                    onClick={() => void saveSettings(withoutExtraModel(settings, m.ref))}
+                    className="mr-2 inline-flex size-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </SettingsInset>
+        )}
+        <p className="px-1 text-xs text-muted-foreground">A household with its own key for a provider can always pick that provider&apos;s verified models.</p>
+        <SettingsLabel className="pt-2">Add a model by name</SettingsLabel>
         <div className="flex flex-wrap items-center gap-2">
           <div className="min-w-[10rem] flex-1">
             <SearchablePicker

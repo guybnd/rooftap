@@ -61,21 +61,17 @@ export function AssistantTelegram() {
     }
   };
 
-  if (!status) return null;
+  // A server with no bot has nothing here anyone can use, so the panel stays out of the way.
+  if (!status?.configured) return null;
   const bot = status.botUsername ? `@${status.botUsername}` : 'the bot';
 
   return (
     <SettingsPanel
       icon={Send}
       title="Telegram"
-      description={
-        status.configured
-          ? 'Talk to the assistant from Telegram. It answers as you, and the chat shows here in Rooftap too.'
-          : 'This server has no Telegram bot yet. Whoever runs it can add one; the self-hosting guide shows how.'
-      }
+      description='Talk to the assistant from Telegram. It answers as you, and the chat shows here in Rooftap too.'
     >
-      {status.configured &&
-        (status.linked ? (
+      {(status.linked ? (
           <SettingsInset>
             <View className="min-h-[52px] flex-row items-center gap-3 px-3.5 py-2.5">
               <View className="min-w-0 flex-1">

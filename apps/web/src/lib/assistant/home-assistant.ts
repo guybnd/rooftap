@@ -1,5 +1,5 @@
 import { lookup } from "node:dns/promises";
-import { isIP } from "node:net";
+import { BlockList, isIP } from "node:net";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
@@ -64,23 +64,56 @@ export async function homeAssistantRow(admin: SupabaseClient, groupId: string): 
 
 // ── Where the server may connect ────────────────────────────────────────
 
-function privateAddress(ip: string): boolean {
-  if (isIP(ip) === 6) {
-    const v = ip.toLowerCase();
-    if (v === "::1" || v === "::") return true;
-    if (v.startsWith("::ffff:")) return privateAddress(v.slice(7));
-    return /^(fc|fd|fe8|fe9|fea|feb)/.test(v);
+// Everything that isn't the public internet: loopback, private, CGNAT,
+// link-local (cloud metadata), benchmarking, multicast and reserved ranges,
+// and their IPv6 counterparts, including IPv6 forms that carry an IPv4
+// address (mapped, NAT64, 6to4).
+const NOT_PUBLIC = new BlockList();
+for (const [net, prefix] of [
+  ["0.0.0.0", 8], ["10.0.0.0", 8], ["100.64.0.0", 10], ["127.0.0.0", 8], ["169.254.0.0", 16],
+  ["172.16.0.0", 12], ["192.0.0.0", 24], ["192.168.0.0", 16], ["198.18.0.0", 15], ["224.0.0.0", 3],
+] as const) NOT_PUBLIC.addSubnet(net, prefix, "ipv4");
+for (const [net, prefix] of [
+  ["::", 127], ["fc00::", 7], ["fe80::", 10], ["fec0::", 10], ["ff00::", 8],
+] as const) NOT_PUBLIC.addSubnet(net, prefix, "ipv6");
+
+/** The IPv4 address an IPv6 address carries (::ffff:a.b.c.d, 64:ff9b::/96, 2002::/16), if any. */
+function embeddedIPv4(v6: string): string | null {
+  const groups = expandIPv6(v6);
+  if (!groups) return null;
+  const ipv4 = (hi: number, lo: number) => [hi >> 8, hi & 255, lo >> 8, lo & 255].join(".");
+  const zeros = (from: number, to: number) => groups.slice(from, to).every((g) => g === 0);
+  if (zeros(0, 5) && (groups[5] === 0xffff || groups[5] === 0)) return ipv4(groups[6], groups[7]);
+  if (groups[0] === 0x64 && groups[1] === 0xff9b && zeros(2, 6)) return ipv4(groups[6], groups[7]);
+  if (groups[0] === 0x2002) return ipv4(groups[1], groups[2]);
+  return null;
+}
+
+/** An IPv6 address as its eight 16-bit groups, or null when it isn't one. */
+function expandIPv6(v6: string): number[] | null {
+  let text = v6.toLowerCase().split("%")[0];
+  const dotted = text.match(/(\d+\.\d+\.\d+\.\d+)$/);
+  if (dotted) {
+    const [a, b, c, d] = dotted[1].split(".").map(Number);
+    text = text.slice(0, -dotted[1].length) + `${((a << 8) | b).toString(16)}:${((c << 8) | d).toString(16)}`;
   }
-  const [a, b] = ip.split(".").map(Number);
-  return (
-    a === 10 ||
-    a === 127 ||
-    a === 0 ||
-    (a === 169 && b === 254) ||
-    (a === 172 && b >= 16 && b <= 31) ||
-    (a === 192 && b === 168) ||
-    (a === 100 && b >= 64 && b <= 127)
-  );
+  const [head, tail] = text.split("::");
+  const part = (s: string | undefined) => (s ? s.split(":").map((g) => parseInt(g, 16)) : []);
+  const left = part(head);
+  const right = part(tail);
+  const fill = tail === undefined ? 0 : 8 - left.length - right.length;
+  const groups = [...left, ...Array(Math.max(0, fill)).fill(0), ...right];
+  return groups.length === 8 && groups.every((g) => Number.isInteger(g) && g >= 0 && g <= 0xffff) ? groups : null;
+}
+
+/** Whether an address is anywhere but the public internet. Anything unreadable counts as private. */
+export function privateAddress(ip: string): boolean {
+  const kind = isIP(ip);
+  if (kind === 4) return NOT_PUBLIC.check(ip, "ipv4");
+  if (kind !== 6) return true;
+  const v4 = embeddedIPv4(ip);
+  if (v4) return privateAddress(v4);
+  return NOT_PUBLIC.check(ip, "ipv6");
 }
 
 /**
@@ -137,6 +170,10 @@ interface Pooled {
 const pool = new Map<string, Pooled>();
 
 async function connectTo(base: string, token: string): Promise<Client> {
+  // Checked again on every new connection, not only when the address was
+  // saved, so a name that later resolves somewhere private is still refused.
+  const refused = await checkHomeAssistantHost(base);
+  if (refused) throw new Error(refused);
   const client = new Client({ name: "rooftap-assistant", version: "1.0.0" });
   const transport = new StreamableHTTPClientTransport(new URL(homeAssistantMcpUrl(base)), {
     // No redirects: a hop could land on an address checkHomeAssistantHost refused.
