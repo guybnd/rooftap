@@ -11,6 +11,7 @@ import { SectionPreferences } from './panels/section-preferences';
 import { HomeProfileSettings } from './panels/home-profile-settings';
 import { NavigationSettings } from './panels/navigation-settings';
 import { ModulesSettings } from './panels/modules-settings';
+import { AssistantSettings } from './panels/assistant-settings';
 import { NotificationsSettings } from './panels/notifications-settings';
 import { ApiKeysSettings } from './panels/api-keys-settings';
 import { PatSettings } from './panels/pat-settings';
@@ -53,6 +54,7 @@ export const sectionPanels: Record<string, ComponentType[]> = {
   groceries: [GroceriesSettings],
   checklists: [ChecklistsSettings],
   calendar: [CalendarSetup],
+  assistant: [AssistantSettings],
 };
 
 // Modules (.docs/modules.md): a panel for an integration module shows only

@@ -863,6 +863,21 @@ export function CaptureSheet() {
                 <div className="space-y-3">
                   {/* Add-as chips pinned ABOVE results so the keyboard can't hide
                       the primary add actions (FLUX-176 point 2). */}
+                  {/* HOUP-443: hand the text to the assistant as a quick ask. */}
+                  {modules.isEnabled("assistant") && isOnline && (
+                    <button
+                      type="button"
+                      data-hue={sectionHue("assistant")}
+                      onClick={() => navigateTo(`/assistant/new?kind=quick&ask=${encodeURIComponent(q.trim())}`)}
+                      className="flex w-full items-center gap-2 rounded-xl border border-border bg-card px-3 py-2.5 text-left text-sm transition hover:bg-muted/60"
+                    >
+                      <Sparkles className="h-4 w-4 shrink-0 text-[var(--hue-glyph)]" />
+                      <span className="min-w-0 flex-1 truncate">
+                        Ask Rooftap <span className="text-muted-foreground">“{q.trim()}”</span>
+                      </span>
+                    </button>
+                  )}
+
                   {addAsChips.length > 0 && (
                     <div>
                       <p className="mb-1.5 text-xs text-muted-foreground">

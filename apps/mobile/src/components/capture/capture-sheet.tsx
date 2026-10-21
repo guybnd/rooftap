@@ -33,6 +33,7 @@ import {
   Plus,
   ScanLine,
   ShoppingCart,
+  Sparkles,
   Wallet,
   type LucideIcon,
 } from 'lucide-react-native';
@@ -386,6 +387,19 @@ export function CaptureSheet() {
 
           {q.trim() ? (
             <View className="gap-3">
+              {/* HOUP-443: hand the text to the assistant as a quick ask. */}
+              {modules.isEnabled('assistant') && isOnline && (
+                <Pressable
+                  onPress={() => navigateTo(`/assistant/new?kind=quick&ask=${encodeURIComponent(q.trim())}`)}
+                  accessibilityRole="button"
+                  className="min-h-11 flex-row items-center gap-2 rounded-xl border border-border bg-card px-3 py-2.5"
+                >
+                  <Sparkles size={16} color={sectionHueSwatch('assistant', scheme).glyph} />
+                  <Text numberOfLines={1} className="min-w-0 flex-1 text-sm text-foreground">
+                    Ask Rooftap <Text className="text-sm text-muted-foreground">&ldquo;{q.trim()}&rdquo;</Text>
+                  </Text>
+                </Pressable>
+              )}
               {addAsChips.length > 0 && (
                 <View>
                   <Text className="mb-1.5 text-xs text-muted-foreground">

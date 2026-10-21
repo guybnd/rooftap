@@ -5,8 +5,9 @@
 // Spaces of their own, money-spaces.tsx; Documents lives in its section).
 // Each reads its section's existing store/data without leaving the hub.
 
+import { useEffect, useState } from 'react';
 import { use$ } from '@legendapp/state/react';
-import { Hammer, LayoutDashboard, CalendarClock, Star, ShoppingBag } from 'lucide-react';
+import { Hammer, LayoutDashboard, CalendarClock, Star, ShoppingBag, Sparkles } from 'lucide-react';
 import type { Group, SetupItem, ApartmentWithScore, Appointment, ShopperWant, ShopperPriceSnapshot } from '@homeup/core';
 import {
   formatRelativeDay,
@@ -25,6 +26,7 @@ import {
   hitTarget,
 } from '@homeup/core';
 import { SegmentedBar } from '@/app/setup/segmented-bar';
+import { assistantApi } from '@/lib/assistant-client';
 import { HubTile, TileHeader, formatTime12h, pad2 } from './hub-shared';
 
 // ── Home Setup ──────────────────────────────────────────────────────────────────
@@ -161,6 +163,36 @@ export function ShopperTile({ group }: { group: Group }) {
             </div>
           )}
         </div>
+      )}
+    </HubTile>
+  );
+}
+
+// ── Assistant (HOUP-443) ────────────────────────────────────────────────────────
+// Only what waits on you: changes the assistant proposed that need your OK.
+export function AssistantTile() {
+  const [pending, setPending] = useState<number | null>(null);
+  useEffect(() => {
+    let live = true;
+    assistantApi
+      .status()
+      .then((s) => live && setPending(s.access === 'none' || !s.ready ? null : s.pending))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  return (
+    <HubTile href="/assistant" ariaLabel="Assistant">
+      <TileHeader sectionId="assistant" Icon={Sparkles} title="Assistant" />
+      {pending ? (
+        <div className="flex items-baseline gap-2">
+          <span className="font-heading text-2xl font-bold tracking-tight text-foreground tabular-nums">{pending}</span>
+          <span className="text-xs text-muted-foreground">{pending === 1 ? 'change waits on your OK' : 'changes wait on your OK'}</span>
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">Ask about the week, the list or the bills.</p>
       )}
     </HubTile>
   );

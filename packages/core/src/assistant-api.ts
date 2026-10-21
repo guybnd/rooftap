@@ -1,0 +1,160 @@
+// Rooftap Assistant: what /api/assistant/* sends and receives, and one client
+// both apps build on (HOUP-443). Each app passes its own `call` (web: a
+// same-origin fetch; native: the server origin plus the Supabase session as
+// a Bearer token), so the request shapes can't drift between platforms.
+
+import type {
+  AssistantAccess,
+  AssistantSettings,
+  ConversationKind,
+  MessageChannel,
+  ProposalState,
+  TrustLevel,
+} from './assistant';
+import type { ModuleId } from './modules';
+
+export interface AssistantConversation {
+  id: string;
+  kind: ConversationKind;
+  title: string | null;
+  pinned: boolean;
+  last_active_at: string;
+  closes_at: string | null;
+  /** Proposals in this conversation waiting for an OK. */
+  pending: number;
+}
+
+export interface ProposalItem {
+  tool: string;
+  module: ModuleId;
+  args: Record<string, unknown>;
+  /** One line for the card, e.g. `Add "Milk" to Groceries`. */
+  summary: string;
+}
+
+export interface AssistantMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  /** Who wrote it, for user messages in the household thread. */
+  author: string | null;
+  channel: MessageChannel;
+  created_at: string;
+  proposal: { items: ProposalItem[]; state: ProposalState } | null;
+  /** Spend for this reply in micro-dollars, when known. */
+  cost_micros: number | null;
+}
+
+export interface AssistantMemory {
+  id: string;
+  text: string;
+  source: 'agent' | 'manual';
+  created_at: string;
+}
+
+export interface AssistantStatus {
+  access: AssistantAccess;
+  /** A model is configured on the server (or the household has a key). */
+  ready: boolean;
+  /** Proposals waiting on this person across their conversations. */
+  pending: number;
+  /** This month's household spend in cents. */
+  spentCents: number;
+  isOwner: boolean;
+}
+
+export interface ChatResponse {
+  conversation: AssistantConversation;
+  /** The person's message and the reply, as stored. */
+  messages: AssistantMessage[];
+  /** Budget state after this turn, for a warning line. */
+  budget: 'ok' | 'warn' | 'over';
+}
+
+/** Stable error codes the apps turn into sheets or lines. */
+export type AssistantErrorCode =
+  | 'assistant_requires_plus'
+  | 'assistant_not_configured'
+  | 'assistant_budget_reached'
+  | 'assistant_conversation_closed';
+
+export class AssistantApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly code: AssistantErrorCode | null
+  ) {
+    super(message);
+  }
+}
+
+export type AssistantCall = <T>(path: string, init?: { method?: string; body?: unknown }) => Promise<T>;
+
+export function createAssistantApi(call: AssistantCall) {
+  return {
+    status: () => call<AssistantStatus>('/api/assistant/status'),
+    conversations: async () => (await call<{ conversations: AssistantConversation[] }>('/api/assistant/conversations')).conversations,
+    messages: (conversationId: string) =>
+      call<{ conversation: AssistantConversation; messages: AssistantMessage[] }>(
+        `/api/assistant/conversations/${encodeURIComponent(conversationId)}`
+      ),
+    updateConversation: (conversationId: string, patch: { title?: string; pinned?: boolean; deleted?: boolean }) =>
+      call<{ ok: true }>(`/api/assistant/conversations/${encodeURIComponent(conversationId)}`, { method: 'PATCH', body: patch }),
+    send: (input: { text: string; conversationId?: string | null; kind?: ConversationKind }) =>
+      call<ChatResponse>('/api/assistant/chat', { method: 'POST', body: input }),
+    decide: (messageId: string, decision: 'confirm' | 'decline') =>
+      call<{ message: AssistantMessage; outcome: AssistantMessage | null }>(
+        `/api/assistant/proposals/${encodeURIComponent(messageId)}`,
+        { method: 'POST', body: { decision } }
+      ),
+    settings: () => call<{ settings: AssistantSettings; isOwner: boolean }>('/api/assistant/settings'),
+    saveSettings: (patch: Partial<AssistantSettings>) =>
+      call<{ settings: AssistantSettings }>('/api/assistant/settings', { method: 'PUT', body: patch }),
+    memories: async () => (await call<{ memories: AssistantMemory[] }>('/api/assistant/memories')).memories,
+    addMemory: (text: string) => call<{ memory: AssistantMemory }>('/api/assistant/memories', { method: 'POST', body: { text } }),
+    removeMemory: (id: string) => call<{ ok: true }>(`/api/assistant/memories/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  };
+}
+
+export type AssistantApi = ReturnType<typeof createAssistantApi>;
+
+/** Reads an error body from /api/assistant into an AssistantApiError. */
+export function assistantError(status: number, body: unknown): AssistantApiError {
+  const b = (body ?? {}) as { error?: string; code?: string };
+  return new AssistantApiError(b.error ?? `Request failed (${status})`, status, (b.code as AssistantErrorCode) ?? null);
+}
+
+// ── Proposal summaries ──────────────────────────────────────────────────
+
+const MODULE_NOUN: Partial<Record<ModuleId, string>> = {
+  household: 'Tasks',
+  calendar: 'Calendar',
+  groceries: 'Groceries',
+  costs: 'Budget',
+};
+
+function quoted(value: unknown): string {
+  return typeof value === 'string' && value.trim() ? `"${value.trim()}"` : 'an item';
+}
+
+/**
+ * One plain line for a proposed change, from the tool and its arguments.
+ * Ids aren't shown (the model's reply names the item); unknown tools fall
+ * back to a generic line so a new tool never breaks the card.
+ */
+export function describeProposal(tool: string, module: ModuleId, args: Record<string, unknown>): string {
+  const where = MODULE_NOUN[module] ?? 'the app';
+  const name = args.title ?? args.name;
+  if (tool.startsWith('create_')) return module === 'groceries' ? `Add ${quoted(name)} to Groceries` : `Add ${quoted(name)} to ${where}`;
+  if (tool === 'complete_task') return args.done === false ? 'Mark a task not done' : 'Mark a task done';
+  if (tool.startsWith('update_')) return name ? `Change ${quoted(name)} in ${where}` : `Change an item in ${where}`;
+  if (tool.startsWith('delete_')) return `Remove an item from ${where}`;
+  return `Make a change in ${where}`;
+}
+
+/** The trust options in the order Settings shows them, with their short labels. */
+export const TRUST_OPTIONS: { value: TrustLevel; label: string }[] = [
+  { value: 'read', label: 'Read' },
+  { value: 'ask', label: 'Ask' },
+  { value: 'act', label: 'Act' },
+];

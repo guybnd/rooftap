@@ -13,8 +13,9 @@ import * as React from 'react';
 import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { use$ } from '@legendapp/state/react';
-import { Hammer, LayoutDashboard, CalendarClock, Star, ChevronRight, ShoppingBag } from 'lucide-react-native';
+import { Hammer, LayoutDashboard, CalendarClock, Star, ChevronRight, ShoppingBag, Sparkles } from 'lucide-react-native';
 import { Text, Card, LeadingTile } from '@homeup/ui';
+import { assistantApi } from '@/features/assistant/assistant-api';
 import {
   summarize,
   useReconnectSync,
@@ -220,6 +221,45 @@ export function ShopperTile({ group }: { group: Group }) {
                   </View>
                 )}
               </View>
+            )}
+          </View>
+        </Card>
+      </Pressable>
+    </View>
+  );
+}
+
+// ── Assistant (HOUP-443) ────────────────────────────────────────────────────────
+// Only what waits on you: changes the assistant proposed that need your OK.
+export function AssistantTile() {
+  const router = useRouter();
+  const [pending, setPending] = React.useState<number | null>(null);
+  React.useEffect(() => {
+    let live = true;
+    assistantApi
+      .status()
+      .then((s) => live && setPending(s.access === 'none' || !s.ready ? null : s.pending))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  return (
+    <View className="min-w-[47%] flex-1">
+      <Pressable onPress={() => router.push('/assistant')} accessibilityRole="button" accessibilityLabel="Assistant">
+        <Card size="sm">
+          <View className="gap-2 px-4">
+            <TileHeader Icon={Sparkles} sectionId="assistant" title="Assistant" />
+            {pending ? (
+              <View className="flex-row items-baseline gap-2">
+                <Text className="text-title font-semibold text-foreground" style={{ fontVariant: ['tabular-nums'] }}>
+                  {pending}
+                </Text>
+                <Text className="text-caption text-muted-foreground">{pending === 1 ? 'change waits on your OK' : 'changes wait on your OK'}</Text>
+              </View>
+            ) : (
+              <Text className="text-caption text-muted-foreground">Ask about the week, the list or the bills.</Text>
             )}
           </View>
         </Card>

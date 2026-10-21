@@ -24,6 +24,7 @@ export type ModuleId =
   | 'setup'
   | 'search'
   | 'shopper'
+  | 'assistant'
   | 'google-calendar'
   | 'mcp';
 
@@ -128,6 +129,15 @@ export const MODULES: ModuleDef[] = [
     defaultEnabled: false,
     enhances: ['household', 'costs'],
     minSchema: '20261021010000_shopper',
+  },
+  {
+    id: 'assistant',
+    label: 'Assistant',
+    description: 'A household agent you can ask or talk to, with your OK before it changes anything.',
+    iconId: 'sparkles',
+    defaultEnabled: false,
+    enhances: ['household', 'calendar', 'costs', 'groceries'],
+    minSchema: '20261021020000_assistant',
   },
   // Integrations: modules with no section of their own (.docs/modules.md, section 3).
   {

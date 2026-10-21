@@ -17,6 +17,7 @@ export const MODULE_DEFAULTS: ReadonlyArray<{ id: string; defaultEnabled: boolea
   { id: "setup", defaultEnabled: false, requires: [] },
   { id: "search", defaultEnabled: false, requires: [] },
   { id: "shopper", defaultEnabled: false, requires: [] },
+  { id: "assistant", defaultEnabled: false, requires: [] },
   { id: "google-calendar", defaultEnabled: false, requires: ["calendar"] },
   { id: "mcp", defaultEnabled: false, requires: [] },
 ];

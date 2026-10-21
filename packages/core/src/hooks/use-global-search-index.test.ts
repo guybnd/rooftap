@@ -415,9 +415,9 @@ describe('buildGlobalHits with a module switched off', () => {
       ...ALL_ROWS,
       hiddenSections: hiddenWithDisabledModules([], new Set(ALL_MODULE_IDS)),
     });
-    // Calendar has no rows of its own in search yet, and Google Calendar and
-    // MCP are integrations with no rows at all.
-    const noRows = new Set(['calendar', 'google-calendar', 'mcp']);
+    // Calendar has no rows of its own in search yet, Google Calendar and MCP
+    // are integrations with no rows at all, and assistant chats aren't searched.
+    const noRows = new Set(['calendar', 'google-calendar', 'mcp', 'assistant']);
     expect([...modulesWithHits(hits)].sort()).toEqual(ALL_MODULE_IDS.filter((id) => !noRows.has(id)).sort());
   });
 

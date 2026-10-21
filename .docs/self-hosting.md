@@ -267,6 +267,30 @@ can't be switched on by any household. The list is read at runtime and reaches t
 `/api/public-config`, so the same store app works against every server and
 nothing needs rebuilding.
 
+## The household assistant (HOUP-443)
+
+Switch on the **Assistant** module (Settings → Modules) to give the household
+a chat agent that reads and, with your OK, changes tasks, the calendar, the
+budget and the grocery list. Self-hosted servers always include it, with no
+Plus plan or spending cap unless an owner sets one.
+
+It needs a model. Any one of `GEMINI_API_KEY`, `OPENROUTER_API_KEY`,
+`OPENAI_API_KEY` or `ANTHROPIC_API_KEY` is enough (Gemini Flash is the
+cheapest default). To keep everything on your own box, run Ollama or LM
+Studio and set:
+
+```
+ASSISTANT_PROVIDER=compatible
+ASSISTANT_BASE_URL=http://ollama:11434/v1
+ASSISTANT_MODEL=llama3.1:8b
+```
+
+A local model needs tool calling for the assistant to reach your data (the
+Llama 3.1+, Qwen 2.5+ and Mistral families have it). `ASSISTANT_MODEL_PRICES`
+lets usage tracking price a model Rooftap doesn't know; local models count as
+free. Each household then picks what the assistant may do per module (Read,
+Ask first, Act) in Settings → Assistant.
+
 ## The `NEXT_PUBLIC_*` build-time trade-off
 
 Next.js inlines `NEXT_PUBLIC_*` env vars into the JS bundle at `next build`

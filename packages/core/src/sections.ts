@@ -76,6 +76,10 @@ const shopperNavItems: NavItem[] = [
   { href: "/shopper", label: "Watching", iconId: "shopping-bag", accent: true },
 ];
 
+const assistantNavItems: NavItem[] = [
+  { href: "/assistant", label: "Chats", iconId: "sparkles", accent: true },
+];
+
 const documentsNavItems: NavItem[] = [
   { href: "/documents", label: "All Documents", iconId: "folder-open", accent: true },
 ];
@@ -183,6 +187,16 @@ export const sections: Section[] = [
     navItems: shopperNavItems,
   },
   {
+    id: "assistant",
+    label: "Assistant",
+    shortLabel: "Assistant",
+    iconId: "sparkles",
+    basePath: "/assistant",
+    enabled: true,
+    acceptsShares: false,
+    navItems: assistantNavItems,
+  },
+  {
     id: "documents",
     label: "Documents",
     shortLabel: "Docs",
@@ -279,6 +293,10 @@ export function getSectionByPath(pathname: string): Section {
   if (matchesBase(pathname, "/shopper")) {
     const shopperSection = getSection("shopper");
     if (shopperSection) return shopperSection;
+  }
+  if (matchesBase(pathname, "/assistant")) {
+    const assistantSection = getSection("assistant");
+    if (assistantSection) return assistantSection;
   }
   if (matchesBase(pathname, "/documents")) {
     const documentsSection = getSection("documents");

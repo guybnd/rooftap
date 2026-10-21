@@ -51,7 +51,7 @@ import { TodayHero } from './today-hero';
 import { SummaryHero } from './summary-hero';
 import { BudgetSpace, BillsSpace } from './money-spaces';
 import { GroceriesWidget } from './groceries-widget';
-import { SetupTile, HomeSearchTile, ShopperTile } from './section-tiles';
+import { SetupTile, HomeSearchTile, ShopperTile, AssistantTile } from './section-tiles';
 
 export default function HomeHubPage() {
   const { group, memberProfiles, groupMembers, currentUserId, userSettings, loading: cacheLoading } =
@@ -690,6 +690,7 @@ export default function HomeHubPage() {
         {!lens && !isHidden('setup') && <SetupTile group={group} />}
         {!lens && searchVisible && <HomeSearchTile apartments={apartments} appointments={appointments} />}
         {!lens && !isHidden('shopper') && <ShopperTile group={group} />}
+        {!lens && !isHidden('assistant') && <AssistantTile />}
       </div>
 
       {/* ── Modals ── */}
