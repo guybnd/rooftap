@@ -2,12 +2,16 @@
 // from the fixtures. Anything else gets an empty 200.
 import {
   assistantConversations,
+  assistantMessages,
+  homeAssistantStatus,
+  homeAssistantTools,
+  scoutPicks,
+  scoutSearch,
   assistantSettings,
   assistantStatus,
   assistantTelegram,
   assistantUsage,
   at,
-  householdThread,
   SATURDAY,
   googleEvents,
   shopperDeals,
@@ -68,6 +72,7 @@ const answers: [RegExp, Answer][] = [
   // Shopper: prices are already in the stores; a check finds what is there.
   [/^\/api\/shopper\/sources/, () => ({ sources: shopperSources })],
   [/^\/api\/shopper\/deals/, (url) => ({ deals: url.searchParams.get("wantId") === "w-vacuum" ? shopperDeals : [] })],
+  [/^\/api\/shopper\/scout\/scout-tv/, () => ({ search: scoutSearch, picks: scoutPicks })],
   [/^\/api\/shopper\/lookup/, () => ({ offers: 5, sources: ["serpapi-google-shopping"], failed: [] })],
   // Assistant.
   [/^\/api\/assistant\/status/, () => assistantStatus],
@@ -76,9 +81,27 @@ const answers: [RegExp, Answer][] = [
     (url) => {
       const id = decodeURIComponent(url.pathname.split("/").pop() ?? "");
       const conversation = assistantConversations.find((c) => c.id === id) ?? assistantConversations[0];
-      return { conversation, messages: conversation.kind === "household" ? householdThread : [] };
+      return { conversation, messages: assistantMessages[conversation.id] ?? [] };
     },
   ],
+  // The live demo has no model: a message gets one fixed reply.
+  [
+    /^\/api\/assistant\/chat/,
+    (_url, init) => {
+      const input = JSON.parse(String(init?.body ?? "{}")) as { text?: string; conversationId?: string | null; kind?: "quick" | "chat" | "household" };
+      const conversation = assistantConversations.find((c) => c.id === input.conversationId) ?? { ...assistantConversations[0], id: `conv-demo-${Date.now()}`, kind: input.kind ?? "quick", title: input.text?.slice(0, 40) ?? null, pending: 0 };
+      const stamp = new Date().toISOString();
+      return {
+        conversation,
+        messages: [
+          { id: `demo-u-${stamp}`, role: "user", content: input.text ?? "", author: "Ava", channel: "app", created_at: stamp, proposal: null, cost_micros: null },
+          { id: `demo-a-${stamp}`, role: "assistant", content: "This demo has no model behind it. On your own server, the Assistant answers here with the model you pick.", author: null, channel: "app", created_at: stamp, proposal: null, cost_micros: null },
+        ],
+        budget: "ok",
+      };
+    },
+  ],
+  [/^\/api\/assistant\/home-assistant/, (_url, init) => (init?.method === "POST" ? { tools: homeAssistantTools } : homeAssistantStatus)],
   [/^\/api\/assistant\/conversations/, () => ({ conversations: assistantConversations })],
   [/^\/api\/assistant\/settings/, () => ({ settings: assistantSettings, isOwner: true })],
   [/^\/api\/assistant\/usage/, () => assistantUsage],

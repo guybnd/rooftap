@@ -58,11 +58,15 @@ export const GROCERIES_STORY: Story = {
     {
       title: "Intuitive UI",
       features: [
-        play("Aisle sort.", "Items group by aisle, in the order you set for your store. One list is one tap away.", [
-          { at: 300, tap: m("groceries-aisles", "oneList") },
-          { at: 700, show: { a: "groceries-flat" } },
-          { at: 2400, tap: m("groceries-flat", "byAisle") },
-          { at: 2800, show: { a: "groceries-aisles" } },
+        play("Aisle sort.", "Items group by aisle, in the order you set for your store. One list is in the View menu.", [
+          { at: 300, tap: m("groceries-aisles", "view") },
+          { at: 600, show: { a: "groceries-aisles-menu" } },
+          { at: 1300, tap: m("groceries-aisles-menu", "oneList") },
+          { at: 1700, show: { a: "groceries-flat" } },
+          { at: 3200, tap: m("groceries-flat", "view") },
+          { at: 3500, show: { a: "groceries-flat-menu" } },
+          { at: 4200, tap: m("groceries-flat-menu", "byAisle") },
+          { at: 4600, show: { a: "groceries-aisles" } },
         ]),
         play("Swipe right: got.", "The item moves to the trolley. Swipe left: have, it is in the house. Undo on both.", [
           { at: 300, swipe: m("groceries-aisles", "lemons"), dx: 190 },
@@ -80,11 +84,11 @@ export const GROCERIES_STORY: Story = {
     {
       title: "Smart grocery recommendations",
       features: [
-        play("Shelf life.", "Each item learns how long it lasts in your house from its buy and got dates.", [
-          { at: 200, highlight: at("a", m("groceries-aisles", "needSoon")) },
+        play("Shelf life.", "Each item learns how long it lasts in your house from its buy and got dates. The meter shows the days left.", [
+          { at: 200, highlight: at("a", m("groceries-aisles", "onions"), true) },
           { at: 2400, highlight: null },
         ]),
-        play("Re-add suggestions.", "Items past their shelf life are offered back as chips. Add all 2 in one tap.", [
+        play("Might be running low.", "Items past their shelf life are offered back as chips. Add all puts them on the list in one tap.", [
           { at: 200, highlight: at("a", m("groceries-aisles", "reAdd")) },
           { at: 1600, tap: m("groceries-aisles", "addAll") },
           { at: 2600, highlight: null },
@@ -98,7 +102,7 @@ export const GROCERIES_STORY: Story = {
       title: "End-to-end groceries flow",
       features: [
         fact("Running total.", "The items in the trolley and their sum, while you shop."),
-        play("Rewards cards.", "Any barcode or QR code, stored per household. One tap at the checkout, full brightness.", [
+        play("Rewards cards.", "Any barcode or QR code, for the household or just you. One tap at the checkout.", [
           { at: 300, tap: m("groceries-shopping", "rewards") },
           { at: 700, show: { a: "groceries-rewards" } },
         ]),
@@ -109,7 +113,7 @@ export const GROCERIES_STORY: Story = {
     {
       title: "One-tap cost logging",
       features: [
-        play("Done shopping.", "One tap writes the trip to Costs with the store, the date and the total.", [
+        play("Done.", "Done confirms the total and the receipt, and writes the trip to Costs with the store and the date.", [
           { at: 300, tap: m("groceries-shopping", "done") },
           { at: 900, show: { b: "costs-groceries" } },
           { at: 900, pop: "b" },
@@ -292,7 +296,7 @@ export const SHOPPER_STORY: Story = {
   id: "shopper",
   room: "shopper",
   eyebrow: "Shopper",
-  label: "Shopper: a watchlist with a deal rating per item, a price history, every store's price, and a plan to buy that lands in Tasks and Costs",
+  label: "Shopper: a watchlist with a deal rating per item, a price history, every store's price, a plan to buy that lands in Tasks and Costs, and Scout picks for a brief",
   steps: [
     {
       title: "A watchlist with a deal rating",
@@ -340,10 +344,81 @@ export const SHOPPER_STORY: Story = {
           { at: 3400, highlight: null },
         ]),
         fact("Add a source.", "A source is a manifest and one server file, or a web service you run. The contributor guide is in the repo."),
-        fact("Scout, in progress.", "Describe what you need and a budget. Scout returns three picks with the reason for each."),
       ],
       a: "shopper-item-buy",
       b: "tasks",
+    },
+    {
+      title: "Scout: picks for a brief",
+      features: [
+        play("A brief.", "Write what you need, a budget and where to look. Scout checks the stores and returns up to three picks.", [
+          { at: 200, highlight: at("a", m("shopper-scout-list", "run")) },
+          { at: 1200, tap: m("shopper-scout-list", "run") },
+          { at: 1700, show: { a: "shopper-scout" } },
+          { at: 2000, highlight: at("a", m("shopper-scout", "hero")) },
+          { at: 3600, highlight: null },
+        ]),
+        point("A role per pick.", "Best value, best picture, or a stretch. A pick over the budget shows only with a reason.", at("a", m("shopper-scout", "best"))),
+        play("Why it fits.", "Each pick says why it fits the brief, and lists the pages it read.", [
+          { at: 200, pop: "b" },
+          { at: 400, highlight: at("b", m("shopper-scout-pick", "why"), true) },
+          { at: 2600, highlight: null },
+        ]),
+        play("Watch the price.", "One tap puts the pick on the watchlist, with a daily price check.", [
+          { at: 0, show: { b: "shopper-scout-pick" } },
+          { at: 300, tap: m("shopper-scout-pick", "watch") },
+          { at: 900, show: { b: "shopper-scout-list" } },
+          { at: 900, pop: "b" },
+          { at: 1200, highlight: at("b", m("shopper-scout-list", "tv")) },
+          { at: 3400, highlight: null },
+        ]),
+        fact("Your key or Plus.", "Scout runs on the household's own AI key. On the hosted service it uses the Plus allowance."),
+      ],
+      a: "shopper-scout-list",
+      b: "shopper-scout-pick",
+    },
+  ],
+};
+
+export const REWARDS_STORY: Story = {
+  id: "rewards",
+  room: "rewards",
+  eyebrow: "Rewards",
+  label: "Rewards: loyalty cards and memberships with the stores they work at, a store lookup at the till, the card's barcode, and the perks that end soon",
+  steps: [
+    {
+      title: "Which card works here",
+      features: [
+        point("Your cards.", "Loyalty cards and memberships as card faces, each with its store count. A card is shared or just yours.", at("a", m("rewards", "flybuys"))),
+        play("Store lookup.", "Type the store you are at. The cards that work there come first, best perk first.", [
+          { at: 200, highlight: at("a", m("rewards", "search")) },
+          { at: 1200, show: { a: "rewards-store" } },
+          { at: 1500, highlight: at("a", m("rewards-store", "match")) },
+          { at: 3300, highlight: null },
+        ]),
+        play("At the till.", "One tap shows the card's barcode, with the screen kept awake.", [
+          { at: 0, show: { a: "rewards-store" } },
+          { at: 300, tap: m("rewards-store", "show") },
+          { at: 900, show: { b: "rewards-card" } },
+          { at: 900, pop: "b" },
+          { at: 1200, highlight: at("b", m("rewards-card", "perk"), true) },
+          { at: 3200, highlight: null },
+        ]),
+        point("Expiry.", "A membership shows when it expires.", at("a", m("rewards", "costco"))),
+      ],
+      a: "rewards",
+      b: "rewards-card",
+    },
+    {
+      title: "Stores and perks per scheme",
+      features: [
+        point("Many stores per scheme.", "One scheme lists every partner store. Common AU schemes start with their stores. Paste a list from the scheme's website to add more.", at("b", m("rewards-card", "stores"), true)),
+        point("Ending soon.", "Perks with an end date in the next 30 days come first.", at("a", m("rewards-perks", "print"))),
+        point("Every perk.", "A percent, an amount, points or a freebie, for one store or for all of them.", at("a", m("rewards-perks", "bws"))),
+        fact("In Groceries too.", "The rewards card button in Groceries opens the same cards at the checkout."),
+      ],
+      a: "rewards-perks",
+      b: "rewards-card",
     },
   ],
 };
@@ -363,13 +438,20 @@ export const ASSISTANT_STORY: Story = {
   id: "assistant",
   room: "assistant",
   eyebrow: "Assistant",
-  label: "The Assistant: quick asks, named chats and a household thread, changes that wait for an OK, trust and spending per household, and Telegram",
+  label: "The Assistant: quick asks, named chats and a household thread, changes that wait for an OK, Home Assistant, trust and spending per household, and Telegram",
   steps: [
     {
       title: "A household assistant in the app",
       features: [
         point("Quick asks.", "Ask from the top of the space. A quick ask takes follow-ups for 30 minutes, then closes.", at("a", m("assistant", "quick"))),
-        point("Named chats.", "Keep a conversation under a name. Pin it to keep it on top.", at("a", m("assistant", "chats"))),
+        play("Named chats.", "Keep a conversation under a name. Pin it to keep it on top. This one added the lasagne's missing ingredients, wine on a checklist and a task for Noa.", [
+          { at: 200, highlight: at("a", m("assistant", "chats")) },
+          { at: 1200, tap: m("assistant", "chats") },
+          { at: 1700, show: { b: "assistant-hosting" } },
+          { at: 1700, pop: "b" },
+          { at: 2000, highlight: at("b", m("assistant-hosting", "recipe")) },
+          { at: 3600, highlight: null },
+        ]),
         play("Household thread.", "One thread for the whole house. Each message shows who wrote it.", [
           { at: 200, highlight: at("a", m("assistant", "household")) },
           { at: 1200, tap: m("assistant", "household") },
@@ -390,6 +472,22 @@ export const ASSISTANT_STORY: Story = {
         fact("Memory.", "It keeps short facts about the household. Anyone in the home can read and remove them."),
       ],
       a: "assistant-household",
+    },
+    {
+      title: "Home Assistant, built in",
+      features: [
+        play("Connect it.", "Add the Model Context Protocol Server integration in Home Assistant. Paste its URL and a long-lived token in Settings. The server stores the token encrypted.", [
+          { at: 200, pop: "b" },
+          { at: 400, highlight: at("b", m("assistant-home-assistant", "connected"), true) },
+          { at: 2600, highlight: null },
+        ]),
+        point("Reads the house.", "It sees the devices you expose to Assist in Home Assistant: locks, doors, sensors and their batteries.", at("a", m("assistant-house", "garage"))),
+        point("Controls it.", "Lights, covers and climate, with Home Assistant's own tools. Each change is a line marked Home Assistant.", at("a", m("assistant-house", "porch"))),
+        point("One trust level.", "Read, Ask first or Act for all of Home Assistant, and a switch per tool.", at("b", m("assistant-home-assistant", "trust"))),
+        fact("On your network.", "A self-hosted server reaches Home Assistant on your LAN. The hosted service needs a public https address."),
+      ],
+      a: "assistant-house",
+      b: "assistant-home-assistant",
     },
     {
       title: "Trust, models and spending",
@@ -566,4 +664,4 @@ export const NATIVE_STORY: Story = {
 /** The first stage: the Home dashboard, under the self-hosting section. */
 export const HERO_STORIES: readonly Story[] = [HOME_STORY];
 /** The modules, one continuous stage, the Android app last. */
-export const ROOM_STORIES: readonly Story[] = [GROCERIES_STORY, CALENDAR_STORY, RECIPES_STORY, SHOPPER_STORY, ASSISTANT_STORY, MCP_STORY, COSTS_STORY, DOCUMENTS_STORY, CHECKLISTS_STORY, NATIVE_STORY];
+export const ROOM_STORIES: readonly Story[] = [GROCERIES_STORY, CALENDAR_STORY, RECIPES_STORY, SHOPPER_STORY, REWARDS_STORY, ASSISTANT_STORY, MCP_STORY, COSTS_STORY, DOCUMENTS_STORY, CHECKLISTS_STORY, NATIVE_STORY];

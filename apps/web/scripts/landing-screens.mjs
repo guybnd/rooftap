@@ -89,6 +89,33 @@ async function act(page, action) {
   else if ("wait" in action) await page.waitForTimeout(action.wait);
 }
 
+/** Marks recorded for a mark's row carry this suffix (story-player.tsx reads them). */
+const ROW_SUFFIX = "@row";
+
+/**
+ * Runs in the page: the rect of the row or card around an element, or null.
+ * That is the nearest wide ancestor that is a list item, has its own fill or
+ * border with rounding, or sits beside other wide rows in its parent.
+ */
+function rowRect(el) {
+  const min = window.innerWidth * 0.8;
+  const wide = (node) => node.getBoundingClientRect().width >= min;
+  for (let node = el; node && node !== document.body; node = node.parentElement) {
+    if (!wide(node)) continue;
+    const cs = getComputedStyle(node);
+    const filled = cs.backgroundColor !== "rgba(0, 0, 0, 0)" && cs.backgroundColor !== "transparent";
+    const bordered = parseFloat(cs.borderTopWidth) > 0 && parseFloat(cs.borderBottomWidth) > 0;
+    const rounded = parseFloat(cs.borderTopLeftRadius) > 0;
+    const listItem = /list-item/.test(node.className?.toString?.() ?? "");
+    const inList = [...(node.parentElement?.children ?? [])].filter(wide).length > 1;
+    if (listItem || ((filled || bordered) && rounded) || inList) {
+      const r = node.getBoundingClientRect();
+      return [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)];
+    }
+  }
+  return null;
+}
+
 async function main() {
   build();
   const { chromium } = await loadPlaywright();
@@ -149,6 +176,10 @@ async function main() {
       const box = await loc.boundingBox().catch(() => null);
       if (box) found[name] = [Math.round(box.x), Math.round(box.y), Math.round(box.width), Math.round(box.height)];
       else errors.push(`mark ${name} (${sel}) not found`);
+      // The row or card the mark sits in, for a story that rings the whole
+      // row: the nearest wide ancestor with its own fill, border or rounding.
+      const row = box && (await loc.evaluate(rowRect).catch(() => null));
+      if (row) found[`${name}${ROW_SUFFIX}`] = row;
     }
     if (Object.keys(wantedMarks).length) marks[id] = found;
     else delete marks[id];

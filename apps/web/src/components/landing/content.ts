@@ -147,7 +147,18 @@ export const FEATURE_GROUPS: readonly FeatureGroup[] = [
       ["Every store", "price, distance and stock"],
       ["Price sources", "pluggable per region, and open to new ones"],
       ["Plan to buy", "a to-do in Tasks and a planned cost in Costs"],
-      ["Scout", "three AI picks for a brief, in progress"],
+      ["Scout", "up to three AI picks for a brief, each with its reason"],
+    ],
+  },
+  {
+    section: "rewards",
+    name: "Rewards",
+    items: [
+      ["Card wallet", "loyalty cards and memberships, shared or just yours"],
+      ["Store lookup", "type a store, see which card works there"],
+      ["Partner stores", "many per scheme, from a starter list or a pasted list"],
+      ["Perks", "the ones that end soon first"],
+      ["Expiry", "when a membership runs out"],
     ],
   },
   {
@@ -161,6 +172,7 @@ export const FEATURE_GROUPS: readonly FeatureGroup[] = [
       ["Any model", "a cloud key or a local model"],
       ["Spending", "a budget per household and per person"],
       ["Telegram", "your own bot, history in the app"],
+      ["Home Assistant", "lights, locks and climate, through its MCP Server"],
       ["Memory", "facts the household can read and remove"],
     ],
   },
@@ -194,6 +206,7 @@ export const ASSISTANT_FACTS: ReadonlyArray<[string, string]> = [
   ["Trust per module.", "Read, Ask first or Act. A delete always asks. Changes under Ask first wait for a tap in the app or on Telegram."],
   ["No caps.", "A self-hosted server has no plan and no spending limit unless an owner sets a budget."],
   ["Spending.", "A household budget, a limit per person, and usage by person, by feature and by model."],
+  ["Home Assistant.", "Connect Home Assistant's MCP Server with a long-lived token. The assistant reads and controls what you expose to Assist, under one trust level and a switch per tool."],
   ["Hosted.", "On the hosted service the Assistant needs the Plus plan. Plus is not on sale yet."],
 ];
 
@@ -207,6 +220,7 @@ export const FAQ: ReadonlyArray<[question: string, answer: string]> = [
   ["Can my AI assistant use it?", "Yes. Rooftap has an MCP server. Each key can be read-only, limited to some tools, and set to expire."],
   ["Is the Assistant free?", "On a self-hosted server, yes. You bring a model key or run a local model. On the hosted service the Assistant needs the Plus plan, which is not on sale yet."],
   ["Does the Assistant change things without asking?", "Only where an owner sets a module to Act. The default is Ask first: each change waits for a tap. A delete always asks."],
+  ["Does it work with Home Assistant?", "Yes. The Assistant connects to Home Assistant's MCP Server integration with a long-lived token. It sees and controls only the devices you expose to Assist. A self-hosted server can reach Home Assistant on your LAN."],
   ["Where do Shopper prices come from?", "From the sources your server has for its region. An AU server ships with Google Shopping via SerpApi, OpenStreetMap and OzBargain. You can add a price by hand, or write a source."],
 ];
 
@@ -225,6 +239,7 @@ export const COMPARE: ReadonlyArray<[job: string, separate: string, homeup: stri
   ["Warranties and leases", "A drive folder", "Documents that remind you before they expire."],
   ["Recipes", "A notes app", "Recipes that know what is in the house and fill the list."],
   ["Price tracking", "A price tracker site", "Shopper, with a deal rating and a price history on your server."],
-  ["An AI for the house", "A chatbot with no access", "The Assistant, with your tasks, calendar, budget and list. In the app or on Telegram."],
+  ["Loyalty cards", "A wallet app", "Rewards, with the stores each card works at and the perks that end soon."],
+  ["An AI for the house", "A chatbot with no access", "The Assistant, with your tasks, calendar, budget, list and Home Assistant. In the app or on Telegram."],
   ["Where the data lives", "Each app's own servers", "One Postgres database, on your server."],
 ];

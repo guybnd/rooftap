@@ -88,8 +88,9 @@ function rectOf(target: Target, row = false): Rect {
   const m = target as Mark;
   const r = marks[m.scene]?.[m.mark];
   if (!r) return [SCREEN_W / 2 - 20, SCREEN_H / 2 - 20, 40, 40];
-  // A measured line of text becomes its whole row: the full width, the row's height.
-  if (row) return [12, r[1] - 14, SCREEN_W - 24, r[3] + 28];
+  // A measured line of text becomes its whole row: the row or card the shoot
+  // script found around it, else the full width at the line's height.
+  if (row) return marks[m.scene]?.[`${m.mark}@row`] ?? [12, r[1] - 14, SCREEN_W - 24, r[3] + 28];
   return r;
 }
 const spotRect = (s: Spot): Rect => {

@@ -15,16 +15,21 @@ import type {
   LoyaltyCard,
   Recipe,
   RecipeIngredient,
+  RewardPartner,
+  RewardPerk,
+  RewardScheme,
   AssistantConversation,
   AssistantMessage,
   AssistantStatus,
   AssistantUsage,
   ShopperOffer,
+  ShopperPick,
   ShopperPriceSnapshot,
+  ShopperSearch,
   ShopperWant,
   UserSettings,
 } from "@homeup/core";
-import type { AssistantSettings, ModuleId } from "@homeup/core";
+import type { AssistantScope, AssistantSettings, HomeAssistantStatus, HomeAssistantToolInfo } from "@homeup/core";
 
 export const GROUP = "demo-home";
 export const AVA = "user-ava";
@@ -360,8 +365,78 @@ export function todaysSession() {
 }
 
 export const loyaltyCards: LoyaltyCard[] = [
-  { ...base, id: "lc-flybuys", created_by: AVA, name: "Flybuys", number: "6014355001234568", format: "code128" },
-  { ...base, id: "lc-rewards", created_by: NOA, name: "Everyday Rewards", number: "9355000012345", format: "ean13" },
+  { ...base, id: "lc-flybuys", created_by: AVA, name: "Flybuys", number: "6014355001234568", format: "code128", scheme_id: "rs-flybuys", private: false, expires_on: null, notes: null },
+  { ...base, id: "lc-rewards", created_by: NOA, name: "Everyday Rewards", number: "9355000012345", format: "ean13", scheme_id: "rs-everyday", private: false, expires_on: null, notes: null },
+  { ...base, id: "lc-ikea", created_by: MIA, name: "IKEA Family", number: "6275980123456789", format: "code128", scheme_id: "rs-ikea", private: false, expires_on: null, notes: null },
+  { ...base, id: "lc-costco", created_by: AVA, name: "Costco", number: "111234567890", format: "code128", scheme_id: "rs-costco", private: true, expires_on: day(24), notes: "Renew at the membership desk" },
+];
+
+// ── Rewards ──────────────────────────────────────────────────────────────────
+// Each scheme with its partner stores (core's AU starter list) and perks. The
+// brand keys are core's brandKey(name), written out: core's runtime is not
+// loaded yet when the stores read these fixtures.
+const scheme = (id: string, name: string, kind: RewardScheme["kind"], color: string, catalog: string | null): RewardScheme => ({
+  ...base,
+  id,
+  name,
+  kind,
+  website: null,
+  partners_url: null,
+  color,
+  catalog_id: catalog,
+  notes: null,
+  created_by: AVA,
+});
+
+export const rewardSchemes: RewardScheme[] = [
+  scheme("rs-flybuys", "Flybuys", "loyalty", "#1F4FA8", "au-flybuys"),
+  scheme("rs-everyday", "Everyday Rewards", "loyalty", "#E0602A", "au-everyday-rewards"),
+  scheme("rs-ikea", "IKEA Family", "loyalty", "#18284A", "au-ikea-family"),
+  scheme("rs-costco", "Costco", "membership", "#C8202F", "au-costco"),
+];
+
+const partner = (schemeId: string, name: string, category: string): RewardPartner => ({
+  ...base,
+  id: `rp-${schemeId.slice(3)}-${name.toLowerCase().replace(/[^a-z0-9]/g, "")}`,
+  scheme_id: schemeId,
+  name,
+  brand_key: name.toLowerCase().replace(/&/g, "and").replace(/^the\s+/, "").replace(/[^a-z0-9]/g, ""),
+  category,
+  online_only: false,
+  created_by: AVA,
+});
+
+export const rewardPartners: RewardPartner[] = [
+  ...[["Coles", "Groceries"], ["Kmart", "Shopping"], ["Target", "Shopping"], ["Officeworks", "Shopping"], ["Liquorland", "Liquor"], ["First Choice Liquor Market", "Liquor"]].map(([n, c]) => partner("rs-flybuys", n, c)),
+  ...[["Woolworths", "Groceries"], ["BIG W", "Shopping"], ["BWS", "Liquor"], ["Ampol", "Fuel"]].map(([n, c]) => partner("rs-everyday", n, c)),
+  partner("rs-ikea", "IKEA", "Home"),
+  partner("rs-costco", "Costco", "Groceries"),
+];
+
+const perk = (id: string, schemeId: string, title: string, kind: RewardPerk["kind"], value: number | null, extra: Partial<RewardPerk> = {}): RewardPerk => ({
+  ...base,
+  id,
+  scheme_id: schemeId,
+  partner_id: null,
+  title,
+  kind,
+  value,
+  conditions: null,
+  valid_until: null,
+  created_by: AVA,
+  ...extra,
+});
+
+export const rewardPerks: RewardPerk[] = [
+  perk("pk-ow-print", "rs-flybuys", "10% off print and copy", "percent", 10, { partner_id: "rp-flybuys-officeworks", valid_until: day(5) }),
+  perk("pk-fb-points", "rs-flybuys", "1 point per $1 spent", "other", null),
+  perk("pk-kmart", "rs-flybuys", "4x points on homewares", "points", 4, { partner_id: "rp-flybuys-kmart", valid_until: day(12), conditions: "Activate the offer in the app first" }),
+  perk("pk-bws", "rs-everyday", "$10 off a $50 spend", "amount", 10, { partner_id: "rp-everyday-bws", valid_until: day(9) }),
+  perk("pk-ampol", "rs-everyday", "4c off a litre", "other", null, { partner_id: "rp-everyday-ampol" }),
+  perk("pk-ew-points", "rs-everyday", "1 point per $1 spent", "other", null),
+  perk("pk-ikea-coffee", "rs-ikea", "Free tea or coffee", "freebie", null, { conditions: "In the IKEA restaurant" }),
+  perk("pk-ikea-sofa", "rs-ikea", "15% off sofas", "percent", 15, { valid_until: day(20) }),
+  perk("pk-costco", "rs-costco", "Member prices on fuel", "other", null),
 ];
 
 // ── Recipes ──────────────────────────────────────────────────────────────────
@@ -586,6 +661,7 @@ export const shopperWants: ShopperWant[] = [
   want("w-desk", "Standing desk", { best_cents: 64900, best_store: "Officeworks" }),
   want("w-pizza", "Pizza oven", { status: "idea", last_checked_at: null }),
   want("w-rug", "Hallway runner", { status: "idea", last_checked_at: null, created_by: MIA }),
+  want("w-tv", "Samsung 65\" QN85D Neo QLED", { best_cents: 189900, best_store: "The Good Guys", notes: "From Scout: best picture" }),
   want("w-kettle", "Kettle", { status: "bought", best_cents: 8900, best_store: "Kmart", bought_at: at(-12, "10:00") }),
 ];
 
@@ -651,6 +727,61 @@ export const shopperDeals = [
   { title: "Roborock Q7 Max robot vacuum $449 at JB Hi-Fi", url: "https://www.ozbargain.com.au/", posted_at: at(-1, "08:40"), source: "OzBargain" },
 ];
 
+/** One finished Scout run: a brief for a lounge TV, three picks, one already on the watchlist. */
+export const scoutSearch: ShopperSearch = {
+  id: "scout-tv",
+  group_id: GROUP,
+  brief: {
+    text: "A TV for the lounge, about 65 inches, for films and the kids' games. The room gets afternoon sun.",
+    budget_min_cents: null,
+    budget_max_cents: 200000,
+    need_by: null,
+    where: ["nearby", "online"],
+  },
+  status: "done",
+  error: null,
+  stores_checked: 14,
+  key_source: "household",
+  created_by: AVA,
+  created_at: at(-1, "20:10"),
+  updated_at: at(-1, "20:11"),
+  finished_at: at(-1, "20:11"),
+  deleted: false,
+};
+
+const pick = (rank: number, label: string, title: string, why: string, cents: number, store: string, extra: Partial<ShopperPick> = {}): ShopperPick => ({
+  id: `pick-tv-${rank}`,
+  group_id: GROUP,
+  search_id: scoutSearch.id,
+  rank,
+  label,
+  title,
+  why,
+  price_cents: cents,
+  currency: "AUD",
+  store,
+  url: "https://example.com/",
+  in_stock: true,
+  stretch: false,
+  sources: [{ title: `${store} product page`, url: "https://example.com/" }],
+  want_id: null,
+  created_at: scoutSearch.created_at,
+  updated_at: scoutSearch.created_at,
+  deleted: false,
+  ...extra,
+});
+
+export const scoutPicks: ShopperPick[] = [
+  pick(1, "Best value", "Hisense 65\" U7 Mini-LED", "Bright enough for a sunny room, and 144 Hz for the games console. In stock 2.4 km away.", 149500, "JB Hi-Fi", {
+    sources: [
+      { title: "JB Hi-Fi product page", url: "https://example.com/" },
+      { title: "RTINGS review", url: "https://example.com/" },
+    ],
+  }),
+  pick(2, "Best picture", "Samsung 65\" QN85D Neo QLED", "An anti-glare screen for the afternoon sun, and good motion for sport.", 189900, "The Good Guys", { want_id: "w-tv" }),
+  pick(3, "Top picture", "LG 65\" C4 OLED", "The best picture of the three. It is $200 over the budget and dimmer in a sunny room.", 219900, "Amazon AU", { stretch: true, in_stock: null }),
+];
+
 // ── Assistant ────────────────────────────────────────────────────────────────
 const minutesAgo = (m: number) => new Date(now.getTime() - m * 60_000).toISOString();
 
@@ -667,6 +798,7 @@ const conv = (id: string, kind: AssistantConversation["kind"], title: string | n
 
 export const assistantConversations: AssistantConversation[] = [
   conv("conv-household", "household", null, 6, { pending: 1 }),
+  conv("conv-house", "chat", "The house tonight", 35),
   conv("conv-hosting", "chat", "Hosting Saturday", 120, { pinned: true }),
   conv("conv-holiday", "chat", "Holiday in March", 3 * 24 * 60),
   conv("conv-dinner", "quick", "Dinner tonight", 8, { closes_at: new Date(now.getTime() + 22 * 60_000).toISOString() }),
@@ -676,7 +808,7 @@ export const assistantConversations: AssistantConversation[] = [
 
 // The summaries are core's describeProposal lines, written out: core's
 // runtime is not loaded yet when the stores read these fixtures.
-const proposal = (state: "pending" | "confirmed", items: [tool: string, module: ModuleId, args: Record<string, unknown>, summary: string][]) => ({
+const proposal = (state: "pending" | "confirmed", items: [tool: string, module: AssistantScope, args: Record<string, unknown>, summary: string][]) => ({
   state,
   items: items.map(([tool, module, args, summary]) => ({ tool, module, args, summary })),
 });
@@ -710,6 +842,68 @@ export const householdThread: AssistantMessage[] = [
       ["create_cost_item", "costs", { name: "Plumber call-out" }, 'Add "Plumber call-out" to Budget'],
     ]),
   }),
+];
+
+/** A named chat with Home Assistant connected: one look-up, then lights and heating, done under Act. */
+const houseChat: AssistantMessage[] = [
+  msg("h-1", "user", 42, "Is everything locked? We are out until 10.", { author: "Ava" }),
+  msg("h-2", "assistant", 41, "The front door and the back door are **locked**. The garage door is **open**, and the hallway motion sensor battery is at 9%. Shall I close the garage and add AA batteries to the list?", {
+    proposal: proposal("confirmed", [
+      ["ha_HassTurnOff", "home-assistant", { name: "Garage door" }, 'Turn off "Garage door" in Home Assistant'],
+      ["create_grocery_item", "groceries", { name: "AA batteries" }, 'Add "AA batteries" to Groceries'],
+    ]),
+  }),
+  msg("h-3", "user", 38, "Thanks. Turn on the porch light, and warm the lounge to 21 for when we get back.", { author: "Ava" }),
+  msg("h-4", "assistant", 37, "Done. The porch light is on, and the lounge thermostat is set to **21°C**. It reads 18.5°C now.", {
+    proposal: proposal("confirmed", [
+      ["ha_HassTurnOn", "home-assistant", { name: "Porch light" }, 'Turn on "Porch light" in Home Assistant'],
+      ["ha_HassClimateSetTemperature", "home-assistant", { name: "Lounge", temperature: 21 }, 'Climate set temperature "Lounge" in Home Assistant'],
+    ]),
+  }),
+];
+
+/** A named chat that planned Saturday: the lasagne's missing ingredients on the list, wine on the checklist. */
+const hostingChat: AssistantMessage[] = [
+  msg("s-1", "user", 130, "Six people on Saturday at 7. We are making the lasagne. What do we still need?", { author: "Ava" }),
+  msg("s-2", "assistant", 129, "The lasagne needs **ricotta** and **lasagne sheets**. The rest is in the house. The Hosting Saturday checklist has no wine yet. Shall I add both?", {
+    proposal: proposal("confirmed", [
+      ["add_recipe_to_groceries", "recipes", { recipe: "Lasagne" }, "Add a recipe's ingredients to Groceries"],
+      ["add_checklist_item", "checklists", { label: "Wine" }, 'Add "Wine" to a checklist'],
+    ]),
+  }),
+  msg("s-3", "user", 121, "Yes. And remind Noa to pick up the chairs on Friday.", { author: "Ava" }),
+  msg("s-4", "assistant", 120, "Done. Ricotta and lasagne sheets are on the list, and **Pick up the chairs** is in Tasks for Noa, due Friday.", {
+    proposal: proposal("confirmed", [["create_task", "household", { title: "Pick up the chairs" }, 'Add "Pick up the chairs" to Tasks']]),
+  }),
+];
+
+/** A quick ask, read only. */
+const dinnerChat: AssistantMessage[] = [
+  msg("d-1", "user", 9, "What can we cook tonight with what we have?", { author: "Ava" }),
+  msg("d-2", "assistant", 8, "You can make **Steak and potatoes** now. Every ingredient is in the house. **Green curry** needs only coconut milk."),
+];
+
+/** Each conversation's messages, by conversation id. */
+export const assistantMessages: Record<string, AssistantMessage[]> = {
+  "conv-household": householdThread,
+  "conv-house": houseChat,
+  "conv-hosting": hostingChat,
+  "conv-dinner": dinnerChat,
+};
+
+/** Home Assistant, connected through its MCP Server integration, under Act. */
+export const homeAssistantStatus: HomeAssistantStatus = {
+  connection: { url: "https://ha.wattle.home", last4: "x7Qa", trust: "act", allowedTools: null, updatedAt: at(-6, "21:00") },
+  isOwner: true,
+  canStore: true,
+};
+
+export const homeAssistantTools: HomeAssistantToolInfo[] = [
+  { name: "GetLiveContext", description: "The state of every exposed entity", kind: "read" },
+  { name: "HassTurnOn", description: "Turns on a device or entity", kind: "write" },
+  { name: "HassTurnOff", description: "Turns off a device or entity", kind: "write" },
+  { name: "HassLightSet", description: "Sets the brightness or colour of a light", kind: "write" },
+  { name: "HassClimateSetTemperature", description: "Sets the target temperature", kind: "write" },
 ];
 
 export const assistantStatus: AssistantStatus = { access: "unlimited", ready: true, pending: 1, spentCents: 184, isOwner: true };
@@ -780,6 +974,9 @@ export const HOUSEHOLD: Household = {
     checklist_task_items: byId(checklistItems),
     grocery_items: byId(groceries),
     loyalty_cards: byId(loyaltyCards),
+    reward_schemes: byId(rewardSchemes),
+    reward_partners: byId(rewardPartners),
+    reward_perks: byId(rewardPerks),
     cost_items: byId(costItems),
     documents: byId(documents),
     events: byId(events),
@@ -788,6 +985,7 @@ export const HOUSEHOLD: Household = {
     shopper_wants: byId(shopperWants),
     shopper_offers: byId(shopperOffers),
     shopper_price_snapshots: byId(shopperSnapshots),
+    shopper_searches: byId([scoutSearch]),
   },
   tables: {
     document_links: documentLinks,

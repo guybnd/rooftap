@@ -28,6 +28,7 @@ export default defineConfig({
       { find: /^@\/lib\/use-section$/, replacement: mock("use-section.ts") },
       { find: /^@\/hooks\/use-overdue-task-count$/, replacement: mock("use-overdue-task-count.ts") },
       { find: /^@\/components\/module-picker$/, replacement: mock("module-picker.tsx") },
+      { find: /^@\/components\/whats-new$/, replacement: mock("whats-new.tsx") },
       { find: "virtual:create-group-store-original", replacement: here("../../../../packages/core/src/data/create-group-store.ts") },
       { find: /^@\//, replacement: here("../../src/") },
     ],

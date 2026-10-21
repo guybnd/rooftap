@@ -40,13 +40,24 @@ const Checklists = lazy(() => import("../../src/app/checklists/page"));
 const Tasks = lazy(() => import("../../src/app/tasks/page"));
 const Shopper = lazy(() => import("../../src/app/shopper/page"));
 const ShopperItem = lazy(() => import("../../src/app/shopper/[id]/page"));
+const ScoutRun = lazy(() => import("../../src/app/shopper/scout/[id]/page"));
 const Assistant = lazy(() => import("../../src/app/assistant/page"));
 const AssistantThread = lazy(() => import("../../src/app/assistant/[id]/page"));
+const Rewards = lazy(() => import("../../src/app/rewards/page"));
 const Settings = lazy(() => import("../../src/app/settings/[key]/page"));
 
 /** The to-do that Plan to buy writes for the robot vacuum, at the cheapest store. */
 const planToBuyTask = () =>
   buildPlanToBuyTask({ id: "t-buy-vacuum", want: shopperWants.find((w) => w.id === "w-vacuum")!, offer: shopperOffers.find((o) => o.id === "o-vac-jb")!, priceLabel: "$449.00 at JB Hi-Fi" });
+
+/**
+ * The Groceries View menu (By aisle, One list, Only needed) and the rewards
+ * card button. The first of each sits in the collapsed bar, hidden until the
+ * list scrolls, so these take the second: the one in the head.
+ */
+const VIEW = "[aria-label^='View options'] >> nth=1";
+const REWARDS = "[aria-label='Rewards cards'] >> nth=1";
+const STORE_SEARCH = "[placeholder='Which store are you at?']";
 
 function groceriesView(mode: "aisle" | "flat") {
   localStorage.setItem("homeup_grocery_sort_mode", mode);
@@ -80,8 +91,11 @@ export const SCENES: Scene[] = [
   },
 
   // 2. Groceries.
-  { id: "groceries-aisles", path: "/groceries", page: Groceries, prepare: () => groceriesView("aisle"), marks: { oneList: "text=One list", lemons: "text=Lemons", addAll: "text=Add all 2", reAdd: ["text=Re-add suggestions", 2], needSoon: ["text=Need soon", 2] } },
-  { id: "groceries-flat", path: "/groceries", page: Groceries, prepare: () => groceriesView("flat"), marks: { byAisle: "text=By aisle", ricotta: "text=Ricotta", sheets: "text=Lasagne sheets" } },
+  { id: "groceries-aisles", path: "/groceries", page: Groceries, prepare: () => groceriesView("aisle"), marks: { view: VIEW, lemons: "text=Lemons", addAll: "text=Add all >> visible=true", reAdd: "[aria-label='Might be running low']", onions: "text=Onions >> visible=true" } },
+  // The View menu open, on each sort.
+  { id: "groceries-aisles-menu", path: "/groceries", page: Groceries, prepare: () => groceriesView("aisle"), actions: [{ click: VIEW }, { wait: 400 }], marks: { oneList: "text=One list >> visible=true" } },
+  { id: "groceries-flat-menu", path: "/groceries", page: Groceries, prepare: () => groceriesView("flat"), actions: [{ click: VIEW }, { wait: 400 }], marks: { byAisle: "text=By aisle >> visible=true" } },
+  { id: "groceries-flat", path: "/groceries", page: Groceries, prepare: () => groceriesView("flat"), marks: { view: VIEW, ricotta: "text=Ricotta", sheets: "text=Lasagne sheets" } },
   // A swipe to the right marks an item as got: held mid-way, then released.
   { id: "groceries-swipe", path: "/groceries", page: Groceries, prepare: () => groceriesView("aisle"), actions: [{ drag: ["text=Lemons", 90, 0, true] }, { wait: 200 }], marks: { lemons: "text=Lemons" } },
   { id: "groceries-got", path: "/groceries", page: Groceries, prepare: () => groceriesView("aisle"), actions: [{ drag: ["text=Lemons", 180, 0] }, { wait: 700 }], marks: { track: ["text=Track today", 2] } },
@@ -106,7 +120,7 @@ export const SCENES: Scene[] = [
       seed({ grocery_items: groceriesMidShop() });
       seedTable("grocery_sessions", [todaysSession()]);
     },
-    marks: { rewards: "[aria-label='Rewards cards']", done: "text=Done shopping" },
+    marks: { rewards: REWARDS, done: "button:has-text('Done') >> visible=true" },
   },
   {
     id: "groceries-rewards",
@@ -117,7 +131,7 @@ export const SCENES: Scene[] = [
       seed({ grocery_items: groceriesMidShop() });
       seedTable("grocery_sessions", [todaysSession()]);
     },
-    actions: [{ click: "[aria-label='Rewards cards']" }, { wait: 500 }, { click: "text=Flybuys" }, { wait: 600 }],
+    actions: [{ click: REWARDS }, { wait: 500 }, { click: "text=Flybuys" }, { wait: 600 }],
   },
   // The list without the assistant's batteries, for the before frame.
   { id: "groceries-plain", path: "/groceries", page: Groceries, prepare: () => groceriesView("flat") },
@@ -208,12 +222,65 @@ export const SCENES: Scene[] = [
     marks: { buy: "text=Buy Roborock Q7 robot vacuum at JB Hi-Fi >> visible=true" },
   },
 
+  // Scout: one finished run, three picks, the second already on the watchlist.
+  {
+    id: "shopper-scout-list",
+    path: "/shopper",
+    page: Shopper,
+    actions: [{ scroll: 900 }, { wait: 400 }],
+    marks: { run: '[class*="list-item"]:has-text("TV for the lounge")', tv: '[class*="list-item"]:has-text("QN85D")' },
+  },
+  {
+    id: "shopper-scout",
+    path: "/shopper/scout/scout-tv",
+    params: { id: "scout-tv" },
+    page: ScoutRun,
+    marks: { hero: ["text=/picks? (under|for)/", 2], best: '[class*="list-item"]:has-text("Hisense")', picture: '[class*="list-item"]:has-text("QN85D")', stretch: '[class*="list-item"]:has-text("OLED")' },
+  },
+  {
+    id: "shopper-scout-pick",
+    path: "/shopper/scout/scout-tv",
+    params: { id: "scout-tv" },
+    page: ScoutRun,
+    actions: [{ click: "text=Hisense 65" }, { wait: 700 }],
+    marks: { watch: "text=Watch the price", why: "text=Bright enough for a sunny room" },
+  },
+
+  // Rewards: the wallet, a store lookup, the card at the till, and the perks.
+  {
+    id: "rewards",
+    path: "/rewards",
+    page: Rewards,
+    marks: { search: "[placeholder='Which store are you at?']", chips: ["button:has-text('Ampol')", 1], flybuys: "button:has-text('Flybuys')", costco: "button:has-text('Costco') >> nth=1" },
+  },
+  {
+    id: "rewards-store",
+    path: "/rewards",
+    page: Rewards,
+    actions: [{ fill: STORE_SEARCH, value: "Officeworks" }, { wait: 400 }],
+    marks: { hero: ["text=/works? at Officeworks/", 2], match: '[class*="list-item"]:has-text("Flybuys")', show: "text=Show Flybuys card" },
+  },
+  {
+    id: "rewards-card",
+    path: "/rewards",
+    page: Rewards,
+    actions: [{ fill: STORE_SEARCH, value: "Officeworks" }, { wait: 400 }, { click: "text=Show Flybuys card" }, { wait: 700 }],
+    marks: { stores: "text=Stores and perks", perk: "text=10% off print and copy >> visible=true" },
+  },
+  {
+    id: "rewards-perks",
+    path: "/rewards",
+    page: Rewards,
+    actions: [{ click: "text=Perks >> visible=true" }, { wait: 400 }],
+    marks: { ending: ["text=Ending soon", 1], bws: "text=$10 off a $50 spend >> visible=true", print: "text=10% off print and copy >> visible=true" },
+  },
+
   // Assistant: the space, the household thread with Telegram in it, and its settings.
   {
     id: "assistant",
     path: "/assistant",
     page: Assistant,
-    marks: { pending: ["text=waiting on your OK", 2], ask: "textarea", household: '[class*="list-item"]:has-text("Household")', chats: '[class*="list-item"]:has-text("Hosting Saturday")', quick: '[class*="list-item"]:has-text("Dinner tonight")' },
+    marks: { pending: ["text=waiting on your OK", 2], ask: "textarea", household: '[class*="list-item"]:has-text("Household")', chats: '[class*="list-item"]:has-text("Hosting Saturday")', quick: '[class*="list-item"]:has-text("Dinner tonight")', house: '[class*="list-item"]:has-text("The house tonight")' },
   },
   {
     id: "assistant-household",
@@ -231,6 +298,33 @@ export const SCENES: Scene[] = [
     page: AssistantThread,
     actions: [{ scroll: -2000 }, { wait: 400 }],
     marks: { noa: ["text=Are the bins tonight", 1], tag: "text=52m ago · Telegram", groceries: ["text=Add \"Milk\" to Groceries", 3], done: "text=Done >> visible=true" },
+  },
+  // A named chat that reached Home Assistant: a look-up, then lights and heating.
+  {
+    id: "assistant-house",
+    path: "/assistant/conv-house",
+    params: { id: "conv-house" },
+    page: AssistantThread,
+    actions: [{ scroll: 2000 }, { wait: 400 }],
+    marks: { garage: ["text=Turn off \"Garage door\" in Home Assistant", 1], porch: ["text=Turn on \"Porch light\" in Home Assistant", 3], ask: ["text=Turn on the porch light", 1] },
+  },
+  // A named chat that planned Saturday across Recipes, Checklists and Tasks.
+  {
+    id: "assistant-hosting",
+    path: "/assistant/conv-hosting",
+    params: { id: "conv-hosting" },
+    page: AssistantThread,
+    actions: [{ scroll: 2000 }, { wait: 400 }],
+    marks: { recipe: ["text=Add a recipe's ingredients to Groceries", 3], task: ["text=Add \"Pick up the chairs\" to Tasks", 3] },
+  },
+  // Settings > Assistant, scrolled to the Home Assistant panel.
+  {
+    id: "assistant-home-assistant",
+    path: "/settings/assistant",
+    params: { key: "assistant" },
+    page: Settings,
+    actions: [{ click: "text=Home Assistant >> visible=true" }, { wait: 300 }],
+    marks: { panel: ["text=Home Assistant >> visible=true", 3], connected: "text=/^Connected to/", trust: ["text=What it may do >> nth=1", 1], tools: "text=Tools the assistant may use" },
   },
   {
     id: "assistant-settings",
@@ -260,8 +354,13 @@ const LIVE_PAGES: ReadonlyArray<[path: string, page: LazyExoticComponent<Compone
   ["/checklists/", ChecklistDetail],
   ["/checklists", Checklists],
   ["/tasks", Tasks],
+  ["/shopper/scout/", ScoutRun],
   ["/shopper/", ShopperItem],
   ["/shopper", Shopper],
+  ["/rewards", Rewards],
+  ["/assistant/", AssistantThread],
+  ["/assistant", Assistant],
+  ["/settings/", Settings],
 ];
 
 export function livePage(path: string): LazyExoticComponent<ComponentType> | null {

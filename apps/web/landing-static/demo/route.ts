@@ -36,7 +36,10 @@ export function useDemoRoute(): DemoRoute {
 const PARAM_ROUTES: ReadonlyArray<[prefix: string, name: string]> = [
   ["/recipes/", "id"],
   ["/checklists/", "id"],
+  ["/shopper/scout/", "id"],
   ["/shopper/", "id"],
+  ["/assistant/", "id"],
+  ["/settings/", "key"],
 ];
 
 const history: DemoRoute[] = [];
@@ -50,9 +53,9 @@ export function navigate(href: string) {
   const url = new URL(href, "https://demo.invalid");
   const path = url.pathname.replace(/\/$/, "") || "/home";
   const params: Record<string, string> = {};
-  for (const [prefix, name] of PARAM_ROUTES) {
-    if (path.startsWith(prefix) && path.length > prefix.length) params[name] = path.slice(prefix.length);
-  }
+  // The first prefix that matches wins, so the longer ones come first.
+  const hit = PARAM_ROUTES.find(([prefix]) => path.startsWith(prefix) && path.length > prefix.length);
+  if (hit) params[hit[1]] = path.slice(hit[0].length);
   history.push(route);
   setDemoRoute({ path: path === "/" ? "/home" : path, search: url.search, params });
   window.scrollTo(0, 0);
