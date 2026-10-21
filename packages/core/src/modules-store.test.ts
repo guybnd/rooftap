@@ -298,10 +298,9 @@ describe('server schema', () => {
 
     act(() => setServerSchema(null));
     expect(result.current.server('mcp.connected-apps')).toBe(false);
-    // Shopper, Rewards and Assistant are modules newer than the baseline, so they are listed too.
+    // Shopper and Assistant are modules newer than the baseline, so they are listed too.
     expect(result.current.serverUpdateAdds.map((f) => f.label)).toEqual([
       'Shopper',
-      'Rewards',
       'Assistant',
       'connecting AI assistants by signing in',
       'switching Shopper price sources on and off',
@@ -329,7 +328,6 @@ describe('server schema', () => {
       expect(result.current.offered.some((m) => m.id === 'mcp')).toBe(false);
       expect(result.current.serverUpdateAdds.map((f) => f.label)).toEqual([
         'Shopper',
-        'Rewards',
         'Assistant',
         'AI assistants (MCP)',
         'switching Shopper price sources on and off',

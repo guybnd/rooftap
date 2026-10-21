@@ -22,4 +22,3 @@ export * from './recipes-store';
 export * from './saved-searches-store';
 export * from './setup-items-store';
 export * from './shopper-stores';
-export * from './rewards-stores';

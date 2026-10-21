@@ -40,12 +40,9 @@ const INDEXEDDB_TABLES = [
   'checklist_items',            // FLUX-150 slice 6 (legacy apartment-scoring checklist — distinct from checklist_task_items)
   'checklist_responses',        // FLUX-150 slice 6
   'documents',                  // FLUX-150 slice 7
-  'loyalty_cards',              // Rewards cards (Groceries, Rewards)
-  'reward_schemes',             // Rewards module
-  'reward_partners',            // Rewards module
-  'reward_perks',               // Rewards module
+  'loyalty_cards',              // Rewards cards (Groceries)
 ];
-const INDEXEDDB_VERSION = 8; // bumped for the Rewards tables (non-destructive upgrade)
+const INDEXEDDB_VERSION = 7; // bumped for loyalty_cards (non-destructive upgrade)
 
 let indexedDBPlugin: ReturnType<typeof observablePersistIndexedDB> | undefined;
 

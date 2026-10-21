@@ -116,40 +116,25 @@ describe('the edge-function twin (supabase/functions/_shared/module-rules.ts)', 
   );
 
   it('resolves every on/off combination the same way, with and without a server limit', () => {
-    // Every combination of the modules the rules read (requirements, task
-    // owners, Google Calendar), crossed with the other modules all off, all
-    // on, and each one alone. Every module at once would be 2^modules runs,
-    // which doubles with each new module and outgrew the test's time limit.
-    const ruled = ALL_MODULE_IDS.filter(
-      (id) =>
-        ['household', 'costs', 'documents', 'calendar', 'search'].includes(id) ||
-        MODULES.some((m) => m.id === id && m.requires?.length) ||
-        MODULES.some((m) => m.requires?.includes(id)),
-    );
-    const others = ALL_MODULE_IDS.filter((id) => !ruled.includes(id));
-    const otherSets: string[][] = [[], others, ...others.map((id) => [id])];
-    for (let mask = 0; mask < 1 << ruled.length; mask++) {
-      for (const otherOn of otherSets) {
-        const rows = ALL_MODULE_IDS.map((id) => ({
-          module_id: id,
-          enabled: ruled.includes(id) ? (mask & (1 << ruled.indexOf(id))) !== 0 : otherOn.includes(id),
-        }));
-        for (const available of [null, ['household', 'costs', 'documents']]) {
-          const core = resolveEnabledModules({ available, rows });
-          const deno = twin.resolveEnabledModules({ available, rows });
-          expect([...deno].sort()).toEqual([...core].sort());
-          for (const t of TASKS) {
-            expect(twin.taskOwnerModule(t)).toBe(taskOwnerModule(t));
-            expect(twin.taskOpenHref(t, deno)).toBe(taskOpenHref(t, core));
-            expect(twin.isGoogleCalendarPushEnabled('task', t, deno)).toBe(isGoogleCalendarPushEnabled('task', t, core));
-          }
-          expect(twin.isGoogleCalendarPushEnabled('appointment', null, deno)).toBe(
-            isGoogleCalendarPushEnabled('appointment', null, core),
-          );
+    const ids = ALL_MODULE_IDS;
+    for (let mask = 0; mask < 1 << ids.length; mask++) {
+      const rows = ids.map((id, i) => ({ module_id: id, enabled: (mask & (1 << i)) !== 0 }));
+      for (const available of [null, ['household', 'costs', 'documents']]) {
+        const core = resolveEnabledModules({ available, rows });
+        const deno = twin.resolveEnabledModules({ available, rows });
+        expect([...deno].sort()).toEqual([...core].sort());
+        for (const t of TASKS) {
+          expect(twin.taskOwnerModule(t)).toBe(taskOwnerModule(t));
+          expect(twin.taskOpenHref(t, deno)).toBe(taskOpenHref(t, core));
+          expect(twin.isGoogleCalendarPushEnabled('task', t, deno)).toBe(isGoogleCalendarPushEnabled('task', t, core));
         }
+        expect(twin.isGoogleCalendarPushEnabled('appointment', null, deno)).toBe(
+          isGoogleCalendarPushEnabled('appointment', null, core),
+        );
       }
     }
-  });
+    // 2^modules combinations: about 1s warm, over 10s on a cold CI runner.
+  }, 30_000);
 
   it('falls back to each module default when a household has no rows', () => {
     expect([...twin.resolveEnabledModules({ available: null, rows: [] })].sort()).toEqual(

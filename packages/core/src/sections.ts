@@ -76,10 +76,6 @@ const shopperNavItems: NavItem[] = [
   { href: "/shopper", label: "Watching", iconId: "shopping-bag", accent: true },
 ];
 
-const rewardsNavItems: NavItem[] = [
-  { href: "/rewards", label: "Cards", iconId: "wallet-cards", accent: true },
-];
-
 const assistantNavItems: NavItem[] = [
   { href: "/assistant", label: "Chats", iconId: "sparkles", accent: true },
 ];
@@ -191,16 +187,6 @@ export const sections: Section[] = [
     navItems: shopperNavItems,
   },
   {
-    id: "rewards",
-    label: "Rewards",
-    shortLabel: "Rewards",
-    iconId: "wallet-cards",
-    basePath: "/rewards",
-    enabled: true,
-    acceptsShares: false,
-    navItems: rewardsNavItems,
-  },
-  {
     id: "assistant",
     label: "Assistant",
     shortLabel: "Assistant",
@@ -307,10 +293,6 @@ export function getSectionByPath(pathname: string): Section {
   if (matchesBase(pathname, "/shopper")) {
     const shopperSection = getSection("shopper");
     if (shopperSection) return shopperSection;
-  }
-  if (matchesBase(pathname, "/rewards")) {
-    const rewardsSection = getSection("rewards");
-    if (rewardsSection) return rewardsSection;
   }
   if (matchesBase(pathname, "/assistant")) {
     const assistantSection = getSection("assistant");

@@ -318,7 +318,7 @@ import HomeHubPage from "./home/page";
 const SURFACES: Record<string, { render: () => React.ReactElement; reaches: ModuleId[] }> = {
   "app shell": {
     render: () => <AppSidebar>{null}</AppSidebar>,
-    reaches: ["household", "calendar", "checklists", "documents", "groceries", "recipes", "costs", "setup", "search", "shopper", "rewards", "assistant"],
+    reaches: ["household", "calendar", "checklists", "documents", "groceries", "recipes", "costs", "setup", "search", "shopper", "assistant"],
   },
   "home hub": {
     render: () => <HomeHubPage />,

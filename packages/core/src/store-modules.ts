@@ -16,8 +16,7 @@ export const STORE_MODULES = {
   // Documents (task-modules.ts), so the table syncs while any of the three is on.
   household_tasks: ['household', 'costs', 'documents'],
   grocery_items: ['groceries'],
-  // Cards live in Groceries' sheet and in Rewards.
-  loyalty_cards: ['groceries', 'rewards'],
+  loyalty_cards: ['groceries'],
   cost_items: ['costs'],
   setup_items: ['setup'],
   checklists: ['checklists'],
@@ -33,9 +32,6 @@ export const STORE_MODULES = {
   shopper_price_snapshots: ['shopper'],
   shopper_searches: ['shopper'],
   shopper_picks: ['shopper'],
-  reward_schemes: ['rewards'],
-  reward_partners: ['rewards'],
-  reward_perks: ['rewards'],
   // Home Search: listings, agents, viewings and the listing checklist.
   apartments: ['search'],
   agents: ['search'],
