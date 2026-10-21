@@ -95,6 +95,7 @@ export default function AssistantThreadScreen() {
         setConversation(res.conversation);
         setMessages((m) => [...m.filter((x) => x.id !== local.id), ...res.messages]);
         if (res.budget === 'warn') toast.message("The assistant is close to this month's budget.");
+        else if (res.budget === 'over') toast.message("The assistant is over this month's budget.");
         return true;
       } catch (err) {
         setMessages((m) => m.filter((x) => x.id !== local.id));

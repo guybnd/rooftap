@@ -105,6 +105,7 @@ export default function AssistantThreadPage() {
         setConversation(res.conversation);
         setMessages((m) => [...m.filter((x) => x.id !== local.id), ...res.messages]);
         if (res.budget === 'warn') toast("The assistant is close to this month's budget.");
+        else if (res.budget === 'over') toast("The assistant is over this month's budget.");
         if (isNew) router.replace(`/assistant/${res.conversation.id}`, { scroll: false });
         return true;
       } catch (err) {

@@ -3,7 +3,8 @@
 // HOUP-443: Settings > Assistant. What the assistant may do in each module
 // (Read, Ask first, Act; deletes always ask), which models it uses, and the
 // facts it keeps about the household. Owners change the first two; anyone in
-// the home can see and edit memories. Budgets and usage are HOUP-444.
+// the home can see and edit memories. Budgets and usage live in
+// assistant-spending.tsx (HOUP-444).
 // Native twin: apps/mobile/src/features/settings/panels/assistant-settings.tsx.
 
 import { useEffect, useState } from "react";

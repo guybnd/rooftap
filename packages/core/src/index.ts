@@ -116,3 +116,4 @@ export * from './tab-glide';
 export * from './theme-preference';
 export * from './section-hues';
 export * from './assistant-view';
+export * from './assistant-usage';

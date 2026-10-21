@@ -11,6 +11,7 @@ import type {
   ProposalState,
   TrustLevel,
 } from './assistant';
+import type { UsageSummary } from './assistant-usage';
 import type { ModuleId } from './modules';
 
 export interface AssistantConversation {
@@ -71,6 +72,31 @@ export interface ChatResponse {
   budget: 'ok' | 'warn' | 'over';
 }
 
+/** One person's allowance and what they've spent this month. */
+export interface AssistantMemberUsage {
+  userId: string;
+  name: string;
+  /** Monthly allowance in cents; null means no personal limit. */
+  budgetCents: number | null;
+  readOnly: boolean;
+  spentMicros: number;
+}
+
+export interface AssistantUsage {
+  /** First day of the month shown, e.g. "2026-10-01". */
+  month: string;
+  summary: UsageSummary;
+  /** The household budget, or null for none. */
+  budgetCents: number | null;
+  warnAtPercent: number;
+  /** Plus allowance on Rooftap's key when it applies, in cents. */
+  allowanceCents: number | null;
+  /** Spend on Rooftap's key this month, which the Plus allowance counts. */
+  serverMicros: number;
+  members: AssistantMemberUsage[];
+  isOwner: boolean;
+}
+
 /** Stable error codes the apps turn into sheets or lines. */
 export type AssistantErrorCode =
   | 'assistant_requires_plus'
@@ -110,6 +136,10 @@ export function createAssistantApi(call: AssistantCall) {
     settings: () => call<{ settings: AssistantSettings; isOwner: boolean }>('/api/assistant/settings'),
     saveSettings: (patch: Partial<AssistantSettings>) =>
       call<{ settings: AssistantSettings }>('/api/assistant/settings', { method: 'PUT', body: patch }),
+    usage: (month?: string) =>
+      call<AssistantUsage>(`/api/assistant/usage${month ? `?month=${encodeURIComponent(month)}` : ''}`),
+    saveMemberLimit: (userId: string, patch: { monthlyBudgetCents?: number | null; readOnly?: boolean }) =>
+      call<{ ok: true }>('/api/assistant/limits', { method: 'PUT', body: { userId, ...patch } }),
     memories: async () => (await call<{ memories: AssistantMemory[] }>('/api/assistant/memories')).memories,
     addMemory: (text: string) => call<{ memory: AssistantMemory }>('/api/assistant/memories', { method: 'POST', body: { text } }),
     removeMemory: (id: string) => call<{ ok: true }>(`/api/assistant/memories/${encodeURIComponent(id)}`, { method: 'DELETE' }),
