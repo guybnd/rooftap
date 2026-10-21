@@ -245,7 +245,7 @@ export const RECIPES_STORY: Story = {
       title: "Easy recipe management",
       features: [
         play("Can make now.", "A filter for the recipes whose ingredients are all in the house.", [
-          { at: 200, highlight: { ...at("b", m("recipes", "canMake")), pad: 8 } },
+          { at: 200, highlight: at("b", m("recipes", "canMake")) },
           { at: 1800, highlight: null },
         ]),
         play("Scan a page.", "Point the camera at a cookbook page. Ingredients, servings and times are read into a recipe.", [
@@ -458,8 +458,8 @@ export const REWARDS_STORY: Story = {
       title: "Stores and perks per scheme",
       features: [
         point("Many stores per scheme.", "One scheme lists every partner store. Common AU schemes start with their stores. Paste a list from the scheme's website to add more.", at("b", m("rewards-card", "stores"), true)),
-        point("Ending soon.", "Perks with an end date in the next 30 days come first.", at("a", m("rewards-perks", "print"))),
-        point("Every perk.", "A percent, an amount, points or a freebie, for one store or for all of them.", at("a", m("rewards-perks", "bws"))),
+        point("Ending soon.", "Perks with an end date in the next 30 days come first.", at("a", m("rewards-perks", "print"), true)),
+        point("Every perk.", "A percent, an amount, points or a freebie, for one store or for all of them.", at("a", m("rewards-perks", "bws"), true)),
         fact("In Groceries too.", "The rewards card button in Groceries opens the same cards at the checkout."),
       ],
       a: "rewards-perks",

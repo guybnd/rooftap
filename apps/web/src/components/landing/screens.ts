@@ -122,3 +122,26 @@ export const screenSrc = (id: ScreenId) => `landing/screens/${id}.webp`;
 /** The frames were shot on a 390 by 844 point phone at 2x. */
 export const SCREEN_W = 390;
 export const SCREEN_H = 844;
+
+/**
+ * A measured mark (screen-marks.json): the painted bounds of what it marks, then
+ * the room a ring may take on each side (left, top, right, bottom) before it
+ * would touch other text or icons. Older marks carry no room.
+ */
+export type MarkRect = readonly [number, number, number, number, number?, number?, number?, number?];
+
+/** The most room a ring takes around what it rings, in screen points. */
+export const RING_PAD = 12;
+
+/**
+ * Where the ring around a mark goes: grown by its room on each side (RING_PAD
+ * where nothing is near), plus `extra` points, and kept on the screen.
+ */
+export function ringAround(r: MarkRect, extra = 0): [number, number, number, number] {
+  const [x, y, w, h, pl = RING_PAD, pt = RING_PAD, pr = RING_PAD, pb = RING_PAD] = r;
+  const l = Math.max(3, x - pl - extra);
+  const t = Math.max(3, y - pt - extra);
+  const right = Math.min(SCREEN_W - 3, x + w + pr + extra);
+  const b = Math.min(SCREEN_H - 3, y + h + pb + extra);
+  return [l, t, right - l, b - t];
+}

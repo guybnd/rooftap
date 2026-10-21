@@ -3,7 +3,7 @@ import { sectionHue } from "@homeup/core";
 import { SectionTile } from "./cards";
 import styles from "./landing.module.css";
 import MARKS from "./screen-marks.json";
-import { SCREEN_H, SCREEN_W, screenSrc, type ScreenId } from "./screens";
+import { ringAround, SCREEN_H, SCREEN_W, screenSrc, type MarkRect, type ScreenId } from "./screens";
 
 // How the modules fit together: two chains of real screens, each cropped to
 // the row that the module before it wrote, centred on its mark. The rings are measured marks
@@ -39,19 +39,20 @@ const CHAINS: ReadonlyArray<{ title: string; links: readonly Link[] }> = [
   },
 ];
 
-const marks = MARKS as unknown as Record<string, Record<string, [number, number, number, number]>>;
+const marks = MARKS as unknown as Record<string, Record<string, MarkRect>>;
 const pct = (n: number, of: number) => `${(n / of) * 100}%`;
 
 function Crop({ link }: { link: Link }) {
   const r = marks[link.scene]?.[link.mark];
   // The crop centres on the mark, inside the frame.
+  const ring = r && ringAround(r);
   const top = r ? Math.round(Math.min(Math.max(r[1] + r[3] / 2 - CROP_H / 2, 0), SCREEN_H - CROP_H)) : 0;
   return (
     <div className={styles.crop} style={{ aspectRatio: `${SCREEN_W} / ${CROP_H}` }}>
       {/* A percentage margin is a share of the width, so this moves the frame up by `top` points at any size. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={screenSrc(link.scene)} alt="" loading="lazy" decoding="async" style={{ marginTop: `-${pct(top, SCREEN_W)}` }} />
-      {r && <span className={styles.cropRing} style={{ left: pct(r[0] - 6, SCREEN_W), top: pct(r[1] - top - 6, CROP_H), width: pct(r[2] + 12, SCREEN_W), height: pct(r[3] + 12, CROP_H) }} aria-hidden="true" />}
+      {ring && <span className={styles.cropRing} style={{ left: pct(ring[0], SCREEN_W), top: pct(ring[1] - top, CROP_H), width: pct(ring[2], SCREEN_W), height: pct(ring[3], CROP_H) }} aria-hidden="true" />}
     </div>
   );
 }

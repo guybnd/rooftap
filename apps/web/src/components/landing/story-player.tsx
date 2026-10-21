@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { SectionTile } from "./cards";
 import styles from "./landing.module.css";
 import MARKS from "./screen-marks.json";
-import { SCREEN_ALT, SCREEN_H, SCREEN_W, screenSrc, type ScreenId } from "./screens";
+import { ringAround, SCREEN_ALT, SCREEN_H, SCREEN_W, screenSrc, type MarkRect, type ScreenId } from "./screens";
 import { clamp, cssColorToHex, lerp, type Pointer } from "./scenes/shared";
 import type { Rect as PxRect, StreamsScene } from "./scenes/streams";
 
@@ -35,7 +35,7 @@ export interface Spot {
   on: Slot;
   rect: Target;
   row?: boolean;
-  /** Points to grow the rect on every side, for a chip measured by its text. */
+  /** Points to grow the ring on every side, past its measured room. */
   pad?: number;
 }
 
@@ -81,9 +81,10 @@ export interface Story {
 /** The id of a story's anchor on the page, for links to it. */
 export const storyAnchor = (story: Story) => `story-${story.id}`;
 
-const marks = MARKS as unknown as Record<string, Record<string, [number, number, number, number]>>;
+const marks = MARKS as unknown as Record<string, Record<string, MarkRect>>;
 
-function rectOf(target: Target, row = false): Rect {
+/** The measured mark a target names, with its room for a ring; a hand-written rect has none. */
+function markOf(target: Target, row = false): MarkRect {
   if (Array.isArray(target)) return target as Rect;
   const m = target as Mark;
   const r = marks[m.scene]?.[m.mark];
@@ -93,11 +94,9 @@ function rectOf(target: Target, row = false): Rect {
   if (row) return marks[m.scene]?.[`${m.mark}@row`] ?? [12, r[1] - 14, SCREEN_W - 24, r[3] + 28];
   return r;
 }
-const spotRect = (s: Spot): Rect => {
-  const [x, y, w, h] = rectOf(s.rect, s.row ?? false);
-  const p = s.pad ?? 0;
-  return [x - p, y - p, w + 2 * p, h + 2 * p];
-};
+const rectOf = (target: Target, row = false): Rect => markOf(target, row).slice(0, 4) as unknown as Rect;
+/** A pin or highlight rings its mark with room to spare, so no ring sits on what it rings or on its neighbours. */
+const spotRect = (s: Spot): Rect => ringAround(markOf(s.rect, s.row ?? false), s.pad ?? 0);
 
 const isId = (s: Screen): s is ScreenId => typeof s === "string";
 const screenKey = (s: Screen) => (isId(s) ? s : s.label);
@@ -124,6 +123,8 @@ interface Pin {
   i: number;
   on: Slot;
   rect: Rect;
+  /** The frame the pin was measured on; it shows only while that frame does. */
+  scene?: ScreenId;
 }
 
 /** After a feature's last event, before the next feature starts. */
@@ -293,7 +294,8 @@ function Phone({
           )
         )}
         {pins
-          .filter((p) => p.on === slot)
+          // A feature that plays can show another frame first, and a pin measured on a frame must not ring that one.
+          .filter((p) => p.on === slot && (!p.scene || p.scene === shown))
           .map((p) => (
             <span key={p.i} ref={(el) => pinRef(p.i, el)} className={cn(styles.pin, (p.i === lit || p.i === hover) && styles.pinOn)} style={pct(p.rect)} aria-hidden="true" />
           ))}
@@ -564,7 +566,10 @@ export function StoryPlayer({ stories, eager = false }: { stories: readonly Stor
   const screensA = useMemo(() => screensFor(story, "a"), [story]);
   const screensB = useMemo(() => screensFor(story, "b"), [story]);
   const two = !!screens.b;
-  const pins = useMemo<Pin[]>(() => step.features.flatMap((f, i) => (f.target ? [{ i, on: f.target.on, rect: spotRect(f.target) }] : [])), [step]);
+  const pins = useMemo<Pin[]>(
+    () => step.features.flatMap((f, i) => (f.target ? [{ i, on: f.target.on, rect: spotRect(f.target), scene: Array.isArray(f.target.rect) ? undefined : (f.target.rect as Mark).scene }] : [])),
+    [step]
+  );
 
   const firstOfStory = flat.findIndex((f) => f.story === story);
   const goToStep = (i: number) => {

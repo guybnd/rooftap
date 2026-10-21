@@ -196,7 +196,7 @@ export const SCENES: Scene[] = [
   { id: "recipe-lasagne-steps", path: "/recipes/r-lasagne", params: { id: "r-lasagne" }, page: RecipeDetail, actions: [{ scroll: 720 }, { wait: 400 }] },
 
   // 6. Costs.
-  { id: "costs", path: "/costs", page: Costs, marks: { jazz: "text=Jazz at the Lighthouse >> visible=true", planned: ["text=planned", 1], chart: ["text=Projected", 2], recurring: ["text=Rent", 2] } },
+  { id: "costs", path: "/costs", page: Costs, marks: { jazz: "text=Jazz at the Lighthouse >> visible=true", planned: ["text=planned", 2], chart: ["text=Projected", 2], recurring: ["text=Rent", 2] } },
   { id: "costs-groceries", path: "/costs", page: Costs, actions: [{ click: "text=Groceries >> visible=true" }, { wait: 500 }, { scroll: 520 }, { wait: 300 }], marks: { trip: "text=FreshCo >> visible=true" } },
   { id: "costs-groceries-before", path: "/costs", page: Costs, prepare: () => seed({ cost_items: costItems.filter((c) => c.id !== "c-trip-0") }), actions: [{ click: "text=Groceries >> visible=true" }, { wait: 500 }, { scroll: 520 }, { wait: 300 }] },
 
@@ -241,7 +241,7 @@ export const SCENES: Scene[] = [
     path: "/shopper/w-vacuum",
     params: { id: "w-vacuum" },
     page: ShopperItem,
-    marks: { hero: ["text=cheapest nearby", 2], verdict: "text=/Hit target/", history: ["text=Price history", 2], jb: '[class*="list-item"]:has-text("JB Hi-Fi")' },
+    marks: { hero: 'div.space-y-1\\.5:has-text("cheapest nearby")', verdict: "text=/Hit target/", history: ["text=Price history", 2], jb: '[class*="list-item"]:has-text("JB Hi-Fi")' },
   },
   {
     id: "shopper-item-buy",

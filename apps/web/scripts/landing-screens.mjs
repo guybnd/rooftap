@@ -93,6 +93,97 @@ async function act(page, action) {
 const ROW_SUFFIX = "@row";
 
 /**
+ * Runs in the page: what an element paints, not just its layout box. Large
+ * display type (the Hero numbers) overflows a tight line box, so the box is
+ * widened by every line of text and every icon inside it.
+ */
+/**
+ * Runs in the page: what inks the screen inside `root`, as [node, rect]
+ * pairs: each line of text (glyph overhang included), and each icon or image.
+ */
+function inkParts(root) {
+  const parts = [];
+  // A line's box is its glyphs' advances; big or italic type inks past that,
+  // so each side grows by what the canvas measures for the same font.
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const range = document.createRange();
+  const ctx = document.createElement("canvas").getContext("2d");
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const text = node.textContent.trim();
+    if (!text || !node.parentElement?.checkVisibility?.({ opacityProperty: true, visibilityProperty: true })) continue;
+    const f = getComputedStyle(node.parentElement);
+    ctx.font = f.font;
+    ctx.letterSpacing = f.letterSpacing === "normal" ? "0px" : f.letterSpacing;
+    const m = ctx.measureText(text);
+    const left = Math.max(0, m.actualBoundingBoxLeft);
+    const right = Math.max(0, m.actualBoundingBoxRight - m.width);
+    range.selectNodeContents(node);
+    for (const q of range.getClientRects()) parts.push([node, new DOMRect(q.left - left, q.top, q.width + left + right, q.height)]);
+  }
+  // Icons and pictures, but not a drawing the size of the screen (a map, a backdrop).
+  for (const part of root.querySelectorAll("svg, img")) {
+    const q = part.getBoundingClientRect();
+    if (part.checkVisibility?.({ opacityProperty: true }) && q.width * q.height < window.innerWidth * window.innerHeight * 0.25) parts.push([part, q]);
+  }
+  return parts.filter(([, q]) => q.width >= 1 && q.height >= 1 && q.bottom > 0 && q.top < window.innerHeight);
+}
+
+const isFilled = (cs) => (cs.backgroundColor !== "rgba(0, 0, 0, 0)" && cs.backgroundColor !== "transparent") || parseFloat(cs.borderTopWidth) > 0;
+
+/** Runs in the page: the painted bounds of an element, as [left, top, right, bottom]. */
+function inkBox(el) {
+  // A box with its own fill or border paints all of itself; a bare wrapper
+  // paints only what is in it, so it starts empty and the content sets it.
+  const cs = getComputedStyle(el);
+  const painted = isFilled(cs) || cs.boxShadow !== "none" || ["INPUT", "TEXTAREA", "BUTTON", "IMG", "svg"].includes(el.tagName);
+  const box = el.getBoundingClientRect();
+  let [l, t, r, b] = painted ? [box.left, box.top, box.right, box.bottom] : [Infinity, Infinity, -Infinity, -Infinity];
+  const add = (q) => {
+    if (q.width < 1 || q.height < 1) return;
+    l = Math.min(l, q.left);
+    t = Math.min(t, q.top);
+    r = Math.max(r, q.right);
+    b = Math.max(b, q.bottom);
+  };
+  for (const [, q] of inkParts(el)) add(q);
+  for (const part of el.querySelectorAll("input, textarea, button, [role=progressbar], [role=meter]")) if (part.checkVisibility?.()) add(part.getBoundingClientRect());
+  // Filled or bordered children (chips, meters, cards) paint their whole box.
+  for (const child of el.querySelectorAll("*")) if (child.checkVisibility?.() && isFilled(getComputedStyle(child))) add(child.getBoundingClientRect());
+  if (l === Infinity) [l, t, r, b] = [box.left, box.top, box.right, box.bottom];
+  return [l, t, r, b];
+}
+
+/**
+ * Runs in the page: where a ring around an element goes, as [x, y, w, h,
+ * padLeft, padTop, padRight, padBottom]. The rect is the element's ink; the
+ * pads are the room the ring may take on each side (RING_PAD in the story
+ * player) and still keep CLEAR from other text and icons. When a neighbour is
+ * closer than that, the mark should name the block that holds both.
+ */
+function ringRect(el) {
+  const PAD = 12;
+  const CLEAR = 4;
+  let [l, t, r, b] = inkBox(el);
+  const others = inkParts(document.body)
+    .filter(([node]) => !el.contains(node) && !node.contains?.(el))
+    .map(([, q]) => q);
+  const pads = [PAD, PAD, PAD, PAD];
+  for (const q of others) {
+    const besideX = q.left < r + PAD && q.right > l - PAD;
+    const besideY = q.top < b + PAD && q.bottom > t - PAD;
+    if (besideX && q.bottom <= t) pads[1] = Math.min(pads[1], t - q.bottom - CLEAR);
+    if (besideX && q.top >= b) pads[3] = Math.min(pads[3], q.top - b - CLEAR);
+    if (besideY && q.right <= l) pads[0] = Math.min(pads[0], l - q.right - CLEAR);
+    if (besideY && q.left >= r) pads[2] = Math.min(pads[2], q.left - r - CLEAR);
+  }
+  l = Math.max(0, l);
+  t = Math.max(0, t);
+  r = Math.min(window.innerWidth, r);
+  b = Math.min(window.innerHeight, b);
+  return [l, t, r - l, b - t, ...pads.map((p) => Math.max(CLEAR, p))].map(Math.round);
+}
+
+/**
  * Runs in the page: the rect of the row or card around an element, or null.
  * That is the nearest wide ancestor that is a list item, has its own fill or
  * border with rounding, or sits beside other wide rows in its parent.
@@ -109,8 +200,7 @@ function rowRect(el) {
     const listItem = /list-item/.test(node.className?.toString?.() ?? "");
     const inList = [...(node.parentElement?.children ?? [])].filter(wide).length > 1;
     if (listItem || ((filled || bordered) && rounded) || inList) {
-      const r = node.getBoundingClientRect();
-      return [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)];
+      return window.__ringRect(node);
     }
   }
   return null;
@@ -133,6 +223,8 @@ async function main() {
   const monday = today.toISOString().slice(0, 10);
   const offset = new Intl.DateTimeFormat("en-US", { timeZone: zone, timeZoneName: "longOffset" }).formatToParts(today).find((p) => p.type === "timeZoneName").value.replace("GMT", "") || "+00:00";
   await context.clock.setFixedTime(new Date(`${monday}T14:00:00${offset}`));
+  // rowRect and the marks measure inside the page.
+  await context.addInitScript({ content: `${inkParts}; const isFilled = ${isFilled}; ${inkBox}; ${ringRect}; window.__ringRect = ringRect;` });
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
@@ -174,7 +266,7 @@ async function main() {
       let loc = page.locator(sel).first();
       for (let i = 0; i < up; i++) loc = loc.locator("xpath=..");
       const box = await loc.boundingBox().catch(() => null);
-      if (box) found[name] = [Math.round(box.x), Math.round(box.y), Math.round(box.width), Math.round(box.height)];
+      if (box) found[name] = await loc.evaluate((el) => window.__ringRect(el)).catch(() => [Math.round(box.x), Math.round(box.y), Math.round(box.width), Math.round(box.height)]);
       else errors.push(`mark ${name} (${sel}) not found`);
       // The row or card the mark sits in, for a story that rings the whole
       // row: the nearest wide ancestor with its own fill, border or rounding.
