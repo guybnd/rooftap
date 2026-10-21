@@ -13,7 +13,17 @@ Each change people would notice gets a `whats-new/` entry (see `whats-new/README
 This release ships a new APK: the widget fixes are native.
 
 - Assistant: an optional module (off by default) that answers questions about the household and proposes changes for you to approve, on web and mobile, with quick asks, named chats, a household thread and cost controls.
+- Hold the + to ask the Assistant in a pop-up chat, and pick a closed quick ask back up with Continue. You get a notification when an answer arrives after you leave.
+- The Assistant reaches recipes, checklists, Home Setup and the Shopper watchlist, and can check and control Home Assistant devices you expose to Assist. It asks before changing anything.
+- Talk to the Assistant on Telegram: link it in the Assistant's settings to ask questions and approve changes from a chat.
+- A household owner can save the household's own Gemini, OpenAI, Anthropic or OpenRouter key in Settings > AI keys, used with no limit. Without one, AI reads on the hosted service need Plus.
 - Shopper: an optional module (off by default) that watches things you want to buy, keeps the cheapest price across sources with a price history and a deal rating, and turns "Plan to buy" into a to-do and a planned cost.
+- Scout researches what to buy: describe what you need and it comes back with a short list of options and prices, and tells you when it's done.
+- After an update, Rooftap shows what changed since you last looked. Settings keeps the full list.
+- Confirm and delete prompts and toasts use Rooftap's own look instead of the system's.
+- More opens with the spaces you used last, above a grid of every section.
+- A to-do added on the phone starts due today, so it shows on Home straight away.
+- Number fields open the keyboard again on mobile.
 - The home-screen widget fills its whole box, including with a non-default display size, and taps hit the row you touch.
 - Each task row on the widget has a tick circle that finishes the task. Tapping the rest of the row opens the task. A tick shows "Finished <task>  Undo" for ten minutes.
 - Groceries has a compact header that collapses as you scroll, and while a shop is tracked a floating pill holds the running total and a finish sheet scans the receipt.
