@@ -5,6 +5,11 @@
 // native, react-native-gesture-handler's `Gesture.Pan` (mirrors
 // `swipe-actions.tsx`'s pattern) owns the tracking, and a below-threshold
 // release opens the type-exact-value TextInput instead of committing a drag.
+//
+// Tap-to-type is its own `Gesture.Tap` raced against the pan (Guy,
+// 2026-10-21: a cost's Amount could only be dragged). The pan's `onEnd` only
+// runs once the pan has activated, i.e. after it moved past TAP_SLOP_PX, so
+// the old "short release in onEnd" check never saw a tap.
 import * as React from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -124,11 +129,15 @@ export function DragNumberField({
         const deltaSteps = Math.round(event.translationX / DRAG_PX);
         runOnJS(applyDelta)(deltaSteps);
       })
-      .onEnd((event) => {
-        'worklet';
-        if (Math.abs(event.translationX) < TAP_SLOP_PX) runOnJS(enterEdit)();
-      })
   );
+  const tap = Gesture.Tap()
+    .enabled(!editing)
+    .maxDistance(TAP_SLOP_PX * 2)
+    .onEnd((_event, success) => {
+      'worklet';
+      if (success) runOnJS(enterEdit)();
+    });
+  const gesture = Gesture.Race(pan, tap);
 
   if (editing) {
     return (
@@ -159,7 +168,7 @@ export function DragNumberField({
   const display = value != null ? `${prefix ?? ''}${format(value, precision, trimTrailingZeros)}${suffix ? ` ${suffix}` : ''}` : placeholder;
 
   return (
-    <GestureDetector gesture={pan}>
+    <GestureDetector gesture={gesture}>
       <Pressable
         accessibilityRole="adjustable"
         accessibilityLabel={accessibilityLabel}
