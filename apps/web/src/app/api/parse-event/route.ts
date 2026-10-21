@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { AiBlockedError, aiBlockedResponse, recordAiRead, resolveAiKey, type ResolvedAiKey } from "@/lib/ai/access";
 import { documentBucket, normalizeParsedEvent, type Document } from "@homeup/core";
 import { parseEventDetails } from "@/lib/ai/parser";
 import { extractImagesFromPdf, extractPdfText } from "@/lib/pdf-server";
@@ -24,6 +25,13 @@ export async function POST(request: Request) {
   }
   const off = await requireModules(user.id, "calendar");
   if (off) return off;
+  let aiKey: ResolvedAiKey;
+  try {
+    aiKey = await resolveAiKey(user.id, "event");
+  } catch (e) {
+    if (e instanceof AiBlockedError) return aiBlockedResponse(e);
+    throw e;
+  }
 
   const body = await request.json().catch(() => ({}));
   const { url, documentId } = body;
@@ -52,9 +60,9 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: message }, { status: 422 });
       }
       sourceUrl = page.url;
-      raw = await parseEventDetails({ text: eventPageText(page.html), url: page.url });
+      raw = await parseEventDetails({ text: eventPageText(page.html), url: page.url }, aiKey);
     } else if (Array.isArray(images) && images.length) {
-      raw = await parseEventDetails({ images: images.slice(0, 4) });
+      raw = await parseEventDetails({ images: images.slice(0, 4) }, aiKey);
     } else {
       const base64 = String(pdf).replace(/^data:[^;]+;base64,/, "");
       const buf = Buffer.from(base64, "base64");
@@ -63,16 +71,17 @@ export async function POST(request: Request) {
       // rendering the pages when there's too little of it (a scanned ticket).
       const text = await extractPdfText(arrayBuffer.slice(0)).catch(() => "");
       if (text.trim().length >= 80) {
-        raw = await parseEventDetails({ text: text.slice(0, 30_000) });
+        raw = await parseEventDetails({ text: text.slice(0, 30_000) }, aiKey);
       } else {
         const pages = await extractImagesFromPdf(arrayBuffer);
         if (!pages.length) {
           return NextResponse.json({ error: "Could not read the PDF." }, { status: 422 });
         }
-        raw = await parseEventDetails({ images: pages.slice(0, 4) });
+        raw = await parseEventDetails({ images: pages.slice(0, 4) }, aiKey);
       }
     }
 
+    await recordAiRead(aiKey);
     const details = normalizeParsedEvent({ ...raw, source_url: sourceUrl });
     if (!details.title && !details.start_date) {
       return NextResponse.json({ error: "No event details found there." }, { status: 422 });

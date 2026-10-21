@@ -304,6 +304,7 @@ describe('server schema', () => {
       'Assistant',
       'connecting AI assistants by signing in',
       'switching Shopper price sources on and off',
+      "using your household's own AI key",
     ]);
 
     act(() => setServerSchema('20261020050000_mcp_oauth'));
@@ -327,6 +328,7 @@ describe('server schema', () => {
         'Assistant',
         'AI assistants (MCP)',
         'switching Shopper price sources on and off',
+        "using your household's own AI key",
       ]);
     } finally {
       delete mcp.minSchema;

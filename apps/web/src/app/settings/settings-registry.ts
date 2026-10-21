@@ -13,6 +13,7 @@ import { SavedSearchesSettings } from "@/components/saved-searches-settings";
 import { AgentsManager } from "@/components/agents-manager";
 import { PatSettings } from "@/components/pat-settings";
 import { ApiKeysSettings } from "@/components/api-keys-settings";
+import { HouseholdAiKeys } from "@/components/household-ai-keys";
 import { McpSettings } from "@/components/mcp-settings";
 import { UsersManager } from "@/components/users-manager";
 import { CostsSettings } from "@/components/costs-settings";
@@ -39,7 +40,7 @@ export const globalMenus: GlobalMenu[] = [
   { key: "users", label: "Users", panels: [GroupManager, UsersManager] },
   { key: "appearance", label: "Appearance", panels: [AppearanceSettings] },
   { key: "notifications", label: "Notifications", panels: [NotificationsSettings] },
-  { key: "integrations", label: "Integrations & keys", panels: [ApiKeysSettings, PatSettings, McpSettings] },
+  { key: "integrations", label: "Integrations & keys", panels: [HouseholdAiKeys, ApiKeysSettings, PatSettings, McpSettings] },
 ];
 
 // Per-section tabs. Adding a future panel/section is a single edit here (AC#7).

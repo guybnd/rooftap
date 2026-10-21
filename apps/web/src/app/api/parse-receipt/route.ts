@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { AiBlockedError, aiBlockedResponse, recordAiRead, resolveAiKey, type ResolvedAiKey } from "@/lib/ai/access";
 import { parseReceiptFromImages } from "@/lib/ai/parser";
 import { extractImagesFromPdf } from "@/lib/pdf-server";
 import { getSessionUser } from "@/lib/supabase/session";
@@ -19,6 +20,13 @@ export async function POST(request: Request) {
   // Only Groceries reads receipts today (.docs/modules.md).
   const off = await requireModules(user.id, "groceries");
   if (off) return off;
+  let aiKey: ResolvedAiKey;
+  try {
+    aiKey = await resolveAiKey(user.id, "receipt");
+  } catch (e) {
+    if (e instanceof AiBlockedError) return aiBlockedResponse(e);
+    throw e;
+  }
 
   const { images, pdf } = await request.json();
 
@@ -40,7 +48,8 @@ export async function POST(request: Request) {
       }
     }
 
-    const parsed = await parseReceiptFromImages(dataUrls);
+    const parsed = await parseReceiptFromImages(dataUrls, aiKey);
+    await recordAiRead(aiKey);
     return NextResponse.json(parsed);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Parse failed";

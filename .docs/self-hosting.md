@@ -254,6 +254,27 @@ access-token refresh path in `src/lib/google-calendar.ts`. The initial OAuth
 code-exchange step, if it runs inside an edge function, is unaffected by a
 UI-set key and still needs the value in `.env` and `docker-compose.yml`.
 
+**Households' own AI keys (HOUP-436):** separate from the operator keys
+above, any household owner can save their own Gemini, OpenAI, Anthropic or
+OpenRouter key in **Settings → Integrations & keys → AI keys**. AI reads
+(receipts, recipes, listings, events) and the assistant then use the
+household's key first, with no monthly limit, and fall back to the server's
+key only when the household has none. Keys are encrypted with
+`HOUSEHOLD_KEYS_SECRET` (AES-256-GCM, `src/lib/ai/household-keys.ts`) before
+they reach the service-role-only `household_ai_keys` table, and only the last
+four characters are ever shown again. `self-host-init.sh` generates the
+secret on first boot; without it households can't save keys. Changing it makes
+every saved key unreadable.
+
+With `ROOFTAP_BILLING` unset (every self-hosted server), every household may
+use the server's key with no cap. Hosted Rooftap sets `ROOFTAP_BILLING=on`:
+there a Free household needs its own key, Plus gets 300 reads a month on the
+server's key (`PLUS_AI_READS_PER_MONTH`, counted in `ai_usage`), and a comped
+household (`group_entitlements.billing_exempt`) has no limit. A blocked read
+answers `402` with `code` `ai_requires_plus` or `ai_allowance_used`, and a
+message that points at Settings → AI keys. The rule is core's `decideAiKey`
+(`packages/core/src/ai-keys.ts`).
+
 ## Choosing which modules your server offers
 
 Every feature (Tasks, Calendar, Groceries, Home Search and so on) is a module

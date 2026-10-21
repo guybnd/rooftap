@@ -270,14 +270,26 @@ async function callAnthropic(apiKey: string, req: StructuredParseRequest): Promi
 
 // ── Entry point ──────────────────────────────────────────────────────────
 
+/** A resolved key for one AI read (lib/ai/access.ts): the household's own, or the server's. */
+export interface AiCallKey {
+  provider: ParsingProvider;
+  apiKey: string;
+}
+
+/** The server's key for a provider, or undefined when unset or still the .env.example placeholder. */
+export async function serverProviderKey(provider: ParsingProvider): Promise<string | undefined> {
+  const apiKey = (await resolveServerKey(PROVIDER_KEY_NAMES[provider]))?.trim();
+  return apiKey && apiKey !== PROVIDER_KEY_PLACEHOLDERS[provider] ? apiKey : undefined;
+}
+
 export async function runStructuredParse(
   provider: ParsingProvider,
-  req: StructuredParseRequest
+  req: StructuredParseRequest,
+  key?: string
 ): Promise<Record<string, unknown>> {
-  const keyName = PROVIDER_KEY_NAMES[provider];
-  const apiKey = await resolveServerKey(keyName);
-  if (!apiKey || apiKey === PROVIDER_KEY_PLACEHOLDERS[provider]) {
-    throw new Error(`${keyName} is not configured`);
+  const apiKey = key ?? (await serverProviderKey(provider));
+  if (!apiKey) {
+    throw new Error(`${PROVIDER_KEY_NAMES[provider]} is not configured`);
   }
 
   return withRetry(() => {

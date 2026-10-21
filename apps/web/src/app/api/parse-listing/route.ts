@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { AiBlockedError, aiBlockedResponse, recordAiRead, resolveAiKey, type ResolvedAiKey } from "@/lib/ai/access";
 import { parseListingFromHtml, parseListingFromImages } from "@/lib/ai/parser";
 import { extractPdfText, extractImagesFromPdf } from "@/lib/pdf-server";
 import { resolveServerKey } from "@/lib/admin-config";
@@ -96,6 +97,13 @@ export async function POST(request: Request) {
   // Listings belong to Home Search (.docs/modules.md).
   const off = await requireModules(user.id, "search");
   if (off) return off;
+  let aiKey: ResolvedAiKey;
+  try {
+    aiKey = await resolveAiKey(user.id, "listing");
+  } catch (e) {
+    if (e instanceof AiBlockedError) return aiBlockedResponse(e);
+    throw e;
+  }
 
   const { url, html: providedHtml, text, images } = await request.json();
 
@@ -113,7 +121,8 @@ export async function POST(request: Request) {
 
   try {
     if (images?.length) {
-      const parsed = await parseListingFromImages(images, url);
+      const parsed = await parseListingFromImages(images, url, aiKey);
+      await recordAiRead(aiKey);
       return NextResponse.json(parsed);
     }
 
@@ -125,7 +134,8 @@ export async function POST(request: Request) {
           const buffer = await fetchPdf(pdfUrl);
           const pdfImages = await extractImagesFromPdf(buffer);
           const pdfText = await extractPdfText(buffer);
-          const parsed = await parseListingFromHtml(pdfText, url);
+          const parsed = await parseListingFromHtml(pdfText, url, aiKey);
+          await recordAiRead(aiKey);
           if (pdfImages.length > 0) {
             const supabase = createServiceClient();
             const uploadedUrls: string[] = [];
@@ -166,7 +176,8 @@ export async function POST(request: Request) {
       content = await fetchListingHtml(url);
     }
 
-    const parsed = await parseListingFromHtml(content, url || "pasted text");
+    const parsed = await parseListingFromHtml(content, url || "pasted text", aiKey);
+    await recordAiRead(aiKey);
     return NextResponse.json(parsed);
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : "Unknown error";

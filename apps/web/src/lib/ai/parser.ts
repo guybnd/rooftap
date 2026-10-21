@@ -1,5 +1,5 @@
 import { resolveParsingProvider } from "@/lib/admin-config";
-import { runStructuredParse } from "@/lib/ai/providers";
+import { runStructuredParse, type AiCallKey } from "@/lib/ai/providers";
 
 // HOUP-43: parsing now routes through `runStructuredParse`, which resolves
 // the owner's selected provider (`resolveParsingProvider`) and translates
@@ -75,8 +75,8 @@ function stripHtmlNoise(html: string): string {
     .slice(0, 40_000);
 }
 
-export async function parseListingFromHtml(html: string, url: string): Promise<ParsedListing> {
-  const provider = await resolveParsingProvider("listing");
+export async function parseListingFromHtml(html: string, url: string, key?: AiCallKey): Promise<ParsedListing> {
+  const provider = key?.provider ?? (await resolveParsingProvider("listing"));
   const cleanHtml = stripHtmlNoise(html);
 
   const parsed = await runStructuredParse(provider, {
@@ -84,13 +84,13 @@ export async function parseListingFromHtml(html: string, url: string): Promise<P
     userText: `Parse this apartment listing from ${url}:\n\n${cleanHtml}`,
     schema: LISTING_SCHEMA,
     schemaName: LISTING_SCHEMA_NAME,
-  });
+  }, key?.apiKey);
 
   return extractListingResult(parsed);
 }
 
-export async function parseListingFromImages(dataUrls: string[], url?: string): Promise<ParsedListing> {
-  const provider = await resolveParsingProvider("listing");
+export async function parseListingFromImages(dataUrls: string[], url?: string, key?: AiCallKey): Promise<ParsedListing> {
+  const provider = key?.provider ?? (await resolveParsingProvider("listing"));
 
   const parsed = await runStructuredParse(provider, {
     systemPrompt: SYSTEM_PROMPT,
@@ -98,7 +98,7 @@ export async function parseListingFromImages(dataUrls: string[], url?: string): 
     images: dataUrls,
     schema: LISTING_SCHEMA,
     schemaName: LISTING_SCHEMA_NAME,
-  });
+  }, key?.apiKey);
 
   return extractListingResult(parsed);
 }
@@ -157,8 +157,8 @@ const RECEIPT_SCHEMA = {
   additionalProperties: false,
 };
 
-export async function parseReceiptFromImages(dataUrls: string[]): Promise<ParsedReceipt> {
-  const provider = await resolveParsingProvider("receipt");
+export async function parseReceiptFromImages(dataUrls: string[], key?: AiCallKey): Promise<ParsedReceipt> {
+  const provider = key?.provider ?? (await resolveParsingProvider("receipt"));
 
   const parsed = await runStructuredParse(provider, {
     systemPrompt: RECEIPT_SYSTEM_PROMPT,
@@ -166,7 +166,7 @@ export async function parseReceiptFromImages(dataUrls: string[]): Promise<Parsed
     images: dataUrls,
     schema: RECEIPT_SCHEMA,
     schemaName: RECEIPT_SCHEMA_NAME,
-  });
+  }, key?.apiKey);
 
   const result: ParsedReceipt = {};
   if (parsed.retailer) result.retailer = String(parsed.retailer);
@@ -262,8 +262,8 @@ const RECIPE_SCHEMA = {
   required: ["title", "ingredients", "steps"],
 };
 
-export async function parseRecipeFromImages(dataUrls: string[], libraryNames: string[] = []): Promise<ParsedRecipe> {
-  const provider = await resolveParsingProvider("recipe");
+export async function parseRecipeFromImages(dataUrls: string[], libraryNames: string[] = [], key?: AiCallKey): Promise<ParsedRecipe> {
+  const provider = key?.provider ?? (await resolveParsingProvider("recipe"));
 
   // FLUX-205 (decision D2): pass the existing item library (grocery items +
   // prior recipe ingredients) so "item" can snap to OUR conventions instead of
@@ -279,7 +279,7 @@ export async function parseRecipeFromImages(dataUrls: string[], libraryNames: st
     images: dataUrls,
     schema: RECIPE_SCHEMA,
     schemaName: RECIPE_SCHEMA_NAME,
-  });
+  }, key?.apiKey);
 
   const result: ParsedRecipe = {};
   if (parsed.title) {
@@ -381,8 +381,9 @@ const EVENT_SCHEMA = {
 /** Read an event from page text (a link) or from ticket images. Returns the raw answer; callers normalize it with core's normalizeParsedEvent. */
 export async function parseEventDetails(
   input: { text: string; url?: string } | { images: string[] },
+  key?: AiCallKey,
 ): Promise<Record<string, unknown>> {
-  const provider = await resolveParsingProvider("event");
+  const provider = key?.provider ?? (await resolveParsingProvider("event"));
   const today = new Date().toISOString().slice(0, 10);
   return runStructuredParse(provider, {
     systemPrompt: EVENT_SYSTEM_PROMPT,
@@ -393,5 +394,5 @@ export async function parseEventDetails(
     images: "images" in input ? input.images : undefined,
     schema: EVENT_SCHEMA,
     schemaName: EVENT_SCHEMA_NAME,
-  });
+  }, key?.apiKey);
 }

@@ -35,9 +35,11 @@ import {
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSessionUser } from "@/lib/supabase/session";
 import { getEnabledModules } from "@/lib/server-modules";
+import { billingMode } from "@/lib/billing";
 import { executeProposals, runAssistantTurn, type Proposal } from "./engine";
 import { llmClient, type ChatMessage, type LlmClient } from "./llm";
-import { resolveServerBrain, type AssistantBrain } from "./provider";
+import { resolveHouseholdBrain, resolveServerBrain, type AssistantBrain } from "./provider";
+import { householdKeys } from "@/lib/ai/household-keys";
 import { assistantTools } from "./tools";
 
 // HOUP-443: the assistant's server side, shared by every /api/assistant
@@ -59,10 +61,7 @@ export function assistantErrorResponse(status: number, error: string, code?: Ass
   return NextResponse.json(code ? { error, code } : { error }, { status });
 }
 
-/** Hosted Rooftap sets ROOFTAP_BILLING=on; self-hosted servers leave it off, so everyone there has the assistant. */
-export function billingMode(): "on" | "off" {
-  return process.env.ROOFTAP_BILLING?.trim().toLowerCase() === "on" ? "on" : "off";
-}
+export { billingMode };
 
 /**
  * The front half of every /api/assistant route: a signed-in member, the
@@ -384,6 +383,11 @@ export function turnCost(brain: Pick<AssistantBrain, "free">, model: string, inp
   return costMicros(model, input, output, prices) ?? (brain.free ? 0 : costMicros(model, input, output, { [model]: FALLBACK_MODEL_PRICE })!);
 }
 
+/** The household's own key first (HOUP-436), then the server's. */
+export async function assistantBrain(admin: SupabaseClient, groupId: string): Promise<AssistantBrain | null> {
+  return resolveHouseholdBrain(await householdKeys(admin, groupId)) ?? (await resolveServerBrain());
+}
+
 export interface ChatDeps {
   brain?: AssistantBrain | null;
   llm?: LlmClient;
@@ -393,7 +397,7 @@ export interface ChatDeps {
 export async function runChat(ctx: AssistantContext, input: ChatInput, deps: ChatDeps = {}): Promise<ChatOutcome> {
   const text = input.text.trim();
   if (!text) return { ok: false, status: 400, error: "Say something first." };
-  const brain = deps.brain === undefined ? await resolveServerBrain() : deps.brain;
+  const brain = deps.brain === undefined ? await assistantBrain(ctx.admin, ctx.groupId) : deps.brain;
   if (!brain) return { ok: false, status: 503, error: "No AI model is set up on this server yet.", code: "assistant_not_configured" };
 
   const settings = await loadSettings(ctx.admin, ctx.groupId);

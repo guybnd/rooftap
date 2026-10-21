@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { usageMonth } from "@homeup/core";
-import { assistantRequest, listConversations, monthUsage } from "@/lib/assistant/service";
-import { resolveServerBrain } from "@/lib/assistant/provider";
+import { assistantBrain, assistantRequest, listConversations, monthUsage } from "@/lib/assistant/service";
 
 // HOUP-443: what the Home space and the Plus sheet need to know: whether this
 // household may use the assistant, whether a model is set up, what is
@@ -12,7 +11,7 @@ export async function GET() {
   if (ctx.access === "none") {
     return NextResponse.json({ access: "none", ready: false, pending: 0, spentCents: 0, isOwner: ctx.isOwner });
   }
-  const [brain, conversations, usage] = await Promise.all([resolveServerBrain(), listConversations(ctx), monthUsage(ctx.admin, ctx.groupId, usageMonth())]);
+  const [brain, conversations, usage] = await Promise.all([assistantBrain(ctx.admin, ctx.groupId), listConversations(ctx), monthUsage(ctx.admin, ctx.groupId, usageMonth())]);
   const micros = usage.reduce((t, r) => t + Number(r.cost_micros ?? 0), 0);
   return NextResponse.json({
     access: ctx.access,

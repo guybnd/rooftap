@@ -127,4 +127,14 @@ else
   echo "Reusing existing REALTIME_DB_ENC_KEY from $ENV_FILE (not regenerating)."
 fi
 
+# HOUSEHOLD_KEYS_SECRET encrypts the AI keys households save in Settings >
+# AI keys (HOUP-436). Generate once, reuse forever: a new secret makes every
+# saved key unreadable, and households would have to enter them again.
+if is_unset "HOUSEHOLD_KEYS_SECRET"; then
+  echo "First boot: generating HOUSEHOLD_KEYS_SECRET into $ENV_FILE ..."
+  upsert_env "HOUSEHOLD_KEYS_SECRET" "$(openssl rand -hex 32)"
+else
+  echo "Reusing existing HOUSEHOLD_KEYS_SECRET from $ENV_FILE (not regenerating)."
+fi
+
 exec docker compose up "$@"

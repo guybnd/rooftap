@@ -339,6 +339,14 @@ services:
       ASSISTANT_API_KEY: ${ASSISTANT_API_KEY:-}
       ASSISTANT_MODEL_PRICES: ${ASSISTANT_MODEL_PRICES:-}
       SCRAPER_API_KEY: ${SCRAPER_API_KEY:-}
+      # Shopper price sources and the daily price check (.docs/shopper-sources.md).
+      SERPAPI_API_KEY: ${SERPAPI_API_KEY:-}
+      SHOPPER_SOURCES_DISABLED: ${SHOPPER_SOURCES_DISABLED:-}
+      SHOPPER_HTTP_SOURCES: ${SHOPPER_HTTP_SOURCES:-}
+      CRON_SECRET: ${CRON_SECRET:-}
+      # Encrypts households' own AI keys (HOUP-436); self-host-init.sh
+      # generates it on first boot.
+      HOUSEHOLD_KEYS_SECRET: ${HOUSEHOLD_KEYS_SECRET:-}
       # Emails allowed to manage server-wide settings (the API keys panel).
       # Unset = nobody; see .env.example.
       SERVER_OPERATOR_EMAILS: ${SERVER_OPERATOR_EMAILS:-}

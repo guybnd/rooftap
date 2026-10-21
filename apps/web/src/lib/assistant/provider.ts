@@ -11,7 +11,7 @@ import type { LlmConnection } from "./llm";
 // ASSISTANT_MODEL and ASSISTANT_QUICK_MODEL override the default models for
 // chats and for quick asks and routines. Every value can live in admin_config
 // or the environment (resolveServerKey). A household's own key (HOUP-436)
-// slots in ahead of these later.
+// comes first: resolveHouseholdBrain.
 
 export type AssistantProvider = "gemini" | "openrouter" | "openai" | "anthropic" | "compatible";
 
@@ -100,6 +100,25 @@ export async function resolveServerBrain(lookup: Lookup = resolveServerKey): Pro
       quickModel: quickOverride ?? def.models.quick,
       free: false,
       keySource: "server",
+    };
+  }
+  return null;
+}
+
+/** The household's own brain (HOUP-436): its first key in provider order, on that provider's default models. */
+export function resolveHouseholdBrain(keys: ReadonlyMap<string, string>): AssistantBrain | null {
+  for (const provider of ASSISTANT_PROVIDERS) {
+    if (provider === "compatible") continue;
+    const apiKey = keys.get(provider);
+    if (!apiKey) continue;
+    const def = PROVIDERS[provider];
+    return {
+      provider,
+      connection: { wire: def.wire, apiKey, ...(def.baseURL ? { baseURL: def.baseURL } : {}) },
+      chatModel: def.models.chat,
+      quickModel: def.models.quick,
+      free: false,
+      keySource: "household",
     };
   }
   return null;

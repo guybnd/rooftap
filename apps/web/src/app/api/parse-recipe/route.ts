@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { AiBlockedError, aiBlockedResponse, recordAiRead, resolveAiKey, type ResolvedAiKey } from "@/lib/ai/access";
 import { parseRecipeFromImages } from "@/lib/ai/parser";
 import { extractImagesFromPdf } from "@/lib/pdf-server";
 import { getSessionUser } from "@/lib/supabase/session";
@@ -19,6 +20,13 @@ export async function POST(request: Request) {
   }
   const off = await requireModules(user.id, "recipes");
   if (off) return off;
+  let aiKey: ResolvedAiKey;
+  try {
+    aiKey = await resolveAiKey(user.id, "recipe");
+  } catch (e) {
+    if (e instanceof AiBlockedError) return aiBlockedResponse(e);
+    throw e;
+  }
 
   const { images, pdf, libraryNames } = await request.json();
 
@@ -42,7 +50,8 @@ export async function POST(request: Request) {
 
     // FLUX-205: item-library names (grocery items + prior recipe ingredients),
     // passed through to the Gemini prompt so "item" can snap to our conventions.
-    const parsed = await parseRecipeFromImages(dataUrls, Array.isArray(libraryNames) ? libraryNames : []);
+    const parsed = await parseRecipeFromImages(dataUrls, Array.isArray(libraryNames) ? libraryNames : [], aiKey);
+    await recordAiRead(aiKey);
     return NextResponse.json(parsed);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Parse failed";

@@ -37,6 +37,10 @@ export const SERVER_FEATURES = {
     minSchema: '20261021050000_shopper_source_switches',
     label: 'switching Shopper price sources on and off',
   },
+  'ai.household-keys': {
+    minSchema: '20261021061000_household_ai_keys',
+    label: "using your household's own AI key",
+  },
 } as const satisfies Record<string, ServerFeatureDef>;
 
 export type ServerFeatureId = keyof typeof SERVER_FEATURES;
