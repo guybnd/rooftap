@@ -47,6 +47,10 @@ export function SwipeActions({ children, onSwipeRight, onSwipeLeft, right, left,
 
   const onPointerDown = (e: React.PointerEvent) => {
     if (disabled) return;
+    // A right-click is the row's context menu, not a swipe: capturing the
+    // pointer here would retarget the contextmenu event to this wrapper,
+    // past the row that handles it.
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
     if ((e.target as HTMLElement).closest(NO_SWIPE)) return; // let the control handle it
     startX.current = e.clientX;
     isSwiping.current = false;

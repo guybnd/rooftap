@@ -24,7 +24,7 @@
 // button that wears a coral dot while any is on. Quick add went: the tab
 // bar's + already adds.
 
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import {
@@ -34,6 +34,7 @@ import {
   CalendarClock,
   CalendarDays,
   ChevronDown,
+  ChevronLeft,
   LayoutGrid,
   ChevronRight,
   ExternalLink,
@@ -55,6 +56,7 @@ import {
 } from '@/components/ui/list-item';
 import { LeadingTile } from '@/components/ui/leading-tile';
 import { sectionIconFor } from '@/lib/section-icons';
+import { iconAndLabelForCode, type WeatherData } from './use-weather';
 import {
   AvatarBubble,
   formatTime12h,
@@ -71,6 +73,8 @@ import {
   feedRowWhen,
   filterHeroFeed,
   groupFeedItems,
+  weekBoardColumns,
+  type WeekBoardColumn,
   heroItemSectionId,
   heroRangeCounts,
   isHeroFeedFiltered,
@@ -123,6 +127,16 @@ interface TodayHeroProps {
   checklistsById?: Record<string, Checklist>;
   /** FLUX-1565: checklist id → its live items, for the same inline panel. */
   checklistItemsByChecklistId?: Record<string, ChecklistTaskItem[]>;
+  /**
+   * Hearth §13 "Desktop shell": 'board' lays the agenda out as a week of day
+   * columns (core weekBoardColumns) for a wide screen; 'feed' is the phone's
+   * one list. Same rows, gestures and filters either way.
+   */
+  layout?: 'feed' | 'board';
+  /** The range's last day, so the board doesn't draw days the range leaves out. */
+  windowEnd?: string;
+  /** The week's forecast for the board's day headers (soft-optional, see core WeatherData.days). */
+  weatherDays?: WeatherData['days'];
 }
 
 // FLUX-239: done rows sink last — factored once so the flat (Today) sort and the
@@ -180,8 +194,13 @@ export function TodayHero({
   onRequestDelete,
   checklistsById,
   checklistItemsByChecklistId,
+  layout = 'feed',
+  windowEnd,
+  weatherDays,
 }: TodayHeroProps) {
   const router = useRouter();
+  const board = layout === 'board';
+  const boardRef = useRef<HTMLDivElement>(null);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [mineOnly, setMineOnly] = useState(false);
 
@@ -222,6 +241,31 @@ export function TodayHero({
   // Hearth v2 (Feed): bucket into feed groups for every range — Earlier
   // (overdue), each day, then undated. Item order inside a group is `visible`'s.
   const feedGroups = useMemo(() => groupFeedItems(visible, today), [visible, today]);
+  const boardColumns = useMemo(
+    () => (board ? weekBoardColumns(visible, today, windowEnd ?? today) : []),
+    [board, visible, today, windowEnd]
+  );
+  const scrollBoard = (dir: 1 | -1) => {
+    const el = boardRef.current;
+    if (!el) return;
+    const column = el.querySelector<HTMLElement>('[data-board-column]');
+    el.scrollBy({ left: dir * ((column?.offsetWidth ?? 280) + 16) * 2, behavior: 'smooth' });
+  };
+  const rowProps = {
+    profiles,
+    groupMembers,
+    onToggle,
+    onSnooze,
+    onEdit,
+    onUpdate,
+    onRequestDelete,
+    onDismissCalendar,
+    onEditEvent,
+    onHideEvent,
+    currentUserId,
+    checklistsById,
+    checklistItemsByChecklistId,
+  };
 
   // H6: the heading counts what is still to do in the visible (filtered) set,
   // the same figure its menu shows beside the current range.
@@ -271,6 +315,17 @@ export function TodayHero({
           </PopMenu>
         }
         trailing={
+          <div className="flex shrink-0 items-center gap-1">
+          {board && boardColumns.length > 4 && (
+            <>
+              <button type="button" aria-label="Earlier days" onClick={() => scrollBoard(-1)} className={BOARD_ARROW}>
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <button type="button" aria-label="Later days" onClick={() => scrollBoard(1)} className={BOARD_ARROW}>
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </>
+          )}
           <PopMenu
             align="right"
             width="w-56"
@@ -322,12 +377,28 @@ export function TodayHero({
               </>
             )}
           </PopMenu>
+          </div>
         }
       />
 
       {/* List */}
       <div id="heroList">
-        {visible.length === 0 ? (
+        {board && boardColumns.length > 0 ? (
+          <div
+            ref={boardRef}
+            // A column is narrow: titles wrap instead of truncating, and an
+            // assignee shows as their avatar alone.
+            className="-mx-1 mt-2 grid snap-x snap-mandatory auto-cols-[minmax(288px,1fr)] grid-flow-col items-start gap-4 overflow-x-auto px-1 pb-3 [scrollbar-width:thin] [&_[data-assignee-name]]:!hidden [&_[data-slot=list-item-title]]:whitespace-normal [&_[data-slot=list-item-title]_*]:whitespace-normal"
+          >
+            {boardColumns.map((column) => (
+              <BoardColumn key={column.key} column={column} today={today} weatherDays={weatherDays}>
+                {column.items.map((item) => (
+                  <HeroRow key={item.id} item={item} {...rowProps} />
+                ))}
+              </BoardColumn>
+            ))}
+          </div>
+        ) : visible.length === 0 ? (
           <div className="mt-2 rounded-3xl border border-border/60 bg-card px-4 py-8 text-center text-sm text-muted-foreground shadow-[var(--card-shadow)]">
             {items.length === 0
               ? householdVisible
@@ -341,23 +412,7 @@ export function TodayHero({
               <FeedHeader groupKey={feedGroup.key} label={feedGroup.label} />
               <ListGroup>
                 {feedGroup.items.map((item) => (
-                  <HeroRow
-                    key={item.id}
-                    item={item}
-                    profiles={profiles}
-                    groupMembers={groupMembers}
-                    onToggle={onToggle}
-                    onSnooze={onSnooze}
-                    onEdit={onEdit}
-                    onUpdate={onUpdate}
-                    onRequestDelete={onRequestDelete}
-                    onDismissCalendar={onDismissCalendar}
-                    onEditEvent={onEditEvent}
-                    onHideEvent={onHideEvent}
-                    currentUserId={currentUserId}
-                    checklistsById={checklistsById}
-                    checklistItemsByChecklistId={checklistItemsByChecklistId}
-                  />
+                  <HeroRow key={item.id} item={item} {...rowProps} />
                 ))}
               </ListGroup>
             </div>
@@ -376,6 +431,78 @@ export function TodayHero({
           All tasks
           <ChevronRight className="h-4 w-4" />
         </button>
+      )}
+    </section>
+  );
+}
+
+const BOARD_ARROW =
+  'flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground hover:bg-card hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+
+// Hearth §13 "Desktop shell": one day of the week board. Its header names
+// the day, its date and (when the server sends a forecast) the day's sky,
+// so the week reads like a planner; its items sit in one card under it, as
+// a feed day does (H4: no card in a card). An empty day says so quietly.
+function BoardColumn({
+  column,
+  today,
+  weatherDays,
+  children,
+}: {
+  column: WeekBoardColumn;
+  today: string;
+  weatherDays?: WeatherData['days'];
+  children: ReactNode;
+}) {
+  const isToday = column.date === today;
+  const dayIndex = column.date && weatherDays ? weatherDays.dates.indexOf(column.date) : -1;
+  const sky =
+    dayIndex >= 0 && weatherDays
+      ? {
+          ...iconAndLabelForCode(weatherDays.weatherCode[dayIndex]),
+          high: Math.round(weatherDays.highC[dayIndex]),
+          low: Math.round(weatherDays.lowC[dayIndex]),
+          rain: weatherDays.precipitationProbabilityMax[dayIndex],
+        }
+      : null;
+  const dayNumber = column.date ? Number(column.date.slice(8, 10)) : null;
+  return (
+    <section data-board-column aria-label={column.label} className="flex min-w-0 snap-start flex-col gap-2">
+      <header className="flex min-h-12 items-end justify-between gap-2 px-1">
+        <div className="flex min-w-0 items-baseline gap-2">
+          {dayNumber != null && (
+            <span
+              className={cn(
+                'font-heading text-[26px] font-semibold leading-none tabular-nums tracking-[-0.02em]',
+                isToday ? 'text-foreground' : 'text-muted-foreground'
+              )}
+            >
+              {dayNumber}
+            </span>
+          )}
+          <span
+            className={cn(
+              'truncate text-[10.5px] font-semibold uppercase tracking-[0.1em]',
+              column.key === 'earlier' ? 'text-destructive' : isToday ? 'text-foreground' : 'text-muted-foreground'
+            )}
+          >
+            {column.label}
+          </span>
+        </div>
+        {sky && (
+          <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground" title={sky.label}>
+            <sky.Icon aria-label={sky.label} className="h-4 w-4" />
+            <span className="font-mono tabular-nums">
+              {sky.high}° / {sky.low}°
+            </span>
+            {sky.rain >= 30 && <span className="font-mono tabular-nums">{sky.rain}%</span>}
+          </span>
+        )}
+      </header>
+      {column.items.length > 0 ? (
+        <ListGroup>{children}</ListGroup>
+      ) : (
+        <p className="px-1 py-3 text-sm text-muted-foreground/70">Nothing on</p>
       )}
     </section>
   );

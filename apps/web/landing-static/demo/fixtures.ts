@@ -6,6 +6,7 @@ import type {
   ChecklistTaskItem,
   CostItem,
   Document,
+  DocumentFolder,
   DocumentLink,
   GroceryItem,
   Group,
@@ -639,6 +640,13 @@ export const documentLinks: DocumentLink[] = [
   { id: "dl-3", document_id: "d-receipt", group_id: GROUP, entity_type: "cost_item", entity_id: "c-trip-0", link_role: "receipt", created_at: STAMP },
 ];
 
+/** The Jazz night's ticket, filed in Event tickets and linked to the event. Only the README scenes seed these. */
+export const ticketsFolder: DocumentFolder = { id: "f-tickets", group_id: GROUP, name: "Event tickets", parent_id: null, created_by: NOA, created_at: STAMP, updated_at: STAMP };
+export const jazzTicket = doc("d-jazz-ticket", "Jazz at the Lighthouse ticket", "other", { folder_id: "f-tickets", uploaded_by: NOA, tags: ["tickets"] });
+/** The robot vacuum's warranty, filed after the purchase. Only the README scenes seed it. */
+export const vacuumWarranty = doc("d-vacuum-warranty", "Roborock Q7 warranty", "warranty", { expiry_date: day(728), tags: ["appliances"], metadata: { manufacturer: "Roborock", model: "Q7", purchase_date: day(-2) }, source: "warranty", created_at: at(-2, "18:00"), updated_at: at(-2, "18:00") });
+export const jazzTicketLink: DocumentLink = { id: "dl-jazz", document_id: "d-jazz-ticket", group_id: GROUP, entity_type: "event", entity_id: "e-jazz", link_role: "ticket", created_at: STAMP };
+
 // ── Shopper ──────────────────────────────────────────────────────────────────
 const want = (id: string, title: string, extra: Partial<ShopperWant> = {}): ShopperWant => ({
   ...base,
@@ -807,6 +815,7 @@ export const assistantConversations: AssistantConversation[] = [
   conv("conv-hosting", "chat", "Hosting Saturday", 120, { pinned: true }),
   conv("conv-holiday", "chat", "Holiday in March", 3 * 24 * 60),
   conv("conv-spend", "chat", "Grocery spend this month", 2 * 24 * 60),
+  conv("conv-week", "chat", "Cooking this week", 4 * 24 * 60),
   // Quick asks still open, so each one shows its answer and takes a follow-up.
   conv("conv-dinner", "quick", "Dinner tonight", 8, { closes_at: minutesFromNow(22) }),
   conv("conv-dentist", "quick", "When is the dentist?", 12, { closes_at: minutesFromNow(18) }),
@@ -883,6 +892,15 @@ const hostingChat: AssistantMessage[] = [
   }),
 ];
 
+/** A named chat that plans the week's cooking from the recipes and the list. */
+const weekChat: AssistantMessage[] = [
+  msg("w-1", "user", 4 * 24 * 60 + 6, "What can we cook this week? Plan one shopping trip for it.", { author: "Ava" }),
+  msg("w-2", "assistant", 4 * 24 * 60 + 5, "You can make **Steak and potatoes** now with what is in the house. **Lasagne** needs ricotta and lasagne sheets. Shall I add them to the grocery list?", {
+    proposal: proposal("confirmed", [["add_recipe_to_groceries", "recipes", { recipe: "Lasagne" }, "Add a recipe's ingredients to Groceries"]]),
+  }),
+  msg("w-3", "assistant", 4 * 24 * 60 + 4, "Done. Ricotta and lasagne sheets are on the list, marked for the lasagne."),
+];
+
 /** A quick ask, read only. */
 const dinnerChat: AssistantMessage[] = [
   msg("d-1", "user", 9, "What can we cook tonight with what we have?", { author: "Ava" }),
@@ -923,6 +941,7 @@ export const assistantMessages: Record<string, AssistantMessage[]> = {
   "conv-spend": spendChat,
   "conv-dinner": dinnerChat,
   "conv-dentist": dentistChat,
+  "conv-week": weekChat,
 };
 
 /** Home Assistant, connected through its MCP Server integration, under Act. */

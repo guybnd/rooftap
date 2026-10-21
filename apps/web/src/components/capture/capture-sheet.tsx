@@ -828,7 +828,9 @@ export function CaptureSheet() {
         side="bottom"
         open={open}
         onOpenChange={setOpen}
-        className="rounded-t-2xl max-h-[88dvh] overflow-y-auto pb-[max(1rem,env(safe-area-inset-bottom))]"
+        // Desktop (Hearth §13 "Desktop shell"): a card docked above the roof +
+        // at the bottom right, like a messenger window, not a full-width sheet.
+        className="rounded-t-2xl max-h-[88dvh] overflow-y-auto pb-[max(1rem,env(safe-area-inset-bottom))] md:inset-x-auto md:bottom-24 md:right-6 md:max-h-[min(78dvh,760px)] md:w-[440px] md:rounded-[28px] md:border md:pb-4"
         style={
           keyboardInset > 0
             ? { bottom: keyboardInset, maxHeight: `calc(100dvh - ${keyboardInset}px - 1rem)` }

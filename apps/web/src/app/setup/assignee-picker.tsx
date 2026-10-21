@@ -135,7 +135,7 @@ export function AssigneePicker({
             <UserPlus className="h-3 w-3 text-warning" />
           </span>
         )}
-        {value && <span className="hidden sm:inline text-xs text-muted-foreground max-w-[6rem] truncate">{name}</span>}
+        {value && <span data-assignee-name className="hidden sm:inline text-xs text-muted-foreground max-w-[6rem] truncate">{name}</span>}
       </button>
 
       {open && mounted && createPortal(

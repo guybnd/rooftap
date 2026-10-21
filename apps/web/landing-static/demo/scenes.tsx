@@ -3,7 +3,7 @@
 // page's eight stories are told with these frames.
 import { lazy, type ComponentType, type LazyExoticComponent } from "react";
 import { buildPlanToBuyTask } from "@homeup/core";
-import { costItems, events, groceries, groceriesMidShop, grocery, SATURDAY, seed, seedTable, shopperOffers, shopperWants, tasks, todaysSession } from "./fixtures";
+import { costItems, documentLinks, documents, events, groceries, groceriesMidShop, grocery, jazzTicket, jazzTicketLink, SATURDAY, seed, seedTable, shopperOffers, shopperWants, tasks, ticketsFolder, todaysSession, vacuumWarranty } from "./fixtures";
 
 /** A tap, a drag or a wait the screenshot script performs in order, in the page. */
 export type Action =
@@ -77,6 +77,14 @@ const STORE_SEARCH = "[placeholder='Which store are you at?']";
 function groceriesView(mode: "aisle" | "flat") {
   localStorage.setItem("homeup_grocery_sort_mode", mode);
   localStorage.setItem("homeup_shopping_tooltip_dismissed", "1");
+}
+
+/** The Jazz night's ticket in Documents' Event tickets folder, linked to the event. */
+function withTicket() {
+  seed({ documents: [...documents, jazzTicket] });
+  // The demo client does not filter or embed, so the ticket's row carries its document for the event's list.
+  seedTable("document_links", [...documentLinks, { ...jazzTicketLink, documents: jazzTicket }]);
+  seedTable("document_folders", [ticketsFolder]);
 }
 
 /** The calendar opens on today; the story's night out is on Saturday. */
@@ -377,6 +385,16 @@ export const SCENES: Scene[] = [
     page: Settings,
     actions: [{ scroll: 900 }, { wait: 400 }],
   },
+
+  // README journeys: frames the landing stories do not use.
+  { id: "readme-event-ticket", path: "/calendar", page: Calendar, prepare: withTicket, actions: [...toSaturday, { click: "text=Agenda" }, { wait: 400 }, { click: "text=Jazz at the Lighthouse >> visible=true" }, { wait: 600 }, { scroll: 2000 }, { wait: 600 }] },
+  { id: "readme-documents-tickets", path: "/documents", page: Documents, prepare: withTicket },
+  { id: "readme-assistant-week", path: "/assistant/conv-week", params: { id: "conv-week" }, page: AssistantThread, actions: [{ scroll: 2000 }, { wait: 400 }] },
+  { id: "readme-homesearch", path: "/homesearch", page: HomeSearch },
+  { id: "readme-setup", path: "/setup", page: Setup },
+  { id: "readme-documents-lease", path: "/documents", page: Documents, actions: [{ click: "text=Leases >> visible=true" }, { wait: 400 }] },
+  { id: "readme-tasks-lease", path: "/tasks", page: Tasks, actions: [{ scroll: 800 }, { wait: 400 }] },
+  { id: "readme-documents-vacuum", path: "/documents", page: Documents, prepare: () => seed({ documents: [...documents, vacuumWarranty] }), actions: [{ click: "text=Warranties >> visible=true" }, { wait: 400 }] },
 ];
 
 /** The live demo's pages, by path; a path with an id matches its prefix. */

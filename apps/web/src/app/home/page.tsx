@@ -17,6 +17,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { use$ } from '@legendapp/state/react';
 import { useDataCache } from '@/lib/data-cache';
+import { cn } from '@/lib/utils';
 import { toastItemAdded } from '@/lib/added-toast';
 import { toastUndoDelete } from '@/lib/undo-toast';
 import { useTaskSnoozeUndo } from '@/app/tasks/use-task-snooze-undo';
@@ -50,6 +51,8 @@ import { HOUSEHOLD_TASKS_CHANGED_EVENT } from '@/hooks/use-overdue-task-count';
 import { buildHeroItems, heroRangeWindow, parseLocalISODate, type HeroItem, type HeroRange } from './hub-shared';
 import { TodayHero } from './today-hero';
 import { SummaryHero } from './summary-hero';
+import { useWeather } from './use-weather';
+import { useWideLayout } from '@/lib/desktop-layout';
 import { BudgetSpace, BillsSpace } from './money-spaces';
 import { GroceriesWidget } from './groceries-widget';
 import { SetupTile, HomeSearchTile, ShopperTile, AssistantTile } from './section-tiles';
@@ -557,6 +560,11 @@ export default function HomeHubPage() {
   const [editingTask, setEditingTask] = useState<HouseholdTask | undefined>();
   const [newTaskTitle, setNewTaskTitle] = useState('');
 
+  // Hearth §13 "Desktop shell": a wide screen gets the summary as a row and
+  // the agenda as a week board, with the day forecast over each column.
+  const wide = useWideLayout();
+  const { data: weather } = useWeather(group?.home_lat ?? null, group?.home_lng ?? null);
+
   // ── Hero callbacks ────────────────────────────────────────────────────────
   const onHeroToggle = (item: HeroItem) => {
     if (item.task) toggleTask(item.task);
@@ -629,7 +637,7 @@ export default function HomeHubPage() {
   // FLUX-190: the top row (tagline + global search) was removed — search now lives
   // in the "+" capture menu, and the top bar already names the section.
   return (
-    <div className="mx-auto max-w-6xl space-y-4 p-4 md:p-6 pb-24">
+    <div className={cn('mx-auto space-y-4 p-4 md:p-6 pb-24', wide ? 'max-w-[1680px] lg:px-8 lg:pt-8' : 'max-w-6xl')}>
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="lg:col-span-3 space-y-4">
           <SummaryHero
@@ -652,6 +660,7 @@ export default function HomeHubPage() {
             checklistItemsByChecklistId={taskChecklistsVisible ? checklistItemsByChecklistId : undefined}
             lens={lens}
             onLensChange={setLens}
+            wide={wide}
           />
           {!lens && agendaVisible && (
             <TodayHero
@@ -677,6 +686,9 @@ export default function HomeHubPage() {
               onHideEvent={hideEvent}
               checklistsById={taskChecklistsVisible ? checklistsById : undefined}
               checklistItemsByChecklistId={taskChecklistsVisible ? checklistItemsByChecklistId : undefined}
+              layout={wide ? 'board' : 'feed'}
+              windowEnd={heroRangeWindow(today, heroRange, upcomingDays).to}
+              weatherDays={weather?.days}
             />
           )}
         </div>

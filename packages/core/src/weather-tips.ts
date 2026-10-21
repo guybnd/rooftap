@@ -38,6 +38,19 @@ export interface WeatherData {
     tempC: number[];
     precipitationProbability: number[];
   };
+  /**
+   * The week ahead, one entry per local day starting today, for the week
+   * board's day headers on wide screens. Soft-optional: a server that
+   * predates it leaves the headers without weather.
+   */
+  days?: {
+    /** 'YYYY-MM-DD' local dates. */
+    dates: string[];
+    weatherCode: number[];
+    highC: number[];
+    lowC: number[];
+    precipitationProbabilityMax: number[];
+  };
 }
 
 export const RAIN_CODES = new Set([51, 52, 53, 54, 55, 56, 57, 61, 62, 63, 64, 65, 66, 67, 80, 81, 82, 95, 96, 97, 98, 99]);

@@ -41,15 +41,17 @@ Everything works with no AI and no AI key. The Assistant and MCP modules stay of
 
 Each module works alone. When two related modules are on, they link to each other. The screens show the demo data.
 
-<img src=".github/readme/journey-recipe-to-budget.webp" alt="Recipes adds the missing ingredients to Groceries. The shopping trip adds a cost line to Costs.">
+<img src=".github/readme/journey-recipe-scan.webp" alt="Scan a recipe in Recipes, add the missing ingredients to Groceries, track the trip, and see its cost line in Costs.">
 
-<img src=".github/readme/journey-wish-list-to-plan.webp" alt="Shopper shows the price history of an item. Plan to buy adds a task and a cost.">
+<img src=".github/readme/journey-event-ticket.webp" alt="Fill a Calendar event from its ticket. The ticket goes to the Event tickets folder in Documents, and the event shows it with a time to leave.">
 
-<img src=".github/readme/journey-paperwork-reminders.webp" alt="A warranty in Documents gets a reminder in Tasks. The reminder shows on Home.">
+<img src=".github/readme/journey-warranty-reminder.webp" alt="File a warranty in Documents with its expiry date. A reminder shows in Tasks and on Home.">
 
-<img src=".github/readme/journey-hosting-day.webp" alt="Checked items in a checklist log their cost. The checklist date makes a task, and the checklist shows in Calendar.">
+<img src=".github/readme/journey-assistant-meals.webp" alt="Ask the Assistant what you can cook this week. It adds the missing ingredients to Groceries for one trip.">
 
-<img src=".github/readme/journey-rewards-at-the-till.webp" alt="Rewards finds the card for a store. The card barcode opens from Groceries. Perks that end soon show first.">
+<img src=".github/readme/journey-new-home-lease.webp" alt="Compare places in Home Search, set up the new home in Home Setup, file the lease in Documents, and get a lease reminder in Tasks.">
+
+<img src=".github/readme/journey-shopper-warranty.webp" alt="Scout finds an item in Shopper. Watch its price, mark it bought, and file the warranty in Documents.">
 
 ## Quick start
 

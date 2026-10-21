@@ -11,6 +11,7 @@ import { useDataCache } from '@/lib/data-cache';
 import { useGroupTableRefetch } from '@/lib/hooks/use-group-table-realtime';
 import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
+import { useWideLayout } from '@/lib/desktop-layout';
 import { use$ } from '@legendapp/state/react';
 import {
   listUnifiedDocuments,
@@ -303,6 +304,7 @@ function DocumentsView() {
   // list's key, so legacy files can be ticked too. Ticks survive browsing
   // between folders, so a selection can gather files from anywhere.
   const [selecting, setSelecting] = useState(false);
+  const wide = useWideLayout();
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   // What the bulk move sheet is filing, read when it opens so its title holds
   // while it dismisses (the selection clears the moment a folder is picked).
@@ -847,7 +849,7 @@ function DocumentsView() {
   return (
     // Select mode's bar floats over the foot of the page; the last row must
     // be able to scroll clear of it.
-    <div className={cn('mx-auto max-w-3xl px-4 py-6', selecting && 'pb-28')}>
+    <div className={cn('mx-auto px-4 py-6', wide ? 'max-w-[1400px] lg:px-8' : 'max-w-3xl', selecting && 'pb-28')}>
       {/* FLUX-187: title removed, the top nav already names this section.
           Inside a folder its path heads the page as micro labels, the way
           back out. Hearth v2 (Pulse, H1): the count is the page's Hero lede,
@@ -1011,7 +1013,7 @@ function DocumentsView() {
           {childFolders.length > 0 && (
             <section>
               <DocumentsSectionLabel label="Folders" count={childFolders.length} />
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <div className={cn('grid grid-cols-2 gap-3 sm:grid-cols-3', wide && 'lg:grid-cols-4 xl:grid-cols-6')}>
                 {childFolders.map((f) => (
                   <FolderTile
                     key={f.id}
@@ -1033,12 +1035,16 @@ function DocumentsView() {
           {/* Group headers are micro labels with a count (§6). The rows
               already tint their own expiry word, so the header stays muted
               (H2). */}
-          {sections.map((section) => (
-            <section key={section.key}>
-              <DocumentsSectionLabel label={section.label} count={section.docs.length} />
-              <ListGroup>{groupByCost(section.docs).ordered.map((d) => renderCard(d))}</ListGroup>
-            </section>
-          ))}
+          {/* Hearth §13.7 "Desktop shell": on a wide screen the sections sit
+              side by side as columns. */}
+          <div className={cn(wide ? 'grid grid-cols-2 items-start gap-6 xl:grid-cols-3' : 'space-y-7')}>
+            {sections.map((section) => (
+              <section key={section.key}>
+                <DocumentsSectionLabel label={section.label} count={section.docs.length} />
+                <ListGroup>{groupByCost(section.docs).ordered.map((d) => renderCard(d))}</ListGroup>
+              </section>
+            ))}
+          </div>
         </div>
       )}
 

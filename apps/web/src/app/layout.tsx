@@ -16,6 +16,7 @@ import { PersistentStorage } from "@/components/persistent-storage";
 import { sectionHueCss } from "@/lib/section-hue-css";
 import { Toaster } from "sonner";
 import { DialogHost } from "@/components/ui/dialog-host";
+import { DESKTOP_LAYOUT_STORAGE_KEY } from "@/lib/desktop-layout-key";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono", display: "swap" });
@@ -43,7 +44,7 @@ const cinzel = Cinzel({
 // wins, anything else ("system", unset, stale) follows the device scheme.
 const PINNABLE_THEMES = JSON.stringify(THEME_IDS);
 const LIGHT_THEMES = JSON.stringify(LIGHT_THEME_IDS);
-const THEME_BOOT_SCRIPT = `try{var p=localStorage.getItem(${JSON.stringify(THEME_PREFERENCE_STORAGE_KEY)}),ids=${PINNABLE_THEMES},light=${LIGHT_THEMES},t=ids.indexOf(p)>=0?p:(window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches?${JSON.stringify(SYSTEM_THEME_IDS.dark)}:${JSON.stringify(SYSTEM_THEME_IDS.light)});document.documentElement.setAttribute("data-theme",t);if(light.indexOf(t)<0)document.documentElement.classList.add("dark")}catch(e){}`;
+const THEME_BOOT_SCRIPT = `try{var p=localStorage.getItem(${JSON.stringify(THEME_PREFERENCE_STORAGE_KEY)}),ids=${PINNABLE_THEMES},light=${LIGHT_THEMES},t=ids.indexOf(p)>=0?p:(window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches?${JSON.stringify(SYSTEM_THEME_IDS.dark)}:${JSON.stringify(SYSTEM_THEME_IDS.light)});document.documentElement.setAttribute("data-theme",t);if(light.indexOf(t)<0)document.documentElement.classList.add("dark");if(localStorage.getItem(${JSON.stringify(DESKTOP_LAYOUT_STORAGE_KEY)})==="classic")document.documentElement.setAttribute("data-layout","classic")}catch(e){}`;
 
 export const metadata: Metadata = {
   title: "Rooftap",
@@ -109,6 +110,8 @@ export default function RootLayout({
               Ember Day/Night wins over the OS scheme. */}
           <Toaster
             position="bottom-right"
+            // On a desktop the roof + docks bottom right (Hearth §13 "Desktop shell"): toasts stack above it.
+            offset={{ bottom: 96, right: 24 }}
             style={
               {
                 "--normal-bg": "var(--glass-bg)",
