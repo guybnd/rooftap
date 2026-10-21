@@ -5,9 +5,12 @@
 // The proposal card's Confirm is the one primary action on it (PC); its rows
 // follow the three-slot line item (H6). Native twin:
 // apps/mobile/src/features/assistant/assistant-parts.tsx.
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { ArrowUp, Check, X } from 'lucide-react';
 import {
+  GHOST_REPLY_GROW_MS,
+  GHOST_REPLY_LINES,
+  GHOST_REPLY_STAGGER_MS,
   formatMicros,
   parseReply,
   timeAgo,
@@ -160,15 +163,20 @@ export function MessageBubble({
   );
 }
 
+/**
+ * Rooftap working on a reply (Hearth §8 "Ghost reply"): faint lines grow
+ * where the answer will sit, one after another, shimmering until it lands.
+ */
 export function Thinking() {
   return (
-    <div className="flex items-center gap-1.5 px-1 py-2" aria-label="Rooftap is thinking" role="status">
-      {[0, 1, 2].map((i) => (
-        <span
-          key={i}
-          className="size-1.5 animate-pulse rounded-full bg-muted-foreground/60"
-          style={{ animationDelay: `${i * 160}ms` }}
-        />
+    <div className="w-full space-y-2 px-1 py-1.5" aria-label="Rooftap is thinking" role="status">
+      {GHOST_REPLY_LINES.map((width, i) => (
+        <div key={i} style={{ width: `${width * 100}%` }}>
+          <div
+            className="ghost-line h-3 rounded-full bg-muted-foreground/15"
+            style={{ '--ghost-delay': `${i * GHOST_REPLY_STAGGER_MS}ms`, '--ghost-grow': `${GHOST_REPLY_GROW_MS}ms` } as CSSProperties}
+          />
+        </div>
       ))}
     </div>
   );

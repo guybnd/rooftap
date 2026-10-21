@@ -18,6 +18,9 @@ import Animated, {
 import { ArrowUp, Check, X } from 'lucide-react-native';
 import { Text, LeadingTile, cn } from '@homeup/ui';
 import {
+  GHOST_REPLY_GROW_MS,
+  GHOST_REPLY_LINES,
+  GHOST_REPLY_STAGGER_MS,
   formatMicros,
   parseReply,
   timeAgo,
@@ -172,25 +175,39 @@ export function MessageBubble({
   );
 }
 
-function ThinkingDot({ index, still }: { index: number; still: boolean }) {
-  const opacity = useSharedValue(0.35);
+function GhostLine({ index, width, still }: { index: number; width: number; still: boolean }) {
+  const grow = useSharedValue(still ? 1 : 0);
+  const opacity = useSharedValue(1);
   React.useEffect(() => {
     if (still) return;
-    // The web twin's animate-pulse: a slow fade, staggered so the dots ripple.
-    // A looping wait indicator is the one loop Hearth allows (MO, like skeletons).
-    opacity.value = withDelay(index * 160, withRepeat(withTiming(1, { duration: 1000, easing: Easing.inOut(Easing.ease) }), -1, true));
-    return () => cancelAnimation(opacity);
-  }, [index, still, opacity]);
-  const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
-  return <Animated.View className="size-1.5 rounded-full bg-muted-foreground" style={style} />;
+    // Hearth §8 "Ghost reply": each line eases out towards its width, a beat
+    // after the one before, then shimmers like a skeleton (the one loop Hearth allows).
+    const delay = index * GHOST_REPLY_STAGGER_MS;
+    grow.value = withDelay(delay, withTiming(1, { duration: GHOST_REPLY_GROW_MS, easing: Easing.bezier(0.16, 1, 0.3, 1) }));
+    opacity.value = withDelay(
+      delay + GHOST_REPLY_GROW_MS / 3,
+      withRepeat(withTiming(0.45, { duration: 2000, easing: Easing.inOut(Easing.ease) }), -1, true)
+    );
+    return () => {
+      cancelAnimation(grow);
+      cancelAnimation(opacity);
+    };
+  }, [index, still, grow, opacity]);
+  const style = useAnimatedStyle(() => ({ opacity: opacity.value, transform: [{ scaleX: grow.value }] }));
+  return (
+    <View style={{ width: `${width * 100}%` }}>
+      <Animated.View className="h-3 rounded-full bg-muted-foreground/15" style={[{ transformOrigin: 'left' }, style]} />
+    </View>
+  );
 }
 
+/** Rooftap working on a reply: faint lines grow where the answer will sit, shimmering until it lands. */
 export function Thinking() {
   const still = useReducedMotion();
   return (
-    <View className="flex-row items-center gap-1.5 px-1 py-2" accessibilityLabel="Rooftap is thinking" accessibilityRole="progressbar">
-      {[0, 1, 2].map((i) => (
-        <ThinkingDot key={i} index={i} still={still} />
+    <View className="w-full gap-2 px-1 py-1.5" accessibilityLabel="Rooftap is thinking" accessibilityRole="progressbar">
+      {GHOST_REPLY_LINES.map((width, i) => (
+        <GhostLine key={i} index={i} width={width} still={still} />
       ))}
     </View>
   );

@@ -239,3 +239,15 @@ export function stepsCrossed(steps: readonly number[], prev: number, next: numbe
   });
   return crossed;
 }
+
+/**
+ * Hearth §8 "Ghost reply": while the assistant works, faint lines grow where
+ * its answer will sit, one after another, as if it were being written. Each
+ * line eases out towards its width (`GHOST_REPLY_LINES`, fractions of the
+ * column) over `GHOST_REPLY_GROW_MS` and starts `GHOST_REPLY_STAGGER_MS`
+ * after the one before, so a long wait still shows movement. The lines
+ * shimmer like a skeleton (the sanctioned loop) until the reply replaces them.
+ */
+export const GHOST_REPLY_LINES = [0.92, 0.78, 0.54] as const;
+export const GHOST_REPLY_STAGGER_MS = 1100;
+export const GHOST_REPLY_GROW_MS = 2400;

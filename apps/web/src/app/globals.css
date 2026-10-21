@@ -830,6 +830,28 @@
     43% { transform: scale(1.14); }
   }
 
+  /* Hearth §8 "Ghost reply": while the assistant works, each line grows from
+     the left towards its width (eased out, staggered by core
+     GHOST_REPLY_STAGGER_MS) and shimmers like a skeleton until the reply
+     replaces it. Reduced motion: the lines sit at full width, still. */
+  .ghost-line {
+    transform-origin: left center;
+    animation:
+      ghost-grow var(--ghost-grow, 2400ms) var(--motion-ease-out) var(--ghost-delay, 0ms) both,
+      ghost-shimmer 2s ease-in-out calc(var(--ghost-delay, 0ms) + var(--ghost-grow, 2400ms) / 3) infinite alternate;
+  }
+  @keyframes ghost-grow {
+    from { transform: scaleX(0); }
+    to { transform: scaleX(1); }
+  }
+  @keyframes ghost-shimmer {
+    from { opacity: 1; }
+    to { opacity: 0.45; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .ghost-line { animation: none; }
+  }
+
   /* Hearth §8 "Pop out, pop in": a tapped suggestion chip swells (fast,
      swift-out) then vanishes (fast, ease-in) before the item is re-added
      (core POP_OUT_*), and the item's row pops into its aisle (from 0.94 past
