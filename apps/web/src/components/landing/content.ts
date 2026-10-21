@@ -20,6 +20,7 @@ export const SELF_HOST_FACTS: ReadonlyArray<[string, string]> = [
   ["Modules.", "HOMEUP_MODULES lists the modules your server offers. The rest are not served."],
   ["Clients.", "The web app, and the Android app (APK). Both point at your server."],
   ["MCP.", "The MCP server runs on your machine. Your assistant talks to it, not to us."],
+  ["Assistant.", "The household assistant runs in the same app, with the model you pick, and answers on your own Telegram bot."],
   ["Google optional.", "Sign-in with Google and Calendar sync are add-ons. Everything else works without them."],
   ["Price.", "Free to self-host. Hosted plans come later."],
 ];
@@ -136,6 +137,34 @@ export const FEATURE_GROUPS: readonly FeatureGroup[] = [
     ],
   },
   {
+    section: "shopper",
+    name: "Shopper",
+    items: [
+      ["Watchlist", "the things the house wants to buy"],
+      ["Deal rating", "great, good, fair or above usual, from 90 days of prices"],
+      ["Target price", "the row says when a store reaches it"],
+      ["Price history", "a daily low per item, on your server"],
+      ["Every store", "price, distance and stock"],
+      ["Price sources", "pluggable per region, and open to new ones"],
+      ["Plan to buy", "a to-do in Tasks and a planned cost in Costs"],
+      ["Scout", "three AI picks for a brief, in progress"],
+    ],
+  },
+  {
+    section: "assistant",
+    name: "Assistant",
+    items: [
+      ["Quick asks", "close 30 minutes after the last message"],
+      ["Named chats", "kept and pinned"],
+      ["Household thread", "one thread the whole house shares"],
+      ["Trust per module", "read, ask first or act"],
+      ["Any model", "a cloud key or a local model"],
+      ["Spending", "a budget per household and per person"],
+      ["Telegram", "your own bot, history in the app"],
+      ["Memory", "facts the household can read and remove"],
+    ],
+  },
+  {
     section: "profile",
     name: "For your assistant",
     items: [
@@ -146,6 +175,28 @@ export const FEATURE_GROUPS: readonly FeatureGroup[] = [
   },
 ];
 
+/** The Assistant on a self-hosted server (.docs/self-hosting.md, "The household assistant"). */
+export const ASSISTANT_ENV: readonly string[] = [
+  "# .env: a local model in Ollama",
+  "ASSISTANT_PROVIDER=compatible",
+  "ASSISTANT_BASE_URL=http://ollama:11434/v1",
+  "ASSISTANT_MODEL=llama3.1:8b",
+  "# your own bot, from @BotFather",
+  "TELEGRAM_BOT_TOKEN=...",
+  "TELEGRAM_WEBHOOK_SECRET=...",
+  "",
+  "docker compose --profile telegram up -d",
+];
+
+export const ASSISTANT_FACTS: ReadonlyArray<[string, string]> = [
+  ["Any model.", "A key for Gemini, OpenAI, Anthropic or OpenRouter, or a local model in Ollama or LM Studio. With a local model, no prompt leaves your network."],
+  ["Your Telegram bot.", "The poller runs in Docker and needs no open ports. Each person links an account with a code. The history stays in your database."],
+  ["Trust per module.", "Read, Ask first or Act. A delete always asks. Changes under Ask first wait for a tap in the app or on Telegram."],
+  ["No caps.", "A self-hosted server has no plan and no spending limit unless an owner sets a budget."],
+  ["Spending.", "A household budget, a limit per person, and usage by person, by feature and by model."],
+  ["Hosted.", "On the hosted service the Assistant needs the Plus plan. Plus is not on sale yet."],
+];
+
 export const FAQ: ReadonlyArray<[question: string, answer: string]> = [
   ["Where is my data?", "On a server you run, in its Postgres database, when you self-host. Nothing leaves it unless you turn on an add-on such as Google Calendar sync."],
   ["What does it cost?", "Self-hosting is free. Hosted plans come later."],
@@ -154,7 +205,14 @@ export const FAQ: ReadonlyArray<[question: string, answer: string]> = [
   ["Do I need a Google account?", "No. Google sign-in and Google Calendar sync are optional."],
   ["What is the licence?", "The Elastic License 2.0. You can read the source, run it and change it for your own household. You cannot offer it to others as a hosted service."],
   ["Can my AI assistant use it?", "Yes. Rooftap has an MCP server. Each key can be read-only, limited to some tools, and set to expire."],
+  ["Is the Assistant free?", "On a self-hosted server, yes. You bring a model key or run a local model. On the hosted service the Assistant needs the Plus plan, which is not on sale yet."],
+  ["Does the Assistant change things without asking?", "Only where an owner sets a module to Act. The default is Ask first: each change waits for a tap. A delete always asks."],
+  ["Where do Shopper prices come from?", "From the sources your server has for its region. An AU server ships with Google Shopping via SerpApi, OpenStreetMap and OzBargain. You can add a price by hand, or write a source."],
 ];
+
+/** The hosted web app, and the Android APKs on the public repo's Releases page. */
+export const WEB_APP_URL = "https://homeup.vercel.app";
+export const APK_URL = "https://github.com/guybnd/rooftap/releases";
 
 export const LICENCE_URL = "https://www.elastic.co/licensing/elastic-license";
 
@@ -166,5 +224,7 @@ export const COMPARE: ReadonlyArray<[job: string, separate: string, homeup: stri
   ["Budget", "A spreadsheet", "Costs, filled by grocery trips, event tickets and contracts."],
   ["Warranties and leases", "A drive folder", "Documents that remind you before they expire."],
   ["Recipes", "A notes app", "Recipes that know what is in the house and fill the list."],
+  ["Price tracking", "A price tracker site", "Shopper, with a deal rating and a price history on your server."],
+  ["An AI for the house", "A chatbot with no access", "The Assistant, with your tasks, calendar, budget and list. In the app or on Telegram."],
   ["Where the data lives", "Each app's own servers", "One Postgres database, on your server."],
 ];

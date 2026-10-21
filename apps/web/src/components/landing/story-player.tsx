@@ -78,6 +78,9 @@ export interface Story {
   steps: readonly Step[];
 }
 
+/** The id of a story's anchor on the page, for links to it. */
+export const storyAnchor = (story: Story) => `story-${story.id}`;
+
 const marks = MARKS as unknown as Record<string, Record<string, [number, number, number, number]>>;
 
 function rectOf(target: Target, row = false): Rect {
@@ -579,6 +582,15 @@ export function StoryPlayer({ stories, eager = false }: { stories: readonly Stor
 
   return (
     <div ref={runRef} className={styles.run} style={{ height: `${n * 100 + 60}svh` }}>
+      {/* An anchor per story at the scroll offset of its first step, for the nav's module menu (goToStep's formula, in svh). */}
+      {stories.map((st) => (
+        <span
+          key={st.id}
+          id={storyAnchor(st)}
+          className={styles.storyAnchor}
+          style={{ top: `${((flat.findIndex((f) => f.story === st) + 0.5) / n) * (n * 100 - 40)}svh` }}
+        />
+      ))}
       <div ref={stageRef} className={cn(styles.stage, gl && styles.stageGl)} data-hue={sectionHue(story.room)} role="group" aria-label={story.label}>
         {/* Which section this is, at the top the whole time. */}
         <div className={styles.stageLabel}>

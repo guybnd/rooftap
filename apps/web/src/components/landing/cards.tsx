@@ -7,8 +7,9 @@ import { cn } from "@/lib/utils";
 import styles from "./landing.module.css";
 
 // Drawn phone screens for the things the app's own pages cannot show: the
-// Android home screen with the widget, a chat with an assistant, a lock
-// screen with a push, and the camera over a cookbook page. Each fills a
+// Android home screen with the widget, a chat with an assistant or with the
+// household's Telegram bot, a lock screen with a push, and the camera over a
+// cookbook page. Each fills a
 // phone (390 by 844 points) and sizes in cqw, so it scales with the phone.
 
 export function SectionTile({ sectionId, small = false }: { sectionId: string; small?: boolean }) {
@@ -109,18 +110,30 @@ export interface ChatLine {
   text: string;
   /** The MCP tools the assistant called before this line. */
   tools?: readonly string[];
+  /** Buttons under the line, as Telegram puts them under a bot's reply. */
+  buttons?: readonly string[];
 }
 
-/** A chat app with an AI assistant that has Rooftap connected over MCP. */
-export function ChatScreen({ lines, typing = false }: { lines: readonly ChatLine[]; typing?: boolean }) {
+/** A chat app with an AI assistant that has Rooftap connected over MCP, or Telegram with the household's bot. */
+export function ChatScreen({
+  lines,
+  typing = false,
+  name = "Assistant",
+  status = "Rooftap and Home Assistant connected",
+}: {
+  lines: readonly ChatLine[];
+  typing?: boolean;
+  name?: string;
+  status?: string;
+}) {
   return (
     <div className={styles.chatApp}>
       <TopInset />
       <div className={styles.chatBar}>
         <span className={styles.chatAvatar} aria-hidden="true" />
         <span>
-          <b>Assistant</b>
-          <small>Rooftap and Home Assistant connected</small>
+          <b>{name}</b>
+          <small>{status}</small>
         </span>
       </div>
       <div className={styles.chat} role="log">
@@ -134,6 +147,13 @@ export function ChatScreen({ lines, typing = false }: { lines: readonly ChatLine
               </span>
             )}
             <span className={styles.bubble}>{line.text}</span>
+            {line.buttons && (
+              <span className={styles.chatButtons}>
+                {line.buttons.map((b) => (
+                  <span key={b}>{b}</span>
+                ))}
+              </span>
+            )}
           </div>
         ))}
         {typing && (

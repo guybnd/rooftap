@@ -1,16 +1,16 @@
 "use client";
 
-import { Fragment } from "react";
+import { Fragment, useEffect, useRef, type MouseEvent } from "react";
 import { cn } from "@/lib/utils";
 import { AskPanel } from "./ask";
 import { SectionTile } from "./cards";
-import { COMPARE, FAQ, HERO_FACTS, FEATURE_GROUPS, LICENCE_URL, SELF_HOST_FACTS, SELF_HOST_STEPS } from "./content";
+import { APK_URL, ASSISTANT_ENV, ASSISTANT_FACTS, COMPARE, FAQ, HERO_FACTS, FEATURE_GROUPS, LICENCE_URL, SELF_HOST_FACTS, SELF_HOST_STEPS, WEB_APP_URL } from "./content";
 import { Fits } from "./fits";
 import { HeroPhone } from "./hero-phone";
 import styles from "./landing.module.css";
 import { SignIn, SignInHref } from "./sign-in";
 import { HERO_STORIES, ROOM_STORIES } from "./stories";
-import { StoryPlayer } from "./story-player";
+import { StoryPlayer, storyAnchor } from "./story-player";
 
 /**
  * Without JavaScript the story stages cannot play, so each one becomes a
@@ -26,6 +26,11 @@ const NO_SCRIPT_CSS = `
 .${styles.steps},.${styles.lines}{display:none}
 `;
 
+/** Closes the Modules menu once a module is picked. */
+function closeMenuOnPick(e: MouseEvent<HTMLDetailsElement>) {
+  if ((e.target as Element).closest("a")) e.currentTarget.open = false;
+}
+
 export function LandingPage({
   signInHref = "/login",
   privacyHref = "/privacy",
@@ -36,6 +41,17 @@ export function LandingPage({
   /** The live demo's address. Only the static site builds the demo. */
   demoHref?: string | null;
 }) {
+  // A tap anywhere outside the open Modules menu closes it.
+  const menuRef = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    const close = (e: PointerEvent) => {
+      const menu = menuRef.current;
+      if (menu?.open && !menu.contains(e.target as Node)) menu.open = false;
+    };
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, []);
+
   return (
     <SignInHref.Provider value={signInHref}>
       {/* Always Ember Night: the page is presented at night whatever the device's theme. */}
@@ -47,11 +63,22 @@ export function LandingPage({
               Rooftap
             </a>
             <nav className={styles.navLinks} aria-label="Page">
-              <a href="#modules" className={styles.navLink}>
-                Modules
-              </a>
+              <details ref={menuRef} className={styles.navMenu} onClick={closeMenuOnPick}>
+                <summary className={styles.navLink}>Modules</summary>
+                <div className={styles.navMenuList}>
+                  {[...HERO_STORIES, ...ROOM_STORIES].map((story) => (
+                    <a key={story.id} href={`#${storyAnchor(story)}`}>
+                      <SectionTile sectionId={story.room} small />
+                      {story.eyebrow}
+                    </a>
+                  ))}
+                </div>
+              </details>
               <a href="#self-host" className={styles.navLink}>
                 Self-host
+              </a>
+              <a href="#assistant" className={styles.navLink}>
+                Assistant
               </a>
               <a href="#features" className={styles.navLink}>
                 Features
@@ -73,15 +100,26 @@ export function LandingPage({
                   Your home, your server.
                 </h1>
                 <p className={styles.sectionLede}>
-                  One shared app for the tasks, groceries, costs, calendar, recipes, documents and checklists of a household. Everyone in the house sees each change as it happens.
+                  One shared app for the tasks, groceries, costs, calendar, recipes, documents, checklists and shopping of a household. Everyone in the house sees each change as it happens.
                 </p>
-                <p className={styles.sectionLede}>Run it on a machine you own with one script. The web app and the Android app point at your server.</p>
+                <p className={styles.sectionLede}>
+                  Run it on a machine you own with one script. The web app and the Android app point at your server. A household assistant runs there too, with your model and your Telegram bot.
+                </p>
                 <div className={styles.ctaRow}>
                   <a href="#self-host" className={styles.button}>
                     Run your own
                   </a>
                   <a href="#modules" className={styles.ghost}>
                     See the modules
+                  </a>
+                </div>
+                <div className={cn(styles.ctaRow, styles.tryRow)}>
+                  <span>Try it</span>
+                  <a href={WEB_APP_URL} className={styles.ghost}>
+                    Open the web app
+                  </a>
+                  <a href={APK_URL} className={styles.ghost}>
+                    Download the Android APK
                   </a>
                 </div>
                 <p className={styles.heroFacts}>
@@ -124,7 +162,7 @@ export function LandingPage({
               <div className={styles.sectionHead}>
                 <p className={styles.eyebrow}>Instead of</p>
                 <h2 id="compare-title" className={cn(styles.display, styles.sectionTitle)}>
-                  One app, not six
+                  One app, not eight
                 </h2>
               </div>
               <div className={styles.compareWrap}>
@@ -153,8 +191,33 @@ export function LandingPage({
           <section id="assistant" className={styles.section} aria-labelledby="assistant-title">
             <div className={cn(styles.wrap, styles.split)}>
               <div className={styles.sectionHead}>
-                <p className={styles.eyebrow}>MCP server</p>
+                <p className={styles.eyebrow}>Self-hosted assistant</p>
                 <h2 id="assistant-title" className={cn(styles.display, styles.sectionTitle)}>
+                  An assistant on your own server
+                </h2>
+                <p className={styles.sectionLede}>
+                  The Assistant module runs inside your Rooftap server. It reads and, with your OK, changes the tasks, the calendar, the budget and the grocery list. Pick the model. Talk to it in the app or through your own Telegram bot.
+                </p>
+                <pre className={styles.code}>
+                  <code>{ASSISTANT_ENV.join("\n")}</code>
+                </pre>
+              </div>
+              <dl className={cn(styles.hostFacts, styles.assistantFacts)}>
+                {ASSISTANT_FACTS.map(([name, text]) => (
+                  <div key={name}>
+                    <dt>{name}</dt>
+                    <dd>{text}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          </section>
+
+          <section id="mcp" className={styles.section} aria-labelledby="mcp-title">
+            <div className={cn(styles.wrap, styles.split)}>
+              <div className={styles.sectionHead}>
+                <p className={styles.eyebrow}>MCP server</p>
+                <h2 id="mcp-title" className={cn(styles.display, styles.sectionTitle)}>
                   Ask your assistant
                 </h2>
                 <p className={styles.sectionLede}>
@@ -262,6 +325,7 @@ export function LandingPage({
             <nav className={styles.footerLinks} aria-label="Footer">
               <a href="#modules">Modules</a>
               <a href="#self-host">Self-host</a>
+              <a href="#assistant">Assistant</a>
               <a href="#features">Every feature</a>
               <a href="#faq">FAQ</a>
               <a href={privacyHref}>Privacy</a>

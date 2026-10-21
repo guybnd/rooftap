@@ -74,6 +74,59 @@
   align-items: center;
   gap: 6px;
 }
+/* The Modules menu: a shortcut to each module's story. */
+.navMenu {
+  position: relative;
+}
+.navMenu > summary {
+  gap: 6px;
+  cursor: pointer;
+  list-style: none;
+}
+.navMenu > summary::-webkit-details-marker {
+  display: none;
+}
+.navMenu > summary::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  margin-top: -3px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg);
+  opacity: 0.6;
+}
+.navMenu[open] > summary::after {
+  margin-top: 3px;
+  transform: rotate(225deg);
+}
+.navMenuList {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: grid;
+  min-width: 260px;
+  padding: 6px;
+  border-radius: 20px;
+  background: var(--card);
+  box-shadow: var(--card-shadow), 0 18px 48px rgb(0 0 0 / 0.45);
+}
+.navMenuList a {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 6px 10px;
+  border-radius: 14px;
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--foreground);
+}
+.navMenuList a:hover,
+.navMenuList a:focus-visible {
+  background: var(--muted);
+}
 
 .button {
   display: inline-flex;
@@ -122,6 +175,13 @@
    behind (three.js) draws the room's hue and the streams between them. */
 .run {
   position: relative;
+}
+.storyAnchor {
+  position: absolute;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
 }
 .stage {
   position: sticky;
@@ -627,7 +687,8 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .navLinks .navLink {
+  .navLinks .navLink,
+  .navLinks .navMenu {
     display: none;
   }
   .steps {
@@ -924,6 +985,7 @@
   border-radius: 1.4em;
   font-size: 1em;
   line-height: 1.4;
+  white-space: pre-line;
   background: var(--card);
   box-shadow: var(--card-shadow);
 }
@@ -947,6 +1009,20 @@
   border-radius: 999px;
   background: var(--muted);
   color: var(--muted-foreground);
+}
+.chatButtons {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 0.3em;
+}
+.chatButtons span {
+  padding: 0.6em 1em;
+  border-radius: 0.8em;
+  text-align: center;
+  font-size: 0.9em;
+  font-weight: 600;
+  background: color-mix(in oklab, var(--card) 70%, transparent);
 }
 .typing {
   display: inline-flex;
@@ -1195,6 +1271,16 @@
 }
 .heroText .ctaRow {
   margin-top: 6px;
+}
+.tryRow {
+  align-items: center;
+}
+.tryRow > span {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  color: var(--muted-foreground);
+  margin-right: 4px;
 }
 .heroFacts {
   font-family: var(--font-mono), ui-monospace, monospace;
@@ -1565,6 +1651,16 @@
 }
 .split .sectionHead {
   margin-bottom: 0;
+}
+/* The self-hosted assistant: the .env lines on a card, the facts beside them. */
+.split .code {
+  margin-top: 24px;
+  background: var(--card);
+  box-shadow: var(--card-shadow);
+}
+.assistantFacts {
+  margin-top: 0;
+  grid-template-columns: minmax(0, 1fr);
 }
 .ask {
   display: grid;

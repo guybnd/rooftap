@@ -32,6 +32,15 @@ export const SCREEN_IDS = [
   "tasks",
   "tasks-gym",
   "tasks-plain",
+  "tasks-shopper",
+  "shopper",
+  "shopper-item",
+  "shopper-item-buy",
+  "assistant",
+  "assistant-household",
+  "assistant-telegram",
+  "assistant-settings",
+  "assistant-spending",
 ] as const;
 
 export type ScreenId = (typeof SCREEN_IDS)[number];
@@ -66,6 +75,15 @@ export const SCREEN_ALT: Record<ScreenId, string> = {
   tasks: "The Tasks screen, with this week's chores and reminders from other rooms",
   "tasks-gym": "The Tasks screen scrolled to the gym contract's renewal task, three weeks before its notice date",
   "tasks-plain": "The Tasks screen with only the chores people wrote: bins, plants and the plumber",
+  "tasks-shopper": "The Tasks screen with a to-do from Shopper: buy the Roborock Q7 robot vacuum at JB Hi-Fi on Saturday",
+  shopper: "Shopper: two items at a good price now, four watched, each with its deal word, usual price and trend",
+  "shopper-item": "The Roborock Q7 robot vacuum in Shopper: 449 dollars at JB Hi-Fi, hit target, 31 percent under usual, with 90 days of price history",
+  "shopper-item-buy": "Where to buy the robot vacuum: five stores by price, the sources, a deal shared on OzBargain, and the Plan to buy button",
+  assistant: "The Assistant space: one change waiting on your OK, the ask field, the Household thread, two chats and the quick asks",
+  "assistant-household": "The household thread: Ava asks to book the plumber, and the assistant proposes a calendar event and a budget line with Do all 2",
+  "assistant-telegram": "The household thread from its start: Noa's message and the reply came from Telegram, and the milk and eggs were added",
+  "assistant-settings": "Settings for the Assistant: Read, Ask or Act per module, and the models for chats and quick asks",
+  "assistant-spending": "Assistant spending: a 5 dollar monthly budget, and a switch to the cheaper model at the limit",
 };
 
 /** The frame's address. Relative, so the same markup works at / and on GitHub Pages. */

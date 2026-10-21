@@ -1,6 +1,18 @@
 // window.fetch for the screen demo: the API routes the pages call, answered
 // from the fixtures. Anything else gets an empty 200.
-import { at, SATURDAY, googleEvents } from "./fixtures";
+import {
+  assistantConversations,
+  assistantSettings,
+  assistantStatus,
+  assistantTelegram,
+  assistantUsage,
+  at,
+  householdThread,
+  SATURDAY,
+  googleEvents,
+  shopperDeals,
+  shopperSources,
+} from "./fixtures";
 
 type Answer = (url: URL, init?: RequestInit) => unknown;
 
@@ -53,6 +65,25 @@ const answers: [RegExp, Answer][] = [
     }),
   ],
   [/^\/api\/public-config/, () => ({ modules: null })],
+  // Shopper: prices are already in the stores; a check finds what is there.
+  [/^\/api\/shopper\/sources/, () => ({ sources: shopperSources })],
+  [/^\/api\/shopper\/deals/, (url) => ({ deals: url.searchParams.get("wantId") === "w-vacuum" ? shopperDeals : [] })],
+  [/^\/api\/shopper\/lookup/, () => ({ offers: 5, sources: ["serpapi-google-shopping"], failed: [] })],
+  // Assistant.
+  [/^\/api\/assistant\/status/, () => assistantStatus],
+  [
+    /^\/api\/assistant\/conversations\/./,
+    (url) => {
+      const id = decodeURIComponent(url.pathname.split("/").pop() ?? "");
+      const conversation = assistantConversations.find((c) => c.id === id) ?? assistantConversations[0];
+      return { conversation, messages: conversation.kind === "household" ? householdThread : [] };
+    },
+  ],
+  [/^\/api\/assistant\/conversations/, () => ({ conversations: assistantConversations })],
+  [/^\/api\/assistant\/settings/, () => ({ settings: assistantSettings, isOwner: true })],
+  [/^\/api\/assistant\/usage/, () => assistantUsage],
+  [/^\/api\/assistant\/memories/, () => ({ memories: [{ id: "mem-1", text: "Noa is vegetarian", source: "agent", created_at: at(-20, "19:00") }, { id: "mem-2", text: "We shop at FreshCo on Saturdays", source: "manual", created_at: at(-14, "10:00") }] })],
+  [/^\/api\/assistant\/telegram/, () => assistantTelegram],
 ];
 
 export function installFetchShim() {

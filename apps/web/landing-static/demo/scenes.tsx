@@ -2,7 +2,8 @@
 // state, and what the screenshot script taps before it shoots. The landing
 // page's eight stories are told with these frames.
 import { lazy, type ComponentType, type LazyExoticComponent } from "react";
-import { costItems, events, groceries, groceriesMidShop, grocery, SATURDAY, seed, seedTable, tasks, todaysSession } from "./fixtures";
+import { buildPlanToBuyTask } from "@homeup/core";
+import { costItems, events, groceries, groceriesMidShop, grocery, SATURDAY, seed, seedTable, shopperOffers, shopperWants, tasks, todaysSession } from "./fixtures";
 
 /** A tap, a drag or a wait the screenshot script performs in order, in the page. */
 export type Action =
@@ -37,6 +38,15 @@ const Documents = lazy(() => import("../../src/app/documents/page"));
 const ChecklistDetail = lazy(() => import("../../src/app/checklists/[id]/page"));
 const Checklists = lazy(() => import("../../src/app/checklists/page"));
 const Tasks = lazy(() => import("../../src/app/tasks/page"));
+const Shopper = lazy(() => import("../../src/app/shopper/page"));
+const ShopperItem = lazy(() => import("../../src/app/shopper/[id]/page"));
+const Assistant = lazy(() => import("../../src/app/assistant/page"));
+const AssistantThread = lazy(() => import("../../src/app/assistant/[id]/page"));
+const Settings = lazy(() => import("../../src/app/settings/[key]/page"));
+
+/** The to-do that Plan to buy writes for the robot vacuum, at the cheapest store. */
+const planToBuyTask = () =>
+  buildPlanToBuyTask({ id: "t-buy-vacuum", want: shopperWants.find((w) => w.id === "w-vacuum")!, offer: shopperOffers.find((o) => o.id === "o-vac-jb")!, priceLabel: "$449.00 at JB Hi-Fi" });
 
 function groceriesView(mode: "aisle" | "flat") {
   localStorage.setItem("homeup_grocery_sort_mode", mode);
@@ -161,6 +171,81 @@ export const SCENES: Scene[] = [
       seedTable("household_tasks", own);
     },
   },
+
+  // Shopper: the watchlist, one item's price history and stores, and the to-do Plan to buy writes.
+  {
+    id: "shopper",
+    path: "/shopper",
+    page: Shopper,
+    marks: {
+      good: ["text=at a good price now", 2],
+      vacuum: '[class*="list-item"]:has-text("Roborock")',
+      airfryer: '[class*="list-item"]:has-text("air fryer")',
+      bike: '[class*="list-item"]:has-text("bike")',
+      desk: '[class*="list-item"]:has-text("Standing desk")',
+    },
+  },
+  {
+    id: "shopper-item",
+    path: "/shopper/w-vacuum",
+    params: { id: "w-vacuum" },
+    page: ShopperItem,
+    marks: { hero: ["text=cheapest nearby", 2], verdict: "text=/Hit target/", history: ["text=Price history", 2], jb: '[class*="list-item"]:has-text("JB Hi-Fi")' },
+  },
+  {
+    id: "shopper-item-buy",
+    path: "/shopper/w-vacuum",
+    params: { id: "w-vacuum" },
+    page: ShopperItem,
+    actions: [{ scroll: 600 }, { wait: 400 }],
+    marks: { offers: ["text=Where to buy", 2], manual: '[class*="list-item"]:has-text("Bing Lee")', deals: ["text=Deals people shared", 1], plan: "text=Plan to buy", sources: "text=/Prices from/" },
+  },
+  {
+    id: "tasks-shopper",
+    path: "/tasks",
+    page: Tasks,
+    prepare: () => seed({ household_tasks: [planToBuyTask(), ...tasks] }),
+    marks: { buy: "text=Buy Roborock Q7 robot vacuum at JB Hi-Fi >> visible=true" },
+  },
+
+  // Assistant: the space, the household thread with Telegram in it, and its settings.
+  {
+    id: "assistant",
+    path: "/assistant",
+    page: Assistant,
+    marks: { pending: ["text=waiting on your OK", 2], ask: "textarea", household: '[class*="list-item"]:has-text("Household")', chats: '[class*="list-item"]:has-text("Hosting Saturday")', quick: '[class*="list-item"]:has-text("Dinner tonight")' },
+  },
+  {
+    id: "assistant-household",
+    path: "/assistant/household",
+    params: { id: "household" },
+    page: AssistantThread,
+    actions: [{ scroll: 2000 }, { wait: 400 }],
+    marks: { ava: ["text=Book the plumber", 1], proposal: ["text=Add \"Plumber\" to Calendar", 3], doAll: "text=Do all 2" },
+  },
+  // The same thread from its start: Noa's message came from Telegram.
+  {
+    id: "assistant-telegram",
+    path: "/assistant/household",
+    params: { id: "household" },
+    page: AssistantThread,
+    actions: [{ scroll: -2000 }, { wait: 400 }],
+    marks: { noa: ["text=Are the bins tonight", 1], tag: "text=52m ago · Telegram", groceries: ["text=Add \"Milk\" to Groceries", 3], done: "text=Done >> visible=true" },
+  },
+  {
+    id: "assistant-settings",
+    path: "/settings/assistant",
+    params: { key: "assistant" },
+    page: Settings,
+    marks: { trust: ["text=What it may do", 3], models: ["text=Models", 3] },
+  },
+  {
+    id: "assistant-spending",
+    path: "/settings/assistant",
+    params: { key: "assistant" },
+    page: Settings,
+    actions: [{ scroll: 900 }, { wait: 400 }],
+  },
 ];
 
 /** The live demo's pages, by path; a path with an id matches its prefix. */
@@ -175,6 +260,8 @@ const LIVE_PAGES: ReadonlyArray<[path: string, page: LazyExoticComponent<Compone
   ["/checklists/", ChecklistDetail],
   ["/checklists", Checklists],
   ["/tasks", Tasks],
+  ["/shopper/", ShopperItem],
+  ["/shopper", Shopper],
 ];
 
 export function livePage(path: string): LazyExoticComponent<ComponentType> | null {

@@ -169,7 +169,7 @@ export default function AssistantThreadPage() {
   const own = conversation && conversation.kind !== 'household';
 
   return (
-    <div className="mx-auto flex min-h-[calc(100dvh-4rem)] max-w-3xl flex-col p-4 md:p-6">
+    <div className="mx-auto flex min-h-[calc(100dvh-4rem)] max-w-3xl flex-col p-4 pb-24 md:p-6">
       <div className="flex items-center gap-1">
         <Link
           href="/assistant"

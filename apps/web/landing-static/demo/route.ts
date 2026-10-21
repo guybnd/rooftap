@@ -36,6 +36,7 @@ export function useDemoRoute(): DemoRoute {
 const PARAM_ROUTES: ReadonlyArray<[prefix: string, name: string]> = [
   ["/recipes/", "id"],
   ["/checklists/", "id"],
+  ["/shopper/", "id"],
 ];
 
 const history: DemoRoute[] = [];

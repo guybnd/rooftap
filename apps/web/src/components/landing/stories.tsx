@@ -247,10 +247,10 @@ const chat2d: ChatLine[] = [...chat2c, { from: "assistant", tools: ["homeup · c
 
 const chat = (lines: ChatLine[], label: string, typing = false): Screen => ({ node: <ChatScreen lines={lines} typing={typing} />, label });
 
-export const ASSISTANT_STORY: Story = {
-  id: "assistant",
+export const MCP_STORY: Story = {
+  id: "mcp",
   room: "household",
-  eyebrow: "AI assistant · MCP",
+  eyebrow: "Your own agent · MCP",
   label: "AI assistants over MCP: a chat that reads the groceries, and a sensor battery that becomes a grocery item and a to-do",
   steps: [
     {
@@ -284,6 +284,146 @@ export const ASSISTANT_STORY: Story = {
       ],
       a: chat(chat1, "A chat with an assistant: What can I cook with what we have?"),
       b: "recipes",
+    },
+  ],
+};
+
+export const SHOPPER_STORY: Story = {
+  id: "shopper",
+  room: "shopper",
+  eyebrow: "Shopper",
+  label: "Shopper: a watchlist with a deal rating per item, a price history, every store's price, and a plan to buy that lands in Tasks and Costs",
+  steps: [
+    {
+      title: "A watchlist with a deal rating",
+      features: [
+        point("Good now.", "The count of watched items at a good price today, and how many hit your target.", at("a", m("shopper", "good"))),
+        play("Deal rating.", "Great at the 90-day low or 15% under the usual price. Good at 5 to 15% under. Fair within 5%. Above usual over that.", [
+          { at: 200, highlight: at("a", m("shopper", "airfryer")) },
+          { at: 1600, highlight: at("a", m("shopper", "desk")) },
+          { at: 3000, highlight: null },
+        ]),
+        play("Target price.", "Set the price you want to pay. The row says Hit target when a store reaches it.", [
+          { at: 200, highlight: at("a", m("shopper", "vacuum")) },
+          { at: 1400, tap: m("shopper", "vacuum") },
+          { at: 1900, show: { b: "shopper-item" } },
+          { at: 1900, pop: "b" },
+          { at: 2200, highlight: at("b", m("shopper-item", "verdict")) },
+          { at: 4200, highlight: null },
+        ]),
+        fact("Ideas and bought.", "Keep ideas without a price check. Bought items keep their last price."),
+      ],
+      a: "shopper",
+      b: "shopper-item",
+    },
+    {
+      title: "Price history on your server",
+      features: [
+        point("Cheapest now.", "The lowest price found, and the store distance when the store is near you.", at("a", m("shopper-item", "hero"))),
+        point("Price history.", "One daily low per item, over 30 days, 90 days or a year. The usual range is marked.", at("a", m("shopper-item", "history"))),
+        point("Every store.", "Each store's price, cheapest first, with its distance and stock.", at("a", m("shopper-item", "jb"))),
+        fact("Daily check.", "A cron job calls the refresh route once a day. It checks each watched item again."),
+      ],
+      a: "shopper-item",
+    },
+    {
+      title: "Pluggable price sources",
+      features: [
+        point("Sources by region.", "An AU server ships with Google Shopping via SerpApi, store locations from OpenStreetMap and deals from OzBargain.", at("a", m("shopper-item-buy", "sources"))),
+        point("Your own price.", "Add a price you saw in a store. It sits with the others.", at("a", m("shopper-item-buy", "manual"))),
+        point("Shared deals.", "Posts from deal sites that match the item.", at("a", m("shopper-item-buy", "deals"))),
+        play("Plan to buy.", "One tap writes a to-do in Tasks and a planned cost in Costs, at the cheapest store.", [
+          { at: 300, tap: m("shopper-item-buy", "plan") },
+          { at: 900, show: { b: "tasks-shopper" } },
+          { at: 900, pop: "b" },
+          { at: 1200, highlight: at("b", m("tasks-shopper", "buy"), true) },
+          { at: 3400, highlight: null },
+        ]),
+        fact("Add a source.", "A source is a manifest and one server file, or a web service you run. The contributor guide is in the repo."),
+        fact("Scout, in progress.", "Describe what you need and a budget. Scout returns three picks with the reason for each."),
+      ],
+      a: "shopper-item-buy",
+      b: "tasks",
+    },
+  ],
+};
+
+const tg = (lines: ChatLine[], label: string, typing = false): Screen => ({
+  node: <ChatScreen lines={lines} typing={typing} name="Wattle St" status="bot" />,
+  label,
+});
+const tg1: ChatLine[] = [{ from: "you", text: "We need dishwasher tablets, and the recycling is full" }];
+const tg1b: ChatLine[] = [
+  ...tg1,
+  { from: "assistant", text: "Two changes wait for your OK:\n• Add \"Dishwasher tablets\" to Groceries\n• Add \"Take out the recycling\" to Tasks", buttons: ["Do all 2", "Not now"] },
+];
+const tg1c: ChatLine[] = [...tg1b, { from: "assistant", text: "Done. Dishwasher tablets are on the list, and the task is due tonight." }];
+
+export const ASSISTANT_STORY: Story = {
+  id: "assistant",
+  room: "assistant",
+  eyebrow: "Assistant",
+  label: "The Assistant: quick asks, named chats and a household thread, changes that wait for an OK, trust and spending per household, and Telegram",
+  steps: [
+    {
+      title: "A household assistant in the app",
+      features: [
+        point("Quick asks.", "Ask from the top of the space. A quick ask takes follow-ups for 30 minutes, then closes.", at("a", m("assistant", "quick"))),
+        point("Named chats.", "Keep a conversation under a name. Pin it to keep it on top.", at("a", m("assistant", "chats"))),
+        play("Household thread.", "One thread for the whole house. Each message shows who wrote it.", [
+          { at: 200, highlight: at("a", m("assistant", "household")) },
+          { at: 1200, tap: m("assistant", "household") },
+          { at: 1700, show: { b: "assistant-household" } },
+          { at: 1700, pop: "b" },
+        ]),
+        point("Waiting on your OK.", "The count of changes that wait for a tap.", at("a", m("assistant", "pending"))),
+      ],
+      a: "assistant",
+      b: "assistant-household",
+    },
+    {
+      title: "Changes wait for your OK",
+      features: [
+        point("Proposals.", "Under Ask first, each change is one line on a card, with the module it goes to.", at("a", m("assistant-household", "proposal"))),
+        play("Do all 2.", "One tap makes both changes. Not now drops them.", [{ at: 300, tap: m("assistant-household", "doAll") }]),
+        fact("What it reaches.", "Tasks, the calendar, the budget and the grocery list, with the same tools as the MCP server."),
+        fact("Memory.", "It keeps short facts about the household. Anyone in the home can read and remove them."),
+      ],
+      a: "assistant-household",
+    },
+    {
+      title: "Trust, models and spending",
+      features: [
+        point("Trust per module.", "Read only looks things up. Ask first proposes each change. Act makes the change. A delete always asks.", at("a", m("assistant-settings", "trust"))),
+        point("Any model.", "Gemini, OpenAI, Anthropic, OpenRouter, or a local model in Ollama or LM Studio. Quick asks can use a cheaper model.", at("a", m("assistant-settings", "models"))),
+        play("Spending.", "A monthly budget for the household and a limit per person. At the limit: warn, switch to the cheaper model, or stop.", [{ at: 300, pop: "b" }]),
+        fact("Usage.", "Spend by person, by feature and by model. A local model counts as free."),
+      ],
+      a: "assistant-settings",
+      b: "assistant-spending",
+    },
+    {
+      title: "Telegram, on your own bot",
+      features: [
+        play("Your bot.", "Make a bot with BotFather and put its token in .env. The telegram profile polls from your server, with no open ports.", [
+          { at: 300, show: { b: tg(tg1, "A Telegram chat with the household's bot: we need dishwasher tablets, and the recycling is full") } },
+          { at: 300, pop: "b" },
+          { at: 900, show: { b: tg(tg1, "The bot is typing", true) } },
+          { at: 1900, show: { b: tg(tg1b, "The bot lists two changes that wait for an OK, with Do all 2 and Not now buttons") } },
+        ]),
+        play("Buttons for changes.", "A change under Ask first arrives with buttons under the reply. One tap makes it.", [
+          { at: 0, show: { b: tg(tg1b, "The bot lists two changes that wait for an OK, with Do all 2 and Not now buttons") } },
+          { at: 1600, show: { b: tg(tg1c, "The bot: done, dishwasher tablets are on the list and the task is due tonight") } },
+        ]),
+        play("One history.", "Messages from Telegram are stored on your server like any other. The app shows them, marked Telegram.", [
+          { at: 200, highlight: at("a", m("assistant-telegram", "tag")) },
+          { at: 1600, highlight: at("a", m("assistant-telegram", "noa"), true) },
+          { at: 3200, highlight: null },
+        ]),
+        fact("Private or in a group.", "Each person links an account with a code. In a group the bot answers when mentioned, in the household thread."),
+      ],
+      a: "assistant-telegram",
+      b: tg(tg1, "A Telegram chat with the household's bot: we need dishwasher tablets, and the recycling is full"),
     },
   ],
 };
@@ -426,4 +566,4 @@ export const NATIVE_STORY: Story = {
 /** The first stage: the Home dashboard, under the self-hosting section. */
 export const HERO_STORIES: readonly Story[] = [HOME_STORY];
 /** The modules, one continuous stage, the Android app last. */
-export const ROOM_STORIES: readonly Story[] = [GROCERIES_STORY, CALENDAR_STORY, RECIPES_STORY, ASSISTANT_STORY, COSTS_STORY, DOCUMENTS_STORY, CHECKLISTS_STORY, NATIVE_STORY];
+export const ROOM_STORIES: readonly Story[] = [GROCERIES_STORY, CALENDAR_STORY, RECIPES_STORY, SHOPPER_STORY, ASSISTANT_STORY, MCP_STORY, COSTS_STORY, DOCUMENTS_STORY, CHECKLISTS_STORY, NATIVE_STORY];

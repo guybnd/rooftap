@@ -15,8 +15,16 @@ import type {
   LoyaltyCard,
   Recipe,
   RecipeIngredient,
+  AssistantConversation,
+  AssistantMessage,
+  AssistantStatus,
+  AssistantUsage,
+  ShopperOffer,
+  ShopperPriceSnapshot,
+  ShopperWant,
   UserSettings,
 } from "@homeup/core";
+import type { AssistantSettings, ModuleId } from "@homeup/core";
 
 export const GROUP = "demo-home";
 export const AVA = "user-ava";
@@ -552,6 +560,199 @@ export const documentLinks: DocumentLink[] = [
   { id: "dl-3", document_id: "d-receipt", group_id: GROUP, entity_type: "cost_item", entity_id: "c-trip-0", link_role: "receipt", created_at: STAMP },
 ];
 
+// ── Shopper ──────────────────────────────────────────────────────────────────
+const want = (id: string, title: string, extra: Partial<ShopperWant> = {}): ShopperWant => ({
+  ...base,
+  id,
+  title,
+  query: title,
+  target_cents: null,
+  budget_cents: null,
+  status: "watching",
+  need_by: null,
+  notes: null,
+  best_cents: null,
+  best_store: null,
+  last_checked_at: at(0, "13:10"),
+  bought_at: null,
+  created_by: AVA,
+  ...extra,
+});
+
+export const shopperWants: ShopperWant[] = [
+  want("w-vacuum", "Roborock Q7 robot vacuum", { need_by: day(SATURDAY), target_cents: 50000, best_cents: 44900, best_store: "JB Hi-Fi" }),
+  want("w-airfryer", "Ninja dual air fryer", { best_cents: 25900, best_store: "Big W", created_by: NOA }),
+  want("w-bike", "Kids' bike, 20 inch", { target_cents: 28000, best_cents: 32900, best_store: "Rebel", created_by: NOA }),
+  want("w-desk", "Standing desk", { best_cents: 64900, best_store: "Officeworks" }),
+  want("w-pizza", "Pizza oven", { status: "idea", last_checked_at: null }),
+  want("w-rug", "Hallway runner", { status: "idea", last_checked_at: null, created_by: MIA }),
+  want("w-kettle", "Kettle", { status: "bought", best_cents: 8900, best_store: "Kmart", bought_at: at(-12, "10:00") }),
+];
+
+/** One daily low per want over 90 days: a wobble around the usual price, then today's. */
+function history(wantId: string, usual: number, today: number, swing: number, recent: [days: number, cents: number][] = []): ShopperPriceSnapshot[] {
+  return Array.from({ length: 90 }, (_, i) => {
+    const ago = 89 - i;
+    const near = recent.find(([d]) => ago <= d);
+    const wobble = Math.round((Math.sin(i * 0.7) + Math.sin(i * 0.23)) * swing) * 100;
+    const cents = ago === 0 ? today : near ? near[1] : usual + wobble;
+    return {
+      ...base,
+      id: `s-${wantId}-${ago}`,
+      want_id: wantId,
+      source_id: "serpapi-google-shopping",
+      store: "Google Shopping",
+      price_cents: cents,
+      currency: "AUD",
+      captured_on: day(-ago),
+    };
+  });
+}
+
+export const shopperSnapshots: ShopperPriceSnapshot[] = [
+  ...history("w-vacuum", 64900, 44900, 12, [[1, 47900]]),
+  ...history("w-airfryer", 27900, 25900, 4),
+  ...history("w-bike", 32900, 32900, 6),
+  ...history("w-desk", 59900, 64900, 8, [[6, 64900]]),
+];
+
+const offer = (id: string, wantId: string, store: string, cents: number, extra: Partial<ShopperOffer> = {}): ShopperOffer => ({
+  ...base,
+  id,
+  want_id: wantId,
+  source_id: "serpapi-google-shopping",
+  store,
+  title: store,
+  url: null,
+  price_cents: cents,
+  currency: "AUD",
+  in_stock: true,
+  distance_m: null,
+  checked_at: at(0, "13:10"),
+  ...extra,
+});
+
+export const shopperOffers: ShopperOffer[] = [
+  offer("o-vac-jb", "w-vacuum", "JB Hi-Fi", 44900, { distance_m: 2400 }),
+  offer("o-vac-gg", "w-vacuum", "The Good Guys", 47900, { distance_m: 5100 }),
+  offer("o-vac-amz", "w-vacuum", "Amazon AU", 49900, { in_stock: null }),
+  offer("o-vac-hn", "w-vacuum", "Harvey Norman", 54900, { distance_m: 3800, in_stock: false }),
+  offer("o-vac-manual", "w-vacuum", "Bing Lee", 52900, { source_id: "manual", in_stock: null }),
+];
+
+/** The sources a self-hosted AU server ships with, as /api/shopper/sources lists them. */
+export const shopperSources = [
+  { id: "serpapi-google-shopping", name: "Google Shopping", capabilities: ["offers"], attribution: "Google Shopping via SerpApi", homepage: "https://serpapi.com", enabled: true },
+  { id: "osm-stores", name: "OpenStreetMap", capabilities: ["stores"], attribution: "Store locations © OpenStreetMap contributors", homepage: "https://www.openstreetmap.org", enabled: true },
+  { id: "ozbargain", name: "OzBargain", capabilities: ["deals"], attribution: "Deals from OzBargain", homepage: "https://www.ozbargain.com.au", enabled: true },
+];
+
+export const shopperDeals = [
+  { title: "Roborock Q7 Max robot vacuum $449 at JB Hi-Fi", url: "https://www.ozbargain.com.au/", posted_at: at(-1, "08:40"), source: "OzBargain" },
+];
+
+// ── Assistant ────────────────────────────────────────────────────────────────
+const minutesAgo = (m: number) => new Date(now.getTime() - m * 60_000).toISOString();
+
+const conv = (id: string, kind: AssistantConversation["kind"], title: string | null, activeMinutesAgo: number, extra: Partial<AssistantConversation> = {}): AssistantConversation => ({
+  id,
+  kind,
+  title,
+  pinned: false,
+  last_active_at: minutesAgo(activeMinutesAgo),
+  closes_at: null,
+  pending: 0,
+  ...extra,
+});
+
+export const assistantConversations: AssistantConversation[] = [
+  conv("conv-household", "household", null, 6, { pending: 1 }),
+  conv("conv-hosting", "chat", "Hosting Saturday", 120, { pinned: true }),
+  conv("conv-holiday", "chat", "Holiday in March", 3 * 24 * 60),
+  conv("conv-dinner", "quick", "Dinner tonight", 8, { closes_at: new Date(now.getTime() + 22 * 60_000).toISOString() }),
+  conv("conv-dentist", "quick", "When is the dentist?", 26 * 60, { closes_at: minutesAgo(25 * 60) }),
+  conv("conv-groceries-spend", "quick", "Grocery spend this month", 2 * 24 * 60, { closes_at: minutesAgo(47 * 60) }),
+];
+
+// The summaries are core's describeProposal lines, written out: core's
+// runtime is not loaded yet when the stores read these fixtures.
+const proposal = (state: "pending" | "confirmed", items: [tool: string, module: ModuleId, args: Record<string, unknown>, summary: string][]) => ({
+  state,
+  items: items.map(([tool, module, args, summary]) => ({ tool, module, args, summary })),
+});
+
+const msg = (id: string, role: AssistantMessage["role"], minutes: number, content: string, extra: Partial<AssistantMessage> = {}): AssistantMessage => ({
+  id,
+  role,
+  content,
+  author: null,
+  channel: "app",
+  created_at: minutesAgo(minutes),
+  proposal: null,
+  cost_micros: null,
+  ...extra,
+});
+
+/** The household thread: Noa on Telegram, Ava in the app, one answer each. */
+export const householdThread: AssistantMessage[] = [
+  msg("m-1", "user", 52, "We are out of milk and eggs. Are the bins tonight?", { author: "Noa", channel: "telegram" }),
+  msg("m-2", "assistant", 51, "Yes. **Bins out** is due at 7 PM tonight and it is assigned to you. Shall I add milk and eggs to the list?", {
+    channel: "telegram",
+    proposal: proposal("confirmed", [
+      ["create_grocery_item", "groceries", { name: "Milk" }, 'Add "Milk" to Groceries'],
+      ["create_grocery_item", "groceries", { name: "Eggs" }, 'Add "Eggs" to Groceries'],
+    ]),
+  }),
+  msg("m-3", "user", 7, "Book the plumber for Thursday at 9 and put the call-out fee in the budget.", { author: "Ava" }),
+  msg("m-4", "assistant", 6, "The call-out fee from the quote is **$120**. These two changes wait for your OK:", {
+    proposal: proposal("pending", [
+      ["create_event", "calendar", { title: "Plumber" }, 'Add "Plumber" to Calendar'],
+      ["create_cost_item", "costs", { name: "Plumber call-out" }, 'Add "Plumber call-out" to Budget'],
+    ]),
+  }),
+];
+
+export const assistantStatus: AssistantStatus = { access: "unlimited", ready: true, pending: 1, spentCents: 184, isOwner: true };
+
+/** Self-hosted: Gemini Flash for chats, a local Llama for quick asks, no budget. */
+export const assistantSettings: AssistantSettings = {
+  trust: { groceries: "act", household: "ask", calendar: "ask", costs: "read" },
+  chatModel: "gemini-3.1-flash-lite",
+  quickModel: "ollama/llama3.1:8b",
+  contextMessages: 12,
+  quickAskIdleMinutes: 30,
+  monthlyBudgetCents: 500,
+  atLimit: "cheap",
+  warnAtPercent: 80,
+  showCostPerReply: true,
+};
+
+const slice = (key: string, label: string, costMicros: number, turns: number) => ({ key, label, costMicros, turns, tokens: turns * 2400 });
+
+export const assistantUsage: AssistantUsage = {
+  month: `${day(0).slice(0, 7)}-01`,
+  summary: {
+    costMicros: 1_840_000,
+    turns: 212,
+    tokens: 508_800,
+    byPerson: [slice(AVA, "Ava", 1_020_000, 104), slice(NOA, "Noa", 640_000, 81), slice(MIA, "Mia", 180_000, 27)],
+    byFeature: [slice("chat", "Chats", 1_120_000, 96), slice("household", "Household thread", 560_000, 58), slice("quick", "Quick asks", 160_000, 58)],
+    byModel: [slice("gemini-3.1-flash-lite", "gemini-3.1-flash-lite", 1_840_000, 154), slice("ollama/llama3.1:8b", "ollama/llama3.1:8b", 0, 58)],
+  },
+  budgetCents: 500,
+  warnAtPercent: 80,
+  allowanceCents: null,
+  serverMicros: 0,
+  members: [
+    { userId: AVA, name: "Ava", budgetCents: null, readOnly: false, spentMicros: 1_020_000 },
+    { userId: NOA, name: "Noa", budgetCents: 200, readOnly: false, spentMicros: 640_000 },
+    { userId: MIA, name: "Mia", budgetCents: 50, readOnly: true, spentMicros: 180_000 },
+  ],
+  isOwner: true,
+};
+
+export const assistantTelegram = { configured: true, botUsername: "wattle_st_bot", linked: { username: "ava_k", since: at(-9, "20:00") } };
+
 // ── Assembled ────────────────────────────────────────────────────────────────
 const byId = <T extends { id: string }>(rows: T[]) => Object.fromEntries(rows.map((r) => [r.id, r]));
 
@@ -584,6 +785,9 @@ export const HOUSEHOLD: Household = {
     events: byId(events),
     recipes: byId(recipes),
     recipe_ingredients: byId(recipeIngredients),
+    shopper_wants: byId(shopperWants),
+    shopper_offers: byId(shopperOffers),
+    shopper_price_snapshots: byId(shopperSnapshots),
   },
   tables: {
     document_links: documentLinks,
