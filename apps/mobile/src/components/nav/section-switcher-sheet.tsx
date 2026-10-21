@@ -18,6 +18,7 @@ import { Settings } from 'lucide-react-native';
 import {
   Text,
   BottomSheet,
+  BottomSheetScrollView,
   LeadingTile,
   ListGroup,
   ListItem,
@@ -97,91 +98,96 @@ export function SectionSwitcherSheet({
         </Pressable>
       </View>
 
-      {showNavItemsGroup && (
-        <View className="px-3 pb-3">
-          {currentSectionLabel && (
-            <Text className="cap-inscription px-1 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-              {currentSectionLabel}
-            </Text>
-          )}
-          <ListGroup className="border-0 bg-transparent">
-            {navItems.map((item) => {
-              const Icon = sectionIcons[item.iconId];
-              const showBadge = item.badge === 'overdueTasks' && overdueCount > 0;
+      {/* Every visible section plus Settings can outgrow the sheet's 88% cap
+          on a short phone: the list scrolls under the fixed header instead
+          of clipping its last rows. */}
+      <BottomSheetScrollView>
+        {showNavItemsGroup && (
+          <View className="px-3 pb-3">
+            {currentSectionLabel && (
+              <Text className="cap-inscription px-1 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+                {currentSectionLabel}
+              </Text>
+            )}
+            <ListGroup className="border-0 bg-transparent">
+              {navItems.map((item) => {
+                const Icon = sectionIcons[item.iconId];
+                const showBadge = item.badge === 'overdueTasks' && overdueCount > 0;
+                return (
+                  <ListItem key={item.href} onPress={() => onSelectNavItem(item.href)}>
+                    <ListItemLeading>
+                      {Icon && <Icon size={20} className={item.accent ? 'text-primary' : 'text-muted-foreground'} />}
+                    </ListItemLeading>
+                    <ListItemContent>
+                      <ListItemTitle className={item.accent ? 'text-primary' : undefined}>{item.label}</ListItemTitle>
+                    </ListItemContent>
+                    {showBadge && (
+                      <ListItemTrailing>
+                        <NavBadge count={overdueCount} />
+                      </ListItemTrailing>
+                    )}
+                  </ListItem>
+                );
+              })}
+            </ListGroup>
+          </View>
+        )}
+
+        {sections.length > 0 && (
+          <ListGroup className="mx-3 border-0 bg-transparent">
+            {sections.map((section) => {
+              const Icon = sectionIcons[section.iconId];
+              const active = section.id === currentSectionId;
+              const showBadge = overdueCount > 0 && section.navItems.some((i) => i.badge === 'overdueTasks');
+              const inBar = !!barSectionIds?.has(section.id);
+              // Same language as the tab bar (Hearth v2 H2, navigation): every
+              // section leads with its own identity tile, and the one you're on
+              // names itself in its glyph hue.
               return (
-                <ListItem key={item.href} onPress={() => onSelectNavItem(item.href)}>
-                  <ListItemLeading>
-                    {Icon && <Icon size={20} className={item.accent ? 'text-primary' : 'text-muted-foreground'} />}
-                  </ListItemLeading>
+                <ListItem
+                  key={section.id}
+                  onPress={() => onSelect(section)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                  className="items-center"
+                >
+                  {Icon && <LeadingTile sectionId={section.id} Icon={Icon} size="sm" />}
                   <ListItemContent>
-                    <ListItemTitle className={item.accent ? 'text-primary' : undefined}>{item.label}</ListItemTitle>
+                    <ListItemTitle
+                      className={active ? 'font-semibold' : undefined}
+                      style={active ? { color: sectionHueSwatch(section.id, scheme).glyph } : undefined}
+                    >
+                      {section.label}
+                    </ListItemTitle>
                   </ListItemContent>
-                  {showBadge && (
-                    <ListItemTrailing>
-                      <NavBadge count={overdueCount} />
+                  {(showBadge || inBar) && (
+                    <ListItemTrailing className="items-center gap-2">
+                      {inBar && <Text className="text-caption text-muted-foreground">In bar</Text>}
+                      {showBadge && <NavBadge count={overdueCount} />}
                     </ListItemTrailing>
                   )}
                 </ListItem>
               );
             })}
           </ListGroup>
-        </View>
-      )}
+        )}
 
-      {sections.length > 0 && (
-        <ListGroup className="mx-3 border-0 bg-transparent">
-          {sections.map((section) => {
-            const Icon = sectionIcons[section.iconId];
-            const active = section.id === currentSectionId;
-            const showBadge = overdueCount > 0 && section.navItems.some((i) => i.badge === 'overdueTasks');
-            const inBar = !!barSectionIds?.has(section.id);
-            // Same language as the tab bar (Hearth v2 H2, navigation): every
-            // section leads with its own identity tile, and the one you're on
-            // names itself in its glyph hue.
-            return (
-              <ListItem
-                key={section.id}
-                onPress={() => onSelect(section)}
-                accessibilityRole="button"
-                accessibilityState={{ selected: active }}
-                className="items-center"
-              >
-                {Icon && <LeadingTile sectionId={section.id} Icon={Icon} size="sm" />}
-                <ListItemContent>
-                  <ListItemTitle
-                    className={active ? 'font-semibold' : undefined}
-                    style={active ? { color: sectionHueSwatch(section.id, scheme).glyph } : undefined}
-                  >
-                    {section.label}
-                  </ListItemTitle>
-                </ListItemContent>
-                {(showBadge || inBar) && (
-                  <ListItemTrailing className="items-center gap-2">
-                    {inBar && <Text className="text-caption text-muted-foreground">In bar</Text>}
-                    {showBadge && <NavBadge count={overdueCount} />}
-                  </ListItemTrailing>
-                )}
-              </ListItem>
-            );
-          })}
+        <ListGroup className="mx-3 mt-2 border-0 bg-transparent">
+          <ListItem
+            onPress={() => {
+              onOpenChange(false);
+              router.push('/settings');
+            }}
+            className="items-center"
+          >
+            {/* Tile-sized slot so the label lines up with the section rows above. */}
+            <ListItemLeading className="mt-0 h-7 w-7">
+              <Settings size={20} className="text-muted-foreground" />
+            </ListItemLeading>
+            <ListItemTitle>Settings</ListItemTitle>
+          </ListItem>
         </ListGroup>
-      )}
-
-      <ListGroup className="mx-3 mt-2 border-0 bg-transparent">
-        <ListItem
-          onPress={() => {
-            onOpenChange(false);
-            router.push('/settings');
-          }}
-          className="items-center"
-        >
-          {/* Tile-sized slot so the label lines up with the section rows above. */}
-          <ListItemLeading className="mt-0 h-7 w-7">
-            <Settings size={20} className="text-muted-foreground" />
-          </ListItemLeading>
-          <ListItemTitle>Settings</ListItemTitle>
-        </ListItem>
-      </ListGroup>
+      </BottomSheetScrollView>
     </BottomSheet>
   );
 }

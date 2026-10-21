@@ -36,6 +36,17 @@
 // Reanimated) because this Modal is a separate native window on Android —
 // see use-keyboard-offset.ts and the root KeyboardProvider in
 // apps/mobile/src/app/_layout.tsx.
+//
+// The Modal's first frame on Android is laid out at the screen height minus
+// the status and navigation bars (RN's ModalHostViewComponentDescriptor
+// seeds it from getEncodedScreenSizeWithoutVerticalInsets); only once the
+// edge-to-edge dialog window attaches does it re-lay out at full height. A
+// `max-h-[88%]` sheet resolved against the short frame came out ~40dp
+// shorter, so a sheet that fills its cap (the More sheet) clipped its last
+// row, then grew under the finger. The content root is sized to the app's
+// own frame (useSafeAreaFrame, the same edge-to-edge window) from the first
+// frame instead, and the wrappers shrink so an over-tall body scrolls in a
+// BottomSheetScrollView rather than overflowing the cap.
 import * as React from 'react';
 import { Modal, Pressable, useWindowDimensions, View, type ViewProps } from 'react-native';
 import {
@@ -55,7 +66,7 @@ import Animated, {
   withTiming,
   type SharedValue,
 } from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaFrame, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { cn } from '../lib/cn';
 import { tick } from '../lib/haptics';
 import { useKeyboardOffset } from '../hooks/use-keyboard-offset';
@@ -153,6 +164,7 @@ export function BottomSheet({
   ...props
 }: BottomSheetProps) {
   const insets = useSafeAreaInsets();
+  const frame = useSafeAreaFrame();
   const material = useThemeMaterial();
   const { height: windowHeight } = useWindowDimensions();
   const offscreenFallback = windowHeight || OFFSCREEN_FALLBACK;
@@ -293,8 +305,21 @@ export function BottomSheet({
   const backdropStyle = useAnimatedStyle(() => ({ opacity: scrimOpacity.value }));
 
   return (
-    <Modal transparent visible={visible} animationType="none" onRequestClose={close} statusBarTranslucent>
-      <GestureHandlerRootView style={{ flex: 1 }}>
+    <Modal
+      transparent
+      visible={visible}
+      animationType="none"
+      onRequestClose={close}
+      statusBarTranslucent
+      navigationBarTranslucent
+    >
+      <GestureHandlerRootView
+        style={
+          frame.height > 0
+            ? { position: 'absolute', left: 0, top: 0, width: frame.width, height: frame.height }
+            : { flex: 1 }
+        }
+      >
         <AnimatedPressable
           accessibilityLabel="Close"
           onPress={close}
@@ -314,13 +339,13 @@ export function BottomSheet({
             className={cn('absolute inset-x-0 bottom-0 max-h-[88%] rounded-t-2xl border-t', className)}
             {...props}
           >
-            <Animated.View style={keyboardCapStyle}>
+            <Animated.View style={[{ flexShrink: 1 }, keyboardCapStyle]}>
               {showHandle && (
                 <View className={cn('items-center py-3', handleClassName)}>
                   <View className={cn('h-1.5 w-12 rounded-full bg-foreground/20', handleIndicatorClassName)} />
                 </View>
               )}
-              <View style={{ paddingBottom: insets.bottom }}>
+              <View style={{ flexShrink: 1, paddingBottom: insets.bottom }}>
                 <BottomSheetContext.Provider value={bottomSheetContext}>{children}</BottomSheetContext.Provider>
               </View>
             </Animated.View>
