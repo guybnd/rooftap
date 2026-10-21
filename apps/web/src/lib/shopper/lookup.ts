@@ -6,6 +6,8 @@ import {
   householdCurrency,
   isSourceApplicable,
   mergeSourceOffers,
+  offerMismatch,
+  relevantOffers,
   parseSourceIds,
   sortOffers,
   storeKey,
@@ -134,7 +136,9 @@ export async function runLookup(admin: SupabaseClient, want: ShopperWant, group:
     }),
   );
 
-  const merged = sortOffers(mergeSourceOffers(found));
+  // Only the thing itself counts: no cables "for LG C5", no LG fridges.
+  const relevant = relevantOffers(query, found, { referenceCents: want.target_cents ?? want.budget_cents });
+  const merged = sortOffers(mergeSourceOffers(relevant));
   await addDistances(merged, ctx, off);
 
   const now = new Date().toISOString();
@@ -148,6 +152,15 @@ export async function runLookup(admin: SupabaseClient, want: ShopperWant, group:
       .from("shopper_offers")
       .update({ deleted: true })
       .eq("want_id", want.id)
+      .neq("source_id", "manual")
+      .eq("deleted", false);
+    // Today's point is this check's, so a re-check replaces it (and clears
+    // anything an earlier, less careful check counted).
+    await admin
+      .from("shopper_price_snapshots")
+      .update({ deleted: true })
+      .eq("want_id", want.id)
+      .eq("captured_on", today)
       .neq("source_id", "manual")
       .eq("deleted", false);
   }
@@ -227,7 +240,9 @@ export async function findDeals(want: ShopperWant, group: Group): Promise<(Sourc
   const out: (SourceDeal & { source: string })[] = [];
   for (const { source, ctx: callCtx } of await applicableSources(ctx, "deals", householdDisabledSources(group))) {
     try {
-      for (const d of (await source.deals?.(wantQuery(want), callCtx)) ?? []) out.push({ ...d, source: source.manifest.attribution });
+      for (const d of (await source.deals?.(wantQuery(want), callCtx)) ?? []) {
+        if (offerMismatch(wantQuery(want), d.title) === null) out.push({ ...d, source: source.manifest.attribution });
+      }
     } catch (err) {
       console.warn(`shopper deals source ${source.manifest.id} failed:`, err instanceof Error ? err.message : err);
     }

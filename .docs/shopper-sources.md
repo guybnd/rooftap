@@ -95,6 +95,15 @@ The server sends each request as a `POST` with `Content-Type: application/json`,
 
 The server checks everything that comes back against the same rules as an in-repo source, and drops anything that breaks them. A non-2xx answer counts as "didn't answer" for that check.
 
+## Only the thing itself
+
+Sources search by words, so a search for "LG C5" also turns up a power cable "for LG C5" and an LG fridge. Before anything is saved, the server keeps only offers that are the product (`relevantOffers` in `packages/core/src/shopper-relevance.ts`):
+- a title must carry every model-like word of the search ("c5", also inside "OLED65C5PSA") and at least half of the other words;
+- add-ons are dropped (cable, remote, mount, replacement, spare, "for LG C5" and similar) unless the search itself asks for one;
+- a price under 30% of the matching offers' median, or under 25% of the household's target or budget, is dropped as a different product.
+
+Shared deals pass the same title check. A source doesn't need to do any of this itself, but returning fewer, better matches is still kinder to its rate limit.
+
 ## Rules a source must follow
 
 `checkSourceOffers` enforces the first group of rules. Reviewers check the rest.
