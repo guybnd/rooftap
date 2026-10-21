@@ -46,6 +46,8 @@ import { useFuzzySearch } from '@/hooks/use-fuzzy-search';
 import { CostDashboard } from './cost-chart';
 import { PopMenu, MenuItem, MenuLabel } from '../setup/pop-menu';
 import { memberLabel, memberAvatar } from '../setup/member-label';
+import { useWideLayout } from '@/lib/desktop-layout';
+import { cn } from '@/lib/utils';
 
 // FLUX-150 slice 2: Legend-State local-first migration
 
@@ -92,6 +94,7 @@ export default function CostsPage() {
 
   const [period, setPeriod] = useState<Period>('monthly');
   const [search, setSearch] = useState('');
+  const wide = useWideLayout();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<CostItem | undefined>();
 
@@ -400,7 +403,7 @@ export default function CostsPage() {
   }, {} as Record<string, CostItem[]>);
 
   return (
-    <div className="space-y-5 p-4 md:p-6 max-w-5xl mx-auto pb-24">
+    <div className={cn('space-y-5 p-4 md:p-6 mx-auto pb-24', wide ? 'max-w-[1400px] lg:px-8' : 'max-w-5xl')}>
       {/* Section head (Hearth v2 §11): the screen's actions on the right; the
           Hero lede below is the first thing on the ground. */}
       <div className="flex items-center justify-end gap-2">
@@ -436,6 +439,10 @@ export default function CostsPage() {
         </button>
       </div>
 
+      {/* Hearth §13.7 "Desktop shell": on a wide screen the dashboard holds
+          still on the left while the costs scroll on the right. */}
+      <div className={wide ? 'grid grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] items-start gap-8' : 'space-y-5'}>
+      <div className={cn('space-y-5', wide && 'sticky top-4')}>
       {items.length > 0 && (
         <CostDashboard
           items={searchedItems}
@@ -462,7 +469,9 @@ export default function CostsPage() {
           onSelectCategory={(cat) => setSelectedCategory((prev) => (prev === cat ? null : cat))}
         />
       )}
+      </div>
 
+      <div className="space-y-5">
       {/* From your other sections — pull in rent & setup total */}
       {(() => {
         if (hideSectionSuggestions) return null;
@@ -674,6 +683,8 @@ export default function CostsPage() {
           )}
         </>
       )}
+      </div>
+      </div>
 
       {/* Bulk action bar */}
       {selectMode && selectedIds.size > 0 && (
