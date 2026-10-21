@@ -104,7 +104,6 @@ export function SummaryHero({
   checklistItemsByChecklistId,
   lens,
   onLensChange,
-  wide = false,
 }: {
   lat: number | null;
   lng: number | null;
@@ -133,12 +132,6 @@ export function SummaryHero({
   /** Hearth v2: the shortcut Home is filtered to (its Space, expanded); the Now card steps aside while one is open. */
   lens: HomeLensKey | null;
   onLensChange: (lens: HomeLensKey | null) => void;
-  /**
-   * Hearth §13 "Desktop shell": a wide screen lays the summary out as a row,
-   * the lede on the left and the day ribbon (always open, there is room)
-   * over the Now card on the right, finished with a button, not a slide.
-   */
-  wide?: boolean;
 }) {
   const { data: weather, error: weatherError } = useWeather(lat, lng);
   const { config, setModule, countdown, setCountdown, flushCountdown } = useHeroModuleConfig();
@@ -180,8 +173,7 @@ export function SummaryHero({
   }, [lens, lensShortcutShown, onLensChange]);
   const renderedTips = selectRenderedTips(modulesIn('tips'), ctx);
 
-  const [ribbonPref, toggleRibbon] = useSkyRibbonOpen();
-  const ribbonOpen = wide || ribbonPref;
+  const [ribbonOpen, toggleRibbon] = useSkyRibbonOpen();
   const sky = isOn('weather') ? weather : null;
   const showSky = sky != null;
   const ribbon = sky ? buildDayRibbon(sky, todayItems.filter((i) => i.dueTime && !i.done).map((i) => `${today}T${i.dueTime}`)) : [];
@@ -278,22 +270,11 @@ export function SummaryHero({
     };
   });
 
-  const ribbonNode =
-    showSky && ribbonOpen && ribbon.length > 0 ? (
-      <div className="relative z-10">
-        <DayRibbon hours={ribbon} />
-      </div>
-    ) : null;
-  const nowNode =
-    !lens && nowCards.length > 0 ? <NowCardPager items={nowCards} finishAs={wide ? 'button' : 'slide'} /> : null;
-  const aside = wide && (ribbonNode || nowNode);
-
   return (
     <>
       {/* Hearth v2 (Pulse): no card around the lede; it sits on the ground
           under the coral glow. Axis Mundi keeps its meridian here instead. */}
-      <div className={cn(aside && 'grid grid-cols-12 items-start gap-x-10 gap-y-4')}>
-      <section className={cn('relative flex flex-col gap-3 px-1 pt-1', aside && 'col-span-5')} aria-label="Today summary">
+      <section className="relative flex flex-col gap-3 px-1 pt-1" aria-label="Today summary">
         <MeridianAxis variant="hero" />
         <div className="relative z-10 flex items-center justify-between gap-4">
           <p className="text-xs text-muted-foreground">
@@ -320,13 +301,17 @@ export function SummaryHero({
                 headline={headline}
                 open={ribbonOpen}
                 onToggle={toggleRibbon}
-                canExpand={!wide && ribbon.length > 0}
+                canExpand={ribbon.length > 0}
               />
             )}
             {skyNote && <SkyNote reason={skyNote} />}
           </div>
         )}
-        {!wide && ribbonNode}
+        {showSky && ribbonOpen && ribbon.length > 0 && (
+          <div className="relative z-10">
+            <DayRibbon hours={ribbon} />
+          </div>
+        )}
         {(peopleLine || streakEnabled) && (
           <div className="relative z-10 flex flex-col gap-2">
             {peopleLine}
@@ -346,14 +331,7 @@ export function SummaryHero({
           </div>
         )}
       </section>
-      {aside ? (
-        <div className="col-span-7 flex min-w-0 flex-col gap-4 pt-1">
-          {ribbonNode}
-          {nowNode}
-        </div>
-      ) : null}
-      </div>
-      {!wide && nowNode}
+      {!lens && nowCards.length > 0 && <NowCardPager items={nowCards} />}
       <HeroCustomizeSheet
         open={sheetOpen}
         onOpenChange={setSheetOpen}

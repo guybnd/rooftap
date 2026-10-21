@@ -12,7 +12,6 @@ import {
   pickNowItem,
   pickNowQueue,
   todayProgress,
-  weekBoardColumns,
 } from "./feed";
 import type { HeroItem } from "./hero";
 import type { Appointment, GoogleCalendarEventWithAttribution, HouseholdTask } from "./types";
@@ -243,40 +242,5 @@ describe("feedRowWhen", () => {
   it("counts how late an overdue item is", () => {
     expect(feedRowWhen(item({ dueDate: "2026-10-15", overdue: true }), TODAY)).toEqual({ kind: "overdue", text: "3d overdue" });
     expect(feedRowWhen(item({ dueDate: TODAY, dueTime: "08:00", overdue: true }), TODAY)).toEqual({ kind: "overdue", text: "Overdue" });
-  });
-});
-
-describe("weekBoardColumns", () => {
-  it("gives every day of the week a column, with Earlier, Later and No date around them", () => {
-    const cols = weekBoardColumns(
-      [
-        item({ id: "a", dueDate: "2026-10-20" }),
-        item({ id: "b", dueDate: "2026-10-12", overdue: true }),
-        item({ id: "c", dueDate: null }),
-        item({ id: "d", dueDate: TODAY }),
-        item({ id: "e", dueDate: "2026-10-30" }),
-      ],
-      TODAY,
-      "2026-12-31"
-    );
-    expect(cols.map((c) => [c.key, c.label, c.items.map((i) => i.id)])).toEqual([
-      ["earlier", "Earlier", ["b"]],
-      [TODAY, "Today", ["d"]],
-      ["2026-10-19", "Tomorrow", []],
-      ["2026-10-20", "Tuesday", ["a"]],
-      ["2026-10-21", "Wednesday", []],
-      ["2026-10-22", "Thursday", []],
-      ["2026-10-23", "Friday", []],
-      ["2026-10-24", "Saturday", []],
-      ["later", "Later", ["e"]],
-      ["none", "No date", ["c"]],
-    ]);
-    expect(cols[1].date).toBe(TODAY);
-    expect(cols[0].date).toBeNull();
-  });
-
-  it("stops at the range's end", () => {
-    const cols = weekBoardColumns([item({ id: "d" })], TODAY, TODAY);
-    expect(cols.map((c) => c.key)).toEqual([TODAY]);
   });
 });

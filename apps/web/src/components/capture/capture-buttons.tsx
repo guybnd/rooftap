@@ -53,19 +53,6 @@ export function DesktopCaptureButton() {
  * (z-30) but kept below the drawer overlay (z-40) and drawer (z-50).
  */
 export function MobileCaptureFab() {
-  return <CaptureFab />;
-}
-
-/**
- * Desktop (Hearth §13 "Desktop shell"): the same roof + docked at the bottom
- * right of the screen, with the same tap, hold and swipe. Capture and the
- * pop-up chat open out of it, like a messenger window.
- */
-export function DockCaptureFab() {
-  return <CaptureFab dock />;
-}
-
-function CaptureFab({ dock = false }: { dock?: boolean }) {
   const { openCapture } = useCapture();
   const router = useRouter();
   const modules = useModules();
@@ -169,22 +156,20 @@ function CaptureFab({ dock = false }: { dock?: boolean }) {
       aria-label={canAsk ? (unread > 0 ? "Add (hold or swipe up to chat with Rooftap, new answer waiting)" : "Add (hold or swipe up to chat with Rooftap)") : "Add"}
       data-hue={sectionHue("assistant")}
       style={{
-        transform: `${dock ? "" : "translateX(-50%) "}translateY(${lift}px) scale(${1 + 0.14 * charge - lift / 400})`,
+        transform: `translateX(-50%) translateY(${lift}px) scale(${1 + 0.14 * charge - lift / 400})`,
         // The assistant's glow gathers round the + as the hold charges or the swipe climbs.
         ...(glow > 0 && {
           boxShadow: `0 0 0 4px var(--background), 0 0 0 ${4 + 10 * glow}px color-mix(in oklch, var(--hue-glow) ${Math.round(85 * glow)}%, transparent)`,
         }),
       }}
       className={cn(
-        dock
-          ? "desk-top fixed bottom-6 right-6 z-40 hidden h-14 w-14 md:flex"
-          : "md:hidden absolute left-1/2 -top-5 z-30 flex h-12 w-12 [view-transition-name:capture-fab]",
-        "select-none touch-none [-webkit-touch-callout:none] items-center justify-center rounded-full bg-primary text-primary-foreground",
+        "md:hidden absolute left-1/2 -top-5 z-30 [view-transition-name:capture-fab] select-none touch-none [-webkit-touch-callout:none]",
+        "flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground",
         "shadow-lg ring-4 ring-background disabled:opacity-50 disabled:pointer-events-none motion-safe:transition-[transform,box-shadow]",
         charge > 0 ? "duration-[560ms] ease-linear" : "duration-[var(--motion-fast)]"
       )}
     >
-      <RooftapMark className={dock ? "h-7 w-7" : "h-6 w-6"} />
+      <RooftapMark className="h-6 w-6" />
       {/* A reply you haven't opened yet: the assistant's glow, in a small dose. */}
       {canAsk && unread > 0 && (
         <span

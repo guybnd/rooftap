@@ -314,15 +314,3 @@ A full-screen `--primary` ground that marks a real milestone, with a check, a He
 ### 13.6 Spaces
 
 On Home, below the feed, a micro label "Spaces" heads the section tiles (groceries, costs, setup and the rest). Each tile header leads with its section's 36px tile and a Title-step name. Spaces replaces a separate navigation tab: the tab bar keeps its sections, and Home shows their pulse.
-
-### 13.7 Desktop shell (Guy, 2026-10-21)
-
-From the `md` width up, the web app runs under a **top bar** instead of the phone's tab bar (`components/top-bar.tsx`). It holds, left to right: the Rooftap mark, every visible space as its glyph in its glyph hue (the navigation exception in H2), then Settings and the profile menu (name, theme, sign out). Each space sits in a fixed slot, so nothing moves when a name appears: the active space's short name shows under its glyph, and hovering or focusing another shows that name in its place (one name at a time). The active slot rides the same pebble as the phone bar (§8 "Tab glide"), gliding sideways on the page's Shift clock. A space with more than one page (Groceries' Item Library, Checklists' Templates) shows them as a row of links under the bar. Settings screens get the settings menu as their own left column.
-
-The roof + docks at the bottom right of the screen (`DockCaptureFab`), with the phone +'s tap, hold and swipe; capture and the pop-up chat open out of it as docked cards, like a messenger window, and toasts stack above it.
-
-From the `lg` width up, pages lay out as boards (`useWideLayout`): wider containers and columns where the content has them. On Home the lede sits beside the day ribbon (always open on a wide screen) and the Now card, which finishes with a "Mark done" button instead of the slide; the feed becomes a **week board** (core `weekBoardColumns`): one column per day from today, each headed by its date number, its day label and that day's forecast (`WeatherData.days`), with Earlier leading and Later and No date closing it, scrolling sideways past the fifth or so column. Spaces stay below, as on the phone. A narrow column wraps row titles and shows an assignee as their avatar alone.
-
-Right-click on a row opens its hold menu at the pointer (`PopMenu` anchors to the last right-click inside its row).
-
-Settings > Appearance > "Layout on wide screens" switches a browser back to the classic sidebar with one-column pages (`lib/desktop-layout.ts`, mirrored on `<html data-layout>` before first paint). Phones and the native app are unchanged: the Expo app ships for portrait phones, so the desktop shell has no native twin.

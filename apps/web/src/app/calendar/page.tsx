@@ -545,26 +545,6 @@ function CalendarPage() {
     [longPressHandlers]
   );
 
-  // Hearth §13.7: with a mouse, a double-click or right-click on an empty
-  // slot opens the same chooser a long-press does. Blocks on the slot keep
-  // their own clicks, so only the bare grid (or its hour lines) counts.
-  const handleSlotMouseAdd = useCallback(
-    (dayIndex: number, isMobile: boolean, e: React.MouseEvent<HTMLDivElement>) => {
-      const target = e.target as HTMLElement;
-      if (target !== e.currentTarget && (target.parentElement !== e.currentTarget || target.hasChildNodes())) return;
-      e.preventDefault();
-      pendingPressRef.current = {
-        dayIndex,
-        isMobile,
-        clientX: e.clientX,
-        clientY: e.clientY,
-        rectTop: e.currentTarget.getBoundingClientRect().top,
-      };
-      handleSlotLongPress();
-    },
-    [handleSlotLongPress]
-  );
-
   const chooseNewEvent = () => {
     setChooserOpen(false);
     setEditEvent(null);
@@ -1065,8 +1045,6 @@ function CalendarPage() {
         key={dayIndex}
         className={`relative border-l select-none ${isToday ? "bg-foreground/[0.025]" : ""}`}
         onPointerDown={(e) => handleSlotPointerDown(dayIndex, isMobile, e)}
-        onDoubleClick={isMobile ? undefined : (e) => handleSlotMouseAdd(dayIndex, isMobile, e)}
-        onContextMenu={isMobile ? undefined : (e) => handleSlotMouseAdd(dayIndex, isMobile, e)}
       >
         {HOURS.map((_, i) => (
           <div
@@ -1267,9 +1245,7 @@ function CalendarPage() {
           <HeroLede value={mobileDayCount} label={heroDayLabel(mobileDay)} className="md:hidden" />
           <HeroLede value={todayCount} label="on today" className="hidden md:flex" />
           <p className="text-muted-foreground text-sm mt-1 hidden md:block">
-            <span className="pointer-fine:hidden">Long-press</span>
-            <span className="hidden pointer-fine:inline">Double-click or right-click</span>
-            {" "}a time slot to add {calendarAddPhrase({ tasks: showTasks, viewings: showViewings })}
+            Long-press a time slot to add {calendarAddPhrase({ tasks: showTasks, viewings: showViewings })}
           </p>
         </div>
         {/* Desktop: week navigation */}

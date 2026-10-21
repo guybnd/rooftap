@@ -38,7 +38,6 @@ import { RecipeFormSheet } from './recipe-form-sheet';
 import { RecipeRow } from './recipe-row';
 import { OfflineHint } from '@/components/offline-hint';
 import { cn } from '@/lib/utils';
-import { useWideLayout } from '@/lib/desktop-layout';
 
 export default function RecipesPage() {
   const { group, currentUserId, isOnline, loading: cacheLoading } = useDataCache();
@@ -96,7 +95,6 @@ export default function RecipesPage() {
   }, [recipes]);
 
   const [search, setSearch] = useState('');
-  const wide = useWideLayout();
   const [selectedCuisines, setSelectedCuisines] = useState<Set<string>>(new Set());
   const [selectedMethods, setSelectedMethods] = useState<Set<string>>(new Set());
   const [canMakeOnlyPicked, setCanMakeOnly] = useState(false);
@@ -233,7 +231,7 @@ export default function RecipesPage() {
   const hasFilters = selectedCuisines.size > 0 || selectedMethods.size > 0 || canMakeOnly;
 
   return (
-    <div className={cn('mx-auto space-y-4 p-4 md:p-6 pb-24', wide ? 'max-w-[1400px] lg:px-8' : 'max-w-3xl')}>
+    <div className="mx-auto max-w-3xl space-y-4 p-4 md:p-6 pb-24">
       {/* Hearth v2 (Pulse, H1): the recipe count is the page's Hero lede;
           Scan + New recipe sit beside it. Mirrors mobile's grammar. */}
       <div className="flex items-end justify-between gap-3 flex-wrap">
@@ -386,21 +384,6 @@ export default function RecipesPage() {
         <p className="px-1 py-8 text-center text-sm text-muted-foreground">
           {hasFilters || search.trim() ? 'No recipes match your filters.' : 'No recipes yet.'}
         </p>
-      ) : wide ? (
-        // Hearth §13.7 "Desktop shell": on a wide screen each recipe is its
-        // own card in a grid, the same row inside.
-        <div className="grid grid-cols-2 gap-3 xl:grid-cols-3">
-          {filtered.map((r) => (
-            <ListGroup key={r.id}>
-              <RecipeRow
-                recipe={r}
-                ingredients={ingredientsByRecipe.get(r.id) ?? []}
-                groceryItems={groceryItems}
-                groceriesLinked={groceriesLinked}
-              />
-            </ListGroup>
-          ))}
-        </div>
       ) : (
         <ListGroup>
           {filtered.map((r) => (

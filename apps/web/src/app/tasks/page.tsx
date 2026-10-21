@@ -42,8 +42,6 @@ import {
 import { HOUSEHOLD_TASKS_CHANGED_EVENT } from '@/hooks/use-overdue-task-count';
 import { toastUndoDelete } from '@/lib/undo-toast';
 import { useTaskSnoozeUndo } from './use-task-snooze-undo';
-import { useWideLayout } from '@/lib/desktop-layout';
-import { cn } from '@/lib/utils';
 
 // FLUX-60: Household tasks & reminders — generic recurring tasks + moving template
 // FLUX-64: Mobile-first UX pass — overflow menus, pill filters, group-by, undo toasts
@@ -124,9 +122,6 @@ export default function TasksPage() {
 
   const [showDone, setShowDone] = useState(false);
   const [showLater, setShowLater] = useState(false);
-  // Hearth §13.7 "Desktop shell": on a wide screen each group (Overdue, This
-  // week, Upcoming, Later; or each person) is its own column, Later open.
-  const wide = useWideLayout();
   const [mineOnly, setMineOnly] = useState(false);
   const [search, setSearch] = useState('');
   const [groupBy, setGroupBy] = useState<GroupBy>('date');
@@ -486,7 +481,7 @@ export default function TasksPage() {
   };
 
   return (
-    <div className={cn('space-y-3 p-4 md:p-6 mx-auto', wide ? 'max-w-[1400px] lg:px-8' : 'max-w-3xl')}>
+    <div className="space-y-3 p-4 md:p-6 max-w-3xl mx-auto">
       {/* Row 1 — progress summary + actions. FLUX-193: no big "Add Task" button —
           add via the quick-add bar below or the "+" nav; refresh + generate live in
           the ⋯ overflow, search collapses to the icon. */}
@@ -656,9 +651,7 @@ export default function TasksPage() {
       </div>
 
       {/* Quick-add */}
-      <div className={cn(wide && 'max-w-2xl')}>
-        <QuickAddTask onAdd={handleQuickAdd} />
-      </div>
+      <QuickAddTask onAdd={handleQuickAdd} />
 
       {/* Sections */}
       {visibleTasks.length === 0 ? (
@@ -682,12 +675,12 @@ export default function TasksPage() {
           )}
         </div>
       ) : groupBy === 'person' ? (
-        <div className={wide ? 'grid grid-cols-2 items-start gap-5 xl:grid-cols-3' : 'space-y-5'}>
+        <div className="space-y-5">
           {renderSection('Just added', justAdded, 'text-primary')}
           {renderPersonView()}
         </div>
       ) : (
-        <div className={wide ? 'grid grid-cols-2 items-start gap-5 xl:grid-cols-3' : 'space-y-5'}>
+        <div className="space-y-5">
           {/* H2: only Overdue is a status; the other headers stay muted. */}
           {renderSection('Just added', justAdded, 'text-muted-foreground')}
           {renderSection('Overdue', overdue, 'text-destructive')}
@@ -695,22 +688,16 @@ export default function TasksPage() {
           {renderSection('Upcoming', upcoming, 'text-muted-foreground')}
           {later.length > 0 && (
             <div>
-              {wide ? (
-                <h2 className="mb-2 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-                  Later <span className="text-muted-foreground">({later.length})</span>
-                </h2>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setShowLater((v) => !v)}
-                  aria-expanded={showLater}
-                  className="mb-2 flex items-center gap-1 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground hover:text-foreground"
-                >
-                  {showLater ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-                  Later <span className="text-muted-foreground">({later.length})</span>
-                </button>
-              )}
-              {(showLater || wide) && (
+              <button
+                type="button"
+                onClick={() => setShowLater((v) => !v)}
+                aria-expanded={showLater}
+                className="mb-2 flex items-center gap-1 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground hover:text-foreground"
+              >
+                {showLater ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                Later <span className="text-muted-foreground">({later.length})</span>
+              </button>
+              {showLater && (
                 <ListGroup>
                   {later.map((task) => (
                     <TaskRow key={task.id} task={task} focused={task.id === focusId} {...cardProps} />

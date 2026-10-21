@@ -1624,12 +1624,5 @@ function useLongPressCompact(onFire: () => void, enabled: boolean, options: Para
     shared.onPointerDown(e);
   }, [shared]);
 
-  // Right-click opens the same menu the hold does (Hearth §13 "Desktop shell").
-  const onContextMenu = useCallback((e: React.MouseEvent) => {
-    if (!enabled || (e.target as HTMLElement).closest(NO_HOLD)) return;
-    e.preventDefault();
-    onFire();
-  }, [enabled, onFire]);
-
-  return { handlers: { onPointerDown, onContextMenu }, consumeClick, progress };
+  return { handlers: { onPointerDown }, consumeClick, progress };
 }

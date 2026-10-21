@@ -86,7 +86,6 @@ import { useSuggestDismiss } from './use-suggest-dismiss';
 import { toastUndoDelete } from '@/lib/undo-toast';
 import { useGroceryUndo } from './use-grocery-undo';
 import { GroceryGlyph } from '@/components/grocery-glyph';
-import { useWideLayout } from '@/lib/desktop-layout';
 
 const SHOPPING_TOOLTIP_KEY = 'homeup_shopping_tooltip_dismissed';
 
@@ -239,7 +238,6 @@ export default function GroceriesPage() {
   const [defaultAisle, setDefaultAisle] = useState<string>('other');
 
   const [aisleOrder, setAisleOrder] = useState<string[]>(AISLE_ORDER as string[]);
-  const wide = useWideLayout();
   const [collapsedAisles, setCollapsedAisles] = useState<Set<string>>(new Set());
   const [selectMode, setSelectMode] = useState(false);
   // Reorder aisles (More menu, By aisle only): aisles fold to their headers
@@ -1044,12 +1042,6 @@ export default function GroceriesPage() {
   const aisleStickyTop = headGone ? 'top-14' : 'top-0';
   // Reorder only means something in By aisle.
   const reordering = reorderMode && sortMode === 'aisle';
-  // Hearth §13.7 "Desktop shell": on a wide screen the aisles flow into
-  // columns like a store map, Running low leading the first one. Reorder
-  // aisles stays one column so the drag reads top to bottom.
-  // One list stays a single centred column.
-  const wideAisles = wide && sortMode === 'aisle';
-  const aisleColumns = wideAisles && !reordering;
 
   // Lede caption fragments (H6): what's left beyond the to-buy count. The
   // estimate moved to the "This trip" card at the end of the list.
@@ -1152,7 +1144,7 @@ export default function GroceriesPage() {
 
   return (
     // The floating ask or pill reserves room so it never covers the list's end.
-    <div className={cn('space-y-5 p-4 md:p-6 mx-auto', wideAisles ? 'max-w-[1400px] lg:px-8' : 'max-w-3xl', showTrackPrompt || showShopPill ? 'pb-44' : 'pb-28')}>
+    <div className={cn('space-y-5 p-4 md:p-6 max-w-3xl mx-auto', showTrackPrompt || showShopPill ? 'pb-44' : 'pb-28')}>
       {/* Collapsed bar: a zero-height sticky anchor (so it never shifts the
           page or re-trips the observer) holding a slim bar that slides in
           once the head has scrolled away. MO: transform + opacity only, base
@@ -1283,7 +1275,7 @@ export default function GroceriesPage() {
 
         {/* Search row: the search box, then View (sort mode + Only needed). */}
         {items.length > 0 && (
-          <div ref={searchWrapRef} className={cn('flex items-center gap-2', wideAisles && 'max-w-2xl')}>
+          <div ref={searchWrapRef} className="flex items-center gap-2">
             <SectionSearchBar
               value={search}
               onChange={setSearch}
@@ -1299,7 +1291,7 @@ export default function GroceriesPage() {
       {/* Running low (re-add suggestions) as its own group, in the aisle
           header grammar, ahead of the aisles. Steps aside while searching so
           the results sit directly under the search bar. */}
-      {!searching && !(aisleColumns && sortMode === 'aisle' && orderedAisles.length > 0) && (
+      {!searching && (
         <ReAddSuggestions
           variant="group"
           runningLow={reAddSuggestions}
@@ -1408,18 +1400,7 @@ export default function GroceriesPage() {
           onDragEnd={handleDragEnd}
         >
           <SortableContext items={orderedAisles} strategy={verticalListSortingStrategy}>
-            <div className={aisleColumns ? 'columns-2 gap-5 xl:columns-3 [&>*]:mb-5 [&>*]:break-inside-avoid' : 'space-y-3'}>
-              {aisleColumns && !searching && (
-                <ReAddSuggestions
-                  variant="group"
-                  runningLow={reAddSuggestions}
-                  onAdd={needAgainWithPop}
-                  onAddAll={() => needAgainWithPop(reAddSuggestions)}
-                  onSnooze={groceryUndo.snooze}
-                  dismissAction={suggestDismiss.dismissAction}
-                  onDismiss={suggestDismiss.dismiss}
-                />
-              )}
+            <div className="space-y-3">
               {orderedAisles.map((aisle) => {
                 const aisleItems = grouped[aisle] ?? [];
                 const collapsed = collapsedAisles.has(aisle);
@@ -1453,9 +1434,8 @@ export default function GroceriesPage() {
                           owns the only border in this view). */}
                       <div
                         className={cn(
-                          'flex items-center gap-2 px-1 py-1',
-                          // Columns can't hold a sticky header; each aisle is short there anyway.
-                          !aisleColumns && ['sticky z-20 bg-background/90 backdrop-blur-sm', aisleStickyTop]
+                          'flex items-center gap-2 px-1 py-1 sticky z-20 bg-background/90 backdrop-blur-sm',
+                          aisleStickyTop
                         )}
                       >
                         {/* The grip shows on wide screens always, and at every
