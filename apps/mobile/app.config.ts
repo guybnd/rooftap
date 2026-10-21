@@ -1,10 +1,16 @@
 import type { ExpoConfig } from 'expo/config';
 import { withGradleProperties } from 'expo/config-plugins';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 
 // HOUP-130: APP_VARIANT=development installs alongside the release build as
 // a distinct app (own package, name, icon tint) instead of replacing it, so
 // a dev-client build tethered to Metro never doubles as the daily-use app.
 const IS_DEV = process.env.APP_VARIANT === 'development';
+
+// The Firebase config is not in the public repo. A build without it still
+// works, it just has no FCM push. google-services.example.json shows the shape.
+const HAS_GOOGLE_SERVICES = existsSync(join(__dirname, 'google-services.json'));
 
 const config: ExpoConfig = {
   name: IS_DEV ? 'Rooftap Dev' : 'Rooftap',
@@ -28,7 +34,7 @@ const config: ExpoConfig = {
     // FCM binding for push (HOUP-154). Release-only: the Firebase project
     // registers com.homeup.mobile; the dev variant has no entry and the
     // google-services plugin fails the build on a missing package.
-    ...(IS_DEV ? {} : { googleServicesFile: './google-services.json' }),
+    ...(IS_DEV || !HAS_GOOGLE_SERVICES ? {} : { googleServicesFile: './google-services.json' }),
     adaptiveIcon: {
       backgroundColor: IS_DEV ? '#FCE3C2' : '#121016',
       foregroundImage: './assets/images/android-icon-foreground.png',

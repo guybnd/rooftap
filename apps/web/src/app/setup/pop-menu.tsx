@@ -39,6 +39,25 @@ interface PopMenuProps {
   triggerProps?: Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onClick' | 'className' | 'type'>;
 }
 
+// Right-click (Hearth §13 "Desktop shell"): a menu a row opens from a
+// contextmenu event (useRowLongPress and friends) opens at the pointer, as a
+// desktop context menu does, instead of under the whole row. The last
+// right-click is noted here once for every menu.
+let lastContextMenu: { x: number; y: number; at: number } | null = null;
+if (typeof document !== 'undefined') {
+  document.addEventListener(
+    'contextmenu',
+    (e) => {
+      lastContextMenu = { x: e.clientX, y: e.clientY, at: Date.now() };
+    },
+    true
+  );
+}
+/** How recent a right-click must be to count as the one that opened a menu. */
+const CONTEXT_MENU_WINDOW_MS = 600;
+/** Room a pointer-anchored panel keeps from the right edge before it opens leftward. */
+const CONTEXT_MENU_ROOM_PX = 280;
+
 // Lightweight popover menu with click-outside + Escape handling. Tap-friendly:
 // the menu opens on click/tap (no hover dependency), so it works on mobile.
 // The panel renders in a portal with fixed positioning so it floats above any
@@ -95,10 +114,30 @@ export function PopMenu({
   // while the page scrolls or resizes. Not needed for the bottom-sheet layout.
   useEffect(() => {
     if (!open || asSheet) return;
+    // Opened by a right-click inside the trigger: anchor at the pointer, kept
+    // as an offset into the trigger so the panel follows it on scroll.
+    const first = triggerRef.current?.getBoundingClientRect();
+    const click = lastContextMenu;
+    const pointer =
+      first && click && Date.now() - click.at < CONTEXT_MENU_WINDOW_MS &&
+      click.x >= first.left && click.x <= first.right && click.y >= first.top && click.y <= first.bottom
+        ? { dx: click.x - first.left, dy: click.y - first.top }
+        : null;
     const reposition = () => {
       const el = triggerRef.current;
       if (!el) return;
       const r = el.getBoundingClientRect();
+      if (pointer) {
+        const x = r.left + pointer.dx;
+        const y = r.top + pointer.dy;
+        const style: CSSProperties = { position: 'fixed' };
+        if (y > window.innerHeight * 0.62) style.bottom = Math.max(8, window.innerHeight - y + 2);
+        else style.top = y + 2;
+        if (x > window.innerWidth - CONTEXT_MENU_ROOM_PX) style.right = Math.max(8, window.innerWidth - x);
+        else style.left = Math.max(8, x);
+        setCoords(style);
+        return;
+      }
       const openUp = r.bottom > window.innerHeight * 0.62; // flip up near the fold
       const style: CSSProperties = { position: 'fixed' };
       if (openUp) style.bottom = Math.max(8, window.innerHeight - r.top + 6);

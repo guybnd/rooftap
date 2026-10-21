@@ -20,6 +20,13 @@ interface WeatherPayload {
     tempC: number[];
     precipitationProbability: number[];
   };
+  days?: {
+    dates: string[];
+    weatherCode: number[];
+    highC: number[];
+    lowC: number[];
+    precipitationProbabilityMax: number[];
+  };
 }
 
 /** Hourly entries Home's day ribbon shows, starting at the current hour. */
@@ -67,7 +74,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(cached.data);
   }
 
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,weather_code,relative_humidity_2m,wind_speed_10m&hourly=temperature_2m,precipitation,precipitation_probability,uv_index&daily=temperature_2m_max,temperature_2m_min,sunset,uv_index_max&timezone=auto&forecast_days=2`;
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,weather_code,relative_humidity_2m,wind_speed_10m&hourly=temperature_2m,precipitation,precipitation_probability,uv_index&daily=temperature_2m_max,temperature_2m_min,sunset,uv_index_max,weather_code,precipitation_probability_max&timezone=auto&forecast_days=7`;
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
@@ -118,7 +125,7 @@ export async function GET(request: NextRequest) {
   const uvIndex = raw.hourly?.uv_index;
   if (Array.isArray(times) && Array.isArray(precipitation) && Array.isArray(precipitationProbability) && Array.isArray(uvIndex)) {
     // `hourly` stays today-only (the tip helpers scan it to the end of the day);
-    // two forecast days are fetched so `ahead` can run past midnight.
+    // later forecast days are fetched so `ahead` can run past midnight.
     data.hourly = {
       times: times.slice(0, HOURS_PER_DAY),
       precipitation: precipitation.slice(0, HOURS_PER_DAY),
@@ -140,6 +147,19 @@ export async function GET(request: NextRequest) {
         };
       }
     }
+  }
+
+  // The week board's day headers (wide screens): every daily series must line up.
+  const d = raw.daily;
+  const series = [d?.time, d?.weather_code, d?.temperature_2m_max, d?.temperature_2m_min, d?.precipitation_probability_max];
+  if (series.every((a) => Array.isArray(a) && a.length === series[0].length)) {
+    data.days = {
+      dates: d.time,
+      weatherCode: d.weather_code,
+      highC: d.temperature_2m_max,
+      lowC: d.temperature_2m_min,
+      precipitationProbabilityMax: d.precipitation_probability_max,
+    };
   }
 
   setCacheEntry(cacheKey, data);

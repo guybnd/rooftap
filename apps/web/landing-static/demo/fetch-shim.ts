@@ -46,6 +46,14 @@ const weather = {
     tempC: ahead.map((_, i) => Math.round(18 + 3 * Math.sin((i - 2) / 4))),
     precipitationProbability: ahead.map((_, i) => (i >= rainFrom && i < rainFrom + 4 ? 80 : 10)),
   },
+  // A week of spring: today's rain, a clear weekend, showers after.
+  days: {
+    dates: Array.from({ length: 7 }, (_, i) => localIso(new Date(hour.getFullYear(), hour.getMonth(), hour.getDate() + i)).slice(0, 10)),
+    weatherCode: [61, 2, 3, 1, 0, 0, 80],
+    highC: [21, 19, 18, 22, 24, 25, 20],
+    lowC: [11, 10, 12, 13, 14, 15, 13],
+    precipitationProbabilityMax: [80, 20, 30, 10, 0, 5, 60],
+  },
 };
 
 /** Straight lines between the stops, a third longer for the streets, at each mode's pace. */

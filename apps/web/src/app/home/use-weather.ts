@@ -32,6 +32,19 @@ export interface WeatherData {
     tempC: number[];
     precipitationProbability: number[];
   };
+  /**
+   * The week ahead, one entry per local day starting today, for the week
+   * board's day headers on wide screens. Soft-optional: a server that
+   * predates it leaves the headers without weather.
+   */
+  days?: {
+    /** 'YYYY-MM-DD' local dates. */
+    dates: string[];
+    weatherCode: number[];
+    highC: number[];
+    lowC: number[];
+    precipitationProbabilityMax: number[];
+  };
 }
 
 const CACHE_TTL_MS = 45 * 60 * 1000;

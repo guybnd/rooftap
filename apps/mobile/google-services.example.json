@@ -1,21 +1,21 @@
 {
   "project_info": {
-    "project_number": "890027895512",
-    "project_id": "homeup-93874",
-    "storage_bucket": "homeup-93874.firebasestorage.app"
+    "project_number": "000000000000",
+    "project_id": "your-firebase-project",
+    "storage_bucket": "your-firebase-project.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:890027895512:android:4174f26de61c06987805ad",
+        "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
         "android_client_info": {
-          "package_name": "com.homeup.mobile"
+          "package_name": "com.example.rooftap"
         }
       },
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyA4AB_rUpOsIFinBDUagxbpLB3887gNnjc"
+          "current_key": "YOUR_ANDROID_API_KEY"
         }
       ],
       "services": {

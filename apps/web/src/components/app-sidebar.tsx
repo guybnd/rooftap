@@ -33,7 +33,8 @@ import { useAnySheetOpen } from "@/hooks/use-sheet-gestures";
 import { runNavTransition, notifyRouteSettled } from "@/lib/view-transitions";
 import { CaptureProvider } from "@/components/capture/capture-context";
 import { CaptureSheet } from "@/components/capture/capture-sheet";
-import { DesktopCaptureButton } from "@/components/capture/capture-buttons";
+import { DesktopCaptureButton, DockCaptureFab } from "@/components/capture/capture-buttons";
+import { SectionSubnav, TopBar } from "@/components/top-bar";
 import { SectionGlow } from "@/components/ui/section-glow";
 
 function OfflineBanner() {
@@ -297,7 +298,7 @@ export function AppSidebar({ children }: { children: React.ReactNode }) {
     <AssistantChatPopup />
     <div className="flex h-[100svh] overflow-hidden">
       {/* Desktop sidebar */}
-      <aside className="hidden md:flex w-[220px] flex-col border-r border-sidebar-border/60 bg-sidebar shrink-0">
+      <aside className="desk-classic hidden md:flex w-[220px] flex-col border-r border-sidebar-border/60 bg-sidebar shrink-0">
         <div className="flex flex-col border-b border-sidebar-border/60">
           {/* Logo section */}
           <div className="flex items-center gap-2.5 px-5 h-14">
@@ -531,6 +532,16 @@ export function AppSidebar({ children }: { children: React.ReactNode }) {
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* Hearth §13 "Desktop shell": the wide-screen top bar (the default;
+            Settings > Appearance can bring the sidebar above back). */}
+        <TopBar
+          sections={visibleSections}
+          currentSectionId={currentSection.id}
+          onSelect={handleSectionChange}
+          overdueCount={overdueCount}
+          user={user}
+          onSettings={onSettings}
+        />
         {/* Mobile top bar */}
         <header className="flex items-center gap-3 px-4 h-12 border-b border-border/50 bg-background/90 backdrop-blur-md md:hidden shrink-0 sticky top-0 z-30">
           <button onClick={() => setOpen(true)} className="p-2 -ml-1.5 rounded-lg hover:bg-muted/60 active:bg-muted text-muted-foreground transition-colors">
@@ -546,6 +557,7 @@ export function AppSidebar({ children }: { children: React.ReactNode }) {
             the same timing (globals.css .section-glow). */}
         <div className="relative isolate flex min-h-0 flex-1 flex-col">
           <SectionGlow sectionId={currentSection.id} />
+          {!onSettings && <SectionSubnav section={currentSection} isActive={isActive} />}
           <div
             className="route-transition-region relative isolate flex-1 overflow-y-auto origin-top transition-[transform,filter] duration-[var(--motion-slow)] ease-[var(--motion-ease-out)]"
             style={sheetOpen ? { transform: "scale(0.96)", filter: "brightness(0.85)" } : undefined}
@@ -556,7 +568,18 @@ export function AppSidebar({ children }: { children: React.ReactNode }) {
               <LegendSyncBootstrap />
               <OfflineBanner />
               <RevalidatingIndicator />
-              {children}
+              {onSettings ? (
+                // Under the top bar the settings menu that lived in the
+                // sidebar becomes the settings screens' own left column.
+                <div className="md:mx-auto md:flex md:w-full md:max-w-5xl md:gap-2">
+                  <nav aria-label="Settings" className="desk-top hidden w-56 shrink-0 flex-col gap-px self-start px-2 pt-8 md:sticky md:top-0 md:flex">
+                    <SettingsMenuNav settingsSectionRows={settingsSectionRows} isActive={isActive} compact />
+                  </nav>
+                  <div className="min-w-0 flex-1">{children}</div>
+                </div>
+              ) : (
+                children
+              )}
               {/* Capture sheet: inside DataCacheProvider so it has the active groupId */}
               <CaptureSheet />
               {/* First-run module picker for a new household's owner (.docs/modules.md). */}
@@ -581,6 +604,8 @@ export function AppSidebar({ children }: { children: React.ReactNode }) {
           />
         )}
       </div>
+      {/* Desktop: the roof + docks bottom right; capture and the chat pop up from it. */}
+      <DockCaptureFab />
     </div>
     </CaptureProvider>
   );

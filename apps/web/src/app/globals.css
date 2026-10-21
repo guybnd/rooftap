@@ -888,3 +888,39 @@
     }
   }
 }
+
+/* Hearth §13 "Desktop shell": the top bar (default) or the classic sidebar,
+   picked per browser in Settings > Appearance (lib/desktop-layout.ts). The
+   boot script sets <html data-layout="classic"> before first paint, so the
+   chrome never swaps after hydration. These only hide; each element's own
+   breakpoint classes (`hidden md:flex`) still decide when it shows. */
+html[data-layout="classic"] .desk-top,
+html:not([data-layout="classic"]) .desk-classic {
+  display: none !important;
+}
+
+/* Top bar tabs: an icon in a fixed slot, its name fading in underneath, so a
+   label never pushes its neighbours. One name shows at a time: the active
+   tab's, or the hovered or focused tab's in its place. */
+.topbar-label {
+  opacity: 0;
+  translate: 0 -2px;
+  transition: opacity var(--motion-fast) var(--motion-ease-out), translate var(--motion-fast) var(--motion-ease-out);
+}
+.topbar-tab[aria-current="page"] .topbar-label,
+.topbar-tab:hover .topbar-label,
+.topbar-tab:focus-visible .topbar-label {
+  opacity: 1;
+  translate: 0 0;
+}
+.topbar-tabs:has(.topbar-tab:hover, .topbar-tab:focus-visible)
+  .topbar-tab[aria-current="page"]:not(:hover):not(:focus-visible)
+  .topbar-label {
+  opacity: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .topbar-label {
+    transition: none;
+    translate: none;
+  }
+}

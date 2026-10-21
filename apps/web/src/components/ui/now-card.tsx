@@ -22,7 +22,7 @@
 // segmented meter under the meta line (H3: the meter sits with its list).
 
 import { useCallback, useEffect, useRef, useState, type HTMLAttributes, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { MOTION_DURATIONS_MS, MOTION_EASE, nowQueueIndex } from "@homeup/core";
 import { cn } from "@/lib/utils";
 import { SegmentMeter } from "./hero-lede";
@@ -51,6 +51,12 @@ export interface NowCardProps {
   body?: ReactNode;
   onOpen?: () => void;
   onComplete?: () => void;
+  /**
+   * How a finishable card is finished: the slide track (touch), or a plain
+   * "Mark done" button where a slide feels out of place (a desktop pointer,
+   * Hearth §13 "Desktop shell").
+   */
+  finishAs?: "slide" | "button";
   className?: string;
 }
 
@@ -70,6 +76,7 @@ function NowCardFrame({
   body,
   onOpen,
   onComplete,
+  finishAs = "slide",
   className,
   headProps,
   hidden,
@@ -137,7 +144,19 @@ function NowCardFrame({
       {opensInPlace && expanded && <div>{body}</div>}
       {/* mt-auto: in the pager every card is as tall as the tallest, and the
           track stays at the bottom edge where the thumb expects it. */}
-      {onComplete && <SlideToComplete onComplete={onComplete} className="mt-auto md:max-w-md" />}
+      {onComplete &&
+        (finishAs === "button" ? (
+          <button
+            type="button"
+            onClick={onComplete}
+            className="mt-auto inline-flex h-10 items-center gap-2 self-start rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground transition-[background-color,scale] hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card active:scale-[0.97]"
+          >
+            <Check className="h-4 w-4" />
+            Mark done
+          </button>
+        ) : (
+          <SlideToComplete onComplete={onComplete} className="mt-auto md:max-w-md" />
+        ))}
     </section>
   );
 }
@@ -166,7 +185,15 @@ const ARRIVE_FALLBACK_MS = 400;
 
 type Swipe = { pointerId: number; x: number; y: number; t: number; dragging: boolean };
 
-export function NowCardPager({ items, className }: { items: NowCardPagerItem[]; className?: string }) {
+export function NowCardPager({
+  items,
+  className,
+  finishAs,
+}: {
+  items: NowCardPagerItem[];
+  className?: string;
+  finishAs?: NowCardProps["finishAs"];
+}) {
   // Which item the person paged to (null follows the head) and where it was,
   // so the card holds its place when that item leaves the queue.
   const [anchor, setAnchor] = useState<{ id: string | null; index: number }>({ id: null, index: 0 });
@@ -361,6 +388,7 @@ export function NowCardPager({ items, className }: { items: NowCardPagerItem[]; 
                   }
                   onOpen={celebratingId !== null ? undefined : item.onOpen}
                   onComplete={item.onComplete ? () => celebrate(item, at) : undefined}
+                  finishAs={finishAs}
                   headProps={at === index ? headProps : undefined}
                   hidden={at !== index}
                   className="w-full"
