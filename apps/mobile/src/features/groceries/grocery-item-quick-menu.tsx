@@ -10,7 +10,7 @@
 // shared menu primitive to lean on instead — same substitution that file's
 // header comment documents).
 import * as React from 'react';
-import { Alert, Pressable, ScrollView, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import {
   Archive,
   Check,
@@ -29,6 +29,7 @@ import {
   getAisleMeta,
   type GroceryCustomAisle,
   type GroceryItem,
+  dialog,
 } from '@homeup/core';
 
 type MemberProfiles = Record<string, { email: string; name: string | null; avatar: string | null }>;
@@ -216,8 +217,7 @@ export function GroceryItemQuickMenu({
             icon={<Trash2 size={14} className="text-destructive" />}
             label="Delete"
             onPress={() => {
-              haptics.warn();
-              Alert.alert(`Delete "${item.name}"?`, 'This removes it from the list.', [
+              dialog.alert(`Delete "${item.name}"?`, 'This removes it from the list.', [
                 { text: 'Cancel', style: 'cancel' },
                 { text: 'Delete', style: 'destructive', onPress: () => commit(onRequestDelete, haptics.remove) },
               ]);

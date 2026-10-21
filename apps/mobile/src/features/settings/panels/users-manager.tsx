@@ -9,7 +9,7 @@
 // cookie-session flow.
 //
 // Simplified vs. web: no `sonner` toast / no <Dialog> primitive on native —
-// errors surface as Alert.alert, the "reveal password" step uses BottomSheet,
+// errors show inline, the "reveal password" step uses BottomSheet,
 // and the copy-to-clipboard button is dropped (no clipboard dependency exists
 // in apps/mobile yet, matching the caution appointment-modal.tsx already
 // noted for expo-file-system) in favor of a selectable Text the user can

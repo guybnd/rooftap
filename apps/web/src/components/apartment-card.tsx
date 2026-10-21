@@ -14,6 +14,7 @@ import { useDataCache } from "@/lib/data-cache";
 import { AppointmentModal } from "@/components/appointment-modal";
 import { cn } from "@/lib/utils";
 import { apartmentPhotoUrls, formatRelativeDay, formatMoney, appointments$, apartments$, apartmentComments$, useReconnectSync, useStoreHelpers } from '@homeup/core';
+import { dialog } from '@homeup/core';
 import { toast } from "sonner";
 import type { Agent, ApartmentWithScore, Appointment } from '@homeup/core';
 
@@ -160,10 +161,10 @@ export function ApartmentCard({ apartment, agent, agents: linkedAgents, commentC
     setArchiving(false);
   };
 
-  const handleDelete = (e: React.MouseEvent) => {
+  const handleDelete = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!confirm("Delete this apartment?")) return;
+    if (!(await dialog.confirm({ title: "Delete this apartment?", destructive: true }))) return;
 
     setDeleteError(false);
     softDeleteApartment(apartment.id);

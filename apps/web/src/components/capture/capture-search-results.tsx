@@ -40,6 +40,7 @@ import {
   type SetupStore,
   type TaskSnooze,
 } from "@homeup/core";
+import { dialog } from "@homeup/core";
 import { GLOBAL_HIT_SECTION_ID, resolveGlobalHitAction, type GlobalHit } from "@/hooks/use-global-search-index";
 import { useFuzzySearch } from "@/hooks/use-fuzzy-search";
 import { HOUSEHOLD_TASKS_CHANGED_EVENT } from "@/hooks/use-overdue-task-count";
@@ -253,8 +254,10 @@ export function CaptureSearchResults({
             customAisles={customAisles}
             libraryPriceCents={libraryPriceFor?.(grocery.name) ?? null}
             onUpdate={writeGrocery}
-            onRequestDelete={(it) => {
-              if (window.confirm(`Remove “${it.name}” from the list?`)) softDeleteGrocery(it.id);
+            onRequestDelete={async (it) => {
+              if (await dialog.confirm({ title: `Remove “${it.name}” from the list?`, confirmLabel: "Remove", destructive: true })) {
+                softDeleteGrocery(it.id);
+              }
             }}
             onEdit={onEditGrocery}
           />

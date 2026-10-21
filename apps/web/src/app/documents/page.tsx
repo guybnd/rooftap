@@ -31,6 +31,7 @@ import {
   syncDocumentReminder,
   deleteDocumentReminder,
 } from '@homeup/core';
+import { dialog } from '@homeup/core';
 import { memberLabel } from '@/app/setup/member-label';
 import {
   DocumentsSectionLabel,
@@ -731,16 +732,20 @@ function DocumentsView() {
     });
   };
 
-  const deleteSelected = () => {
+  const deleteSelected = async () => {
     const picked = selectedDocs;
     if (picked.length === 0) return;
     const fromSources = picked.some((d) => !d.storeId);
-    hapticWarn();
     // A centre dialog is correct here per Hearth M4: destructive confirm.
     const detail = fromSources
       ? 'Files from bills and receipts are removed from those too.'
       : 'They are deleted for everyone in the household.';
-    if (!window.confirm(`Delete ${countLabel(picked.length)}? ${detail} This can’t be undone.`)) return;
+    const confirmed = await dialog.confirm({
+      title: `Delete ${countLabel(picked.length)}?`,
+      message: `${detail} This can’t be undone.`,
+      destructive: true,
+    });
+    if (!confirmed) return;
     exitSelect();
     const keys = new Set(picked.map((d) => d.key));
     setDocs((prev) => prev.filter((d) => !keys.has(d.key)));
@@ -1166,9 +1171,14 @@ function DocumentCard({
     .filter(Boolean)
     .join(' · ');
 
-  const remove = () => {
+  const remove = async () => {
     if (!doc.storeId) return;
-    if (!confirm(`Delete "${doc.title || doc.filename}"? This removes it from the store.`)) return;
+    const confirmed = await dialog.confirm({
+      title: `Delete "${doc.title || doc.filename}"?`,
+      message: 'This removes it from the store.',
+      destructive: true,
+    });
+    if (!confirmed) return;
     onDelete();
   };
 
@@ -1196,8 +1206,13 @@ function DocumentCard({
     }
   };
 
-  const removeLegacy = () => {
-    if (!confirm(`Delete "${doc.title || doc.filename}"? This removes the file from ${SOURCE_LABEL[doc.source] ?? 'its source'}.`)) return;
+  const removeLegacy = async () => {
+    const confirmed = await dialog.confirm({
+      title: `Delete "${doc.title || doc.filename}"?`,
+      message: `This removes the file from ${SOURCE_LABEL[doc.source] ?? 'its source'}.`,
+      destructive: true,
+    });
+    if (!confirmed) return;
     onDelete();
   };
 

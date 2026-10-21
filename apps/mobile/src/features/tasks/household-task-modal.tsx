@@ -7,7 +7,7 @@
 // `REPEAT_OPTIONS` segmented control), assignee reassignment via the new
 // `AssigneePicker` (needs `groupMembers`/`memberProfiles`, both now exposed
 // by `useDataCache()`), and a destructive-confirm on Delete (Hearth M4:
-// "center dialogs only for destructive confirms" — `Alert.alert` is this
+// "center dialogs only for destructive confirms" — `dialog.alert` is this
 // codebase's established native confirm surface, see
 // apps/mobile/src/app/(tabs)/documents/index.tsx's delete flow).
 import * as React from 'react';

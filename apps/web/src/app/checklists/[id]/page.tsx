@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { useDataCache } from '@/lib/data-cache';
 import { checklists$, checklistItems$, todayISO, householdTasks$, costItems$, useReconnectSync, useStoreHelpers, useStoreLoaded, useChecklistItemActions, useChecklistViewPrefs, createUndoBatchTracker, useModules, currencySymbol } from '@homeup/core';
+import { dialog } from '@homeup/core';
 import type { Checklist, ChecklistTaskItem, ChecklistRenewalMode } from '@homeup/core';
 import {
   typeMeta,
@@ -277,12 +278,16 @@ export default function ChecklistDetailPage() {
     router.push('/checklists');
   };
 
-  // D3/E4: Delete list is the lone danger row in the header menu — same
-  // window.confirm convention as other destructive MenuItem rows (e.g.
-  // apps/web/src/app/documents/page.tsx's folder delete).
-  const confirmDeleteList = () => {
+  // D3/E4: Delete list is the lone danger row in the header menu, confirmed
+  // in the themed dialog like other destructive MenuItem rows.
+  const confirmDeleteList = async () => {
     if (!checklist) return;
-    if (!window.confirm(`Delete "${checklist.title}"? This removes the whole list.`)) return;
+    const confirmed = await dialog.confirm({
+      title: `Delete "${checklist.title}"?`,
+      message: 'This removes the whole list.',
+      destructive: true,
+    });
+    if (!confirmed) return;
     deleteChecklist();
   };
 

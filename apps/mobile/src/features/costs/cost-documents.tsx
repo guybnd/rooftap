@@ -9,10 +9,10 @@
 // against — this is the store-only half of web's cost-card.tsx (CostDocuments
 // + LinkedDocuments combined into one source).
 import * as React from 'react';
-import { ActivityIndicator, Alert, View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
 import { use$ } from '@legendapp/state/react';
 import { Paperclip } from 'lucide-react-native';
-import { Text, Button, haptics } from '@homeup/ui';
+import { Text, Button } from '@homeup/ui';
 import {
   deleteDocument,
   documentBucket,
@@ -29,6 +29,7 @@ import {
   type Document,
   type DocumentLink,
   type UnifiedDocument,
+  dialog,
 } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
 import { getCurrentSupabaseClient } from '@/lib/supabase-client';
@@ -154,14 +155,12 @@ export function CostDocuments({ costItemId, groupId, onCountChange }: CostDocume
 
   const remove = (doc: UnifiedDocument) => {
     if (!doc.storeId) return;
-    haptics.warn();
-    Alert.alert(`Delete "${doc.title || doc.filename}"?`, 'This removes it from the document store.', [
+    dialog.alert(`Delete "${doc.title || doc.filename}"?`, 'This removes it from the document store.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
         style: 'destructive',
         onPress: async () => {
-          haptics.remove();
           const row = storeDocs.find((d) => d.id === doc.storeId);
           if (!row) return;
           await deleteDocument(getCurrentSupabaseClient(), row);

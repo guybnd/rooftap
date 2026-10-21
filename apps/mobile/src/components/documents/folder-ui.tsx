@@ -1,16 +1,15 @@
 // Folder chrome for the native Documents screen: the folder path that heads
 // the screen, folder tiles, a name prompt, and the move sheet.
 //
-// Web can lean on window.prompt for "name this folder"; React Native has no
-// equivalent that works on both platforms (Alert.prompt is iOS-only), so the
-// name prompt is a real sheet here. Folders are tiles in a two-column grid
+// Web asks for a folder name through the themed dialog.prompt; here the name
+// prompt is a real sheet (Hearth M4: contextual input arrives as a sheet). Folders are tiles in a two-column grid
 // under their own "Folders" label, and documents stay line items in one card
 // under "Files", so a folder never reads as just another row. The move sheet
 // lists destinations as rows to tap (Hearth M4). Web twin:
 // apps/web/src/components/documents/folder-browser.tsx.
 
 import * as React from 'react';
-import { Alert, Pressable, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Pressable, View, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -57,6 +56,7 @@ import {
   folderMoveOptions,
   MOTION_DURATIONS_MS,
   type DocumentFolder,
+  dialog,
 } from '@homeup/core';
 
 /**
@@ -262,7 +262,7 @@ export function FolderTile({
   );
 }
 
-/** Name prompt for creating and renaming, since RN has no window.prompt. */
+/** Name prompt for creating and renaming. */
 export function FolderNameSheet({
   open,
   onOpenChange,
@@ -612,8 +612,7 @@ export function FolderDeleteSheet({
       onDelete(false);
       return;
     }
-    haptics.warn();
-    Alert.alert(
+    dialog.alert(
       `Delete ${folderName} and ${documentsLabel}?`,
       'The documents are deleted for everyone in the household. This can’t be undone.',
       [

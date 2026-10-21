@@ -11,7 +11,7 @@
 // expo-router transitions are a plain descend here; the source-photo
 // thumbnail is scan-only (Phase 3, out of scope).
 import * as React from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { use$ } from '@legendapp/state/react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -50,6 +50,7 @@ import {
   type GroceryItem,
   type Recipe,
   type RecipeIngredient,
+  dialog,
 } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
 import { NoGroupScreen } from '@/components/no-group-screen';
@@ -182,11 +183,10 @@ export default function RecipeDetailScreen() {
     openRoute('/recipes');
   };
 
-  // E4: a destructive action confirms first (web uses window.confirm).
+  // E4: a destructive action confirms first (the themed dialog, as on web).
   const confirmDeleteRecipe = () => {
     if (!recipe) return;
-    haptics.warn();
-    Alert.alert(`Delete "${recipe.title}"?`, 'This removes the recipe and its ingredients.', [
+    dialog.alert(`Delete "${recipe.title}"?`, 'This removes the recipe and its ingredients.', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: deleteRecipe },
     ]);

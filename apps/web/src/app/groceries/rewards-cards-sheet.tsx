@@ -19,6 +19,7 @@ import {
   type LoyaltyCard,
   type LoyaltyCardFormat,
 } from '@homeup/core';
+import { dialog } from '@homeup/core';
 import { BottomSheet } from '@/components/ui/bottom-sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,7 +33,7 @@ import {
   ListItemTitle,
 } from '@/components/ui/list-item';
 import { CardCode } from '@/components/card-code';
-import { success, warn } from '@/lib/haptics';
+import { success } from '@/lib/haptics';
 
 type SheetView = { kind: 'list' } | { kind: 'show'; id: string } | { kind: 'edit'; id: string | null };
 
@@ -166,9 +167,14 @@ export function RewardsCardsSheet({
             <Button
               variant="ghost"
               className="h-11 text-destructive hover:text-destructive"
-              onClick={() => {
-                warn();
-                if (!confirm(`Remove ${shown.name}? It goes for everyone in your household.`)) return;
+              onClick={async () => {
+                const confirmed = await dialog.confirm({
+                  title: `Remove ${shown.name}?`,
+                  message: 'It goes for everyone in your household.',
+                  confirmLabel: 'Remove',
+                  destructive: true,
+                });
+                if (!confirmed) return;
                 onDelete(shown);
                 setView(cards.length > 1 ? { kind: 'list' } : { kind: 'edit', id: null });
               }}

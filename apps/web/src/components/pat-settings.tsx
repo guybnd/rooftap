@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { Bot, KeyRound, Copy, Check } from "lucide-react";
 import { timeAgo, timeUntil, DEFAULT_PAT_EXPIRY, PAT_EXPIRY_OPTIONS, type PatExpiryChoice } from '@homeup/core';
+import { dialog } from '@homeup/core';
 import { toast } from "sonner";
 
 interface PatStatus {
@@ -92,7 +93,13 @@ export function PatSettings() {
   }, [load, expiry]);
 
   const revoke = useCallback(async () => {
-    if (!confirm("Revoke this API key? Anything using it will stop working immediately.")) return;
+    const confirmed = await dialog.confirm({
+      title: "Revoke this API key?",
+      message: "Anything using it will stop working immediately.",
+      confirmLabel: "Revoke",
+      destructive: true,
+    });
+    if (!confirmed) return;
     setError(null);
     setBusy(true);
     try {

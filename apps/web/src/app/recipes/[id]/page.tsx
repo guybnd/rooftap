@@ -16,6 +16,7 @@ import { use$ } from '@legendapp/state/react';
 import { ArrowLeft, Pencil, Trash2, Plus, Check, RotateCcw, ShoppingCart, Users, Timer, Flame } from 'lucide-react';
 import { useDataCache } from '@/lib/data-cache';
 import { recipes$, recipeIngredients$, groceryItems$, useReconnectSync, useStoreHelpers, useStoreLoaded, useModules } from '@homeup/core';
+import { dialog } from '@homeup/core';
 import type { GroceryItem, Recipe, RecipeIngredient } from '@homeup/core';
 import {
   methodMeta,
@@ -183,11 +184,16 @@ export default function RecipeDetailPage() {
     }
   };
 
-  const deleteRecipe = () => {
+  const deleteRecipe = async () => {
     if (!recipe) return;
-    // E4: a destructive action confirms first (same window.confirm
-    // convention as the checklist detail's Delete list).
-    if (!window.confirm(`Delete "${recipe.title}"? This removes the recipe and its ingredients.`)) return;
+    // E4: a destructive action confirms first (same themed dialog as the
+    // checklist detail's Delete list).
+    const confirmed = await dialog.confirm({
+      title: `Delete "${recipe.title}"?`,
+      message: 'This removes the recipe and its ingredients.',
+      destructive: true,
+    });
+    if (!confirmed) return;
     ingredients.forEach((i) => softDeleteIngredient(i.id));
     softDeleteRecipe(recipe.id);
     router.push('/recipes');

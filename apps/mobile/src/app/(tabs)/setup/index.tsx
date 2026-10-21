@@ -22,7 +22,7 @@
 // controls (lede, filters, notices) and the trailing Budget Summary are
 // shared between both branches via `SetupListHeader`/`SetupBudgetFooter`.
 import * as React from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FlashList, type ListRenderItem } from '@shopify/flash-list';
 // HOUP-318: per-group quick-add rows sit anywhere in the list, so the FlashList
@@ -68,6 +68,7 @@ import {
   type SetupSummary,
   SETUP_STATUS_LABEL,
   currencySymbol,
+  dialog,
 } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
 import { NoGroupScreen } from '@/components/no-group-screen';
@@ -592,15 +593,13 @@ export default function SetupSectionScreen() {
   };
 
   const bulkDelete = () => {
-    haptics.warn();
-    Alert.alert('Delete selected items?', `${selectedIds.size} item(s) will be removed. This cannot be undone.`, [
+    dialog.alert('Delete selected items?', `${selectedIds.size} item(s) will be removed. This cannot be undone.`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
         style: 'destructive',
         onPress: () => {
           selectedIds.forEach((id) => softDeleteRow(id));
-          haptics.remove();
           exitSelectMode();
         },
       },
@@ -609,14 +608,12 @@ export default function SetupSectionScreen() {
 
   const deleteItem = React.useCallback(
     (itemId: string, itemName: string) => {
-      haptics.warn();
-      Alert.alert(`Delete "${itemName}"?`, undefined, [
+      dialog.alert(`Delete "${itemName}"?`, undefined, [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
           style: 'destructive',
           onPress: () => {
-            haptics.remove();
             softDeleteRow(itemId);
           },
         },

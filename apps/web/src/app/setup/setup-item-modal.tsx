@@ -170,7 +170,7 @@ export function SetupItemModal({ isOpen, item, groupId, existingRooms = [], stor
       onSubmit={handleSubmit}
       canSubmit={!!formData.name.trim() && !!formData.room.trim()}
       onDelete={item && onDelete ? handleDelete : undefined}
-      deleteConfirmMessage="Are you sure you want to delete this item?"
+      deleteConfirmTitle="Delete this item?"
     >
       <FormSection>
         <FieldRow label="Name" htmlFor="setup-name" required>

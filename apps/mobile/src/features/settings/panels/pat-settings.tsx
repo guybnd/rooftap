@@ -11,7 +11,7 @@
 // needs no new package and uses the OS's native text-selection "Copy" menu
 // on both iOS and Android.
 import * as React from 'react';
-import { Alert, View } from 'react-native';
+import { View } from 'react-native';
 import { Bot, KeyRound } from 'lucide-react-native';
 import {
   Text,
@@ -24,7 +24,7 @@ import {
   SegmentedControl,
   haptics,
 } from '@homeup/ui';
-import { timeAgo, timeUntil, DEFAULT_PAT_EXPIRY, PAT_EXPIRY_OPTIONS, type PatExpiryChoice } from '@homeup/core';
+import { timeAgo, timeUntil, DEFAULT_PAT_EXPIRY, PAT_EXPIRY_OPTIONS, type PatExpiryChoice, dialog } from '@homeup/core';
 import { getStoredServer } from '@/lib/server-config';
 import { getCurrentSupabaseClient } from '@/lib/supabase-client';
 import { SettingsLabel, SettingsPanel } from './settings-panel';
@@ -131,7 +131,7 @@ export function PatSettings() {
   }, []);
 
   const revoke = React.useCallback(() => {
-    Alert.alert('Revoke this API key?', 'Anything using it will stop working immediately.', [
+    dialog.alert('Revoke this API key?', 'Anything using it will stop working immediately.', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Revoke', style: 'destructive', onPress: doRevoke },
     ]);

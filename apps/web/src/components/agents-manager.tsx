@@ -4,6 +4,7 @@ import { useState } from "react";
 import { use$ } from "@legendapp/state/react";
 import { useDataCache } from "@/lib/data-cache";
 import { agents$, apartmentAgents$, useReconnectSync, useStoreHelpers } from "@homeup/core";
+import { dialog } from "@homeup/core";
 import type { Agent, ApartmentAgent } from '@homeup/core';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -69,13 +70,13 @@ export function AgentsManager() {
     setAdding(false);
   };
 
-  const handleDelete = (agent: Agent) => {
+  const handleDelete = async (agent: Agent) => {
     const count = getListingCount(agent.id);
     if (count > 0) {
       setError(`${agent.name} is on ${count} listing${count !== 1 ? "s" : ""}. Unassign them first.`);
       return;
     }
-    if (!confirm(`Delete agent "${agent.name}"?`)) return;
+    if (!(await dialog.confirm({ title: `Delete agent "${agent.name}"?`, destructive: true }))) return;
     setError(null);
     softDeleteRow(agent.id);
   };

@@ -14,7 +14,7 @@
 // the ticket's plan — see each file's own header comment.
 import { useState } from 'react';
 import { use$ } from '@legendapp/state/react';
-import { Alert, View } from 'react-native';
+import { View } from 'react-native';
 import { Check, Contact, Pencil, Plus, Trash2, X } from 'lucide-react-native';
 import {
   Text,
@@ -26,9 +26,8 @@ import {
   ListItemMeta,
   ListItemTitle,
   ListItemTrailing,
-  haptics,
 } from '@homeup/ui';
-import { agents$, apartmentAgents$, useReconnectSync, useStoreHelpers } from '@homeup/core';
+import { agents$, apartmentAgents$, useReconnectSync, useStoreHelpers, dialog } from '@homeup/core';
 import type { Agent, ApartmentAgent } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
 import { randomUUID } from '@/lib/uuid';
@@ -101,14 +100,12 @@ export function AgentsManager() {
       return;
     }
     setError(null);
-    haptics.warn();
-    Alert.alert(`Delete ${agent.name}?`, undefined, [
+    dialog.alert(`Delete ${agent.name}?`, undefined, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
         style: 'destructive',
         onPress: () => {
-          haptics.remove();
           softDeleteRow(agent.id);
         },
       },

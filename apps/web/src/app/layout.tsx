@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 // HOUP-73: registers apps/web's StoreEnvironment (browser IndexedDB persist,
@@ -14,6 +15,7 @@ import { ChunkReload } from "@/components/chunk-reload";
 import { PersistentStorage } from "@/components/persistent-storage";
 import { sectionHueCss } from "@/lib/section-hue-css";
 import { Toaster } from "sonner";
+import { DialogHost } from "@/components/ui/dialog-host";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono", display: "swap" });
@@ -101,7 +103,32 @@ export default function RootLayout({
         <PersistentStorage />
         <ThemeProvider>
           <AppSidebar>{children}</AppSidebar>
-          <Toaster theme="system" position="bottom-right" richColors />
+          {/* Hearth-themed: the toast is the app's own glass card (same as
+              native ToastHost), status hues only on the icon, Undo/Edit in
+              coral text. Colours come from the theme vars, so a pinned
+              Ember Day/Night wins over the OS scheme. */}
+          <Toaster
+            position="bottom-right"
+            style={
+              {
+                "--normal-bg": "var(--glass-bg)",
+                "--normal-border": "var(--glass-border)",
+                "--normal-text": "var(--popover-foreground)",
+                "--border-radius": "0.75rem",
+              } as CSSProperties
+            }
+            toastOptions={{
+              classNames: {
+                toast: "!shadow-md !font-sans",
+                description: "!text-muted-foreground",
+                success: "[&_[data-icon]]:text-success",
+                error: "[&_[data-icon]]:text-destructive",
+                actionButton: "!bg-transparent !text-primary !font-semibold !px-1",
+                cancelButton: "!bg-transparent !text-muted-foreground",
+              },
+            }}
+          />
+          <DialogHost />
         </ThemeProvider>
       </body>
     </html>

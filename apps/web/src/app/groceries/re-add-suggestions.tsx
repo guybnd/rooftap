@@ -22,6 +22,7 @@ import {
   type GroceryDismissAction,
   type SuggestReAddItem,
 } from '@homeup/core';
+import { dialog } from '@homeup/core';
 import { PopMenu, MenuDivider, MenuItem, MenuLabel } from '../setup/pop-menu';
 import { HOLD_FILL_DELAY_MS, useLongPress } from '@/hooks/use-long-press';
 import { HoldFillOverlay } from '@/components/ui/hold-fill-overlay';
@@ -66,8 +67,13 @@ export function ReAddSuggestions({ runningLow, onAdd, onAddAll, onSnooze, dismis
   const visibleLow = hiddenLow > 0 ? runningLow.slice(0, cap) : runningLow;
 
   // A bulk add gets a confirm on top of the Undo pill (Guy, 2026-10-18).
-  const confirmAddAll = () => {
-    if (confirm(`Add all ${runningLow.length} suggestions to the list?`)) onAddAll();
+  const confirmAddAll = async () => {
+    const confirmed = await dialog.confirm({
+      title: `Add all ${runningLow.length} suggestions?`,
+      message: 'They move back to Needed on your list.',
+      confirmLabel: 'Add all',
+    });
+    if (confirmed) onAddAll();
   };
 
   const body = reviewing ? (

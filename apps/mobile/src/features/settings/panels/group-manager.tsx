@@ -7,14 +7,13 @@
 // refresh().
 //
 // HOUP-139: rename/remove/cancel-invite now surface via the universal toast
-// host instead of Alert.alert-on-failure-only — mirrors web group-manager.tsx's
+// host instead of a blocking alert on failure — mirrors web group-manager.tsx's
 // sonner copy ("Group renamed" / "Member removed" / "Invitation cancelled").
-// Destructive confirms still use Alert.alert's native action-sheet-style
-// buttons instead of `window.confirm`. Member rows/pending-invite rows/sent-
+// Destructive confirms use the themed dialog.alert, like web's dialog.confirm. Member rows/pending-invite rows/sent-
 // invite rows are rebuilt on @homeup/ui's ListGroup/ListItem three-slot
 // anatomy (Hearth) rather than web's raw `divide-y` rows.
 import * as React from 'react';
-import { Alert, View } from 'react-native';
+import { View } from 'react-native';
 import { Check, Mail, Pencil, Plus, Trash2, Users, WifiOff, X } from 'lucide-react-native';
 import {
   Text,
@@ -29,7 +28,6 @@ import {
   SearchablePicker,
   cn,
   toast,
-  haptics,
 } from '@homeup/ui';
 import {
   timeAgo,
@@ -50,6 +48,7 @@ import {
   currencyForCountry,
   currencyPickerOptions,
   FOLLOW_REGION_CURRENCY,
+  dialog,
 } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
 import { getCurrentSupabaseClient } from '@/lib/supabase-client';
@@ -95,8 +94,7 @@ export function GroupManager() {
   const handleDecline = async (invitationId: string) => {
     const error = await declineGroupInvitation(getCurrentSupabaseClient(), invitationId);
     if (error) {
-      haptics.error();
-      Alert.alert('Failed to decline invitation');
+      toast.error('Failed to decline invitation');
       return;
     }
     await refresh();
@@ -201,8 +199,7 @@ export function GroupManager() {
   };
 
   const handleRemove = (userId: string) => {
-    haptics.warn();
-    Alert.alert('Remove this member from the group?', undefined, [
+    dialog.alert('Remove this member from the group?', undefined, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Remove',

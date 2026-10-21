@@ -28,6 +28,7 @@ import { useKeyboardInset } from "@/hooks/use-keyboard-inset";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { LeadingTile } from "@/components/ui/leading-tile";
 
+import { dialog } from '@homeup/core';
 interface ItemFormSheetProps {
   isOpen: boolean;
   onClose: () => void;
@@ -56,11 +57,13 @@ interface ItemFormSheetProps {
   /**
    * When provided, a Delete button is rendered (edit mode). HOUP-191: the
    * footer always confirms before calling this — callers must not layer
-   * their own confirm() on top (that would show two dialogs in a row).
+   * their own dialog.confirm() on top (that would show two dialogs in a row).
    */
   onDelete?: () => void;
   deleteLabel?: string;
-  /** Confirm dialog message override. Defaults to `${deleteLabel}? This cannot be undone.` */
+  /** Confirm dialog title override. Defaults to `${deleteLabel}?` */
+  deleteConfirmTitle?: string;
+  /** Confirm dialog message override. Defaults to "This cannot be undone." */
   deleteConfirmMessage?: string;
   children: React.ReactNode;
 }
@@ -78,6 +81,7 @@ export function ItemFormSheet({
   saving = false,
   onDelete,
   deleteLabel = "Delete",
+  deleteConfirmTitle,
   deleteConfirmMessage,
   children,
 }: ItemFormSheetProps) {
@@ -91,9 +95,15 @@ export function ItemFormSheet({
 
   // HOUP-191: destructive confirm lives here, once, instead of every caller
   // hand-rolling (or forgetting) its own confirm() before onDelete.
-  const requestDelete = () => {
+  const requestDelete = async () => {
     if (!onDelete) return;
-    if (!window.confirm(deleteConfirmMessage ?? `${deleteLabel}? This cannot be undone.`)) return;
+    const confirmed = await dialog.confirm({
+      title: deleteConfirmTitle ?? `${deleteLabel}?`,
+      message: deleteConfirmMessage ?? "This cannot be undone.",
+      confirmLabel: deleteLabel,
+      destructive: true,
+    });
+    if (!confirmed) return;
     onDelete();
   };
 

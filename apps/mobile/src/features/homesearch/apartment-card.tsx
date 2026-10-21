@@ -52,7 +52,7 @@
 //   and the footer status reads a relative day ("Booked tomorrow"). Mirrors
 //   web's apartment-card.tsx.
 import * as React from 'react';
-import { Alert, Image, Linking, Pressable, View } from 'react-native';
+import { Image, Linking, Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { use$ } from '@legendapp/state/react';
 import {
@@ -86,6 +86,7 @@ import {
   type Appointment,
   type ApartmentComment,
   type ApartmentWithScore,
+  dialog,
 } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
 import { getCurrentSupabaseClient } from '@/lib/supabase-client';
@@ -236,14 +237,12 @@ export function ApartmentCard({
   };
 
   const handleDelete = () => {
-    haptics.warn();
-    Alert.alert('Delete this apartment?', undefined, [
+    dialog.alert('Delete this apartment?', undefined, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
         style: 'destructive',
         onPress: () => {
-          haptics.remove();
           softDeleteApartment(apartment.id);
           onDelete?.(apartment.id);
         },

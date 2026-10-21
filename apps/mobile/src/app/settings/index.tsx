@@ -10,7 +10,7 @@
 // perf benefit. Mirrors apartment-grid.tsx's own stated rationale for staying
 // off FlashList (small, bounded row counts).
 import * as React from 'react';
-import { Alert, View } from 'react-native';
+import { View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import * as Notifications from 'expo-notifications';
 import * as SecureStore from 'expo-secure-store';
@@ -41,7 +41,7 @@ import {
   SectionScreen,
   haptics,
 } from '@homeup/ui';
-import { getEnabledSections, useModules } from '@homeup/core';
+import { getEnabledSections, useModules, dialog } from '@homeup/core';
 import { OFFICIAL_SERVER_LABEL, getStoredServer, type ServerSelection } from '@/lib/server-config';
 import { sectionIcons } from '@/lib/section-icons';
 import { signOut } from '@/lib/supabase-client';
@@ -148,7 +148,7 @@ export default function SettingsScreen() {
 
   const handleSignOut = () => {
     if (!server) return;
-    Alert.alert('Sign out?', undefined, [
+    dialog.alert('Sign out?', undefined, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Sign out',

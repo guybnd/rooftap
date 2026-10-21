@@ -31,7 +31,7 @@
 // controls, session panel, suggest-re-add, and add-custom-aisle control are
 // shared between both branches via `GroceriesListHeader`/`GroceriesAddAisleFooter`.
 import * as React from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FlashList, type ListRenderItem } from '@shopify/flash-list';
 // HOUP-318: per-group quick-add rows sit anywhere in the list, so the FlashList
@@ -122,6 +122,7 @@ import {
   type SuggestReAddItem,
   type GroceryDismissAction,
   type DocumentUploadInput,
+  dialog,
 } from '@homeup/core';
 import { useFuzzySearch } from '@homeup/core/src/hooks/use-fuzzy-search';
 import { useDataCache } from '@/lib/data-cache';
@@ -1073,7 +1074,7 @@ export default function GroceriesSectionScreen() {
   const suggestDismiss = useSuggestDismiss({ hide: groceryUndo.hide, archive: archiveItem });
 
   // HOUP-224: the row overflow menu's "Delete" — distinct from Archive above,
-  // confirmed inside the menu (Alert.alert) before this fires, and never
+  // confirmed inside the menu (dialog.alert) before this fires, and never
   // learns to the library (mirrors web page.tsx's handleRequestDelete).
   const handleRequestDelete = React.useCallback(
     (item: GroceryItem) => {
@@ -1231,15 +1232,13 @@ export default function GroceriesSectionScreen() {
   };
 
   const bulkDelete = () => {
-    haptics.warn();
-    Alert.alert('Remove selected items?', `${selectedIds.size} item(s) will be removed.`, [
+    dialog.alert('Remove selected items?', `${selectedIds.size} item(s) will be removed.`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Remove',
         style: 'destructive',
         onPress: () => {
           selectedIds.forEach((id) => softDeleteRow(id));
-          haptics.remove();
           exitSelectMode();
         },
       },
@@ -1279,14 +1278,12 @@ export default function GroceriesSectionScreen() {
     (aisleName: string) => {
       const aisle = (customAisles ?? []).find((a) => a.name === aisleName);
       if (!aisle) return;
-      haptics.warn();
-      Alert.alert(`Delete "${aisleName}"?`, 'Items in this aisle will be moved to Other.', [
+      dialog.alert(`Delete "${aisleName}"?`, 'Items in this aisle will be moved to Other.', [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
           style: 'destructive',
           onPress: () => {
-            haptics.remove();
             items.filter((i) => i.aisle === aisleName).forEach((i) => patchRow(i.id, { aisle: 'other' }));
             void (async () => {
               await getCurrentSupabaseClient().from('grocery_aisles').delete().eq('id', aisle.id);
@@ -1649,7 +1646,7 @@ export default function GroceriesSectionScreen() {
   // already-active session," not "start a session from a picked file."
   const pickReceiptSource = () =>
     new Promise<'camera' | 'library' | 'files' | null>((resolve) => {
-      Alert.alert('Add receipt', undefined, [
+      dialog.alert('Add receipt', undefined, [
         { text: 'Camera', onPress: () => resolve('camera') },
         { text: 'Photo Library', onPress: () => resolve('library') },
         { text: 'Choose PDF…', onPress: () => resolve('files') },

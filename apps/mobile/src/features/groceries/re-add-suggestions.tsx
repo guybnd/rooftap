@@ -6,7 +6,7 @@
 // Full review (next to Show more) expands the full rows (emoji, days, Add / Snooze / X). Mirrors
 // apps/web/src/app/groceries/re-add-suggestions.tsx.
 import * as React from 'react';
-import { Alert, Pressable, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { Plus, Star } from 'lucide-react-native';
 import { BottomSheet, Button, HoldFillOverlay, ListGroup, ListItem, ListItemTitle, Text, haptics, useHoldFill } from '@homeup/ui';
 import {
@@ -16,6 +16,7 @@ import {
   snoozeUntilISO,
   type GroceryDismissAction,
   type SuggestReAddItem,
+  dialog,
 } from '@homeup/core';
 import { SuggestReAddSection } from './suggest-re-add-section';
 
@@ -63,7 +64,7 @@ export function ReAddSuggestions({
   const closeMenu = () => setMenuTarget(null);
   // A bulk add gets a confirm on top of the Undo pill (Guy, 2026-10-18).
   const confirmAddAll = () =>
-    Alert.alert(`Add all ${runningLow.length} suggestions?`, 'They move back to Needed on your list.', [
+    dialog.alert(`Add all ${runningLow.length} suggestions?`, 'They move back to Needed on your list.', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Add all', onPress: onAddAll },
     ]);

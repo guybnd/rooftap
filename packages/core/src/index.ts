@@ -119,6 +119,7 @@ export * from './data/use-event-save';
 export * from './tokens';
 export * from './tab-glide';
 export * from './theme-preference';
+export * from './dialog-store';
 export * from './section-hues';
 export * from './assistant-view';
 export * from './assistant-usage';

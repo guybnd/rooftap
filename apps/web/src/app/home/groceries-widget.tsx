@@ -19,6 +19,7 @@ import { useRouter } from 'next/navigation';
 import { use$ } from '@legendapp/state/react';
 import { ChevronRight, Plus, ShoppingCart, Star } from 'lucide-react';
 import { HOME_RE_ADD_CHIP_CAP, type Group, type GroceryItem } from '@homeup/core';
+import { dialog } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
 import { countNeeded, suggestReAdd, groceryItems$, useReconnectSync, useStoreHelpers, compareStrings, learnItemLibrary, resolveItemDefaults } from '@homeup/core';
 import { createClient } from '@/lib/supabase/client';
@@ -286,8 +287,10 @@ export function GroceriesWidget({
                       customAisles={customAisles}
                       libraryPriceCents={priceFor(item.name)}
                       onUpdate={(next) => onCardUpdate(item, next)}
-                      onRequestDelete={(it) => {
-                        if (window.confirm(`Remove “${it.name}” from the list?`)) softDeleteItem(it.id);
+                      onRequestDelete={async (it) => {
+                        if (await dialog.confirm({ title: `Remove “${it.name}” from the list?`, confirmLabel: 'Remove', destructive: true })) {
+                          softDeleteItem(it.id);
+                        }
                       }}
                       onEdit={(it) => {
                         setEditingItem(it);

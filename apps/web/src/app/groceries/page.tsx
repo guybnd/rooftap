@@ -24,6 +24,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { useDataCache } from '@/lib/data-cache';
 import { createClient } from '@/lib/supabase/client';
 import type { GroceryItem, GroceryAisle, GroceryCustomAisle, GrocerySession, GrocerySortMode } from '@homeup/core';
+import { dialog } from '@homeup/core';
 import {
   AISLE_META,
   AISLE_COLOR,
@@ -665,7 +666,12 @@ export default function GroceriesPage() {
   };
 
   const deleteCustomAisle = async (aisle: GroceryCustomAisle) => {
-    if (!confirm(`Delete aisle "${aisle.name}"? Items in this aisle will be moved to "Other".`)) return;
+    const confirmed = await dialog.confirm({
+      title: `Delete aisle "${aisle.name}"?`,
+      message: 'Items in this aisle will be moved to Other.',
+      destructive: true,
+    });
+    if (!confirmed) return;
     const supabase = createClient();
     // Move items out of the deleted aisle via the store; the aisle row itself is
     // not migrated yet, so it's still deleted directly on Supabase.
@@ -700,7 +706,12 @@ export default function GroceriesPage() {
   const bulkDelete = async () => {
     const count = selectedIds.size;
     if (!count) return;
-    if (!confirm(`Delete ${count} item${count === 1 ? '' : 's'}? This cannot be undone.`)) return;
+    const confirmed = await dialog.confirm({
+      title: `Delete ${count} item${count === 1 ? '' : 's'}?`,
+      message: 'This cannot be undone.',
+      destructive: true,
+    });
+    if (!confirmed) return;
     setIsBulkSaving(true);
     try {
       [...selectedIds].forEach((id) => softDeleteItem(id));

@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 
+import { dialog } from '@homeup/core';
 export function FolderDeleteSheet({
   open,
   onOpenChange,
@@ -36,13 +37,16 @@ export function FolderDeleteSheet({
   const documentsLabel = documentCount === 1 ? '1 document' : `${documentCount} documents`;
   const deletesDocuments = withDocuments && documentCount > 0;
 
-  const submit = () => {
+  const submit = async () => {
     // A centre dialog is correct here per Hearth M4: destructive confirm.
     if (
       deletesDocuments &&
-      !window.confirm(
-        `Delete ${folderName} and ${documentsLabel}? The documents are deleted for everyone in the household. This can’t be undone.`
-      )
+      !(await dialog.confirm({
+        title: `Delete ${folderName} and ${documentsLabel}?`,
+        message: 'The documents are deleted for everyone in the household. This can’t be undone.',
+        confirmLabel: 'Delete all',
+        destructive: true,
+      }))
     ) {
       return;
     }

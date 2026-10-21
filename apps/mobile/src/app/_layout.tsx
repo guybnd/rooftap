@@ -28,7 +28,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { ToastHost } from '@homeup/ui';
+import { DialogHost, ToastHost } from '@homeup/ui';
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { CaptureProvider } from '@/components/capture/capture-context';
 import { CaptureSheet } from '@/components/capture/capture-sheet';
@@ -141,6 +141,7 @@ export default function RootLayout() {
                     (.docs/modules.md): above the tab bar, under the toasts. */}
                 <ModulePicker />
                 <ToastHost bottomOffset={showTabBar ? TAB_BAR_CONTENT_HEIGHT : 0} />
+                <DialogHost />
               </CaptureProvider>
             </DataCacheProvider>
           </AppThemeProvider>

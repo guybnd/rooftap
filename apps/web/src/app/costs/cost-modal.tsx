@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import type { CostItem, CostCadence, CostCategory } from '@homeup/core';
+import { dialog } from '@homeup/core';
 import { CATEGORY_META, currencySymbol } from '@homeup/core';
 import { syncCostReminders, useModules } from '@homeup/core';
 import { todayISO } from '@/app/tasks/moving-tasks';
@@ -145,9 +146,9 @@ export function CostModal({ isOpen, item, groupId, defaultCategory, defaultName,
     }
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!item?.id || !onDelete) return;
-    if (!confirm(`Delete "${item.name}"? This cannot be undone.`)) return;
+    if (!(await dialog.confirm({ title: `Delete "${item.name}"?`, message: 'This cannot be undone.', destructive: true }))) return;
     onDelete(item.id);
     onClose();
   };

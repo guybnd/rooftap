@@ -18,14 +18,14 @@
 // list — both are bounded to "one day's worth of items," so virtualization
 // has nothing to save.
 import * as React from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
 import { use$ } from '@legendapp/state/react';
 import { useLocalSearchParams } from 'expo-router';
 import { Building2, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, LayoutList, ListPlus, Plus } from 'lucide-react-native';
-import { Text, ActionMenu, type ActionMenuAnchor, BottomSheet, Button, HeroLede, Input, MonthDatePicker, ScreenBackground, SegmentedControl, cn, haptics } from '@homeup/ui';
+import { Text, ActionMenu, type ActionMenuAnchor, BottomSheet, Button, HeroLede, Input, MonthDatePicker, ScreenBackground, SegmentedControl, cn, haptics, toast } from '@homeup/ui';
 import {
   agents$,
   apartments$,
@@ -450,8 +450,7 @@ export default function CalendarSectionScreen() {
         await fetchCalendarOverlay();
         setSelectedCalendarEvent(null);
       } else {
-        haptics.error();
-        Alert.alert(result.error === 'already_imported' ? 'This event has already been imported.' : 'Could not add as to-do. Please try again.');
+        toast.error(result.error === 'already_imported' ? 'This event has already been imported.' : 'Could not add as to-do. Please try again.');
       }
     } finally {
       setCalendarActionBusy(false);
@@ -468,8 +467,7 @@ export default function CalendarSectionScreen() {
         await fetchCalendarOverlay();
         setSelectedCalendarEvent(null);
       } else {
-        haptics.error();
-        Alert.alert(
+        toast.error(
           result.error === 'already_imported' ? 'This event has already been imported.' : 'Could not import as appointment. Please try again.'
         );
       }

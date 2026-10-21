@@ -4,7 +4,7 @@
 // HOUP-191: migrated off a hand-built BottomSheet shell onto the shared
 // `ItemFormSheet` (@homeup/ui) — same header/scrollable-body/sticky-footer
 // anatomy as household-task-modal.tsx, incl. its centralized destructive
-// confirm + `warn()` haptic (this component's own `Alert.alert` delete
+// confirm + `warn()` haptic (this component's own `dialog.alert` delete
 // confirm is gone; `deleteConfirmTitle`/`deleteConfirmMessage` reproduce the
 // same copy). Fields/logic are unchanged.
 //

@@ -199,7 +199,7 @@ export function HouseholdTaskModal({ isOpen, task, groupId, defaultTitle, defaul
       onSubmit={handleSubmit}
       canSubmit={!!formData.title.trim()}
       onDelete={task && onDelete ? handleDelete : undefined}
-      deleteConfirmMessage={task ? `Delete "${task.title}"? This cannot be undone.` : undefined}
+      deleteConfirmTitle={task ? `Delete "${task.title}"?` : undefined}
     >
       <FormSection>
         <FieldRow label="Task" htmlFor="task-title" required>

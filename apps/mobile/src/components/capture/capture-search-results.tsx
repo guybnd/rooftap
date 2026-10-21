@@ -9,7 +9,6 @@
 // chevron (GlobalSearchResults' fallback). Web twin:
 // apps/web/src/components/capture/capture-search-results.tsx.
 import * as React from 'react';
-import { Alert } from 'react-native';
 import { use$ } from '@legendapp/state/react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { haptics, toast } from '@homeup/ui';
@@ -39,6 +38,7 @@ import {
   type SetupItem,
   type SetupStore,
   type TaskSnooze,
+  dialog,
 } from '@homeup/core';
 import { useFuzzySearch } from '@homeup/core/src/hooks/use-fuzzy-search';
 import type { GlobalHit } from '@homeup/core/src/hooks/use-global-search-index';
@@ -213,14 +213,12 @@ export function CaptureSearchResults({
     }
   };
   const deleteSetup = (item: SetupItem) => {
-    haptics.warn();
-    Alert.alert(`Delete "${item.name}"?`, undefined, [
+    dialog.alert(`Delete "${item.name}"?`, undefined, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
         style: 'destructive',
         onPress: () => {
-          haptics.remove();
           softDeleteSetup(item.id);
         },
       },

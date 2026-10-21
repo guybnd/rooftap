@@ -10,9 +10,10 @@
 // a tinted word in the trailing slot (PC1: a chip promises a tap; H2: coral
 // is interactive, so Optional reads amber, Viewed green, the rest muted).
 import * as React from 'react';
-import { Alert, View } from 'react-native';
+import { View } from 'react-native';
+import { dialog } from '@homeup/core';
 import { Trash2 } from 'lucide-react-native';
-import { Text, ListItem, ListItemContent, ListItemLeading, ListItemMeta, ListItemTitle, ListItemTrailing, SwipeActions, cn, haptics } from '@homeup/ui';
+import { Text, ListItem, ListItemContent, ListItemLeading, ListItemMeta, ListItemTitle, ListItemTrailing, SwipeActions, cn } from '@homeup/ui';
 import type { Agent, Apartment, Appointment } from '@homeup/core';
 
 const STATUS_LABEL: Record<Appointment['status'], string> = {
@@ -38,14 +39,12 @@ export function AppointmentRow({ appointment, apartment, agent, onEdit, onDelete
   const isViewed = appointment.status === 'viewed';
 
   const confirmDelete = () => {
-    haptics.warn();
-    Alert.alert(`Delete this appointment?`, "This can't be undone.", [
+    dialog.alert(`Delete this appointment?`, "This can't be undone.", [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
         style: 'destructive',
         onPress: () => {
-          haptics.remove();
           onDelete(appointment);
         },
       },

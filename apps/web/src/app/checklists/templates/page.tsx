@@ -11,6 +11,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { use$ } from '@legendapp/state/react';
 import { checklistTemplates$, checklistTemplateItems$, useReconnectSync, useStoreHelpers, useModules, currencySymbol } from '@homeup/core';
+import { dialog } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
 import type { ChecklistTemplate, ChecklistTemplateItem, ChecklistType } from '@homeup/core';
 import {
@@ -148,8 +149,13 @@ export default function ChecklistTemplatesPage() {
   );
 
   const handleDelete = useCallback(
-    (tpl: ChecklistTemplate) => {
-      if (!confirm(`Delete template “${tpl.title}”? This can't be undone.`)) return;
+    async (tpl: ChecklistTemplate) => {
+      const confirmed = await dialog.confirm({
+        title: `Delete template “${tpl.title}”?`,
+        message: "This can't be undone.",
+        destructive: true,
+      });
+      if (!confirmed) return;
       (itemsByTemplate.get(tpl.id) ?? []).forEach((it) => softDeleteTemplateItem(it.id));
       softDeleteTemplate(tpl.id);
       setEditorOpen(false);

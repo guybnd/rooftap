@@ -9,7 +9,7 @@
 // irrelevant on native, but this mirrors the same flat-list pattern for
 // consistency with the rest of the sub-panels.
 import * as React from 'react';
-import { Alert, Pressable, ScrollView, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import {
   AlarmClock,
   CalendarPlus,
@@ -38,6 +38,7 @@ import {
   type GroupMember,
   type HouseholdTask,
   type TaskSnooze,
+  dialog,
 } from '@homeup/core';
 
 type Priority = 'low' | 'medium' | 'high';
@@ -362,9 +363,8 @@ export function TaskQuickMenu({
               onPress={() => {
                 // HOUP-191: this was deleting immediately with no confirm —
                 // matches the ItemFormSheet footer's centralized confirm
-                // (Alert.alert + warn() fired as the dialog appears).
-                haptics.warn();
-                Alert.alert(`Delete "${task.title}"?`, 'This removes it from the list.', [
+                // (the themed dialog fires warn() as it appears).
+                dialog.alert(`Delete "${task.title}"?`, 'This removes it from the list.', [
                   { text: 'Cancel', style: 'cancel' },
                   {
                     text: 'Delete',

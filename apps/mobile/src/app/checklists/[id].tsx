@@ -12,7 +12,7 @@
 // flagged and deferred for assignee display). Wire this once a screen
 // promotes memberProfiles into the native DataCacheProvider.
 import * as React from 'react';
-import { ActivityIndicator, Alert, Pressable, View } from 'react-native';
+import { ActivityIndicator, Pressable, View } from 'react-native';
 // HOUP-318: keyboard-aware scroll container (same swap as Home/Costs) so an
 // inline field low on the page scrolls above the on-screen keyboard.
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
@@ -82,6 +82,7 @@ import {
   type ChecklistTaskItem,
   type ChecklistRenewalMode,
   currencySymbol,
+  dialog,
 } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
 import { NoGroupScreen } from '@/components/no-group-screen';
@@ -321,14 +322,12 @@ export default function ChecklistDetailScreen() {
 
   const confirmDeleteList = () => {
     if (!checklist) return;
-    haptics.warn();
-    Alert.alert(`Delete "${checklist.title}"?`, 'This removes the whole list.', [
+    dialog.alert(`Delete "${checklist.title}"?`, 'This removes the whole list.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
         style: 'destructive',
         onPress: () => {
-          haptics.remove();
           setShowMenuSheet(false);
           deleteChecklist();
         },

@@ -4,7 +4,7 @@
 // add/edit form. Opened with `initialCardId` it lands straight on that card,
 // so a household with one card is one tap from the list to the till.
 import * as React from 'react';
-import { Alert, Pressable, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { ChevronLeft, Plus, WalletCards } from 'lucide-react-native';
 import {
   BottomSheet,
@@ -31,6 +31,7 @@ import {
   normalizeLoyaltyNumber,
   type LoyaltyCard,
   type LoyaltyCardFormat,
+  dialog,
 } from '@homeup/core';
 import { randomUUID } from '@/lib/uuid';
 import { useKeepAwakeWhile } from '@/lib/keep-awake';
@@ -123,14 +124,12 @@ export function RewardsCardsSheet({ open, onOpenChange, cards, groupId, initialC
               variant="ghost"
               textClassName="text-destructive"
               onPress={() => {
-                haptics.warn();
-                Alert.alert(`Remove ${shown.name}?`, 'It goes for everyone in your household.', [
+                dialog.alert(`Remove ${shown.name}?`, 'It goes for everyone in your household.', [
                   { text: 'Cancel', style: 'cancel' },
                   {
                     text: 'Remove',
                     style: 'destructive',
                     onPress: () => {
-                      haptics.remove();
                       onDelete(shown);
                       setView(cards.length > 1 ? { kind: 'list' } : { kind: 'edit', id: null });
                     },

@@ -13,6 +13,7 @@ import {
   SETUP_STATUS_LABEL,
   currencySymbol,
 } from '@homeup/core';
+import { dialog } from '@homeup/core';
 import {
   ExternalLink,
   MessageSquare,
@@ -170,8 +171,8 @@ export function SetupItemCard({
     onUpdate({ ...item, ...payload } as SetupItem);
   };
 
-  const handleDelete = () => {
-    if (!confirm(`Delete "${item.name}"?`)) return;
+  const handleDelete = async () => {
+    if (!(await dialog.confirm({ title: `Delete "${item.name}"?`, destructive: true }))) return;
     onDelete(item.id);
   };
 

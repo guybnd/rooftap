@@ -11,6 +11,7 @@ import { ChevronLeft, ChevronRight, Folder, FolderInput, FolderPlus, MoreHorizon
 import { PopMenu, MenuItem, MenuDivider } from '@/app/setup/pop-menu';
 import { HoldFillOverlay } from '@/components/ui/hold-fill-overlay';
 import { folderBreadcrumb, folderContentsLabel, type DocumentFolder } from '@homeup/core';
+import { dialog } from '@homeup/core';
 import { cn } from '@/lib/utils';
 import { stopRow, useRowLongPress } from './use-row-long-press';
 
@@ -71,8 +72,8 @@ export function FolderPath({
 export function NewFolderButton({ onCreate }: { onCreate: (name: string) => void }) {
   return (
     <button
-      onClick={() => {
-        const name = window.prompt('Folder name');
+      onClick={async () => {
+        const name = await dialog.prompt({ title: 'New folder', placeholder: 'Folder name', confirmLabel: 'Create' });
         if (name?.trim()) onCreate(name.trim());
       }}
       className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-xl border border-border px-3.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:h-9"
@@ -161,9 +162,9 @@ export function FolderTile({
               <>
                 <MenuItem
                   icon={<Pencil className="h-3.5 w-3.5" />}
-                  onClick={() => {
+                  onClick={async () => {
                     close();
-                    const name = window.prompt('Rename folder', folder.name);
+                    const name = await dialog.prompt({ title: 'Rename folder', defaultValue: folder.name, confirmLabel: 'Rename' });
                     if (name?.trim() && name.trim() !== folder.name) onRename(name.trim());
                   }}
                 >

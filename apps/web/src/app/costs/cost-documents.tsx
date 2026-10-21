@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useDataCache } from '@/lib/data-cache';
 import { OfflineHint } from '@/components/offline-hint';
 import type { CostDocument, DocType } from '@homeup/core';
+import { dialog } from '@homeup/core';
 import { getEnabledModules, isFeatureEnabled } from '@homeup/core';
 import { registerDocument, linkDocument, SIGNED_URL_TTL_SECONDS } from '@/lib/documents';
 import { FileText, Upload, Trash2, Loader2, ExternalLink } from 'lucide-react';
@@ -127,7 +128,7 @@ export function CostDocuments({ costItemId, groupId, onCountChange }: CostDocume
   };
 
   const handleDelete = async (doc: CostDocument) => {
-    if (!confirm(`Delete "${doc.filename}"?`)) return;
+    if (!(await dialog.confirm({ title: `Delete "${doc.filename}"?`, destructive: true }))) return;
     const supabase = createClient();
     await supabase.storage.from(BUCKET).remove([doc.storage_path]);
     await supabase.from('cost_documents').delete().eq('id', doc.id);

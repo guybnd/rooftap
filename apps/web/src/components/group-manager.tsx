@@ -31,6 +31,7 @@ import {
   currencyPickerOptions,
   FOLLOW_REGION_CURRENCY,
 } from '@homeup/core';
+import { dialog } from '@homeup/core';
 import type { GroupInvitation } from '@homeup/core';
 
 export function GroupManager() {
@@ -166,7 +167,7 @@ export function GroupManager() {
   };
 
   const handleRemove = async (userId: string) => {
-    if (!confirm("Remove this member from the group?")) return;
+    if (!(await dialog.confirm({ title: "Remove this member from the group?", confirmLabel: "Remove", destructive: true }))) return;
     const error = await removeGroupMember(createClient(), group.id, userId);
     if (error) {
       toast.error("Failed to remove member");

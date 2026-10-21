@@ -3,9 +3,9 @@
 // group template (seeded starters + user-authored), create/edit/delete them.
 // The web page's hand-rolled `fixed inset-0` modal editor becomes a
 // BottomSheet (Hearth M4: sheets, not modals); `confirm(...)` becomes a native
-// Alert.alert confirm.
+// themed dialog.alert confirm.
 import * as React from 'react';
-import { Alert, Pressable, ScrollView, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { use$ } from '@legendapp/state/react';
 import { useRouter } from 'expo-router';
@@ -26,7 +26,6 @@ import {
   ListItemTrailing,
   ScreenBackground,
   SegmentedControl,
-  haptics,
 } from '@homeup/ui';
 import {
   checklistTemplates$,
@@ -45,6 +44,7 @@ import {
   type ChecklistTemplate,
   type ChecklistTemplateItem,
   type ChecklistType,
+  dialog,
 } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
 import { NoGroupScreen } from '@/components/no-group-screen';
@@ -130,14 +130,12 @@ export default function ChecklistTemplatesScreen() {
 
   const handleDelete = React.useCallback(
     (tpl: ChecklistTemplate) => {
-      haptics.warn();
-      Alert.alert(`Delete "${tpl.title}"?`, "This can't be undone.", [
+      dialog.alert(`Delete "${tpl.title}"?`, "This can't be undone.", [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
           style: 'destructive',
           onPress: () => {
-            haptics.remove();
             (itemsByTemplate.get(tpl.id) ?? []).forEach((it) => softDeleteTemplateItem(it.id));
             softDeleteTemplate(tpl.id);
             setEditorOpen(false);

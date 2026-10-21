@@ -14,7 +14,7 @@
 // `use-group-table-realtime.ts` (apps/mobile's first realtime-refetch hook,
 // mirroring apps/web/src/lib/hooks/use-group-table-realtime.ts :212).
 import * as React from 'react';
-import { ActivityIndicator, Alert, BackHandler, LayoutAnimation, Pressable, Share as RNShare, View } from 'react-native';
+import { ActivityIndicator, BackHandler, LayoutAnimation, Pressable, Share as RNShare, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter, type Href } from 'expo-router';
 import { use$ } from '@legendapp/state/react';
@@ -98,6 +98,7 @@ import {
   type DocumentLink,
   type DocType,
   type UnifiedDocument,
+  dialog,
 } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
 import { NoGroupScreen } from '@/components/no-group-screen';
@@ -834,14 +835,12 @@ export default function DocumentsSectionScreen() {
 
   const remove = (doc: UnifiedDocument) => {
     if (!doc.storeId) return;
-    haptics.warn();
-    Alert.alert(`Delete "${doc.title || doc.filename}"?`, 'This removes it from the store.', [
+    dialog.alert(`Delete "${doc.title || doc.filename}"?`, 'This removes it from the store.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
         style: 'destructive',
         onPress: () => {
-          haptics.remove();
           dropNow(doc);
         },
       },
@@ -876,14 +875,12 @@ export default function DocumentsSectionScreen() {
   };
 
   const removeLegacy = (doc: UnifiedDocument) => {
-    haptics.warn();
-    Alert.alert(`Delete "${doc.title || doc.filename}"?`, `This removes the file from its source.`, [
+    dialog.alert(`Delete "${doc.title || doc.filename}"?`, `This removes the file from its source.`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
         style: 'destructive',
         onPress: () => {
-          haptics.remove();
           dropNow(doc);
         },
       },
@@ -1011,8 +1008,7 @@ export default function DocumentsSectionScreen() {
     const picked = selectedDocs;
     if (picked.length === 0) return;
     const fromSources = picked.some((d) => !d.storeId);
-    haptics.warn();
-    Alert.alert(
+    dialog.alert(
       `Delete ${countLabel(picked.length)}?`,
       fromSources
         ? 'Files from bills and receipts are removed from those too. This can’t be undone.'
@@ -1023,7 +1019,6 @@ export default function DocumentsSectionScreen() {
           text: 'Delete',
           style: 'destructive',
           onPress: () => {
-            haptics.remove();
             exitSelect();
             const keys = new Set(picked.map((d) => d.key));
             animateReflow();

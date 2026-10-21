@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client';
 import { use$ } from '@legendapp/state/react';
 import { syncState } from '@legendapp/state';
 import type { CostItem, CostCadence, CostCategory, Apartment } from '@homeup/core';
+import { dialog } from '@homeup/core';
 import {
   Plus,
   RotateCw,
@@ -207,10 +208,15 @@ export default function CostsPage() {
     exitSelectMode();
   };
 
-  const bulkDelete = () => {
+  const bulkDelete = async () => {
     const targets = items.filter((i) => selectedIds.has(i.id));
     if (targets.length === 0) return;
-    if (!confirm(`Delete ${targets.length} cost${targets.length === 1 ? '' : 's'}? This cannot be undone.`)) return;
+    const confirmed = await dialog.confirm({
+      title: `Delete ${targets.length} cost${targets.length === 1 ? '' : 's'}?`,
+      message: 'This cannot be undone.',
+      destructive: true,
+    });
+    if (!confirmed) return;
     const supabase = createClient();
     targets.forEach((it) => {
       softDeleteRow(it.id);

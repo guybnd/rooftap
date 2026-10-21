@@ -52,6 +52,7 @@ import {
   useModules,
   currencySymbol,
 } from '@homeup/core';
+import { dialog } from '@homeup/core';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -423,9 +424,9 @@ export function EventModal({
     onClose();
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!event?.id || !onDelete) return;
-    if (!confirm(`Delete "${event.title}"? This cannot be undone.`)) return;
+    if (!(await dialog.confirm({ title: `Delete "${event.title}"?`, message: 'This cannot be undone.', destructive: true }))) return;
     onDelete(event.id);
     onClose();
   };

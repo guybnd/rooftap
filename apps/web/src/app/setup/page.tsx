@@ -17,6 +17,7 @@ import {
   SETUP_STATUS_LABEL,
   currencySymbol,
 } from '@homeup/core';
+import { dialog } from '@homeup/core';
 import { ListGroup } from '@/components/ui/list-item';
 import type { SetupItem, SetupStore } from '@homeup/core';
 import { SetupItemModal } from './setup-item-modal';
@@ -310,10 +311,15 @@ export default function SetupPage() {
     exitSelectMode();
   };
 
-  const bulkDelete = () => {
+  const bulkDelete = async () => {
     const ids = [...selectedIds];
     if (ids.length === 0) return;
-    if (!confirm(`Delete ${ids.length} item${ids.length === 1 ? '' : 's'}? This cannot be undone.`)) return;
+    const confirmed = await dialog.confirm({
+      title: `Delete ${ids.length} item${ids.length === 1 ? '' : 's'}?`,
+      message: 'This cannot be undone.',
+      destructive: true,
+    });
+    if (!confirmed) return;
     ids.forEach((id) => softDeleteRow(id));
     exitSelectMode();
   };

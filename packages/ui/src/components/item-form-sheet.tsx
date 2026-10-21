@@ -25,13 +25,14 @@
 // fraction of the window height (matching the pre-HOUP-244 fixed
 // `max-h-[60vh]`), minus the same keyboard offset BottomSheet floats by.
 import * as React from 'react';
-import { Alert, Pressable, Text, useWindowDimensions, View } from 'react-native';
+import { Pressable, Text, useWindowDimensions, View } from 'react-native';
+import { dialog } from '@homeup/core';
 import type { ScrollView } from 'react-native';
 import { X } from 'lucide-react-native';
 import { useAnimatedStyle } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { cn } from '../lib/cn';
-import { commit, remove, warn } from '../lib/haptics';
+import { commit } from '../lib/haptics';
 import { useKeyboardOffset } from '../hooks/use-keyboard-offset';
 import { Button } from './button';
 import { BottomSheet } from './bottom-sheet';
@@ -118,17 +119,15 @@ export const ItemFormSheet = React.forwardRef<ScrollView, ItemFormSheetProps>(fu
     onSubmit();
   }, [canSubmit, saving, onSubmit]);
   // HOUP-191: destructive confirm lives here, once, instead of every caller
-  // hand-rolling (or forgetting) its own Alert.alert before onDelete.
+  // hand-rolling (or forgetting) its own dialog before onDelete. The themed DialogHost fires warn()/remove().
   const requestDelete = React.useCallback(() => {
     if (!onDelete) return;
-    warn();
-    Alert.alert(deleteConfirmTitle ?? `${deleteLabel}?`, deleteConfirmMessage ?? "This can't be undone.", [
+    dialog.alert(deleteConfirmTitle ?? `${deleteLabel}?`, deleteConfirmMessage ?? "This can't be undone.", [
       { text: 'Cancel', style: 'cancel' },
       {
         text: deleteLabel,
         style: 'destructive',
         onPress: () => {
-          remove();
           onDelete();
         },
       },

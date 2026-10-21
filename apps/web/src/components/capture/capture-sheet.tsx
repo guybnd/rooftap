@@ -26,6 +26,7 @@ import { useCapture } from "@/components/capture/capture-context";
 import { getCaptureLauncherCurrentKey } from "@/components/capture/launcher-current";
 import { useSectionSettings } from "@/lib/use-section";
 import { getEnabledModules, getEnabledSections, getSectionByPath, hiddenWithDisabledModules, isCaptureCategoryEnabled, isFeatureEnabled, listSetupStores, sectionHue, syncedGroupId, useModules, useReconnectSync, useStoreHelpers, householdTasks$, groceryItems$, costItems$, setupItems$, recipes$ as recipesStore$, checklists$ as checklistsStore$, shopperWants$, apartments$, appointments$, apartmentChecklistItems$ } from "@homeup/core";
+import { dialog } from "@homeup/core";
 import { useGlobalSearchIndex, resolveGlobalHitAction, type GlobalHit } from "@/hooks/use-global-search-index";
 import { useKeyboardInset } from "@/hooks/use-keyboard-inset";
 import { HOUSEHOLD_TASKS_CHANGED_EVENT } from "@/hooks/use-overdue-task-count";
@@ -728,7 +729,7 @@ export function CaptureSheet() {
   };
 
   const renameViaPrompt = async (id: string, current: string) => {
-    const next = window.prompt("Rename document", current);
+    const next = await dialog.prompt({ title: "Rename document", defaultValue: current, confirmLabel: "Rename" });
     if (next && next.trim()) {
       await renameDocument(createClient(), id, next.trim());
       toast.success("Renamed");
