@@ -42,7 +42,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getSessionUser } from "@/lib/supabase/session";
 import { getEnabledModules } from "@/lib/server-modules";
 import { billingMode } from "@/lib/billing";
-import { TurnTimeoutError, executeProposals, failureReason, runAssistantTurn, type Proposal } from "./engine";
+import { TurnTimeoutError, executeProposals, failureReason, runAssistantTurn, type Proposal, type TurnStreamEvent } from "./engine";
 import { isProviderBusy, llmClient, withFallbackModel, type ChatMessage, type LlmClient } from "./llm";
 import { SERVER_BRAIN_KEYS, resolveAssistantBrain, resolveBackupBrain, type AssistantBrain } from "./provider";
 import { resolveServerKeys } from "@/lib/admin-config";
@@ -436,6 +436,8 @@ export interface ChatInput {
   receivedAt?: number;
   /** How long the app waited for its previous reply, end to end, as it measured it. */
   lastWaitMs?: number;
+  /** The turn as it happens, for a streamed reply (HOUP-509). */
+  onStream?: (event: TurnStreamEvent) => void;
 }
 
 export type ChatOutcome =
@@ -637,6 +639,7 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
       tools,
       deadline: { answerBy: started + TURN_ANSWER_BY_MS, giveUpAt: started + TURN_GIVE_UP_MS },
       onEvent: (e) => console.info(`[assistant] step ${JSON.stringify({ conversation: conversation.id, ...e })}`),
+      ...(input.onStream ? { onStream: input.onStream } : {}),
     });
   } catch (e) {
     if (e instanceof TurnTimeoutError) {

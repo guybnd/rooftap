@@ -24,6 +24,7 @@ import {
   formatMicros,
   parseReply,
   timeAgo,
+  type AssistantDraft,
   type AssistantMessage,
   type ProposalState,
   type ReplySpan,
@@ -202,13 +203,24 @@ function GhostLine({ index, width, still }: { index: number; width: number; stil
 }
 
 /** Rooftap working on a reply: faint lines grow where the answer will sit, shimmering until it lands. */
-export function Thinking() {
+export function Thinking({ draft }: { draft?: AssistantDraft | null }) {
   const still = useReducedMotion();
+  const text = draft?.text.trimStart() ?? '';
+  // HOUP-509 (Hearth §8 "Streamed reply"): the answer replaces the lines as it is written.
+  if (text) {
+    return (
+      <View className="w-full px-1" accessibilityLiveRegion="polite">
+        <ReplyText text={text} />
+        {draft?.status ? <Text className="mt-1.5 text-[13px] text-muted-foreground">{draft.status}</Text> : null}
+      </View>
+    );
+  }
   return (
     <View className="w-full gap-2 px-1 py-1.5" accessibilityLabel="Rooftap is thinking" accessibilityRole="progressbar">
       {GHOST_REPLY_LINES.map((width, i) => (
         <GhostLine key={i} index={i} width={width} still={still} />
       ))}
+      {draft?.status ? <Text className="pt-1 text-[13px] text-muted-foreground">{draft.status}</Text> : null}
     </View>
   );
 }

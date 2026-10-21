@@ -18,6 +18,7 @@ import {
   type AssistantErrorCode,
   type AssistantMessage,
 } from './assistant-api';
+import { EMPTY_DRAFT, applyStreamEvent, type AssistantDraft } from './assistant-stream';
 import { isConversationOpen, wantsAssistantReply, type ConversationKind } from './assistant';
 import { deviceKeyValue } from './data/store-environment';
 
@@ -173,6 +174,8 @@ export function useAssistantThread(target: ThreadTarget, host: ThreadHost) {
   const [sending, setSending] = useState(false);
   // Waiting on Rooftap's answer (the dots); a household message that doesn't tag it just sends.
   const [thinking, setThinking] = useState(false);
+  // The reply as it is written (HOUP-509): what Rooftap is doing, then the text so far.
+  const [draft, setDraft] = useState<AssistantDraft | null>(null);
   const sendingRef = useRef(false);
   const [deciding, setDeciding] = useState<string | null>(null);
   const [blocked, setBlocked] = useState<AssistantErrorCode | null>(null);
@@ -272,7 +275,9 @@ export function useAssistantThread(target: ThreadTarget, host: ThreadHost) {
       sendingRef.current = true;
       setThinking(wantsAssistantReply(kind, 'app', text));
       try {
-        const res = await api.send({ text, conversationId: conversationIdRef.current, kind, reopen: resumedRef.current || undefined });
+        const res = await api.send({ text, conversationId: conversationIdRef.current, kind, reopen: resumedRef.current || undefined }, (event) =>
+          setDraft((d) => applyStreamEvent(d ?? EMPTY_DRAFT, event))
+        );
         resumedRef.current = false;
         setResumed(false);
         const reply = res.messages.filter((m) => m.role === 'assistant').pop();
@@ -301,6 +306,7 @@ export function useAssistantThread(target: ThreadTarget, host: ThreadHost) {
         setSending(false);
         sendingRef.current = false;
         setThinking(false);
+        setDraft(null);
       }
     },
     [kind]
@@ -364,7 +370,7 @@ export function useAssistantThread(target: ThreadTarget, host: ThreadHost) {
   // Closed: a quick ask past its idle time, unless the person chose to carry on.
   const closed = !!conversation && !resumed && !isConversationOpen(conversation.kind, conversation.closes_at);
 
-  return { conversation, messages, kind, loading, loadError, sending, thinking, deciding, blocked, showCost, closed, resumed, send, decide, togglePin, remove, reload, resume };
+  return { conversation, messages, kind, loading, loadError, sending, thinking, draft, deciding, blocked, showCost, closed, resumed, send, decide, togglePin, remove, reload, resume };
 }
 
 export type AssistantThread = ReturnType<typeof useAssistantThread>;

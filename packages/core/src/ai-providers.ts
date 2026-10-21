@@ -122,6 +122,8 @@ export interface AiCustomProvider {
   id: string;
   label: string;
   baseURL: string;
+  /** false: the assistant never asks it to stream replies (HOUP-509). Missing means try, falling back when it can't. */
+  stream?: boolean;
 }
 
 /** A model the operator added by hand, on a built-in or custom provider. */
@@ -211,7 +213,7 @@ export function cleanAiServerSettings(raw: unknown): AiServerSettings {
     const label = typeof o.label === 'string' ? o.label.trim().slice(0, 40) : '';
     const baseURL = cleanUrl(o.baseURL);
     if (!PROVIDER_ID.test(id) || isBuiltInProvider(id) || !label || !baseURL || custom.some((x) => x.id === id)) continue;
-    custom.push({ id, label, baseURL });
+    custom.push({ id, label, baseURL, ...(o.stream === false ? { stream: false } : {}) });
   }
   const providers = new Set<string>([...Object.keys(AI_CATALOG), ...custom.map((c) => c.id)]);
 
@@ -407,6 +409,18 @@ export function withCustomProvider(settings: AiServerSettings, label: string, ba
     custom: [...settings.custom, { id, label: label.trim(), baseURL: baseURL.trim() }],
     extraModels: [...settings.extraModels, ...models],
     offered: settings.offered ? [...settings.offered, ...models.map((m) => modelRef(id, m.id))] : null,
+  };
+}
+
+/** Turns streamed replies on (tried, with a fallback) or off for a custom provider. */
+export function withCustomProviderStream(settings: AiServerSettings, id: string, stream: boolean): AiServerSettings {
+  return {
+    ...settings,
+    custom: settings.custom.map((c) => {
+      if (c.id !== id) return c;
+      const { stream: _old, ...rest } = c;
+      return stream ? rest : { ...rest, stream: false };
+    }),
   };
 }
 

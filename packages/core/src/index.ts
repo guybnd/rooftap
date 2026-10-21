@@ -63,6 +63,7 @@ export * from './ai-keys';
 export * from './ai-providers';
 export * from './assistant-prompt';
 export * from './assistant-api';
+export * from './assistant-stream';
 export * from './home-assistant';
 export * from './document-folders';
 export * from './events';

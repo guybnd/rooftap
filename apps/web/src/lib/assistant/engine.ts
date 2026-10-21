@@ -1,4 +1,4 @@
-import { extractMemoryMarkers } from "@homeup/core";
+import { extractMemoryMarkers, toolStatus, visibleDraftText } from "@homeup/core";
 import type { ChatMessage, LlmClient, ToolCall } from "./llm";
 import type { AssistantTool } from "./tools";
 
@@ -38,7 +38,11 @@ export interface TurnInput {
   deadline?: { answerBy: number; giveUpAt: number };
   /** Called as each model call and tool finishes, for the server log (a turn cut off never reaches its summary line). */
   onEvent?: (event: { kind: "llm" | "tool"; name?: string; ms: number; step: number }) => void;
+  /** The turn as it happens, for a streamed reply (HOUP-509): each new model call, what the tools are doing, and the answer's text. */
+  onStream?: (event: TurnStreamEvent) => void;
 }
+
+export type TurnStreamEvent = { type: "step" } | { type: "status"; text: string } | { type: "text"; text: string };
 
 export class TurnTimeoutError extends Error {
   constructor() {
@@ -145,6 +149,21 @@ export async function runAssistantTurn(input: TurnInput): Promise<TurnResult> {
 
   for (let step = 0; step < maxSteps; step++) {
     const asked = Date.now();
+    if (step > 0) input.onStream?.({ type: "step" });
+    // Memory markers are cut from the reply, so they never stream either.
+    let raw = "";
+    let shown = "";
+    const stream = input.onStream;
+    const onText = stream
+      ? (delta: string) => {
+          raw += delta;
+          const visible = visibleDraftText(raw);
+          if (visible.length > shown.length && visible.startsWith(shown)) {
+            stream({ type: "text", text: visible.slice(shown.length) });
+            shown = visible;
+          }
+        }
+      : undefined;
     // Out of time for more lookups: the model answers with what it has.
     const hurry = !!input.deadline && asked >= input.deadline.answerBy;
     const res = await before(
@@ -154,6 +173,7 @@ export async function runAssistantTurn(input: TurnInput): Promise<TurnResult> {
         messages: conversation,
         // Still offered, since the history holds tool calls (some providers refuse those without tools).
         tools: specs,
+        ...(onText ? { onText } : {}),
       }),
       input.deadline?.giveUpAt
     );
@@ -181,6 +201,13 @@ export async function runAssistantTurn(input: TurnInput): Promise<TurnResult> {
     result.messages.push(assistant);
     const ranBefore = result.ran.length;
     const proposedBefore = result.proposals.length;
+    const status = toolStatus(
+      res.toolCalls.flatMap((c) => {
+        const tool = byName.get(c.name);
+        return tool && tool.gate === "run" ? [{ tool: tool.name, module: tool.module, lookup: tool.lookup, args: c.args }] : [];
+      })
+    );
+    if (status) input.onStream?.({ type: "status", text: status });
     const contents = await handleCalls(res.toolCalls, byName, out);
     res.toolCalls.forEach((call, i) => {
       const toolMessage: ChatMessage = { role: "tool", toolCallId: call.id, name: call.name, content: contents[i] };

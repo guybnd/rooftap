@@ -184,3 +184,33 @@ describe("a step that only made changes", () => {
     expect(r.reply).toBe("Done, and here's the list.");
   });
 });
+
+describe("runAssistantTurn streaming (HOUP-509)", () => {
+  it("streams each step's text without memory markers, and says what the tools are doing", async () => {
+    let call = 0;
+    const llm: LlmClient = async (req) => {
+      call++;
+      if (call === 1) {
+        req.onText?.("Let me look.");
+        return { text: "Let me look.", toolCalls: [{ id: "1", name: "get_grocery_items", args: {} }], inputTokens: 1, outputTokens: 1 };
+      }
+      for (const piece of ["You need milk.", " <remem", "ber>likes oat milk</remember>", " Anything else?"]) req.onText?.(piece);
+      return { text: "You need milk. <remember>likes oat milk</remember> Anything else?", toolCalls: [], inputTokens: 1, outputTokens: 1 };
+    };
+    const lookup = { ...tool("get_grocery_items", "run"), lookup: true };
+    const events: unknown[] = [];
+    const r = await runAssistantTurn({ ...base, llm, tools: [lookup], onStream: (e) => events.push(e) });
+    expect(events.slice(0, 3)).toEqual([{ type: "text", text: "Let me look." }, { type: "status", text: "Checking Groceries" }, { type: "step" }]);
+    const streamed = (events.slice(3) as { type: string; text: string }[]).map((e) => (e.type === "text" ? e.text : "?")).join("");
+    expect(streamed).toBe("You need milk.  Anything else?");
+    expect(r.reply).toBe("You need milk.  Anything else?");
+    expect(r.memories).toEqual(["likes oat milk"]);
+  });
+
+  it("names a change while it runs", async () => {
+    const llm = scripted({ text: "Added.", toolCalls: [{ id: "1", name: "create_grocery_item", args: { name: "Milk" } }] });
+    const events: unknown[] = [];
+    await runAssistantTurn({ ...base, llm: (req) => llm({ ...req, onText: undefined }), tools: [tool("create_grocery_item", "run")], onStream: (e) => events.push(e) });
+    expect(events).toContainEqual({ type: "status", text: 'Add "Milk" to Groceries' });
+  });
+});

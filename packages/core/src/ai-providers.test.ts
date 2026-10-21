@@ -8,6 +8,9 @@ import {
   offeredAiModels,
   parseModelRef,
   aiModelPriceLine,
+  EMPTY_AI_SERVER_SETTINGS,
+  withCustomProvider,
+  withCustomProviderStream,
 } from './ai-providers';
 import { MODEL_PRICES } from './assistant';
 
@@ -120,5 +123,16 @@ describe('editing the settings', () => {
     const { withOfferedAll } = await import('./ai-providers');
     const ready = offeredAiModels(cleanAiServerSettings({}), new Set(['gemini']));
     expect(withOfferedAll(cleanAiServerSettings({}), false, ready).offered).toEqual(ready.map((m) => m.ref));
+  });
+});
+
+describe('custom provider streaming (HOUP-509)', () => {
+  it('keeps a switched-off provider off, and turns it back on', () => {
+    const added = withCustomProvider(EMPTY_AI_SERVER_SETTINGS, 'Home Ollama', 'http://ollama:11434/v1', ['qwen3:14b']);
+    const id = added.custom[0].id;
+    const off = cleanAiServerSettings(JSON.stringify(withCustomProviderStream(added, id, false)));
+    expect(off.custom[0].stream).toBe(false);
+    expect(withCustomProviderStream(off, id, true).custom[0]).not.toHaveProperty('stream');
+    expect(cleanAiServerSettings({ ...added, custom: [{ ...added.custom[0], stream: 'yes' }] }).custom[0]).not.toHaveProperty('stream');
   });
 });

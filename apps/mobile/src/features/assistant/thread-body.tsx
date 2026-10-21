@@ -36,7 +36,7 @@ function LoadFailed({ message, onRetry }: { message: string; onRetry: () => void
 }
 
 export function ThreadMessages({ thread, className }: { thread: AssistantThread; className?: string }) {
-  const { loading, loadError, reload, messages, sending, thinking, kind, showCost, deciding, decide } = thread;
+  const { loading, loadError, reload, messages, sending, thinking, draft, kind, showCost, deciding, decide } = thread;
   const scrollRef = React.useRef<ScrollView>(null);
   return (
     <ScrollView
@@ -67,7 +67,7 @@ export function ThreadMessages({ thread, className }: { thread: AssistantThread;
           />
         ))
       )}
-      {thinking && <Thinking />}
+      {thinking && <Thinking draft={draft} />}
     </ScrollView>
   );
 }

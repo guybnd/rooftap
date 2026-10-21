@@ -95,6 +95,7 @@ export const SERVER_BRAIN_KEYS: readonly string[] = [
   "ASSISTANT_QUICK_MODEL",
   "ASSISTANT_BASE_URL",
   "ASSISTANT_API_KEY",
+  "ASSISTANT_STREAM",
   ...Object.values(PROVIDERS).map((p) => p.keyName),
 ];
 
@@ -117,7 +118,13 @@ export async function resolveServerBrain(lookup: Lookup = resolveServerKey): Pro
       if (!baseURL || !chatOverride) continue;
       return {
         provider,
-        connection: { wire: "openai", baseURL, apiKey: (await usable(lookup, "ASSISTANT_API_KEY")) ?? "" },
+        connection: {
+          wire: "openai",
+          baseURL,
+          apiKey: (await usable(lookup, "ASSISTANT_API_KEY")) ?? "",
+          // A server that can't stream is found out on its own; this skips even trying.
+          ...(/^(off|false|0|no)$/i.test((await usable(lookup, "ASSISTANT_STREAM")) ?? "") ? { stream: false } : {}),
+        },
         chatModel: chatOverride,
         quickModel: quickOverride ?? chatOverride,
         free: true,
@@ -248,7 +255,7 @@ export async function resolveAssistantBrain(input: BrainInput): Promise<Assistan
     const custom = settings.custom.find((c) => c.id === provider);
     if (!custom) return null;
     const apiKey = (await usable(lookupOne, customProviderKeyName(custom.id))) ?? "";
-    return { provider, connection: { wire: "openai", baseURL: custom.baseURL, apiKey }, model, free: true, keySource: "server" };
+    return { provider, connection: { wire: "openai", baseURL: custom.baseURL, apiKey, ...(custom.stream === false ? { stream: false } : {}) }, model, free: true, keySource: "server" };
   };
 
   const side = async (feature: Exclude<AiFeature, "reads">): Promise<Side | null> => {

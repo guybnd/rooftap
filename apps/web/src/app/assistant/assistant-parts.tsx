@@ -14,6 +14,7 @@ import {
   formatMicros,
   parseReply,
   timeAgo,
+  type AssistantDraft,
   type AssistantMessage,
   type ProposalState,
   type ReplySpan,
@@ -166,8 +167,20 @@ export function MessageBubble({
 /**
  * Rooftap working on a reply (Hearth §8 "Ghost reply"): faint lines grow
  * where the answer will sit, one after another, shimmering until it lands.
+ * A streamed reply (HOUP-509, Hearth §8 "Streamed reply") says what the
+ * tools are doing under the lines, then the answer replaces them as it is
+ * written.
  */
-export function Thinking() {
+export function Thinking({ draft }: { draft?: AssistantDraft | null }) {
+  const text = draft?.text.trimStart() ?? '';
+  if (text) {
+    return (
+      <div className="w-full px-1 text-[15px] leading-relaxed text-foreground" aria-live="polite" aria-busy="true">
+        <ReplyText text={text} />
+        {draft?.status && <p className="mt-1.5 text-[13px] text-muted-foreground">{draft.status}</p>}
+      </div>
+    );
+  }
   return (
     <div className="w-full space-y-2 px-1 py-1.5" aria-label="Rooftap is thinking" role="status">
       {GHOST_REPLY_LINES.map((width, i) => (
@@ -178,6 +191,7 @@ export function Thinking() {
           />
         </div>
       ))}
+      {draft?.status && <p className="pt-1 text-[13px] text-muted-foreground">{draft.status}</p>}
     </div>
   );
 }

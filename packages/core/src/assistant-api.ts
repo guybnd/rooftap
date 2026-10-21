@@ -22,6 +22,7 @@ import {
   type HomeAssistantStatus,
   type HomeAssistantToolInfo,
 } from './home-assistant';
+import { createAssistantStreamReader, type AssistantStreamEvent } from './assistant-stream';
 
 export interface AssistantConversation {
   id: string;
@@ -153,10 +154,56 @@ export class AssistantApiError extends Error {
 
 export type AssistantCall = <T>(path: string, init?: { method?: string; body?: unknown }) => Promise<T>;
 
+/**
+ * POSTs `body` as JSON asking for an event stream, hands each piece of the
+ * answer to `onChunk` as it arrives, and resolves with the whole answer.
+ * Each app brings its own (web: fetch's body reader; native: XHR progress,
+ * since React Native's fetch doesn't stream).
+ */
+export type AssistantStreamCall = (
+  path: string,
+  body: unknown,
+  onChunk: (text: string) => void
+) => Promise<{ status: number; contentType: string | null; text: string }>;
+
+/** The progress events the server sends before its answer. */
+export type AssistantProgressEvent = Extract<AssistantStreamEvent, { type: 'step' | 'status' | 'text' }>;
+
+/**
+ * One chat turn over a stream. A server that streams sends progress, then
+ * `done` or `error`; one that predates streaming answers with plain JSON,
+ * which is read as before.
+ */
+async function sendStreamed(stream: AssistantStreamCall, body: unknown, onEvent: (event: AssistantProgressEvent) => void): Promise<ChatResponse> {
+  let done: ChatResponse | null = null;
+  let failure: Extract<AssistantStreamEvent, { type: 'error' }> | null = null;
+  const reader = createAssistantStreamReader((event) => {
+    if (event.type === 'done') done = event.response;
+    else if (event.type === 'error') failure = event;
+    else onEvent(event);
+  });
+  const res = await stream('/api/assistant/chat', body, (chunk) => reader.push(chunk));
+  if (res.contentType?.includes('text/event-stream')) {
+    reader.end();
+    const failed = failure as Extract<AssistantStreamEvent, { type: 'error' }> | null;
+    if (failed) throw new AssistantApiError(failed.error, failed.status, failed.code ?? null);
+    if (done) return done;
+    throw new AssistantApiError("The reply was cut off on the way. Try again.", 502, null);
+  }
+  let json: unknown = {};
+  try {
+    json = JSON.parse(res.text);
+  } catch {
+    // An empty or non-JSON body: the status says what went wrong.
+  }
+  if (res.status < 200 || res.status >= 300) throw assistantError(res.status, json);
+  return json as ChatResponse;
+}
+
 /** How long the last chat send took, end to end, in this app session. */
 let lastWaitMs: number | null = null;
 
-export function createAssistantApi(call: AssistantCall) {
+export function createAssistantApi(call: AssistantCall, stream?: AssistantStreamCall) {
   return {
     status: () => call<AssistantStatus>('/api/assistant/status'),
     conversations: async () => (await call<{ conversations: AssistantConversation[] }>('/api/assistant/conversations')).conversations,
@@ -175,13 +222,21 @@ export function createAssistantApi(call: AssistantCall) {
       call<{ prefs: AssistantNotifyPrefs }>('/api/assistant/notify-prefs', { method: 'PUT', body: patch }),
     updateConversation: (conversationId: string, patch: { title?: string; pinned?: boolean; deleted?: boolean }) =>
       call<{ ok: true }>(`/api/assistant/conversations/${encodeURIComponent(conversationId)}`, { method: 'PATCH', body: patch }),
-    /** Each send carries how long the previous reply took to arrive, so the server log shows the wait as the app saw it. */
-    send: async (input: { text: string; conversationId?: string | null; kind?: ConversationKind; reopen?: boolean }) => {
+    /**
+     * Each send carries how long the previous reply took to arrive, so the
+     * server log shows the wait as the app saw it. With `onEvent` (and a
+     * stream call), the reply shows up as it is written.
+     */
+    send: async (
+      input: { text: string; conversationId?: string | null; kind?: ConversationKind; reopen?: boolean },
+      onEvent?: (event: AssistantProgressEvent) => void
+    ) => {
       const started = Date.now();
-      const res = await call<ChatResponse>('/api/assistant/chat', {
-        method: 'POST',
-        body: lastWaitMs === null ? input : { ...input, lastWaitMs },
-      });
+      const body = lastWaitMs === null ? input : { ...input, lastWaitMs };
+      const res =
+        stream && onEvent
+          ? await sendStreamed(stream, body, onEvent)
+          : await call<ChatResponse>('/api/assistant/chat', { method: 'POST', body });
       lastWaitMs = Date.now() - started;
       return res;
     },
@@ -264,6 +319,25 @@ export function describeProposal(tool: string, module: AssistantScope, args: Rec
   if (tool.startsWith('update_')) return name ? `Change ${quoted(name)} in ${where}` : `Change an item in ${where}`;
   if (tool.startsWith('delete_')) return `Remove an item from ${where}`;
   return `Make a change in ${where}`;
+}
+
+/**
+ * What Rooftap is doing while a step's tools run, for the line under the
+ * reply being written: "Checking Groceries and Calendar" for lookups, the
+ * change itself (as its proposal card would say) for a change.
+ */
+export function toolStatus(calls: { tool: string; module: AssistantScope; lookup?: boolean; args: Record<string, unknown> }[]): string | null {
+  const change = calls.find((c) => !c.lookup);
+  if (change) {
+    const more = calls.filter((c) => !c.lookup).length - 1;
+    return `${describeProposal(change.tool, change.module, change.args)}${more > 0 ? ` and ${more} more` : ''}`;
+  }
+  const places = [
+    ...new Set(calls.map((c) => (c.module === HOME_ASSISTANT_SCOPE ? 'Home Assistant' : MODULE_NOUN[c.module as ModuleId] ?? 'the app'))),
+  ];
+  if (places.length === 0) return null;
+  const list = places.length === 1 ? places[0] : `${places.slice(0, -1).join(', ')} and ${places[places.length - 1]}`;
+  return `Checking ${list}`;
 }
 
 /** The trust options in the order Settings shows them, with their short labels. */

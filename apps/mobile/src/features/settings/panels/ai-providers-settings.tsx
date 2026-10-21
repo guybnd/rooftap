@@ -6,7 +6,7 @@
 import * as React from 'react';
 import { ActivityIndicator, Linking, Pressable, View } from 'react-native';
 import { Cpu, Plus, Trash2 } from 'lucide-react-native';
-import { Button, Input, SearchablePicker, Text, toast } from '@homeup/ui';
+import { Button, Input, SearchablePicker, Switch, Text, toast } from '@homeup/ui';
 import {
   AI_FEATURES,
   aiModelPickerOptions,
@@ -14,6 +14,7 @@ import {
   modelsForFeature,
   splitModelIds,
   withCustomProvider,
+  withCustomProviderStream,
   withDefault,
   withExtraModel,
   withOfferedAll,
@@ -159,6 +160,20 @@ export function AiProvidersSettings() {
                   {busy === `key:${p.id}` ? <ActivityIndicator size="small" /> : 'Save'}
                 </Button>
               </View>
+              {!p.builtIn && (
+                <View className="min-h-11 flex-row items-center justify-between gap-3">
+                  <View className="min-w-0 flex-1">
+                    <Text className="text-sm text-foreground">Stream replies</Text>
+                    <Text className="text-xs text-muted-foreground">Show answers as they're written. Turn off if this server can't stream.</Text>
+                  </View>
+                  <Switch
+                    label={`Stream replies from ${p.label}`}
+                    checked={settings.custom.find((c) => c.id === p.id)?.stream !== false}
+                    disabled={busy === 'settings'}
+                    onChange={(on) => void saveSettings(withCustomProviderStream(settings, p.id, on))}
+                  />
+                </View>
+              )}
             </View>
           ))}
         </SettingsInset>

@@ -38,11 +38,11 @@ function LoadFailed({ message, onRetry }: { message: string; onRetry: () => void
 }
 
 export function ThreadMessages({ thread, className }: { thread: AssistantThread; className?: string }) {
-  const { loading, loadError, reload, messages, sending, thinking, kind, showCost, deciding, decide } = thread;
+  const { loading, loadError, reload, messages, sending, thinking, draft, kind, showCost, deciding, decide } = thread;
   const endRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'end' });
-  }, [messages.length, sending, loading]);
+  }, [messages.length, sending, loading, draft?.text.length, draft?.status]);
   return (
     <div className={cn('space-y-5 py-4', className)}>
       {loadError && !loading && <LoadFailed message={loadError} onRetry={() => void reload()} />}
@@ -66,7 +66,7 @@ export function ThreadMessages({ thread, className }: { thread: AssistantThread;
           />
         ))
       )}
-      {thinking && <Thinking />}
+      {thinking && <Thinking draft={draft} />}
       <div ref={endRef} />
     </div>
   );

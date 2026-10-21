@@ -16,6 +16,7 @@ import {
   modelsForFeature,
   splitModelIds,
   withCustomProvider,
+  withCustomProviderStream,
   withDefault,
   withExtraModel,
   withOfferedAll,
@@ -28,6 +29,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SearchablePicker } from "@/components/ui/searchable-picker";
+import { Switch } from "@/components/ui/switch";
 import { SettingsCheckbox, SettingsChoiceRow, SettingsInset, SettingsLabel, SettingsPanel } from "@/components/settings-panel";
 import { cn } from "@/lib/utils";
 
@@ -187,6 +189,20 @@ export function AiProvidersSettings() {
                   {busy === `key:${p.id}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save"}
                 </Button>
               </div>
+              {!p.builtIn && (
+                <div className="flex min-h-11 items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm">Stream replies</p>
+                    <p className="text-xs text-muted-foreground">Show answers as they&apos;re written. Turn off if this server can&apos;t stream.</p>
+                  </div>
+                  <Switch
+                    label={`Stream replies from ${p.label}`}
+                    checked={settings.custom.find((c) => c.id === p.id)?.stream !== false}
+                    disabled={busy === "settings"}
+                    onChange={(on) => void saveSettings(withCustomProviderStream(settings, p.id, on))}
+                  />
+                </div>
+              )}
             </div>
           ))}
         </SettingsInset>
