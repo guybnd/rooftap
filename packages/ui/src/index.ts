@@ -57,6 +57,7 @@ export * from './components/toast';
 export * from './components/dialog-host';
 export * from './components/meridian-axis';
 export * from './components/section-glow';
+export * from './components/pop';
 export * from './components/leading-tile';
 export * from './components/grocery-glyph';
 export * from './components/card-code';

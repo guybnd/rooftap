@@ -6,16 +6,19 @@
 // adds it back (the caller shows the Undo pill). Holding (with the shared
 // hold fill and haptic) or right-clicking a chip opens Snooze / Stop
 // suggesting; Full review (next to Show more) expands the full rows (emoji, days, Add / Snooze / X).
+// A tapped chip pops out before the item is added (Hearth §8 "Pop out, pop
+// in", `.chip-pop-out`), and the caller pops its row into the list.
 // `variant="group"` is the Groceries page's "Running low" group: a header
 // row in the aisle-header grammar (Hearth §6 Group header: micro label +
 // count, text verbs on the right) with the chips wrapping under it. The Home
 // widget keeps the default look.
 // Mirrors apps/mobile/src/features/groceries/re-add-suggestions.tsx.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Plus, Star } from 'lucide-react';
 import {
   RE_ADD_CHIP_CAP,
+  POP_OUT_MS,
   GROCERY_DISMISS_ACTIONS,
   GROCERY_DISMISS_LABELS,
   snoozeUntilISO,
@@ -26,6 +29,7 @@ import { dialog } from '@homeup/core';
 import { PopMenu, MenuDivider, MenuItem, MenuLabel } from '../setup/pop-menu';
 import { HOLD_FILL_DELAY_MS, useLongPress } from '@/hooks/use-long-press';
 import { HoldFillOverlay } from '@/components/ui/hold-fill-overlay';
+import { tick } from '@/lib/haptics';
 import { SuggestReAddSection } from './suggest-re-add-section';
 
 const CHIP_CLASS =
@@ -183,6 +187,18 @@ function RunningLowChip({
   tall?: boolean;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (timer.current) clearTimeout(timer.current);
+  }, []);
+  const popOutThenAdd = () => {
+    if (leaving) return;
+    setLeaving(true);
+    tick();
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    timer.current = setTimeout(onAdd, reduced ? 0 : POP_OUT_MS);
+  };
   const { handlers, consumeClick, progress } = useLongPress(() => setMenuOpen(true), true, {
     trackProgress: true,
     fillDelayMs: HOLD_FILL_DELAY_MS,
@@ -197,10 +213,10 @@ function RunningLowChip({
       align="left"
       width="w-60"
       triggerLabel={`Need ${item.name} again, ${item.daysOverdue} days past shelf life. Hold for more.`}
-      triggerClassName={tall ? CHIP_CLASS.replace('min-h-[36px]', 'min-h-[44px]') : CHIP_CLASS}
+      triggerClassName={`${tall ? CHIP_CLASS.replace('min-h-[36px]', 'min-h-[44px]') : CHIP_CLASS}${leaving ? ' chip-pop-out' : ''}`}
       onTriggerClick={() => {
         if (consumeClick()) return;
-        onAdd();
+        popOutThenAdd();
       }}
       triggerProps={{
         onPointerDown: (e) => {

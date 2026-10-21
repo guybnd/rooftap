@@ -71,10 +71,12 @@ import {
   haptics,
   HeroLede,
   Input,
+  PopIn,
   ReorderableList,
   ScreenBackground,
   SectionSearchBar,
   toast,
+  useArrivals,
 } from '@homeup/ui';
 import {
   AISLE_ORDER,
@@ -119,6 +121,7 @@ import {
   type GrocerySession,
   type LoyaltyCard,
   type GrocerySortMode,
+  POP_IN_HOLD_MS,
   type SuggestReAddItem,
   type GroceryDismissAction,
   type DocumentUploadInput,
@@ -1071,6 +1074,16 @@ export default function GroceriesSectionScreen() {
     [archiveItem]
   );
   const groceryUndo = useGroceryUndo(patchRow);
+  // Hearth §8 "Pop out, pop in": a re-added suggestion's row pops into its aisle.
+  const arrivals = useArrivals(POP_IN_HOLD_MS);
+  const markArrivals = arrivals.mark;
+  const needAgainWithPop = React.useCallback(
+    (list: SuggestReAddItem | SuggestReAddItem[]) => {
+      markArrivals((Array.isArray(list) ? list : [list]).map((i) => i.id));
+      groceryUndo.needAgain(list);
+    },
+    [markArrivals, groceryUndo],
+  );
   const suggestDismiss = useSuggestDismiss({ hide: groceryUndo.hide, archive: archiveItem });
 
   // HOUP-224: the row overflow menu's "Delete" — distinct from Archive above,
@@ -1467,7 +1480,7 @@ export default function GroceriesSectionScreen() {
       }
       if (row.kind === 'item') {
         return (
-          <View className={cn(groupFrameClass(row.pos), spacing)}>
+          <PopIn active={arrivals.ids.has(row.item.id)} className={cn(groupFrameClass(row.pos), spacing)}>
             <GroceryItemCard
               item={row.item}
               customAisles={customAisles}
@@ -1487,7 +1500,7 @@ export default function GroceriesSectionScreen() {
               // in One list, where there are no aisle headers.
               showAisleDot={sortMode === 'flat'}
             />
-          </View>
+          </PopIn>
         );
       }
       // quick-add
@@ -1539,6 +1552,7 @@ export default function GroceriesSectionScreen() {
       toggleAisleCollapsed,
       deleteCustomAisle,
       openAdd,
+      arrivals.ids,
     ]
   );
 
@@ -1793,12 +1807,12 @@ export default function GroceriesSectionScreen() {
       search={search}
       onSearchChange={setSearch}
       onSearchSubmit={submitSearchAdd}
-      onSuggestAdd={groceryUndo.needAgain}
+      onSuggestAdd={needAgainWithPop}
       suggestions={suggestions}
       onSuggestSnooze={groceryUndo.snooze}
       suggestDismissAction={suggestDismiss.dismissAction}
       onSuggestDismiss={suggestDismiss.dismiss}
-      onSuggestAddAll={() => groceryUndo.needAgain(suggestions)}
+      onSuggestAddAll={() => needAgainWithPop(suggestions)}
     />
   );
 

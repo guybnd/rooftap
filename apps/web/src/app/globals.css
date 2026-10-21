@@ -816,6 +816,29 @@
     43% { transform: scale(1.14); }
   }
 
+  /* Hearth §8 "Pop out, pop in": a tapped suggestion chip swells (fast,
+     swift-out) then vanishes (fast, ease-in) before the item is re-added
+     (core POP_OUT_*), and the item's row pops into its aisle (from 0.94 past
+     1.015 to rest, fast then base, swift-out; core POP_IN_*). Reduced
+     motion collapses both to an instant swap. */
+  .chip-pop-out {
+    pointer-events: none;
+    animation: chip-pop-out calc(var(--motion-fast) * 2) linear both;
+  }
+  @keyframes chip-pop-out {
+    0% { transform: scale(1); opacity: 1; animation-timing-function: var(--motion-ease-out); }
+    50% { transform: scale(1.08); opacity: 1; animation-timing-function: var(--motion-ease-in); }
+    100% { transform: scale(0.6); opacity: 0; }
+  }
+  .row-pop-in {
+    animation: row-pop-in calc(var(--motion-fast) + var(--motion-base)) var(--motion-ease-out) both;
+  }
+  @keyframes row-pop-in {
+    0% { transform: scale(0.94); opacity: 0; }
+    43% { transform: scale(1.015); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
   /* Hearth §8 — the hold-to-edit menu pop (PopMenu's floating dropdown path;
      the mobile sheet path gets its entrance from BottomSheet's own slide-up). */
   @keyframes pop-in {

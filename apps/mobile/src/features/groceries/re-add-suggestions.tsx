@@ -3,12 +3,15 @@
 // overdue. Only a handful show; "Show N more" reveals the rest. Tapping a
 // chip adds it back (the caller shows the Undo pill). Long-pressing a chip
 // (with the shared hold fill and haptic) opens Snooze / Stop suggesting;
+// a tapped chip pops out before the item is added (Hearth §8 "Pop out, pop
+// in"), and the caller pops its row into the list;
 // Full review (next to Show more) expands the full rows (emoji, days, Add / Snooze / X). Mirrors
 // apps/web/src/app/groceries/re-add-suggestions.tsx.
 import * as React from 'react';
 import { Pressable, View } from 'react-native';
 import { Plus, Star } from 'lucide-react-native';
-import { BottomSheet, Button, HoldFillOverlay, ListGroup, ListItem, ListItemTitle, Text, haptics, useHoldFill } from '@homeup/ui';
+import Animated from 'react-native-reanimated';
+import { BottomSheet, Button, HoldFillOverlay, ListGroup, ListItem, ListItemTitle, Text, haptics, useHoldFill, usePopOut } from '@homeup/ui';
 import {
   RE_ADD_CHIP_CAP,
   GROCERY_DISMISS_ACTIONS,
@@ -188,29 +191,35 @@ const LONG_PRESS_MS = 500;
 /** Tap adds; long-press (with the hold fill and a commit haptic) opens the menu. */
 function ReAddChip({ item, onAdd, onLongPress }: { item: SuggestReAddItem; onAdd: () => void; onLongPress: () => void }) {
   const holdFill = useHoldFill(LONG_PRESS_MS);
+  const popOut = usePopOut();
   return (
-    <Pressable
-      onPress={onAdd}
-      onPressIn={holdFill.start}
-      onPressOut={holdFill.stop}
-      delayLongPress={LONG_PRESS_MS}
-      onLongPress={() => {
-        holdFill.stop();
-        haptics.commit();
-        onLongPress();
-      }}
-      accessibilityRole="button"
-      accessibilityLabel={`Need ${item.name} again, ${item.daysOverdue} days past shelf life`}
-      accessibilityHint="Long-press to snooze or stop suggesting"
-      className={CHIP_CLASS}
-    >
-      <HoldFillOverlay progress={holdFill.progress} />
-      {item.is_essential ? <Star size={12} className="fill-current text-warning" /> : <Plus size={12} className="text-primary" />}
-      <Text className="text-sm text-foreground">{item.name}</Text>
-      <Text className="font-mono text-[11.5px] text-muted-foreground" style={{ fontVariant: ['tabular-nums'] }}>
-        {item.daysOverdue}d
-      </Text>
-    </Pressable>
+    <Animated.View style={popOut.style}>
+      <Pressable
+        onPress={() => {
+          haptics.tick();
+          popOut.start(onAdd);
+        }}
+        onPressIn={holdFill.start}
+        onPressOut={holdFill.stop}
+        delayLongPress={LONG_PRESS_MS}
+        onLongPress={() => {
+          holdFill.stop();
+          haptics.commit();
+          onLongPress();
+        }}
+        accessibilityRole="button"
+        accessibilityLabel={`Need ${item.name} again, ${item.daysOverdue} days past shelf life`}
+        accessibilityHint="Long-press to snooze or stop suggesting"
+        className={CHIP_CLASS}
+      >
+        <HoldFillOverlay progress={holdFill.progress} />
+        {item.is_essential ? <Star size={12} className="fill-current text-warning" /> : <Plus size={12} className="text-primary" />}
+        <Text className="text-sm text-foreground">{item.name}</Text>
+        <Text className="font-mono text-[11.5px] text-muted-foreground" style={{ fontVariant: ['tabular-nums'] }}>
+          {item.daysOverdue}d
+        </Text>
+      </Pressable>
+    </Animated.View>
   );
 }
 

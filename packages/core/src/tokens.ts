@@ -103,6 +103,20 @@ export const MOTION_EASE = {
 } as const;
 
 /**
+ * Hearth §8 "Pop out, pop in": a tapped suggestion chip swells to
+ * `POP_OUT_SWELL` at fast (swift-out) and vanishes to `POP_OUT_SHRINK` at fast
+ * (ease-in); the item is written once the chip has gone, so its row pops into
+ * the list right after (from `POP_IN_FROM` past `POP_IN_PEAK` to rest, fast
+ * then base, swift-out). An arrived row stays marked for `POP_IN_HOLD_MS`.
+ */
+export const POP_OUT_MS = MOTION_DURATIONS_MS.fast * 2;
+export const POP_OUT_SWELL = 1.08;
+export const POP_OUT_SHRINK = 0.6;
+export const POP_IN_FROM = 0.94;
+export const POP_IN_PEAK = 1.015;
+export const POP_IN_HOLD_MS = 1000;
+
+/**
  * `MOTION_EASE.out` as a function of linear time (0 to 1), for motion
  * stepped frame by frame in JS that has to land in step with a CSS or
  * native animation on the same curve (the tab glide follows the page shift

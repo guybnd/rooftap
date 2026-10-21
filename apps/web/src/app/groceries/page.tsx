@@ -24,7 +24,8 @@ import { CSS } from '@dnd-kit/utilities';
 import { useDataCache } from '@/lib/data-cache';
 import { createClient } from '@/lib/supabase/client';
 import type { GroceryItem, GroceryAisle, GroceryCustomAisle, GrocerySession, GrocerySortMode } from '@homeup/core';
-import { dialog } from '@homeup/core';
+import { dialog, POP_IN_HOLD_MS } from '@homeup/core';
+import { useArrivals } from '@/hooks/use-arrivals';
 import {
   AISLE_META,
   AISLE_COLOR,
@@ -586,6 +587,16 @@ export default function GroceriesPage() {
   );
 
   const groceryUndo = useGroceryUndo(patchItem);
+  // Hearth §8 "Pop out, pop in": a re-added suggestion's row pops into its aisle.
+  const arrivals = useArrivals(POP_IN_HOLD_MS);
+  const markArrivals = arrivals.mark;
+  const needAgainWithPop = useCallback(
+    (list: GroceryItem | GroceryItem[]) => {
+      markArrivals((Array.isArray(list) ? list : [list]).map((i) => i.id));
+      groceryUndo.needAgain(list);
+    },
+    [markArrivals, groceryUndo],
+  );
   const suggestDismiss = useSuggestDismiss({ hide: groceryUndo.hide, archive: handleArchive });
 
   useEffect(() => () => void flushPending(), [flushPending]);
@@ -1284,8 +1295,8 @@ export default function GroceriesPage() {
         <ReAddSuggestions
           variant="group"
           runningLow={reAddSuggestions}
-          onAdd={(item) => groceryUndo.needAgain(item)}
-          onAddAll={() => groceryUndo.needAgain(reAddSuggestions)}
+          onAdd={needAgainWithPop}
+          onAddAll={() => needAgainWithPop(reAddSuggestions)}
           onSnooze={groceryUndo.snooze}
           dismissAction={suggestDismiss.dismissAction}
           onDismiss={suggestDismiss.dismiss}
@@ -1345,7 +1356,7 @@ export default function GroceriesPage() {
                   Not needed
                 </div>
               )}
-              <div className="flex items-start">
+              <div className={cn('flex items-start', arrivals.ids.has(item.id) && 'row-pop-in')}>
                 {selectMode && (
                   <input
                     type="checkbox"
@@ -1484,7 +1495,7 @@ export default function GroceriesPage() {
                             <ListGroup>
                               <SortableContext items={sortedItems.map((i) => i.id)} strategy={verticalListSortingStrategy}>
                                 {sortedItems.map((item) => (
-                                  <div key={item.id} className="flex items-start">
+                                  <div key={item.id} className={cn('flex items-start', arrivals.ids.has(item.id) && 'row-pop-in')}>
                                     {selectMode && (
                                       <input
                                         type="checkbox"
