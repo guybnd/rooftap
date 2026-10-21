@@ -158,7 +158,7 @@ export const HAPTIC_PATTERNS_MS: Record<HapticPulse, number[]> = {
   error: [16, 40, 16, 40, 16],
   remove: [22],
   celebrate: [8, 60, 10, 60, 14, 90, 12, 60, 12],
-  pop: [28, 70, 10],
+  pop: [120, 50, 35],
 };
 
 // Effects: sequences that ride a gesture instead of answering one event.
@@ -166,28 +166,33 @@ export const HAPTIC_PATTERNS_MS: Record<HapticPulse, number[]> = {
 export const HOLD_CHARGE_STEPS = [0.4, 0.72] as const;
 /** Slide to finish: fraction of the travel past which a release finishes the item. */
 export const SLIDE_FINISH_AT = 0.82;
+const ZIPPER_COUNT = 28;
+const ZIPPER_LAST = 0.8;
 /**
- * Slide to finish: track fractions that click on the way out. The gaps
- * tighten as the thumb travels (10% of the track at first, 2.5% near the
- * end) and the clicks firm up tier by tier (`slideZipperTier`), so the
- * zipper winds up into the threshold click and the finish pop.
+ * Slide to finish: track fractions that buzz on the way out (Guy: "super
+ * granular, increasingly buzzy ... as if the slider physically resists me",
+ * while the thumb still follows the finger exactly). 28 of them, gaps
+ * shrinking evenly from ~4.9% of the track to ~0.8% near the end, so with the
+ * pulses growing (`slideZipperPulseMs`) the zipper grinds up into one
+ * continuous buzz at the threshold, then the finish pop.
  */
-export const SLIDE_ZIPPER_STEPS = [0.1, 0.2, 0.29, 0.37, 0.44, 0.5, 0.555, 0.605, 0.65, 0.69, 0.725, 0.755, 0.78] as const;
-/** How many strengths the zipper climbs through; the threshold click is the top one. */
-export const SLIDE_ZIPPER_TIERS = 3;
+export const SLIDE_ZIPPER_STEPS: readonly number[] = (() => {
+  const weights = Array.from({ length: ZIPPER_COUNT }, (_, i) => ZIPPER_COUNT + 4 - i * 1.0);
+  const total = weights.reduce((a, b) => a + b, 0);
+  let at = 0;
+  return weights.map((w) => Number((at += (w / total) * ZIPPER_LAST).toFixed(4)));
+})();
 
-/**
- * Which strength (0 = lightest .. SLIDE_ZIPPER_TIERS - 1) zipper step `step`
- * clicks at: thirds of the steps, climbing. Any step at or past the last
- * (the threshold) clicks at the top tier.
- */
-export function slideZipperTier(step: number): number {
-  const tier = Math.floor((Math.max(0, step) * SLIDE_ZIPPER_TIERS) / SLIDE_ZIPPER_STEPS.length);
-  return Math.min(SLIDE_ZIPPER_TIERS - 1, tier);
+/** How hard zipper step `step` buzzes, 0..1; any step at or past the last (the threshold) is 1. */
+export function slideZipperStrength(step: number): number {
+  return Math.min(1, Math.max(0, step + 1) / SLIDE_ZIPPER_STEPS.length);
 }
 
-/** Web: vibration (ms) for each zipper tier; a motor can't grade strength, so length stands in. */
-export const SLIDE_ZIPPER_PATTERNS_MS = [[4], [7], [11]] as const;
+/** Pulse length (ms) for zipper step `step` at full motor strength: 6ms taps growing to 40ms buzzes. */
+export function slideZipperPulseMs(step: number): number {
+  return Math.round(6 + 34 * Math.pow(slideZipperStrength(step), 1.4));
+}
+
 /** Celebrate: offsets (ms) of the rising roll (light, medium, heavy); success() lands after the last. */
 export const CELEBRATE_ROLL_MS = [0, 70, 140, 230] as const;
 

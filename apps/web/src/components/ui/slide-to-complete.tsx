@@ -3,8 +3,8 @@
 // Hearth v2 (Pulse): slide-to-finish — web twin of packages/ui's
 // SlideToComplete, the Now card's M3 gesture. Drag the coral thumb to the
 // end of the track to finish; let go short and it slides back. The thumb
-// zips as it travels, clicks closer together and firmer the further it goes,
-// the firmest marking the threshold, and pop() lands the finish (HA). The
+// zips as it travels, buzzes closer together and longer the further it goes,
+// the longest marking the threshold, and pop() lands the finish (HA). The
 // thumb is a real button, so a keyboard or screen-reader user finishes with
 // Enter or Space.
 //
@@ -23,7 +23,7 @@ const THUMB = 48;
 const INSET = 4;
 const TRACK = 56;
 const FINISH_AT = SLIDE_FINISH_AT;
-/** The zipper step the threshold clicks as: one past the last, so its firmest tier. */
+/** The zipper step the threshold buzzes as: one past the last, so its hardest. */
 const ARM_STEP = SLIDE_ZIPPER_STEPS.length;
 /** Sparks around the landed thumb: angle (deg) and size (px), alternating so the burst doesn't read as a stamp. */
 const SPARKS = [0, 45, 90, 135, 180, 225, 270, 315].map((deg, i) => ({ deg: deg + 22.5, size: i % 2 ? 5 : 7 }));
@@ -125,7 +125,7 @@ export function SlideToComplete({
     if (!d || d.pointerId !== e.pointerId) return;
     const max = travel();
     const next = Math.max(0, Math.min(max, e.clientX - d.startX));
-    // One click per move at most: the furthest step crossed, and arming outranks it.
+    // One buzz per move at most: the furthest step crossed, and arming outranks it.
     let click = -1;
     while (d.zipped + 1 < SLIDE_ZIPPER_STEPS.length && next >= max * SLIDE_ZIPPER_STEPS[d.zipped + 1]) click = ++d.zipped;
     const armed = next >= max * FINISH_AT;

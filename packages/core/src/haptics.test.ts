@@ -4,10 +4,9 @@ import {
   HAPTIC_PATTERNS_MS,
   HOLD_CHARGE_STEPS,
   SLIDE_FINISH_AT,
-  SLIDE_ZIPPER_PATTERNS_MS,
   SLIDE_ZIPPER_STEPS,
-  SLIDE_ZIPPER_TIERS,
-  slideZipperTier,
+  slideZipperPulseMs,
+  slideZipperStrength,
   stepsCrossed,
 } from './tokens';
 
@@ -39,20 +38,21 @@ describe('haptic vocabulary', () => {
 });
 
 describe('slide zipper', () => {
-  it('clicks in rising order, all before the threshold', () => {
+  it('buzzes in rising order, all before the threshold', () => {
     expect([...SLIDE_ZIPPER_STEPS]).toEqual([...SLIDE_ZIPPER_STEPS].sort((a, b) => a - b));
     expect(SLIDE_ZIPPER_STEPS.every((s) => s > 0 && s < SLIDE_FINISH_AT)).toBe(true);
+    expect(SLIDE_ZIPPER_STEPS.length).toBeGreaterThanOrEqual(24);
   });
   it('tightens its gaps as the thumb travels', () => {
     const gaps = SLIDE_ZIPPER_STEPS.map((s, i) => s - (i ? SLIDE_ZIPPER_STEPS[i - 1] : 0));
-    for (let i = 1; i < gaps.length; i++) expect(gaps[i]).toBeLessThanOrEqual(gaps[i - 1] + 1e-9);
+    for (let i = 1; i < gaps.length; i++) expect(gaps[i]).toBeLessThanOrEqual(gaps[i - 1] + 1e-3);
+    expect(gaps[gaps.length - 1]).toBeLessThan(gaps[0] / 3);
   });
-  it('firms up tier by tier and tops out at the threshold', () => {
-    const tiers = SLIDE_ZIPPER_STEPS.map((_, i) => slideZipperTier(i));
-    expect(tiers).toEqual([...tiers].sort((a, b) => a - b));
-    expect(tiers[0]).toBe(0);
-    expect(tiers[tiers.length - 1]).toBe(SLIDE_ZIPPER_TIERS - 1);
-    expect(slideZipperTier(SLIDE_ZIPPER_STEPS.length)).toBe(SLIDE_ZIPPER_TIERS - 1);
-    expect(SLIDE_ZIPPER_PATTERNS_MS).toHaveLength(SLIDE_ZIPPER_TIERS);
+  it('grows each pulse and tops out at the threshold', () => {
+    const pulses = SLIDE_ZIPPER_STEPS.map((_, i) => slideZipperPulseMs(i));
+    expect(pulses).toEqual([...pulses].sort((a, b) => a - b));
+    expect(pulses[0]).toBeLessThan(10);
+    expect(slideZipperPulseMs(SLIDE_ZIPPER_STEPS.length)).toBe(40);
+    expect(slideZipperStrength(SLIDE_ZIPPER_STEPS.length + 3)).toBe(1);
   });
 });

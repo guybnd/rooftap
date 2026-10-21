@@ -3,9 +3,9 @@
 // haptic *moment* (not the web's raw vibration-pattern ms) to Expo's nearest
 // feedback style — see @homeup/core's HAPTIC_PATTERNS_MS doc comment: "RN's
 // haptic engine ... maps its own feedback styles to these same named moments."
-import { Platform } from 'react-native';
+import { Platform, Vibration } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { CELEBRATE_ROLL_MS, slideZipperTier } from '@homeup/core';
+import { CELEBRATE_ROLL_MS, HAPTIC_PATTERNS_MS, slideZipperPulseMs, slideZipperStrength } from '@homeup/core';
 
 let enabled = true;
 
@@ -68,41 +68,44 @@ export function charge(step: number): void {
 }
 
 /**
- * Android's system haptic primitives (View.performHapticFeedback): short,
- * crisp, tuned per phone. Expo's impactAsync on Android is a 43-60ms buzz at
- * a fifth of full strength, too soft and too long to ramp with, so the
- * effects that need a felt climb use these. They follow the phone's own
- * Touch feedback setting as well as ours.
+ * Android's full-strength motor (React Native's Vibration: a one-shot at the
+ * device's default amplitude). Expo's impactAsync on Android is a 43-60ms
+ * buzz at a fifth of full strength and the system click primitives are tuned
+ * to whisper, both far too weak for the slide (Guy: "weak as hell"). A motor
+ * can't be graded in strength from JS, so pulse length carries the climb:
+ * a 6ms tap feels like a tick, a 40ms pulse like a buzz. A new pulse cuts
+ * the one before it short, so dense long pulses blur into one grinding buzz.
  */
-function android(type: Haptics.AndroidHaptics): void {
-  if (enabled) void Haptics.performAndroidHapticsAsync(type).catch(() => {});
+function motor(pattern: number | number[]): void {
+  if (enabled) Vibration.vibrate(pattern);
 }
 
-// Climbing strength per zipper tier (core slideZipperTier): texture tick, tick, click.
-const ZIPPER_ANDROID = [Haptics.AndroidHaptics.Clock_Tick, Haptics.AndroidHaptics.Context_Click, Haptics.AndroidHaptics.Virtual_Key];
-const ZIPPER_IOS = [Haptics.ImpactFeedbackStyle.Soft, Haptics.ImpactFeedbackStyle.Light, Haptics.ImpactFeedbackStyle.Medium];
+// iOS has no raw motor; the climb steps through impact styles instead.
+const ZIPPER_IOS = [
+  Haptics.ImpactFeedbackStyle.Soft,
+  Haptics.ImpactFeedbackStyle.Light,
+  Haptics.ImpactFeedbackStyle.Medium,
+  Haptics.ImpactFeedbackStyle.Rigid,
+  Haptics.ImpactFeedbackStyle.Heavy,
+];
 /**
- * Slide to finish: one click of the zipper as the thumb travels (core
- * SLIDE_ZIPPER_STEPS, tightening as it goes). Each third clicks firmer; the
- * step past the last is the threshold and clicks at the top tier.
+ * Slide to finish: one buzz of the zipper as the thumb travels (core
+ * SLIDE_ZIPPER_STEPS, tightening as it goes), each a little longer and
+ * buzzier (slideZipperPulseMs). The step past the last is the threshold and
+ * buzzes hardest.
  */
 export function zipper(step: number): void {
-  const tier = slideZipperTier(step);
-  if (Platform.OS === 'android') android(ZIPPER_ANDROID[tier]);
-  else impact(ZIPPER_IOS[tier]);
+  if (Platform.OS === 'android') motor(slideZipperPulseMs(step));
+  else impact(ZIPPER_IOS[Math.min(ZIPPER_IOS.length - 1, Math.floor(slideZipperStrength(step) * ZIPPER_IOS.length))]);
 }
 
-/** Pop's echo lands as the visual pop settles back, after the heavy hit. */
-const POP_ECHO_MS = 90;
-/** Slide to finish landing: the zipper's payoff. One heavy hit, then a lighter echo as the check settles. */
+/** Slide to finish landing: the zipper's payoff. A long full-strength thump, then a short kick (core HAPTIC_PATTERNS_MS.pop). */
 export function pop(): void {
   if (!enabled) return;
-  if (Platform.OS === 'android') {
-    android(Haptics.AndroidHaptics.Long_Press);
-    setTimeout(() => android(Haptics.AndroidHaptics.Virtual_Key), POP_ECHO_MS);
-  } else {
+  if (Platform.OS === 'android') motor([0, ...HAPTIC_PATTERNS_MS.pop]);
+  else {
     impact(Haptics.ImpactFeedbackStyle.Heavy);
-    setTimeout(() => impact(Haptics.ImpactFeedbackStyle.Light), POP_ECHO_MS);
+    setTimeout(() => notify(Haptics.NotificationFeedbackType.Success), 90);
   }
 }
 

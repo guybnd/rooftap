@@ -1,8 +1,9 @@
 // Hearth v2 (Pulse): slide-to-finish, the Now card's M3 gesture. Drag the
 // coral thumb to the end of the track to finish the item; let go short of
-// the end and it springs back. The thumb zips as it travels: clicks that come
-// closer together and firmer the further it goes, the firmest marking the
-// threshold, then pop() lands the finish (HA, "Zipper"). Screen readers get a plain "Finish" action, and the
+// the end and it springs back. The thumb follows the finger exactly and zips
+// as it travels: buzzes that come closer together and longer the further it
+// goes, grinding into one buzz at the threshold, then pop() lands the finish
+// (HA, "Zipper"). Screen readers get a plain "Finish" action, and the
 // card around it keeps tap = open (M3 always has a tap path).
 //
 // Finishing celebrates once: as the thumb lands its check pops and a small
@@ -39,7 +40,7 @@ const SPARKS = [0, 45, 90, 135, 180, 225, 270, 315].map((deg, i) => ({ deg: deg 
 const SPARK_FROM = THUMB / 2 - 2;
 const SPARK_TO = THUMB / 2 + 26;
 const ZIPPER_AT = [...SLIDE_ZIPPER_STEPS];
-/** The zipper step the threshold clicks as: one past the last, so its firmest tier. */
+/** The zipper step the threshold buzzes as: one past the last, so its hardest. */
 const ARM_STEP = ZIPPER_AT.length;
 
 export interface SlideToCompleteProps extends ViewProps {
@@ -55,7 +56,7 @@ export function SlideToComplete({ onComplete, label = 'Slide to finish', disable
   const [finished, setFinished] = React.useState(false);
   const offset = useSharedValue(0);
   const armed = useSharedValue(0);
-  /** Furthest zipper step clicked this drag, so dragging back and forth over one doesn't chatter. */
+  /** Furthest zipper step buzzed this drag, so dragging back and forth over one doesn't chatter. */
   const zipped = useSharedValue(-1);
   const pop = useSharedValue(1);
   const burst = useSharedValue(0);
@@ -87,8 +88,8 @@ export function SlideToComplete({ onComplete, label = 'Slide to finish', disable
       'worklet';
       const next = Math.max(0, Math.min(travel, event.translationX));
       offset.value = next;
-      // One click per frame at most: a fast flick crossing several steps
-      // clicks the furthest one, and arming outranks a zipper step.
+      // One buzz per frame at most: a fast flick crossing several steps
+      // buzzes the furthest one, and arming outranks a zipper step.
       let click = -1;
       for (let i = zipped.value + 1; i < ZIPPER_AT.length; i++) {
         if (next < travel * ZIPPER_AT[i]) break;

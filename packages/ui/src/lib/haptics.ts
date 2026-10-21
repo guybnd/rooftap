@@ -3,7 +3,7 @@
 // so `expo-haptics` never enters a web bundle. Mirrors
 // apps/web/src/lib/haptics.ts's `navigator.vibrate` pattern, but sourced from
 // @homeup/core's HAPTIC_PATTERNS_MS instead of re-hardcoding the ms values.
-import { HAPTIC_PATTERNS_MS, SLIDE_ZIPPER_PATTERNS_MS, slideZipperTier, type HapticPulse } from '@homeup/core';
+import { HAPTIC_PATTERNS_MS, slideZipperPulseMs, type HapticPulse } from '@homeup/core';
 
 let enabled = true;
 
@@ -42,9 +42,9 @@ export const remove = () => fire('remove');
 export const celebrate = () => fire('celebrate');
 /** Hold to edit: one step of the rising charge (a vibration motor can't grade it, so each is a select). */
 export const charge = (_step: number) => fire('select');
-/** Slide to finish: one click of the zipper, longer each third (a motor can't grade strength). */
+/** Slide to finish: one buzz of the zipper, longer as the thumb travels (a motor can't grade strength). */
 export const zipper = (step: number) => {
-  if (canVibrate()) navigator.vibrate([...SLIDE_ZIPPER_PATTERNS_MS[slideZipperTier(step)]]);
+  if (canVibrate()) navigator.vibrate(slideZipperPulseMs(step));
 };
-/** Slide to finish landing: one firm hit and a short echo. */
+/** Slide to finish landing: a long thump and a short kick. */
 export const pop = () => fire('pop');
