@@ -161,7 +161,7 @@ export function createAssistantApi(call: AssistantCall) {
       call<{ prefs: AssistantNotifyPrefs }>('/api/assistant/notify-prefs', { method: 'PUT', body: patch }),
     updateConversation: (conversationId: string, patch: { title?: string; pinned?: boolean; deleted?: boolean }) =>
       call<{ ok: true }>(`/api/assistant/conversations/${encodeURIComponent(conversationId)}`, { method: 'PATCH', body: patch }),
-    send: (input: { text: string; conversationId?: string | null; kind?: ConversationKind }) =>
+    send: (input: { text: string; conversationId?: string | null; kind?: ConversationKind; reopen?: boolean }) =>
       call<ChatResponse>('/api/assistant/chat', { method: 'POST', body: input }),
     decide: (messageId: string, decision: 'confirm' | 'decline') =>
       call<{ message: AssistantMessage; outcome: AssistantMessage | null }>(

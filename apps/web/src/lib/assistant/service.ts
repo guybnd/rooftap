@@ -4,6 +4,7 @@ import {
   FALLBACK_MODEL_PRICE,
   MODEL_PRICES,
   PLUS_ASSISTANT_ALLOWANCE_CENTS,
+  SUMMARY_SYSTEM_PROMPT,
   assistantAccess,
   buildAssistantSystemPrompt,
   checkBudget,
@@ -17,6 +18,7 @@ import {
   parseModelPrices,
   quickAskClosesAt,
   strictestBudget,
+  summaryRequest,
   trustFor,
   usageMonth,
   type AssistantAccess,
@@ -111,6 +113,8 @@ interface ConversationRow {
   title: string | null;
   pinned: boolean;
   summary: string | null;
+  /** Newest message folded into `summary` (20261021110000); undefined before that migration. */
+  summary_through?: string | null;
   last_active_at: string;
   closes_at: string | null;
 }
@@ -396,10 +400,19 @@ export interface ChatInput {
   conversationId?: string | null;
   kind?: ConversationKind;
   channel?: MessageChannel;
+  /** Carry on a quick ask that has closed, with its history, instead of refusing. */
+  reopen?: boolean;
 }
 
 export type ChatOutcome =
-  | { ok: true; conversation: AssistantConversation; messages: AssistantMessage[]; budget: BudgetCheck["status"] }
+  | {
+      ok: true;
+      conversation: AssistantConversation;
+      messages: AssistantMessage[];
+      budget: BudgetCheck["status"];
+      /** Bookkeeping that can wait until the reply is sent: folding older messages into the summary. */
+      afterReply: () => Promise<void>;
+    }
   | { ok: false; status: number; error: string; code?: AssistantErrorCode };
 
 function priceTable(): Record<string, { input: number; output: number }> {
@@ -446,7 +459,7 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
   let conversation: ConversationRow;
   if (input.conversationId) {
     if (!found) return { ok: false, status: 404, error: "Not found" };
-    if (!isConversationOpen(found.kind, found.closes_at, now)) {
+    if (!isConversationOpen(found.kind, found.closes_at, now) && !(input.reopen && found.kind === "quick")) {
       return { ok: false, status: 409, error: "This quick ask has closed. Start a new one.", code: "assistant_conversation_closed" };
     }
     conversation = found;
@@ -593,7 +606,97 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
     conversation: toConversation({ ...conversation, ...touched }, pending.get(conversation.id) ?? 0),
     messages: [userRow as MessageRow, replyRow as MessageRow].flatMap((r) => (r ? toMessage(r, names) ?? [] : [])),
     budget: after.status,
+    afterReply: () =>
+      foldOlderMessages(ctx, conversation, {
+        llm: deps.llm ?? llmClient(brain.connection),
+        model: settings.quickModel ?? brain.quickModel,
+        window: settings.contextMessages * 3,
+        brain,
+        feature: channel === "telegram" ? "telegram" : conversation.kind,
+        names,
+      }).catch((e) => console.error("[assistant] summary fold failed", e)),
   };
+}
+
+// ── Rolling summary ───────────────────────────────────────────────────────
+
+/** Folding waits until at least this many messages have left the window, so it runs now and then, not every turn. */
+export const FOLD_BATCH = 8;
+
+interface FoldOptions {
+  llm: LlmClient;
+  model: string;
+  /** How many of the newest rows each turn sends word for word (runChat's history). */
+  window: number;
+  brain: Pick<AssistantBrain, "free" | "keySource">;
+  feature: string;
+  names: Map<string, string>;
+}
+
+/**
+ * Keeps a long conversation coherent: messages that have left the context
+ * window are folded into its summary (sent with every turn), a batch at a
+ * time, after the reply is out. A server without summary_through skips it.
+ */
+export async function foldOlderMessages(ctx: AssistantContext, conversation: ConversationRow, opts: FoldOptions): Promise<void> {
+  if (conversation.summary_through === undefined) return;
+  // The oldest row still inside the window; anything before it has left.
+  const { data: edge } = await ctx.admin
+    .from("assistant_messages")
+    .select("created_at")
+    .eq("conversation_id", conversation.id)
+    .order("created_at", { ascending: false })
+    .range(opts.window - 1, opts.window - 1)
+    .maybeSingle();
+  if (!edge) return;
+  let query = ctx.admin
+    .from("assistant_messages")
+    .select("role, content, user_id, created_at")
+    .eq("conversation_id", conversation.id)
+    .in("role", ["user", "assistant"])
+    .lt("created_at", (edge as { created_at: string }).created_at)
+    .order("created_at", { ascending: true })
+    .limit(200);
+  if (conversation.summary_through) query = query.gt("created_at", conversation.summary_through);
+  const { data } = await query;
+  const rows = ((data ?? []) as Pick<MessageRow, "role" | "content" | "user_id" | "created_at">[]).filter((r) => r.content?.trim());
+  if (rows.length < FOLD_BATCH) return;
+
+  const step = await opts.llm({
+    model: opts.model,
+    system: SUMMARY_SYSTEM_PROMPT,
+    messages: [
+      {
+        role: "user",
+        content: summaryRequest(
+          conversation.summary,
+          rows.map((r) => ({ speaker: r.role === "assistant" ? "Rooftap" : (r.user_id && opts.names.get(r.user_id)) || "Someone", text: r.content }))
+        ),
+      },
+    ],
+    tools: [],
+    maxTokens: 400,
+  });
+  const summary = step.text.trim();
+  if (!summary) return;
+  const cost = turnCost(opts.brain, opts.model, step.inputTokens, step.outputTokens);
+  await Promise.all([
+    ctx.admin
+      .from("assistant_conversations")
+      .update({ summary: summary.slice(0, 2000), summary_through: rows[rows.length - 1].created_at })
+      .eq("id", conversation.id),
+    ctx.admin.rpc("assistant_record_usage", {
+      p_group_id: ctx.groupId,
+      p_user_id: ctx.userId,
+      p_month: usageMonth(new Date()),
+      p_feature: opts.feature,
+      p_model: opts.model,
+      p_key_source: opts.brain.keySource,
+      p_input_tokens: step.inputTokens,
+      p_output_tokens: step.outputTokens,
+      p_cost_micros: cost,
+    }),
+  ]);
 }
 
 // ── Proposals ─────────────────────────────────────────────────────────────

@@ -10,7 +10,7 @@ export const maxDuration = 60;
 const KINDS = new Set<ConversationKind>(["quick", "chat", "household"]);
 
 export async function POST(request: Request) {
-  const body = (await request.json().catch(() => ({}))) as { text?: unknown; conversationId?: unknown; kind?: unknown };
+  const body = (await request.json().catch(() => ({}))) as { text?: unknown; conversationId?: unknown; kind?: unknown; reopen?: unknown };
   if (typeof body.text !== "string" || !body.text.trim()) return assistantErrorResponse(400, "text is required");
   if (body.text.length > 4000) return assistantErrorResponse(400, "That message is too long.");
   const ctx = await assistantRequest();
@@ -20,6 +20,7 @@ export async function POST(request: Request) {
     text: body.text,
     conversationId: typeof body.conversationId === "string" ? body.conversationId : null,
     kind,
+    reopen: body.reopen === true,
   });
   if (!out.ok) return assistantErrorResponse(out.status, out.error, out.code);
   // If the person left while Rooftap was thinking, the reply reaches them as a push.
@@ -28,5 +29,6 @@ export async function POST(request: Request) {
     const conversation = out.conversation;
     after(() => notifyIfAway(ctx, conversation, reply).then(() => undefined, (e) => console.error("[assistant] reply push failed", e)));
   }
+  after(out.afterReply);
   return NextResponse.json({ conversation: out.conversation, messages: out.messages, budget: out.budget });
 }

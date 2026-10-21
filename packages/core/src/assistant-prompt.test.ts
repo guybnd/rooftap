@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ASSISTANT_PERSONA, REMEMBER_INSTRUCTION, buildAssistantSystemPrompt, extractMemoryMarkers } from './assistant-prompt';
+import { ASSISTANT_PERSONA, REMEMBER_INSTRUCTION, buildAssistantSystemPrompt, extractMemoryMarkers, summaryRequest } from './assistant-prompt';
 
 const base = {
   now: 'Tuesday 21 October 2026, 09:41',
@@ -61,5 +61,13 @@ describe('extractMemoryMarkers', () => {
       cleanedText: 'Hi there <remember>open',
       memories: [],
     });
+  });
+});
+
+describe('summaryRequest', () => {
+  it('lays out the summary so far and the messages to fold, one line each', () => {
+    expect(summaryRequest(null, [{ speaker: 'Noa', text: 'Dinner\n  Sunday?' }, { speaker: 'Rooftap', text: 'Sunday works.' }])).toBe(
+      'Summary so far:\n(none yet)\n\nNewer messages:\nNoa: Dinner Sunday?\nRooftap: Sunday works.'
+    );
   });
 });

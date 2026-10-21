@@ -5,7 +5,8 @@
 // the + (components/assistant-chat-popup.tsx). State comes from core's
 // useAssistantThread. Native twin: apps/mobile/src/features/assistant/thread-body.tsx.
 import { useEffect, useRef } from 'react';
-import { isConversationOpen, minutesLeft, type AssistantThread } from '@homeup/core';
+import { minutesLeft, type AssistantThread } from '@homeup/core';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Composer, MessageBubble, Thinking } from './assistant-parts';
 import { AssistantNotice } from './assistant-notice';
@@ -58,22 +59,53 @@ export function ThreadMessages({ thread, className }: { thread: AssistantThread;
   );
 }
 
-export function ThreadFooter({ thread, offline, autoFocus, className }: { thread: AssistantThread; offline: boolean; autoFocus?: boolean; className?: string }) {
-  const { conversation, kind, blocked, sending, send } = thread;
-  const open = conversation ? isConversationOpen(conversation.kind, conversation.closes_at) : true;
-  const left = conversation ? minutesLeft(conversation) : null;
+/** A quick ask past its quiet time: carry on with its history, or start over. */
+function ClosedFooter({ onContinue, onFresh }: { onContinue: () => void; onFresh?: () => void }) {
+  return (
+    <div className="space-y-3 rounded-2xl border border-border/60 bg-card p-4">
+      <p className="text-sm text-muted-foreground">This quick ask closed after a quiet spell. Pick it back up with everything said so far, or start over.</p>
+      <div className="flex gap-2">
+        <Button size="lg" className="h-11 flex-1" onClick={onContinue}>
+          Continue
+        </Button>
+        {onFresh && (
+          <Button size="lg" variant="outline" className="h-11 flex-1" onClick={onFresh}>
+            Start fresh
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function ThreadFooter({
+  thread,
+  offline,
+  autoFocus,
+  onFresh,
+  className,
+}: {
+  thread: AssistantThread;
+  offline: boolean;
+  autoFocus?: boolean;
+  /** Starts a new quick ask (offered when this one has closed). */
+  onFresh?: () => void;
+  className?: string;
+}) {
+  const { conversation, kind, blocked, sending, send, closed, resume } = thread;
+  const left = conversation && !closed ? minutesLeft(conversation) : null;
   return (
     <div className={cn('space-y-2', className)}>
-      {blocked && <AssistantNotice code={blocked} />}
-      {!open ? (
-        <AssistantNotice code="assistant_conversation_closed" />
+      {blocked && blocked !== 'assistant_conversation_closed' && <AssistantNotice code={blocked} />}
+      {closed || blocked === 'assistant_conversation_closed' ? (
+        <ClosedFooter onContinue={resume} onFresh={onFresh} />
       ) : (
         <>
           <Composer
             placeholder={kind === 'household' ? 'Message the household thread' : conversation ? 'Ask a follow-up' : 'Ask Rooftap anything'}
             disabled={offline || blocked === 'assistant_requires_plus' || blocked === 'assistant_not_configured'}
             busy={sending}
-            autoFocus={autoFocus}
+            autoFocus={autoFocus || thread.resumed}
             onSend={send}
           />
           {left != null && left > 0 && (

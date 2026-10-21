@@ -126,3 +126,18 @@ export function extractMemoryMarkers(replyText: string): ExtractedMemories {
     .trim();
   return { cleanedText, memories };
 }
+
+// ── Rolling summary ─────────────────────────────────────────────────────────
+
+/** How the model folds messages that left the context window into the conversation's summary. */
+export const SUMMARY_SYSTEM_PROMPT =
+  'You keep the running summary of a household chat with Rooftap, the household assistant. ' +
+  'Fold the newer messages into the summary so far. Keep what later turns may need: decisions, ' +
+  'plans, open questions, names, dates, amounts and anything Rooftap proposed or did. Drop small talk. ' +
+  'Write plain sentences, at most 150 words, no headings or lists. Reply with the summary only.';
+
+/** The request text for one fold: the summary so far, then the messages to add, one per line. */
+export function summaryRequest(previous: string | null | undefined, lines: { speaker: string; text: string }[]): string {
+  const transcript = lines.map((l) => `${l.speaker}: ${l.text.replace(/\s+/g, ' ').trim().slice(0, 1200)}`).join('\n');
+  return `Summary so far:\n${previous?.trim() || '(none yet)'}\n\nNewer messages:\n${transcript}`;
+}

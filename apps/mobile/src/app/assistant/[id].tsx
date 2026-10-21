@@ -98,7 +98,7 @@ export default function AssistantThreadScreen() {
         </View>
 
         <ThreadMessages thread={thread} />
-        <ThreadFooter thread={thread} offline={!isOnline} autoFocus={isNew && !params.ask} />
+        <ThreadFooter thread={thread} offline={!isOnline} autoFocus={isNew && !params.ask} onFresh={() => router.replace('/assistant/new?kind=quick')} />
       </KeyboardAvoidingView>
     </ScreenBackground>
   );

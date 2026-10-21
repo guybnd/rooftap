@@ -18,12 +18,11 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useSafeAreaFrame, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronDown, Maximize2, SquarePen } from 'lucide-react-native';
+import { ChevronDown, Maximize2, SquarePen, Trash2 } from 'lucide-react-native';
 import {
   MOTION_DURATIONS_MS,
   assistantUnread,
   conversationTitle,
-  isConversationOpen,
   onAssistantPopup,
   setAssistantUnread,
   useAssistantThread,
@@ -76,9 +75,8 @@ export function AssistantChatPopup() {
           current.current = null;
           return { open: true, key: prev.key + 1, target: { id: request.conversationId } };
         }
-        // A quick ask that has stopped taking follow-ups gives way to a fresh one.
-        const stale = !!shown && !isConversationOpen(shown.kind, shown.closes_at);
-        if (request.ask || request.fresh || stale) {
+        // A quick ask that has since closed stays on show: its footer offers Continue or Start fresh.
+        if (request.ask || request.fresh) {
           current.current = null;
           return { open: true, key: prev.key + 1, target: { id: 'new', kind: 'quick' }, ask: request.ask };
         }
@@ -172,25 +170,40 @@ function PopupThread({
   const title = conversation ? conversationTitle(conversation) : target.id === 'new' ? 'Ask Rooftap' : '';
 
   return (
-    <PopupSurface open={open} onMinimize={onMinimize}>
-      <View className="flex-row items-center gap-1 pl-4 pr-1.5">
-        <Text numberOfLines={1} className="min-w-0 flex-1 text-micro-label uppercase text-muted-foreground">
-          {title}
-        </Text>
-        <Pressable onPress={onFresh} accessibilityRole="button" accessibilityLabel="New quick ask" className="h-11 w-11 items-center justify-center rounded-lg">
-          <SquarePen size={18} className="text-muted-foreground" />
-        </Pressable>
-        {conversation && (
-          <Pressable onPress={expand} accessibilityRole="button" accessibilityLabel="Open full screen" className="h-11 w-11 items-center justify-center rounded-lg">
-            <Maximize2 size={18} className="text-muted-foreground" />
+    <PopupSurface
+      open={open}
+      onMinimize={onMinimize}
+      header={
+        <View className="flex-row items-center gap-1 pl-4 pr-1.5">
+          <Text numberOfLines={1} className="min-w-0 flex-1 text-micro-label uppercase text-muted-foreground">
+            {title}
+          </Text>
+          <Pressable onPress={onFresh} accessibilityRole="button" accessibilityLabel="New quick ask" className="h-11 w-10 items-center justify-center rounded-lg">
+            <SquarePen size={18} className="text-muted-foreground" />
           </Pressable>
-        )}
-        <Pressable onPress={onMinimize} accessibilityRole="button" accessibilityLabel="Minimise" className="h-11 w-11 items-center justify-center rounded-lg">
-          <ChevronDown size={20} className="text-muted-foreground" />
-        </Pressable>
-      </View>
+          {conversation && conversation.kind !== 'household' && (
+            <Pressable
+              onPress={() => void thread.remove().then((gone) => gone && onFresh())}
+              accessibilityRole="button"
+              accessibilityLabel="Delete this conversation"
+              className="h-11 w-10 items-center justify-center rounded-lg"
+            >
+              <Trash2 size={18} className="text-muted-foreground" />
+            </Pressable>
+          )}
+          {conversation && (
+            <Pressable onPress={expand} accessibilityRole="button" accessibilityLabel="Open full screen" className="h-11 w-10 items-center justify-center rounded-lg">
+              <Maximize2 size={18} className="text-muted-foreground" />
+            </Pressable>
+          )}
+          <Pressable onPress={onMinimize} accessibilityRole="button" accessibilityLabel="Minimise" className="h-11 w-10 items-center justify-center rounded-lg">
+            <ChevronDown size={20} className="text-muted-foreground" />
+          </Pressable>
+        </View>
+      }
+    >
       <ThreadMessages thread={thread} />
-      <ThreadFooter thread={thread} offline={!isOnline} autoFocus={open && target.id === 'new' && !ask} />
+      <ThreadFooter thread={thread} offline={!isOnline} autoFocus={open && target.id === 'new' && !ask} onFresh={onFresh} />
     </PopupSurface>
   );
 }
@@ -201,7 +214,18 @@ function PopupThread({
  * Modal window, so like BottomSheet it needs its own gesture root, sizes
  * itself to the app frame and lifts over the keyboard (use-keyboard-offset).
  */
-function PopupSurface({ open, onMinimize, children }: { open: boolean; onMinimize: () => void; children: React.ReactNode }) {
+function PopupSurface({
+  open,
+  onMinimize,
+  header,
+  children,
+}: {
+  open: boolean;
+  onMinimize: () => void;
+  /** The title row; it drags down to minimise along with the handle. */
+  header: React.ReactNode;
+  children: React.ReactNode;
+}) {
   const frame = useSafeAreaFrame();
   const insets = useSafeAreaInsets();
   const material = useThemeMaterial();
@@ -229,7 +253,7 @@ function PopupSurface({ open, onMinimize, children }: { open: boolean; onMinimiz
     }
   }, [open, progress, drag, hide]);
 
-  const header = Gesture.Pan()
+  const headerDrag = Gesture.Pan()
     .activeOffsetY(10)
     .failOffsetX([-20, 20])
     .onUpdate((event) => {
@@ -287,9 +311,12 @@ function PopupSurface({ open, onMinimize, children }: { open: boolean; onMinimiz
           ]}
           className="overflow-hidden rounded-[28px] border"
         >
-          <GestureDetector gesture={header}>
-            <View className="items-center pb-1 pt-2.5">
-              <View className="h-1.5 w-10 rounded-full bg-foreground/20" />
+          <GestureDetector gesture={headerDrag}>
+            <View>
+              <View className="items-center pb-1 pt-2.5">
+                <View className="h-1.5 w-10 rounded-full bg-foreground/20" />
+              </View>
+              {header}
             </View>
           </GestureDetector>
           {children}

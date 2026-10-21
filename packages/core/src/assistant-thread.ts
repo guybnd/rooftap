@@ -18,7 +18,7 @@ import {
   type AssistantErrorCode,
   type AssistantMessage,
 } from './assistant-api';
-import type { ConversationKind } from './assistant';
+import { isConversationOpen, type ConversationKind } from './assistant';
 
 interface CachedThread {
   conversation: AssistantConversation;
@@ -94,6 +94,9 @@ export function useAssistantThread(target: ThreadTarget, host: ThreadHost) {
   const [deciding, setDeciding] = useState<string | null>(null);
   const [blocked, setBlocked] = useState<AssistantErrorCode | null>(null);
   const [showCost, setShowCost] = useState(false);
+  // A closed quick ask the person chose to carry on: the next send reopens it.
+  const [resumed, setResumed] = useState(false);
+  const resumedRef = useRef(false);
   const hostRef = useRef(host);
   hostRef.current = host;
 
@@ -109,6 +112,20 @@ export function useAssistantThread(target: ThreadTarget, host: ThreadHost) {
 
   const conversationIdRef = useRef<string | null>(cached?.conversation.id ?? null);
   conversationIdRef.current = conversation?.id ?? conversationIdRef.current;
+
+  // The same surface moved on to a new conversation (the chat page's Start fresh): drop the old one.
+  const shownTarget = useRef(target.id);
+  useEffect(() => {
+    if (shownTarget.current !== target.id && target.id === 'new') {
+      conversationIdRef.current = null;
+      resumedRef.current = false;
+      setConversation(null);
+      setMessages([]);
+      setBlocked(null);
+      setResumed(false);
+    }
+    shownTarget.current = target.id;
+  }, [target.id]);
 
   /** Re-reads the thread (opening it marks it read on the server, so the + dot may go). */
   const reload = useCallback(async () => {
@@ -147,7 +164,9 @@ export function useAssistantThread(target: ThreadTarget, host: ThreadHost) {
       setMessages((m) => [...m, local]);
       setSending(true);
       try {
-        const res = await api.send({ text, conversationId: conversationIdRef.current, kind });
+        const res = await api.send({ text, conversationId: conversationIdRef.current, kind, reopen: resumedRef.current || undefined });
+        resumedRef.current = false;
+        setResumed(false);
         const reply = res.messages.filter((m) => m.role === 'assistant').pop();
         conversationIdRef.current = res.conversation.id;
         setConversation(res.conversation);
@@ -226,7 +245,16 @@ export function useAssistantThread(target: ThreadTarget, host: ThreadHost) {
     }
   }, [conversation]);
 
-  return { conversation, messages, kind, loading, sending, deciding, blocked, showCost, send, decide, togglePin, remove, reload };
+  /** Carries on a closed quick ask: the composer comes back, and the next message reopens it with its history. */
+  const resume = useCallback(() => {
+    resumedRef.current = true;
+    setResumed(true);
+    setBlocked((b) => (b === 'assistant_conversation_closed' ? null : b));
+  }, []);
+  // Closed: a quick ask past its idle time, unless the person chose to carry on.
+  const closed = !!conversation && !resumed && !isConversationOpen(conversation.kind, conversation.closes_at);
+
+  return { conversation, messages, kind, loading, sending, deciding, blocked, showCost, closed, resumed, send, decide, togglePin, remove, reload, resume };
 }
 
 export type AssistantThread = ReturnType<typeof useAssistantThread>;

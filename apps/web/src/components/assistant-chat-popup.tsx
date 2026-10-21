@@ -11,11 +11,10 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ChevronDown, Maximize2, SquarePen } from "lucide-react";
+import { ChevronDown, Maximize2, SquarePen, Trash2 } from "lucide-react";
 import {
   assistantUnread,
   conversationTitle,
-  isConversationOpen,
   onAssistantPopup,
   setAssistantUnread,
   useAssistantThread,
@@ -59,9 +58,8 @@ export function AssistantChatPopup() {
           current.current = null;
           return { open: true, key: prev.key + 1, target: { id: request.conversationId } };
         }
-        // A quick ask that has stopped taking follow-ups gives way to a fresh one.
-        const stale = !!shown && !isConversationOpen(shown.kind, shown.closes_at);
-        if (request.ask || request.fresh || stale) {
+        // A quick ask that has since closed stays on show: its footer offers Continue or Start fresh.
+        if (request.ask || request.fresh) {
           current.current = null;
           return { open: true, key: prev.key + 1, target: { id: "new", kind: "quick" }, ask: request.ask };
         }
@@ -164,6 +162,16 @@ function PopupThread({
         <button type="button" onClick={onFresh} aria-label="New quick ask" className={iconButton}>
           <SquarePen className="h-4.5 w-4.5" />
         </button>
+        {conversation && conversation.kind !== "household" && (
+          <button
+            type="button"
+            onClick={() => void thread.remove().then((gone) => gone && onFresh())}
+            aria-label="Delete this conversation"
+            className={iconButton}
+          >
+            <Trash2 className="h-4.5 w-4.5" />
+          </button>
+        )}
         {conversation && (
           <button type="button" onClick={expand} aria-label="Open full page" className={iconButton}>
             <Maximize2 className="h-4.5 w-4.5" />
@@ -174,7 +182,7 @@ function PopupThread({
         </button>
       </div>
       <ThreadMessages thread={thread} className="min-h-0 flex-1 overflow-y-auto px-4" />
-      <ThreadFooter thread={thread} offline={!isOnline} autoFocus={target.id === "new" && !ask} className="px-3 pb-3" />
+      <ThreadFooter thread={thread} offline={!isOnline} autoFocus={target.id === "new" && !ask} onFresh={onFresh} className="px-3 pb-3" />
     </PopupSurface>
   );
 }

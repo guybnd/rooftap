@@ -4,7 +4,8 @@ vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
 vi.mock("@/lib/supabase/session", () => ({ getSessionUser: vi.fn() }));
 
 import { DEFAULT_ASSISTANT_SETTINGS, PLUS_ASSISTANT_ALLOWANCE_CENTS } from "@homeup/core";
-import { billingMode, budgetFor, toHistory, toMessage, turnCost } from "./service";
+import { FOLD_BATCH, billingMode, budgetFor, foldOlderMessages, toHistory, toMessage, turnCost, type AssistantContext } from "./service";
+import type { LlmClient } from "./llm";
 
 const row = (over: Record<string, unknown>) =>
   ({
@@ -105,5 +106,59 @@ describe("turnCost and billing", () => {
     vi.stubEnv("ROOFTAP_BILLING", "on");
     expect(billingMode()).toBe("on");
     vi.unstubAllEnvs();
+  });
+});
+
+describe("foldOlderMessages", () => {
+  // 30 messages a minute apart; the newest `window` stay word for word.
+  const messages = Array.from({ length: 30 }, (_, i) => ({
+    role: i % 2 ? "assistant" : "user",
+    content: `message ${i}`,
+    user_id: "u1",
+    created_at: new Date(Date.UTC(2026, 9, 21, 0, i)).toISOString(),
+  }));
+
+  function fakeAdmin() {
+    const updates: Record<string, unknown>[] = [];
+    const rpc = vi.fn(async () => ({ error: null }));
+    const from = (table: string) => {
+      let rows = table === "assistant_messages" ? [...messages] : [];
+      let range: [number, number] | null = null;
+      let limit = Infinity;
+      const q = {
+        select: () => q,
+        eq: () => q,
+        in: (_k: string, vs: string[]) => ((rows = rows.filter((r) => vs.includes(r.role))), q),
+        lt: (_k: string, v: string) => ((rows = rows.filter((r) => r.created_at < v)), q),
+        gt: (_k: string, v: string) => ((rows = rows.filter((r) => r.created_at > v)), q),
+        order: (_k: string, { ascending }: { ascending: boolean }) => ((rows = [...rows].sort((a, b) => (ascending ? 1 : -1) * a.created_at.localeCompare(b.created_at))), q),
+        range: (a: number, b: number) => ((range = [a, b]), q),
+        limit: (n: number) => ((limit = n), q),
+        maybeSingle: async () => ({ data: range ? rows[range[0]] ?? null : rows[0] ?? null }),
+        update: (patch: Record<string, unknown>) => (updates.push(patch), { eq: async () => ({ error: null }) }),
+        then: (resolve: (v: unknown) => void) => resolve({ data: rows.slice(0, limit) }),
+      };
+      return q;
+    };
+    return { admin: { from, rpc }, updates, rpc };
+  }
+
+  const llm: LlmClient = vi.fn(async () => ({ text: "Planned the Sunday BBQ.", toolCalls: [], inputTokens: 100, outputTokens: 20 }));
+  const conversation = { id: "c", group_id: "g", owner_id: "u1", kind: "chat" as const, title: null, pinned: false, summary: null, summary_through: null, last_active_at: "", closes_at: null };
+  const opts = { llm, model: "m", window: 12, brain: { free: true, keySource: "server" as const }, feature: "chat", names: new Map([["u1", "Noa"]]) };
+
+  it("folds what left the window into the summary and moves the marker", async () => {
+    const { admin, updates, rpc } = fakeAdmin();
+    await foldOlderMessages({ admin, userId: "u1", groupId: "g" } as unknown as AssistantContext, conversation, opts);
+    expect(updates).toEqual([{ summary: "Planned the Sunday BBQ.", summary_through: messages[17].created_at }]);
+    expect(rpc).toHaveBeenCalledOnce();
+  });
+
+  it("waits for a full batch, and skips a server without the column", async () => {
+    const { admin, updates } = fakeAdmin();
+    const ctx = { admin, userId: "u1", groupId: "g" } as unknown as AssistantContext;
+    await foldOlderMessages(ctx, { ...conversation, summary_through: messages[30 - 12 - FOLD_BATCH].created_at }, opts);
+    await foldOlderMessages(ctx, { ...conversation, summary_through: undefined }, opts);
+    expect(updates).toEqual([]);
   });
 });
