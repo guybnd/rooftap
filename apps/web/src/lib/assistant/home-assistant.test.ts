@@ -1,0 +1,108 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const listTools = vi.fn();
+const callTool = vi.fn();
+vi.mock("@modelcontextprotocol/sdk/client/index.js", () => ({
+  Client: class {
+    connect = vi.fn(async () => {});
+    close = vi.fn(async () => {});
+    listTools = listTools;
+    callTool = callTool;
+  },
+}));
+vi.mock("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({ StreamableHTTPClientTransport: class {} }));
+vi.mock("@/lib/ai/household-keys", () => ({ decryptHouseholdKey: (s: string) => (s === "enc" ? "token" : null) }));
+vi.mock("node:dns/promises", () => ({
+  lookup: vi.fn(async (host: string) => [{ address: host === "lan.example.com" ? "192.168.1.5" : "93.184.216.34" }]),
+}));
+
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { checkHomeAssistantHost, forgetHomeAssistantTools, homeAssistantTools, type HomeAssistantRow } from "./home-assistant";
+
+function adminWith(row: Partial<HomeAssistantRow> | null) {
+  const chain = { select: () => chain, eq: () => chain, maybeSingle: async () => ({ data: row, error: null }) };
+  return { from: () => chain } as unknown as SupabaseClient;
+}
+
+const row = (over: Partial<HomeAssistantRow> = {}): Partial<HomeAssistantRow> => ({
+  group_id: "g1",
+  url: "https://home.example.com",
+  encrypted_token: "enc",
+  last4: "oken",
+  trust: "ask",
+  allowed_tools: null,
+  updated_at: "2026-10-21T00:00:00Z",
+  ...over,
+});
+
+beforeEach(() => {
+  forgetHomeAssistantTools("g1");
+  listTools.mockResolvedValue({
+    tools: [
+      { name: "GetLiveContext", description: "States", inputSchema: { type: "object", properties: {} } },
+      { name: "HassTurnOn", description: "Turn on", inputSchema: { type: "object", properties: { name: { type: "string" } } } },
+    ],
+  });
+  callTool.mockResolvedValue({ content: [{ type: "text", text: "done" }] });
+});
+
+afterEach(() => {
+  delete process.env.ROOFTAP_BILLING;
+});
+
+describe("homeAssistantTools", () => {
+  it("offers nothing when Home Assistant isn't connected", async () => {
+    expect(await homeAssistantTools(adminWith(null), "g1")).toBeNull();
+  });
+
+  it("prefixes tools, runs reads and holds writes under Ask first", async () => {
+    const ha = (await homeAssistantTools(adminWith(row()), "g1"))!;
+    expect(ha.tools.map((t) => [t.name, t.gate])).toEqual([
+      ["ha_GetLiveContext", "run"],
+      ["ha_HassTurnOn", "propose"],
+    ]);
+    const res = await ha.tools[1].run({ name: "Kitchen light" });
+    expect(callTool).toHaveBeenCalledWith({ name: "HassTurnOn", arguments: { name: "Kitchen light" } });
+    expect(res.content[0].text).toBe("done");
+  });
+
+  it("follows the allowlist and read-only members", async () => {
+    const ha = (await homeAssistantTools(adminWith(row({ allowed_tools: ["HassTurnOn"], trust: "act" })), "g1"))!;
+    expect(ha.tools.map((t) => [t.name, t.gate])).toEqual([["ha_HassTurnOn", "run"]]);
+    forgetHomeAssistantTools("g1");
+    const readOnly = (await homeAssistantTools(adminWith(row()), "g1", { readOnly: true }))!;
+    expect(readOnly.tools.map((t) => t.name)).toEqual(["ha_GetLiveContext"]);
+  });
+
+  it("carries on without Home Assistant when it can't be reached", async () => {
+    listTools.mockRejectedValue(new Error("fetch failed"));
+    const ha = (await homeAssistantTools(adminWith(row()), "g1"))!;
+    expect(ha.tools).toEqual([]);
+    expect(ha.unavailable).toMatch(/Couldn't reach/);
+  });
+});
+
+describe("checkHomeAssistantHost", () => {
+  it("lets a self-hosted server reach the home network", async () => {
+    expect(await checkHomeAssistantHost("http://192.168.1.5:8123")).toBeNull();
+  });
+
+  it("keeps the hosted server on the public internet over https", async () => {
+    process.env.ROOFTAP_BILLING = "on";
+    expect(await checkHomeAssistantHost("https://home.example.com")).toBeNull();
+    expect(await checkHomeAssistantHost("http://home.example.com")).toMatch(/https/);
+    expect(await checkHomeAssistantHost("https://192.168.1.5")).toMatch(/home network/);
+    expect(await checkHomeAssistantHost("https://lan.example.com")).toMatch(/home network/);
+    expect(await checkHomeAssistantHost("https://homeassistant.local")).toMatch(/home network/);
+  });
+});
+
+describe("an unreachable Home Assistant", () => {
+  it("isn't retried on every turn", async () => {
+    listTools.mockReset();
+    listTools.mockRejectedValue(new Error("fetch failed"));
+    await homeAssistantTools(adminWith(row()), "g1");
+    await homeAssistantTools(adminWith(row()), "g1");
+    expect(listTools).toHaveBeenCalledTimes(1);
+  });
+});

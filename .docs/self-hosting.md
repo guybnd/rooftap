@@ -292,7 +292,8 @@ nothing needs rebuilding.
 
 Switch on the **Assistant** module (Settings → Modules) to give the household
 a chat agent that reads and, with your OK, changes tasks, the calendar, the
-budget and the grocery list. Self-hosted servers always include it, with no
+budget, groceries, recipes and checklists (it also reads Home Setup and the
+Shopper watchlist). Self-hosted servers always include it, with no
 Plus plan or spending cap unless an owner sets one.
 
 It needs a model. Any one of `GEMINI_API_KEY`, `OPENROUTER_API_KEY`,
@@ -348,6 +349,32 @@ starts their own chat (`/new <question>`, `/chats`, `/switch <n>`,
 command, always in the household thread, so only add it to groups whose
 members should see household answers. Changes under "Ask first" come with Do
 it / Not now buttons.
+
+### Assistant and Home Assistant (HOUP-449)
+
+The assistant can check and control your home through Home Assistant's own
+MCP server. Nothing extra runs in the Rooftap stack.
+
+1. In Home Assistant, add the **Model Context Protocol Server** integration
+   (Settings → Devices & services → Add integration). Expose the entities you
+   want the assistant to reach to Assist (Settings → Voice assistants →
+   Expose); it sees nothing else.
+2. On your Home Assistant profile page (Security tab), make a **long-lived
+   access token**.
+3. In Rooftap, an owner opens Settings → Assistant → Home Assistant, pastes
+   the address (for example `http://homeassistant.local:8123` or
+   `http://192.168.1.20:8123`) and the token, and taps Connect. Rooftap tries
+   the connection before saving it.
+
+The token is stored encrypted with `HOUSEHOLD_KEYS_SECRET`, so that must be
+set. A self-hosted server may reach Home Assistant on your own network. The
+hosted Rooftap server only connects over public HTTPS (Nabu Casa, a Cloudflare
+tunnel or Tailscale Funnel) and refuses private addresses.
+
+Owners pick one trust level for Home Assistant (Read, Ask first, Act) and can
+switch single tools off. Reads (`GetLiveContext`) always run; turning things
+on or off, setting lights and the like follow the trust level, and can't be
+undone from Rooftap.
 
 ## The `NEXT_PUBLIC_*` build-time trade-off
 

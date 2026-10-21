@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isDeleteTool, toolGate, trustFor, type AssistantSettings, type ModuleId, type ToolGate } from "@homeup/core";
+import { isDeleteTool, toolGate, trustFor, type AssistantScope, type AssistantSettings, type ToolGate } from "@homeup/core";
 import { MCP_TOOL_BY_NAME } from "@/lib/mcp-tools";
 import { householdTools, type HouseholdToolContext, type ToolResult } from "@/lib/mcp/household-tools";
 import type { ToolSpec } from "./llm";
@@ -10,7 +10,7 @@ import type { ToolSpec } from "./llm";
 // but the engine holds the call for the person's OK instead of running it.
 
 export interface AssistantTool extends ToolSpec {
-  module: ModuleId;
+  module: AssistantScope;
   gate: Exclude<ToolGate, "hidden">;
   run: (args: Record<string, unknown>) => Promise<ToolResult>;
 }

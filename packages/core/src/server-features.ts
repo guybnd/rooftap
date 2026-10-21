@@ -49,6 +49,10 @@ export const SERVER_FEATURES = {
     minSchema: '20261021090000_assistant_reads',
     label: 'notifications when the assistant answers',
   },
+  'assistant.home-assistant': {
+    minSchema: '20261021120000_assistant_home_assistant',
+    label: 'connecting the assistant to Home Assistant',
+  },
 } as const satisfies Record<string, ServerFeatureDef>;
 
 export type ServerFeatureId = keyof typeof SERVER_FEATURES;

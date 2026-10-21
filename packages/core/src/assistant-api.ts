@@ -13,6 +13,14 @@ import type {
 } from './assistant';
 import type { UsageSummary } from './assistant-usage';
 import type { ModuleId } from './modules';
+import {
+  HOME_ASSISTANT_SCOPE,
+  homeAssistantToolLabel,
+  type AssistantScope,
+  type HomeAssistantSaveInput,
+  type HomeAssistantStatus,
+  type HomeAssistantToolInfo,
+} from './home-assistant';
 
 export interface AssistantConversation {
   id: string;
@@ -29,7 +37,7 @@ export interface AssistantConversation {
 
 export interface ProposalItem {
   tool: string;
-  module: ModuleId;
+  module: AssistantScope;
   args: Record<string, unknown>;
   /** One line for the card, e.g. `Add "Milk" to Groceries`. */
   summary: string;
@@ -178,6 +186,13 @@ export function createAssistantApi(call: AssistantCall) {
     telegramStatus: () => call<AssistantTelegramStatus>('/api/assistant/telegram'),
     telegramLinkCode: () => call<AssistantTelegramCode>('/api/assistant/telegram', { method: 'POST' }),
     telegramUnlink: () => call<{ ok: true }>('/api/assistant/telegram', { method: 'DELETE' }),
+    homeAssistant: () => call<HomeAssistantStatus>('/api/assistant/home-assistant'),
+    /** Saves the connection; a new URL or token is tried first, and the tools it offers come back. */
+    saveHomeAssistant: (input: HomeAssistantSaveInput) =>
+      call<{ status: HomeAssistantStatus; tools: HomeAssistantToolInfo[] | null }>('/api/assistant/home-assistant', { method: 'PUT', body: input }),
+    /** Connects with the saved token and lists the tools Home Assistant offers. */
+    homeAssistantTools: () => call<{ tools: HomeAssistantToolInfo[] }>('/api/assistant/home-assistant', { method: 'POST' }),
+    disconnectHomeAssistant: () => call<{ ok: true }>('/api/assistant/home-assistant', { method: 'DELETE' }),
     memories: async () => (await call<{ memories: AssistantMemory[] }>('/api/assistant/memories')).memories,
     addMemory: (text: string) => call<{ memory: AssistantMemory }>('/api/assistant/memories', { method: 'POST', body: { text } }),
     removeMemory: (id: string) => call<{ ok: true }>(`/api/assistant/memories/${encodeURIComponent(id)}`, { method: 'DELETE' }),
@@ -212,9 +227,13 @@ function quoted(value: unknown): string {
  * Ids aren't shown (the model's reply names the item); unknown tools fall
  * back to a generic line so a new tool never breaks the card.
  */
-export function describeProposal(tool: string, module: ModuleId, args: Record<string, unknown>): string {
-  const where = MODULE_NOUN[module] ?? 'the app';
+export function describeProposal(tool: string, module: AssistantScope, args: Record<string, unknown>): string {
+  const where = (module !== HOME_ASSISTANT_SCOPE && MODULE_NOUN[module]) || 'the app';
   const name = args.title ?? args.name;
+  if (module === HOME_ASSISTANT_SCOPE) {
+    const target = args.name ?? args.area ?? args.floor;
+    return `${homeAssistantToolLabel(tool)}${typeof target === 'string' && target.trim() ? ` ${quoted(target)}` : ''} in Home Assistant`;
+  }
   if (tool === 'add_recipe_to_groceries') return "Add a recipe's ingredients to Groceries";
   if (tool === 'add_checklist_item') return `Add ${quoted(args.label)} to a checklist`;
   if (tool === 'check_checklist_item') return args.done === false ? 'Untick a checklist item' : 'Tick a checklist item';

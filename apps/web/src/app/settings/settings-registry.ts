@@ -25,6 +25,7 @@ import { ModulesSettings } from "@/components/modules-settings";
 import { AssistantSettings } from "@/components/assistant-settings";
 import { AssistantSpending } from "@/components/assistant-spending";
 import { AssistantTelegram } from "@/components/assistant-telegram";
+import { AssistantHomeAssistant } from "@/components/assistant-home-assistant";
 import { ShopperSettings } from "@/components/shopper-settings";
 import { WhatsNewHistory } from "@/components/whats-new";
 
@@ -55,7 +56,7 @@ export const sectionPanels: Record<string, ComponentType[]> = {
   groceries: [GroceriesSettings],
   checklists: [ChecklistsSettings],
   calendar: [CalendarSetup],
-  assistant: [AssistantSettings, AssistantSpending, AssistantTelegram],
+  assistant: [AssistantSettings, AssistantSpending, AssistantTelegram, AssistantHomeAssistant],
   shopper: [ShopperSettings],
 };
 

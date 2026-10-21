@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   FALLBACK_MODEL_PRICE,
+  HOME_ASSISTANT_LABEL,
+  HOME_ASSISTANT_SCOPE,
   MODEL_PRICES,
   PLUS_ASSISTANT_ALLOWANCE_CENTS,
   SUMMARY_SYSTEM_PROMPT,
@@ -25,6 +27,7 @@ import {
   type AssistantConversation,
   type AssistantErrorCode,
   type AssistantMessage,
+  type AssistantScope,
   type AssistantSettings,
   type BudgetCheck,
   type ConversationKind,
@@ -44,6 +47,7 @@ import { SERVER_BRAIN_KEYS, resolveHouseholdBrain, resolveServerBrain, type Assi
 import { resolveServerKeys } from "@/lib/admin-config";
 import { householdKeys } from "@/lib/ai/household-keys";
 import { assistantTools } from "./tools";
+import { homeAssistantTools } from "./home-assistant";
 import { isUnread, markConversationRead, readStates } from "./reads";
 
 // HOUP-443: the assistant's server side, shared by every /api/assistant
@@ -103,6 +107,19 @@ export async function assistantContextFor(
   return { admin, userId, groupId: membership.group_id, isOwner: membership.role === "owner", enabled, access };
 }
 
+/**
+ * Everything the assistant may call this turn: the household tools for its
+ * switched-on modules, plus Home Assistant's when the household connected it.
+ */
+async function turnTools(ctx: AssistantContext, settings: AssistantSettings, readOnly: boolean) {
+  const household = assistantTools(
+    { admin: ctx.admin, userId: ctx.userId, groupId: ctx.groupId, enabled: ctx.enabled },
+    { settings, readOnly }
+  );
+  const homeAssistant = await homeAssistantTools(ctx.admin, ctx.groupId, { readOnly });
+  return { tools: [...household, ...(homeAssistant?.tools ?? [])], homeAssistant };
+}
+
 // ── Rows to DTOs ──────────────────────────────────────────────────────────
 
 interface ConversationRow {
@@ -152,7 +169,7 @@ function proposalItems(row: MessageRow): ProposalItem[] {
     tool: p.tool,
     module: p.module as ModuleId,
     args: p.args,
-    summary: p.summary ?? describeProposal(p.tool, p.module as ModuleId, p.args),
+    summary: p.summary ?? describeProposal(p.tool, p.module as AssistantScope, p.args),
   }));
 }
 
@@ -484,20 +501,27 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
   ]);
   const history = toHistory(((recent ?? []) as MessageRow[]).reverse()).slice(-settings.contextMessages * 3);
 
-  const tools = assistantTools(
-    { admin: ctx.admin, userId: ctx.userId, groupId: ctx.groupId, enabled: ctx.enabled },
-    { settings, readOnly: limits.readOnly }
-  );
-  const reachable = [...new Set(tools.map((t) => t.module))];
+  const { tools, homeAssistant } = await turnTools(ctx, settings, limits.readOnly);
+  const reachable = [...new Set(tools.map((t) => t.module))].filter((m): m is ModuleId => m !== HOME_ASSISTANT_SCOPE);
   const system = buildAssistantSystemPrompt({
     now: formatNow(timeZone, now),
     timeZone,
     person: names.get(ctx.userId) ?? "a household member",
     members: [...names.values()],
-    modules: reachable.map((m) => ({
-      label: getModule(m)?.label ?? m,
-      trust: limits.readOnly ? "read" : trustFor(settings.trust, m),
-    })),
+    modules: [
+      ...reachable.map((m) => ({
+        label: getModule(m)?.label ?? m,
+        trust: limits.readOnly ? "read" : trustFor(settings.trust, m),
+      })),
+      ...(homeAssistant
+        ? [
+            {
+              label: homeAssistant.unavailable ? `${HOME_ASSISTANT_LABEL} (unavailable right now: ${homeAssistant.unavailable})` : HOME_ASSISTANT_LABEL,
+              trust: homeAssistant.trust,
+            },
+          ]
+        : []),
+    ],
     memories: ((memoryRows ?? []) as { text: string }[]).map((m) => m.text),
     kind: conversation.kind,
     channel: input.channel ?? "app",
@@ -543,7 +567,7 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
     channel,
   }));
   if (steps.length) await ctx.admin.from("assistant_messages").insert(steps);
-  const items = turn.proposals.map((p) => ({ ...p, summary: describeProposal(p.tool, p.module as ModuleId, p.args) }));
+  const items = turn.proposals.map((p) => ({ ...p, summary: describeProposal(p.tool, p.module as AssistantScope, p.args) }));
   const { data: replyRow } = await ctx.admin
     .from("assistant_messages")
     .insert({
@@ -729,10 +753,7 @@ export async function decideProposal(ctx: AssistantContext, messageId: string, d
   } else {
     const settings = await loadSettings(ctx.admin, ctx.groupId);
     const limits = await loadMemberLimits(ctx.admin, ctx.groupId, ctx.userId);
-    const tools = assistantTools(
-      { admin: ctx.admin, userId: ctx.userId, groupId: ctx.groupId, enabled: ctx.enabled },
-      { settings, readOnly: limits.readOnly }
-    );
+    const { tools } = await turnTools(ctx, settings, limits.readOnly);
     const items = proposalItems(row);
     const outcomes = await executeProposals(
       (row.proposal?.items ?? []).map((p) => ({ toolCallId: p.toolCallId, tool: p.tool, module: p.module, args: p.args })),

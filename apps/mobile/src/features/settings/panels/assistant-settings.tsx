@@ -107,7 +107,7 @@ export function AssistantSettings() {
             ))}
           </SettingsInset>
         ) : (
-          <Text className="text-sm text-muted-foreground">Switch on Tasks, Calendar, Budget or Groceries to give the assistant something to reach.</Text>
+          <Text className="text-sm text-muted-foreground">Switch on a module like Tasks, Calendar, Groceries or Recipes to give the assistant something to reach.</Text>
         )}
       </SettingsPanel>
 
