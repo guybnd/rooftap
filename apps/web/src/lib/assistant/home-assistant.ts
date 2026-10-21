@@ -351,11 +351,25 @@ export function forgetHomeAssistantTools(groupId: string): void {
   for (const k of [...pool.keys()]) drop(k);
 }
 
+/**
+ * Home Assistant answers an intent it couldn't carry out (no such device, or
+ * some targets failed) as an ordinary result, so it is read as a failure here:
+ * the reply must not say a light went on when it didn't.
+ */
+function intentFailed(text: string): boolean {
+  try {
+    const r = JSON.parse(text) as { response_type?: unknown; data?: { failed?: unknown } } | null;
+    return !!r && (r.response_type === "error" || (Array.isArray(r.data?.failed) && r.data.failed.length > 0));
+  } catch {
+    return false;
+  }
+}
+
 function toToolResult(result: unknown): ToolResult {
   const r = (result ?? {}) as { content?: { type: string; text?: string }[]; isError?: boolean; structuredContent?: unknown };
   const texts = (r.content ?? []).filter((c) => c.type === "text" && typeof c.text === "string").map((c) => ({ type: "text" as const, text: c.text! }));
   if (texts.length === 0) texts.push({ type: "text", text: JSON.stringify(r.structuredContent ?? { ok: !r.isError }) });
-  return { content: texts, isError: r.isError === true };
+  return { content: texts, isError: r.isError === true || texts.some((t) => intentFailed(t.text)) };
 }
 
 export interface HomeAssistantTools {

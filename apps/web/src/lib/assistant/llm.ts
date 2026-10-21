@@ -198,10 +198,13 @@ export function openAIClient(conn: LlmConnection, fetchImpl?: typeof fetch): Llm
 
 // ── Anthropic wire ────────────────────────────────────────────────────────
 
-type AnthropicBlock =
+const EPHEMERAL = { type: "ephemeral" } as const;
+
+type AnthropicBlock = (
   | { type: "text"; text: string }
   | { type: "tool_use"; id: string; name: string; input: Record<string, unknown> }
-  | { type: "tool_result"; tool_use_id: string; content: string };
+  | { type: "tool_result"; tool_use_id: string; content: string }
+) & { cache_control?: typeof EPHEMERAL };
 
 interface AnthropicMessage {
   role: "user" | "assistant";
@@ -229,6 +232,19 @@ export function toAnthropicMessages(messages: ChatMessage[]): AnthropicMessage[]
   return out;
 }
 
+/**
+ * Marks the end of the conversation for Anthropic's prompt cache, so each
+ * later model call in the same turn (after a tool runs) reads everything
+ * before it from the cache instead of processing it again.
+ */
+export function cachedToEnd(messages: AnthropicMessage[]): AnthropicMessage[] {
+  const last = messages[messages.length - 1];
+  if (!last || last.content.length === 0) return messages;
+  const blocks = [...last.content];
+  blocks[blocks.length - 1] = { ...blocks[blocks.length - 1], cache_control: EPHEMERAL };
+  return [...messages.slice(0, -1), { ...last, content: blocks }];
+}
+
 export function anthropicClient(conn: LlmConnection, fetchImpl: typeof fetch = fetch): LlmClient {
   return async (req) => {
     const response = await fetchImpl(`${conn.baseURL ?? "https://api.anthropic.com"}/v1/messages`, {
@@ -241,9 +257,17 @@ export function anthropicClient(conn: LlmConnection, fetchImpl: typeof fetch = f
         // most of the wait, and replayed tool calls would need its blocks.
         ...(/^claude-haiku-5/.test(req.model) ? { thinking: { type: "disabled" } } : {}),
         system: req.system,
-        messages: toAnthropicMessages(req.messages),
+        messages: cachedToEnd(toAnthropicMessages(req.messages)),
         ...(req.tools.length
-          ? { tools: req.tools.map((t) => ({ name: t.name, description: t.description, input_schema: t.parameters })) }
+          ? {
+              tools: req.tools.map((t, i) => ({
+                name: t.name,
+                description: t.description,
+                input_schema: t.parameters,
+                // The tool list rarely changes, so the next ask reads it from the cache.
+                ...(i === req.tools.length - 1 ? { cache_control: EPHEMERAL } : {}),
+              })),
+            }
           : {}),
       }),
     });
@@ -253,14 +277,16 @@ export function anthropicClient(conn: LlmConnection, fetchImpl: typeof fetch = f
     }
     const json = (await response.json()) as {
       content?: AnthropicBlock[];
-      usage?: { input_tokens?: number; output_tokens?: number };
+      usage?: { input_tokens?: number; output_tokens?: number; cache_creation_input_tokens?: number; cache_read_input_tokens?: number };
     };
+    const usage = json.usage ?? {};
     const blocks = json.content ?? [];
     return {
       text: blocks.flatMap((b) => (b.type === "text" ? [b.text] : [])).join(""),
       toolCalls: blocks.flatMap((b) => (b.type === "tool_use" ? [{ id: callId(b.id), name: b.name, args: b.input ?? {} }] : [])),
-      inputTokens: json.usage?.input_tokens ?? 0,
-      outputTokens: json.usage?.output_tokens ?? 0,
+      // Cached tokens count in full: budgets stay on the safe side of the cache discount.
+      inputTokens: (usage.input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0) + (usage.cache_read_input_tokens ?? 0),
+      outputTokens: usage.output_tokens ?? 0,
     };
   };
 }

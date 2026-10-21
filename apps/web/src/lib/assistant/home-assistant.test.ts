@@ -171,3 +171,16 @@ describe("the saved tool list", () => {
     expect(ha.tools.map((t) => t.name)).toContain("ha_GetLiveContext");
   });
 });
+
+describe("a Home Assistant intent that didn't happen", () => {
+  it("counts as a failed change", async () => {
+    const ha = (await homeAssistantTools(adminWith(row({ trust: "act" })), "g1"))!;
+    const on = ha.tools.find((t) => t.name === "ha_HassTurnOn")!;
+    callTool.mockResolvedValueOnce({ content: [{ type: "text", text: JSON.stringify({ response_type: "action_done", data: { success: [], failed: [{ name: "Lamp" }] } }) }] });
+    expect((await on.run({ name: "Lamp" })).isError).toBe(true);
+    callTool.mockResolvedValueOnce({ content: [{ type: "text", text: JSON.stringify({ response_type: "error", data: { code: "no_valid_targets" } }) }] });
+    expect((await on.run({ name: "Nope" })).isError).toBe(true);
+    callTool.mockResolvedValueOnce({ content: [{ type: "text", text: JSON.stringify({ response_type: "action_done", data: { success: [{ name: "Lamp" }], failed: [] } }) }] });
+    expect((await on.run({ name: "Lamp" })).isError).toBe(false);
+  });
+});

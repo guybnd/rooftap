@@ -179,12 +179,34 @@ export async function runAssistantTurn(input: TurnInput): Promise<TurnResult> {
     const assistant: ChatMessage = { role: "assistant", content: res.text, toolCalls: res.toolCalls };
     conversation.push(assistant);
     result.messages.push(assistant);
+    const ranBefore = result.ran.length;
+    const proposedBefore = result.proposals.length;
     const contents = await handleCalls(res.toolCalls, byName, out);
     res.toolCalls.forEach((call, i) => {
       const toolMessage: ChatMessage = { role: "tool", toolCallId: call.id, name: call.name, content: contents[i] };
       conversation.push(toolMessage);
       result.messages.push(toolMessage);
     });
+
+    // A step that only made changes, all of which went through, and already
+    // said so: that line is the answer, without another model call to
+    // write it (about a second and a half). Anything else goes back to the model.
+    const ran = result.ran.slice(ranBefore);
+    const confirmation = extractMemoryMarkers(res.text);
+    if (
+      confirmation.cleanedText &&
+      result.proposals.length === proposedBefore &&
+      ran.length === res.toolCalls.length &&
+      ran.every((r) => r.ok) &&
+      res.toolCalls.every((c) => !byName.get(c.name)?.lookup)
+    ) {
+      // The line moves to the end, so the stored turn reads change, result, reply.
+      assistant.content = "";
+      result.reply = confirmation.cleanedText;
+      result.memories = confirmation.memories;
+      result.messages.push({ role: "assistant", content: confirmation.cleanedText });
+      return result;
+    }
   }
 
   result.reply = STEP_LIMIT_REPLY;

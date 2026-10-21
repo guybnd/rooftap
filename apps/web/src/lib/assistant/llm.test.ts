@@ -106,6 +106,39 @@ describe("anthropicClient on Haiku 5.5", () => {
   });
 });
 
+describe("Anthropic prompt caching", () => {
+  it("marks the tool list and the end of the conversation, and counts cached tokens", async () => {
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            content: [{ type: "text", text: "ok" }],
+            usage: { input_tokens: 20, cache_creation_input_tokens: 300, cache_read_input_tokens: 2000, output_tokens: 5 },
+          })
+        )
+    );
+    const step = await anthropicClient({ wire: "anthropic", apiKey: "k" }, fetchImpl as unknown as typeof fetch)({
+      model: "claude-haiku-5-5",
+      system: "s",
+      messages: [
+        { role: "user", content: "switch the light on" },
+        { role: "assistant", content: "", toolCalls: [{ id: "t1", name: "on", args: {} }] },
+        { role: "tool", toolCallId: "t1", name: "on", content: "done" },
+      ],
+      tools: [
+        { name: "a", description: "a", parameters: { type: "object" } },
+        { name: "on", description: "on", parameters: { type: "object" } },
+      ],
+    });
+    const body = JSON.parse((fetchImpl.mock.calls[0] as unknown as [string, RequestInit])[1].body as string);
+    expect(body.tools.map((t: { cache_control?: unknown }) => t.cache_control ?? null)).toEqual([null, { type: "ephemeral" }]);
+    const last = body.messages.at(-1);
+    expect(last.content.at(-1)).toEqual({ type: "tool_result", tool_use_id: "t1", content: "done", cache_control: { type: "ephemeral" } });
+    expect(body.messages[0].content[0].cache_control).toBeUndefined();
+    expect(step.inputTokens).toBe(2320);
+  });
+});
+
 describe("portableSchema", () => {
   it("rewrites zod's JSON Schema into the subset Gemini accepts", () => {
     expect(

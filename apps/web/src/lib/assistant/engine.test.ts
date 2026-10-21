@@ -155,3 +155,32 @@ describe("failureReason", () => {
     expect(failureReason("x".repeat(300))).toHaveLength(160);
   });
 });
+
+describe("a step that only made changes", () => {
+  const change = (): AssistantTool => ({ ...tool("add_item", "run"), lookup: false });
+
+  it("answers with the line it wrote alongside them, without another model call", async () => {
+    const llm = scripted({ text: "Added milk to the list.", toolCalls: [{ id: "1", name: "add_item", args: {} }] });
+    const r = await runAssistantTurn({ ...base, llm, tools: [change()] });
+    expect(llm.calls).toHaveLength(1);
+    expect(r.reply).toBe("Added milk to the list.");
+    expect(r.messages.map((m) => [m.role, m.content])).toEqual([
+      ["assistant", ""],
+      ["tool", '{"ok":true}'],
+      ["assistant", "Added milk to the list."],
+    ]);
+  });
+
+  it("goes back to the model when a change failed, was held, or came with a lookup", async () => {
+    const failing: AssistantTool = { ...change(), run: vi.fn(async () => ({ content: [{ type: "text" as const, text: "no" }], isError: true })) };
+    const say = { text: "Added milk.", toolCalls: [{ id: "1", name: "add_item", args: {} }] };
+    for (const tools of [[failing], [{ ...change(), gate: "propose" as const }]]) {
+      const llm = scripted(say, { text: "Sorry." });
+      expect((await runAssistantTurn({ ...base, llm, tools })).reply).toBe("Sorry.");
+    }
+    const llm = scripted({ ...say, toolCalls: [...say.toolCalls, { id: "2", name: "get_tasks", args: {} }] }, { text: "Done, and here's the list." });
+    const r = await runAssistantTurn({ ...base, llm, tools: [change(), { ...tool("get_tasks", "run"), lookup: true }] });
+    expect(llm.calls).toHaveLength(2);
+    expect(r.reply).toBe("Done, and here's the list.");
+  });
+});
