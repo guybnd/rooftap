@@ -31,6 +31,7 @@ A good pull request:
 - does one thing, with a title that says what changes for the user;
 - passes `npm run check` (CI runs the same command);
 - adds or updates tests for behaviour it changes;
+- adds a `whats-new/` entry if people would notice the change, which the app shows after an update (see [whats-new/README.md](whats-new/README.md)), or says `No user change: <why>` in its description;
 - keeps shared, platform-agnostic logic in `packages/core` rather than duplicating it in `apps/web` and `apps/mobile`;
 - adds a new migration in `supabase/migrations` for any database change, never an edit to an existing one.
 

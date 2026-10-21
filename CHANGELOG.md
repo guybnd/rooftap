@@ -4,7 +4,7 @@ Rooftap's notable changes, newest first. Versions follow [semver](https://semver
 
 The Android app also gets over-the-air updates between releases, so a release is cut when the app needs a new APK (new native code) or at a milestone. Each release and its APK are on the public repository's Releases page.
 
-Add a line under **Unreleased** for each change people would notice. Credit outside contributors with their GitHub handle.
+Each change people would notice gets a `whats-new/` entry (see `whats-new/README.md`), which the app also shows after an update. When cutting a release, `node scripts/whats-new.mjs changelog` prints the entries since the last one as lines for its section. Credit outside contributors with their GitHub handle.
 
 ## Unreleased
 

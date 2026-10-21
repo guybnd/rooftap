@@ -39,6 +39,7 @@ import { ModulePicker } from '@/components/module-picker';
 import { PrimaryTabBar } from '@/components/nav/primary-tab-bar';
 import { OfflineBanner } from '@/components/offline-banner';
 import { ShareIntentHandler } from '@/components/share-intent-handler';
+import { WhatsNewSheet } from '@/components/whats-new/whats-new-sheet';
 import { DataCacheProvider } from '@/lib/data-cache';
 import { PRE_AUTH_ROUTES } from '@/lib/pre-auth-routes';
 import { AppThemeProvider } from '@/lib/theme-context';
@@ -145,6 +146,9 @@ export default function RootLayout() {
                 {/* First-run module picker for a new household's owner
                     (.docs/modules.md): above the tab bar, under the toasts. */}
                 <ModulePicker />
+                {/* What's new since this device last looked (whats-new/README.md):
+                    on Home, after the picker, under the toasts. */}
+                <WhatsNewSheet />
                 <ToastHost bottomOffset={showTabBar ? TAB_BAR_CONTENT_HEIGHT : 0} />
                 <DialogHost />
               </CaptureProvider>

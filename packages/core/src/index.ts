@@ -41,6 +41,8 @@ export * from './sections';
 export * from './recent-sections';
 export * from './modules';
 export * from './modules-store';
+export * from './whats-new';
+export * from './use-whats-new';
 export * from './module-features';
 export * from './server-features';
 export * from './task-modules';

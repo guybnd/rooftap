@@ -5,7 +5,9 @@
   "main": "src/index.ts",
   "types": "src/index.ts",
   "scripts": {
+    "pretypecheck": "node ../../scripts/whats-new.mjs",
     "typecheck": "tsc --noEmit",
+    "pretest": "node ../../scripts/whats-new.mjs",
     "test": "vitest run",
     "lint": "node scripts/check-import-boundary.mjs"
   },

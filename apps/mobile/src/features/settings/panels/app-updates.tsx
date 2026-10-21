@@ -6,9 +6,12 @@ import * as React from 'react';
 import { View } from 'react-native';
 import * as Updates from 'expo-updates';
 import * as Application from 'expo-application';
-import { Info, RefreshCw, TriangleAlert } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
+import { Info, RefreshCw, Sparkles, TriangleAlert } from 'lucide-react-native';
 import { Text, ListItem, ListItemContent, ListItemTitle, ListItemTrailing, Button } from '@homeup/ui';
-import { timeAgo } from '@homeup/core';
+import { timeAgo, useWhatsNewHistory } from '@homeup/core';
+import { WhatsNewGroups } from '@/components/whats-new/whats-new-list';
+import { useDataCache } from '@/lib/data-cache';
 import { SettingsInset, SettingsPanel } from './settings-panel';
 
 /** A read-only label/value line (T3: ids and versions in tabular type). */
@@ -31,6 +34,19 @@ function InfoRow({ label, value, mono }: { label: string; value: string; mono?: 
 }
 
 type CheckState = 'idle' | 'checking' | 'no-update' | 'error';
+
+/** Every What's new entry this person has the feature for (whats-new/README.md), by release. */
+function WhatsNewHistory() {
+  const router = useRouter();
+  const { userSettings } = useDataCache();
+  const view = useWhatsNewHistory({ platform: 'mobile', hidden: userSettings?.hidden_sections });
+  if (view.total === 0) return null;
+  return (
+    <SettingsPanel icon={Sparkles} title="What's new">
+      <WhatsNewGroups view={view} alwaysHeaders onOpen={(href) => router.push(href as never)} />
+    </SettingsPanel>
+  );
+}
 
 export function AppUpdates() {
   const { currentlyRunning, isUpdatePending, isDownloading, downloadProgress } = Updates.useUpdates();
@@ -134,6 +150,8 @@ export function AppUpdates() {
           </View>
         )}
       </SettingsPanel>
+
+      <WhatsNewHistory />
     </>
   );
 }

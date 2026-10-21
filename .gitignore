@@ -84,3 +84,6 @@ r2-copy-report-*.json
 
 # self-host pre-migration backups (scripts/apply-migrations.sh)
 backups/
+
+# What's new: generated from whats-new/*.md by scripts/whats-new.mjs
+packages/core/src/whats-new.generated.ts

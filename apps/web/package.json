@@ -8,6 +8,7 @@
   "scripts": {
     "analyze": "ANALYZE=true npm run build",
     "dev": "node scripts/kill-port.mjs 3434 && next dev --port 3434",
+    "prebuild": "node ../../scripts/whats-new.mjs",
     "build": "next build",
     "build:landing-static": "vite build --config landing-static/vite.config.mjs && vite build --config landing-static/vite.config.mjs --ssr entry-server.tsx --outDir dist-ssr --emptyOutDir false && node landing-static/prerender.mjs && vite build --config landing-static/demo/vite.config.mjs --outDir ../dist/demo --emptyOutDir",
     "build:landing-demo": "vite build --config landing-static/demo/vite.config.mjs",

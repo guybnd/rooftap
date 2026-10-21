@@ -26,6 +26,7 @@ import { AssistantSettings } from "@/components/assistant-settings";
 import { AssistantSpending } from "@/components/assistant-spending";
 import { AssistantTelegram } from "@/components/assistant-telegram";
 import { ShopperSettings } from "@/components/shopper-settings";
+import { WhatsNewHistory } from "@/components/whats-new";
 
 export interface GlobalMenu {
   key: string;
@@ -42,6 +43,7 @@ export const globalMenus: GlobalMenu[] = [
   { key: "appearance", label: "Appearance", panels: [AppearanceSettings] },
   { key: "notifications", label: "Notifications", panels: [NotificationsSettings] },
   { key: "integrations", label: "Integrations & keys", panels: [HouseholdAiKeys, ApiKeysSettings, PatSettings, McpSettings] },
+  { key: "whats-new", label: "What's new", panels: [WhatsNewHistory] },
 ];
 
 // Per-section tabs. Adding a future panel/section is a single edit here (AC#7).

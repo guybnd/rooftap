@@ -185,7 +185,7 @@ condition at the source: use a timestamp later than every file already on
 
 Semver, in `version` of `apps/mobile/app.config.ts`. Cut a release when the app needs a new APK (runtimeVersion moved) or at a milestone; JS-only changes reach phones by OTA without one.
 
-1. In a PR: bump `version`, and move the `CHANGELOG.md` "Unreleased" lines under `## <version> (<date>)`. Merge it.
+1. In a PR: bump `version`, and write `## <version> (<date>)` in `CHANGELOG.md` from `node scripts/whats-new.mjs changelog` (the `whats-new/` entries since the last release) plus any "Unreleased" lines. Merge it. The heading's date is what files those entries under this version in the app's What's new sheet.
 2. Tag the merge commit and push the tag: `git tag v1.1.0 <sha> && git push origin v1.1.0`.
 3. `.github/workflows/release.yml` checks the tag matches `version` and the changelog, waits for the mirror to sync that commit, and creates release `v1.1.0` on the public repo with the changelog section as notes. A hyphenated version (`1.1.0-beta.1`) is a pre-release.
 4. Build the APK on the PC from the tagged commit and attach it:
