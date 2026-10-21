@@ -11,6 +11,13 @@ export interface ToolCall {
   id: string;
   name: string;
   args: Record<string, unknown>;
+  /**
+   * Provider data that must go back with the call on the next step, as
+   * received. Gemini 3 puts its thought signature here
+   * (`{google: {thought_signature}}`) and rejects a follow-up step whose
+   * tool call lacks it (400).
+   */
+  extra?: Record<string, unknown>;
 }
 
 export type ChatMessage =
@@ -124,6 +131,7 @@ export function toOpenAIMessages(system: string, messages: ChatMessage[]): OpenA
                 id: c.id,
                 type: "function" as const,
                 function: { name: c.name, arguments: JSON.stringify(c.args) },
+                ...(c.extra ? { extra_content: c.extra } : {}),
               })),
             }
           : {}),
@@ -132,8 +140,18 @@ export function toOpenAIMessages(system: string, messages: ChatMessage[]): OpenA
   return out;
 }
 
-export function openAIClient(conn: LlmConnection): LlmClient {
-  const client = new OpenAI({ apiKey: conn.apiKey || "not-needed", ...(conn.baseURL ? { baseURL: conn.baseURL } : {}) });
+/** Gemini's `extra_content` on a tool call (not in the OpenAI types), kept to send back. */
+function extraContent(call: object): { extra?: Record<string, unknown> } {
+  const extra = (call as { extra_content?: unknown }).extra_content;
+  return extra && typeof extra === "object" && !Array.isArray(extra) ? { extra: extra as Record<string, unknown> } : {};
+}
+
+export function openAIClient(conn: LlmConnection, fetchImpl?: typeof fetch): LlmClient {
+  const client = new OpenAI({
+    apiKey: conn.apiKey || "not-needed",
+    ...(conn.baseURL ? { baseURL: conn.baseURL } : {}),
+    ...(fetchImpl ? { fetch: fetchImpl } : {}),
+  });
   return async (req) => {
     const response = await client.chat.completions.create({
       model: req.model,
@@ -150,7 +168,16 @@ export function openAIClient(conn: LlmConnection): LlmClient {
     });
     const message = response.choices[0]?.message;
     const toolCalls: ToolCall[] = (message?.tool_calls ?? []).flatMap((c) =>
-      c.type === "function" ? [{ id: callId(c.id), name: c.function.name, args: parseArgs(c.function.arguments) }] : []
+      c.type === "function"
+        ? [
+            {
+              id: callId(c.id),
+              name: c.function.name,
+              args: parseArgs(c.function.arguments),
+              ...extraContent(c),
+            },
+          ]
+        : []
     );
     return {
       text: message?.content ?? "",
