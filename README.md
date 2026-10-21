@@ -2,9 +2,36 @@
 
 [![License: ELv2](https://img.shields.io/badge/license-ELv2-blue.svg)](LICENSE)
 
-Rooftap is a household management app: shared tasks and chores, groceries, recipes, a family calendar, checklists, documents, household costs, and a home-search and moving toolkit. Each household switches on only the modules it uses.
+Rooftap is a household management app: shared tasks and chores, groceries, recipes, a family calendar, costs and budget, loyalty cards, price tracking, and an assistant that can talk to Home Assistant. Each household switches on only the modules it uses.
 
-This repository is everything you need to run your own Rooftap server. Your household's data stays on your machine.
+This repository is everything you need to run your own Rooftap server. Your household's data stays on your machine. Rooftap is source-available under the [Elastic License 2.0](#license): free to self-host and modify, but you may not offer it to others as a hosted service.
+
+**[Try the demo](https://guybnd.github.io/rooftap/demo/?live=1&theme=ember-night)** (runs in your browser on sample data, no account) · [Website](https://guybnd.github.io/rooftap/) · [Android APK](https://github.com/guybnd/rooftap/releases)
+
+<p>
+  <img src="apps/web/public/landing/screens/home.webp" width="190" alt="Home: today's tasks, weather and what's coming up">
+  <img src="apps/web/public/landing/screens/groceries-aisles.webp" width="190" alt="Groceries sorted by aisle, with items running low">
+  <img src="apps/web/public/landing/screens/costs.webp" width="190" alt="Costs: monthly spend against the plan">
+  <img src="apps/web/public/landing/screens/assistant-home-assistant.webp" width="190" alt="Assistant settings with Home Assistant and Telegram connected">
+</p>
+
+## Modules
+
+| Module | What it does |
+| --- | --- |
+| Tasks & Reminders | Shared to-dos, chores and reminders with due dates. |
+| Calendar | Household events and everything with a date, in one view. Optional Google Calendar link: sends tasks and viewings there and shows your Google events. |
+| Groceries | A shared shopping list with aisles and an item library. |
+| Recipes | Your household recipes, with a cooking view. Add a recipe's ingredients to the list in one tap. |
+| Checklists | Reusable lists and templates, from packing to cleaning. |
+| Documents | Warranties, receipts and paperwork, filed in folders. |
+| Costs & Budget | Bills, recurring costs and a monthly budget. |
+| Rewards | Loyalty cards with a scannable barcode, the stores they work at, and their perks. |
+| Shopper | Things you want to buy, with price tracking and a deal rating. |
+| Home Setup | Rooms, purchases and the moving checklist for a new home. |
+| Home Search | Listings, viewings, agents and a map while you look for a place. |
+| Assistant | A household agent you can ask or talk to. It asks before it changes anything. It can use Home Assistant through HA's MCP Server integration, and you can talk to it from Telegram. Needs your own AI provider key. |
+| AI assistants (MCP) | Lets an outside AI assistant, such as Claude, read and update your household through MCP. |
 
 ## Quick start
 
@@ -36,6 +63,13 @@ The web app installs like an app on Android, iPhone, iPad and desktop: open your
 ## What's in the stack
 
 `docker-compose.yml` runs Postgres, Supabase's auth, REST, realtime, storage and edge-function services behind a Kong gateway, plus the Rooftap web app (Next.js). The server needs outbound internet access for public services such as Open-Meteo weather and OpenStreetMap's Overpass API.
+
+## Known rough edges
+
+- No iOS app yet. iPhone and iPad use the web app (PWA).
+- The Android app is not on Google Play yet. Install the APK from [Releases](https://github.com/guybnd/rooftap/releases).
+- No in-app account deletion yet.
+- One maintainer. Issues get read, but expect some delay.
 
 ## Development
 
