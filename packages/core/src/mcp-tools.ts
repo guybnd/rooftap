@@ -35,6 +35,13 @@ export const MCP_TOOLS: McpToolMeta[] = [
   { name: 'create_grocery_item', kind: 'write', module: 'groceries' },
   { name: 'update_grocery_item', kind: 'write', module: 'groceries' },
   { name: 'delete_grocery_item', kind: 'write', module: 'groceries' },
+  { name: 'get_recipes', kind: 'read', module: 'recipes' },
+  { name: 'add_recipe_to_groceries', kind: 'write', module: 'recipes' },
+  { name: 'get_checklists', kind: 'read', module: 'checklists' },
+  { name: 'add_checklist_item', kind: 'write', module: 'checklists' },
+  { name: 'check_checklist_item', kind: 'write', module: 'checklists' },
+  { name: 'get_setup_items', kind: 'read', module: 'setup' },
+  { name: 'get_watchlist', kind: 'read', module: 'shopper' },
 ];
 
 export const MCP_TOOL_BY_NAME: Record<string, McpToolMeta> = Object.fromEntries(

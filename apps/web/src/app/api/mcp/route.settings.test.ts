@@ -144,6 +144,8 @@ describe("MCP module gate (.docs/modules.md) — the endpoint and its tools foll
   it("modules and settings combine: read-only with Tasks off leaves the other read tools", async () => {
     userSettingsRow = { mcp_enabled: true, mcp_read_only: true, mcp_allowed_tools: null };
     moduleRows = withModulesOff("household");
-    expect(await listToolNames()).toEqual(["get_budget_summary", "get_grocery_items", "get_upcoming_calendar_events"]);
+    const reads = MCP_TOOLS.filter((t) => t.kind === "read" && t.module !== "household").map((t) => t.name).sort();
+    expect(reads).toContain("get_budget_summary");
+    expect(await listToolNames()).toEqual(reads);
   });
 });

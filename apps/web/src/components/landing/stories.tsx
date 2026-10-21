@@ -386,7 +386,7 @@ export const ASSISTANT_STORY: Story = {
       features: [
         point("Proposals.", "Under Ask first, each change is one line on a card, with the module it goes to.", at("a", m("assistant-household", "proposal"))),
         play("Do all 2.", "One tap makes both changes. Not now drops them.", [{ at: 300, tap: m("assistant-household", "doAll") }]),
-        fact("What it reaches.", "Tasks, the calendar, the budget and the grocery list, with the same tools as the MCP server."),
+        fact("What it reaches.", "Tasks, the calendar, the budget, groceries, recipes, checklists, Home Setup and Shopper, with the same tools as the MCP server."),
         fact("Memory.", "It keeps short facts about the household. Anyone in the home can read and remove them."),
       ],
       a: "assistant-household",

@@ -80,7 +80,7 @@ describe('parseReply', () => {
 
 describe('assistantModules', () => {
   it('lists switched-on modules that have tools', () => {
-    expect(assistantModules(new Set(['costs', 'household', 'recipes'])).map((m) => m.id)).toEqual(['costs', 'household']);
+    expect(assistantModules(new Set(['costs', 'household', 'recipes', 'search'])).map((m) => m.id)).toEqual(['costs', 'household', 'recipes']);
   });
 });
 

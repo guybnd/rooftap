@@ -239,7 +239,7 @@ async function linkAccount(msg: TgMessage, code: string, deps: TelegramDeps) {
   await send(
     api,
     msg.chat.id,
-    "You're linked. Ask me anything about the home: tasks, the calendar, the budget or the grocery list. I'll ask before I change anything.\n\n" +
+    "You're linked. Ask me anything about the home: tasks, the calendar, the budget, groceries, recipes or your lists. I'll ask before I change anything.\n\n" +
       "Messages here go to the household thread, which everyone at home shares. " +
       TELEGRAM_HELP.split("\n\n")[1]
   );

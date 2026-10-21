@@ -7,7 +7,7 @@
 // rules here means every surface (list, detail, form, grocery badge) agrees.
 
 import type { GroceryItem, Recipe, RecipeIngredient, RecipeMethod, RecipeSourceType } from './types';
-import { getStoreEnvironment } from './data/store-environment';
+import { envRandomUUID } from './data/store-environment';
 
 // ── Name normalisation ─────────────────────────────────────────────────────────
 // The recipe↔grocery match is name-based (decision 2). Replicated here rather than
@@ -349,7 +349,7 @@ export function instructionsFromSteps(steps: string[]): string | null {
 
 // ── id / time helpers ────────────────────────────────────────────────────────────
 function freshId(): string {
-  return getStoreEnvironment().randomUUID();
+  return envRandomUUID();
 }
 function nowISO(): string {
   return new Date().toISOString();

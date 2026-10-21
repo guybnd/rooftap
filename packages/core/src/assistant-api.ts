@@ -199,6 +199,8 @@ const MODULE_NOUN: Partial<Record<ModuleId, string>> = {
   calendar: 'Calendar',
   groceries: 'Groceries',
   costs: 'Budget',
+  checklists: 'Checklists',
+  recipes: 'Recipes',
 };
 
 function quoted(value: unknown): string {
@@ -213,6 +215,9 @@ function quoted(value: unknown): string {
 export function describeProposal(tool: string, module: ModuleId, args: Record<string, unknown>): string {
   const where = MODULE_NOUN[module] ?? 'the app';
   const name = args.title ?? args.name;
+  if (tool === 'add_recipe_to_groceries') return "Add a recipe's ingredients to Groceries";
+  if (tool === 'add_checklist_item') return `Add ${quoted(args.label)} to a checklist`;
+  if (tool === 'check_checklist_item') return args.done === false ? 'Untick a checklist item' : 'Tick a checklist item';
   if (tool.startsWith('create_')) return module === 'groceries' ? `Add ${quoted(name)} to Groceries` : `Add ${quoted(name)} to ${where}`;
   if (tool === 'complete_task') return args.done === false ? 'Mark a task not done' : 'Mark a task done';
   if (tool.startsWith('update_')) return name ? `Change ${quoted(name)} in ${where}` : `Change an item in ${where}`;

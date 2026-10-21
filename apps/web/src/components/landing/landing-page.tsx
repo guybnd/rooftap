@@ -196,7 +196,7 @@ export function LandingPage({
                   An assistant on your own server
                 </h2>
                 <p className={styles.sectionLede}>
-                  The Assistant module runs inside your Rooftap server. It reads and, with your OK, changes the tasks, the calendar, the budget and the grocery list. Pick the model. Talk to it in the app or through your own Telegram bot.
+                  The Assistant module runs inside your Rooftap server. It reads and, with your OK, changes your tasks, calendar, budget, groceries, recipes and lists. Pick the model. Talk to it in the app or through your own Telegram bot.
                 </p>
                 <pre className={styles.code}>
                   <code>{ASSISTANT_ENV.join("\n")}</code>

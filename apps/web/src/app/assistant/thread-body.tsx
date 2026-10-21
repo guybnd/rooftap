@@ -39,7 +39,7 @@ export function ThreadMessages({ thread, className }: { thread: AssistantThread;
         <p className="px-1 py-10 text-center text-sm text-muted-foreground">
           {kind === 'household'
             ? 'The thread the whole household shares. Ask about the week, the list or the bills.'
-            : 'Ask about tasks, the calendar, the budget or the grocery list. Rooftap asks before it changes anything.'}
+            : 'Ask about tasks, the calendar, the budget, groceries, recipes or your lists. Rooftap asks before it changes anything.'}
         </p>
       ) : (
         messages.map((m) => (

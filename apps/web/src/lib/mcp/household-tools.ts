@@ -3,7 +3,36 @@ import type { createAdminClient } from "@/lib/supabase/admin";
 import { visibleTasks, visibleEvents, visibleGroceryItems } from "@/lib/pat";
 import { listCostItems, isTaskOwnerEnabled, type ModuleId } from "@homeup/core";
 import { totalForPeriod, monthlyAmount, CATEGORY_META } from "@homeup/core";
-import type { HouseholdTask, GroupEvent, CostItem, CostCategory, CostCadence, EventCategory, GroceryItem } from "@homeup/core";
+import {
+  buildChecklistItem,
+  buildLoggedCost,
+  buildNeededGroceryItem,
+  checkItemPatch,
+  completion,
+  groceryStatusPatch,
+  ingredientMatchKey,
+  matchIngredientToGrocery,
+  norm,
+  recipeCuisines,
+  recipeNoteFor,
+  stepsFromInstructions,
+  uncheckItemPatch,
+} from "@homeup/core";
+import type {
+  HouseholdTask,
+  GroupEvent,
+  CostItem,
+  CostCategory,
+  CostCadence,
+  EventCategory,
+  GroceryItem,
+  Checklist,
+  ChecklistTaskItem,
+  Recipe,
+  RecipeIngredient,
+  SetupItem,
+  ShopperWant,
+} from "@homeup/core";
 
 // The household tool handlers behind both the public MCP server (/api/mcp)
 // and the in-app assistant, so the two can never drift apart: same inputs,
@@ -727,6 +756,288 @@ export function householdTools({ admin, userId, groupId, enabled }: HouseholdToo
         .eq("group_id", groupId);
       if (error) return toolError(error.message);
       return { content: [{ type: "text", text: JSON.stringify({ ok: true, id: grocery_item_id }) }] };
+    }
+  );
+
+
+  // ── Recipes, checklists, Home Setup and Shopper ─────────────────────────────
+  // So the assistant can answer "what can I cook", "what's left on the packing
+  // list" or "what are we still watching", and do the few changes people ask
+  // for by voice (tick an item, add to a list, put a recipe's ingredients on
+  // the grocery list). Same scoping rule as above: group_id + deleted=false
+  // on every read, since the admin client bypasses RLS.
+
+  tool(
+    "get_recipes",
+    {
+      description:
+        "The household's saved recipes. With no arguments, a short list (title, cuisines, method, times, ingredient names). Pass query to filter by a word in the title, a cuisine or an ingredient. Pass recipe_id for one recipe in full: ingredients with quantities, and the steps.",
+      inputSchema: {
+        query: z.string().optional(),
+        recipe_id: z.string().optional(),
+      },
+    },
+    async ({ query, recipe_id }) => {
+      if (!groupId) return { content: [{ type: "text", text: JSON.stringify([]) }] };
+      let recipeQuery = admin.from("recipes").select("*").eq("group_id", groupId).eq("deleted", false).eq("draft", false);
+      if (recipe_id) recipeQuery = recipeQuery.eq("id", recipe_id);
+      const { data: recipeRows, error } = await recipeQuery;
+      if (error) return toolError(error.message);
+      const recipes = (recipeRows ?? []) as Recipe[];
+      if (recipe_id && recipes.length === 0) return toolError("Recipe not found");
+      const ids = recipes.map((r) => r.id);
+      const { data: ingredientRows } = ids.length
+        ? await admin.from("recipe_ingredients").select("*").eq("group_id", groupId).eq("deleted", false).in("recipe_id", ids)
+        : { data: [] };
+      const byRecipe = new Map<string, RecipeIngredient[]>();
+      for (const ing of ((ingredientRows ?? []) as RecipeIngredient[]).sort((a, b) => a.position - b.position)) {
+        byRecipe.set(ing.recipe_id, [...(byRecipe.get(ing.recipe_id) ?? []), ing]);
+      }
+      if (recipe_id) {
+        const recipe = recipes[0];
+        const full = {
+          ...basic(recipe, ["id", "title", "method", "servings", "prep_minutes", "cook_minutes", "source"] as const),
+          cuisines: recipeCuisines(recipe),
+          ingredients: (byRecipe.get(recipe.id) ?? []).map((i) => basic(i, ["name", "quantity", "unit"] as const)),
+          steps: stepsFromInstructions(recipe.instructions),
+        };
+        return { content: [{ type: "text", text: JSON.stringify(full) }] };
+      }
+      const q = norm(query);
+      const rows = recipes
+        .map((r) => ({
+          ...basic(r, ["id", "title", "method", "servings", "prep_minutes", "cook_minutes"] as const),
+          cuisines: recipeCuisines(r),
+          ingredients: (byRecipe.get(r.id) ?? []).map((i) => i.name),
+        }))
+        .filter((r) => !q || [r.title ?? "", ...r.cuisines, ...r.ingredients].some((s) => norm(s).includes(q)))
+        .sort((a, b) => (a.title ?? "").localeCompare(b.title ?? ""));
+      return { content: [{ type: "text", text: JSON.stringify(rows) }] };
+    }
+  );
+
+  tool(
+    "add_recipe_to_groceries",
+    {
+      description:
+        "Put a recipe's ingredients on the grocery list. Ingredients already on the list as needed, or in stock (have or bought), are left alone unless include_stocked is true; the result says which were added and which were skipped.",
+      inputSchema: {
+        recipe_id: z.string(),
+        include_stocked: z.boolean().optional(),
+      },
+    },
+    async ({ recipe_id, include_stocked }) => {
+      if (!groupId) return noGroupError();
+      if (!enabled.has("groceries")) return toolError("The Groceries module is off for this household");
+      const { data: recipeRows } = await admin.from("recipes").select("*").eq("id", recipe_id).eq("group_id", groupId).eq("deleted", false);
+      const recipe = ((recipeRows ?? []) as Recipe[])[0];
+      if (!recipe) return toolError("Recipe not found");
+      const [{ data: ingredientRows }, { data: groceryRows }] = await Promise.all([
+        admin.from("recipe_ingredients").select("*").eq("recipe_id", recipe_id).eq("group_id", groupId).eq("deleted", false),
+        admin.from("grocery_items").select("*").eq("group_id", groupId).eq("deleted", false),
+      ]);
+      const ingredients = ((ingredientRows ?? []) as RecipeIngredient[]).sort((a, b) => a.position - b.position);
+      const groceries = visibleGroceryItems((groceryRows ?? []) as GroceryItem[], userId);
+      const added: string[] = [];
+      const skipped: { name: string; reason: string }[] = [];
+      for (const ing of ingredients) {
+        const key = ingredientMatchKey(ing);
+        const match = matchIngredientToGrocery(key, groceries);
+        if (match?.status === "needed") {
+          skipped.push({ name: key, reason: "already on the list" });
+          continue;
+        }
+        if (match && !include_stocked) {
+          skipped.push({ name: key, reason: "in stock" });
+          continue;
+        }
+        const note = recipeNoteFor(ing, recipe.title);
+        const { error } = match
+          ? await admin
+              .from("grocery_items")
+              .update({ ...groceryStatusPatch("needed"), recipe_note: note, recipe_source_id: recipe.id, updated_by: userId })
+              .eq("id", match.id)
+              .eq("group_id", groupId)
+          : await admin.from("grocery_items").insert(
+              buildNeededGroceryItem({
+                groupId,
+                name: key,
+                recipeNote: note,
+                recipeSourceId: recipe.id,
+                createdBy: userId,
+                quantity: ing.quantity,
+                unit: ing.unit,
+              })
+            );
+        if (error) return toolError(error.message);
+        added.push(key);
+      }
+      return { content: [{ type: "text", text: JSON.stringify({ recipe: recipe.title, added, skipped }) }] };
+    }
+  );
+
+  tool(
+    "get_checklists",
+    {
+      description:
+        "The household's checklists (packing, cleaning, shopping runs and so on) with their items. Open lists only unless include_completed is true; pass checklist_id for one list.",
+      inputSchema: {
+        checklist_id: z.string().optional(),
+        include_completed: z.boolean().optional(),
+      },
+    },
+    async ({ checklist_id, include_completed }) => {
+      if (!groupId) return { content: [{ type: "text", text: JSON.stringify([]) }] };
+      let listQuery = admin.from("checklists").select("*").eq("group_id", groupId).eq("deleted", false);
+      if (checklist_id) listQuery = listQuery.eq("id", checklist_id);
+      const { data: listRows, error } = await listQuery;
+      if (error) return toolError(error.message);
+      const lists = ((listRows ?? []) as Checklist[]).filter((l) => checklist_id || include_completed || !l.completed_at);
+      if (checklist_id && lists.length === 0) return toolError("Checklist not found");
+      const ids = lists.map((l) => l.id);
+      const { data: itemRows } = ids.length
+        ? await admin.from("checklist_task_items").select("*").eq("group_id", groupId).eq("deleted", false).in("checklist_id", ids)
+        : { data: [] };
+      const byList = new Map<string, ChecklistTaskItem[]>();
+      for (const item of ((itemRows ?? []) as ChecklistTaskItem[]).sort((a, b) => a.order - b.order)) {
+        byList.set(item.checklist_id, [...(byList.get(item.checklist_id) ?? []), item]);
+      }
+      const rows = lists.map((l) => ({
+        ...basic(l, ["id", "title", "type", "scheduled_date", "completed_at"] as const),
+        items: (byList.get(l.id) ?? []).map((i) => basic(i, ["id", "label", "is_done", "cost_cents"] as const)),
+      }));
+      return { content: [{ type: "text", text: JSON.stringify(rows) }] };
+    }
+  );
+
+  tool(
+    "add_checklist_item",
+    {
+      description: "Add an item to the end of a checklist.",
+      inputSchema: {
+        checklist_id: z.string(),
+        label: z.string().min(1),
+        cost_cents: z.number().int().nonnegative().optional(),
+      },
+    },
+    async ({ checklist_id, label, cost_cents }) => {
+      if (!groupId) return noGroupError();
+      const { data: listRows } = await admin.from("checklists").select("*").eq("id", checklist_id).eq("group_id", groupId).eq("deleted", false);
+      const list = ((listRows ?? []) as Checklist[])[0];
+      if (!list) return toolError("Checklist not found");
+      const { data: itemRows } = await admin.from("checklist_task_items").select("*").eq("checklist_id", list.id).eq("group_id", groupId).eq("deleted", false);
+      const items = (itemRows ?? []) as ChecklistTaskItem[];
+      const row = buildChecklistItem({
+        checklistId: list.id,
+        groupId,
+        label,
+        order: items.reduce((max, i) => Math.max(max, i.order), -1) + 1,
+        costCents: cost_cents ?? null,
+      });
+      const { error } = await admin.from("checklist_task_items").insert(row);
+      if (error) return toolError(error.message);
+      // A finished list that gains an item is open again, as in the app.
+      if (list.completed_at && list.type !== "repeating") {
+        await admin.from("checklists").update({ completed_at: null }).eq("id", list.id).eq("group_id", groupId);
+        if (list.linked_task_id) await admin.from("household_tasks").update({ done: false, completed_at: null }).eq("id", list.linked_task_id).eq("group_id", groupId);
+      }
+      return { content: [{ type: "text", text: JSON.stringify({ ok: true, id: row.id, checklist: list.title }) }] };
+    }
+  );
+
+  tool(
+    "check_checklist_item",
+    {
+      description:
+        "Tick (or with done false, untick) a checklist item. Ticking the last open item completes the list and its linked to-do, and a priced item on a shopping list logs its cost, the same as ticking it in the app.",
+      inputSchema: {
+        item_id: z.string(),
+        done: z.boolean().optional(),
+      },
+    },
+    async ({ item_id, done = true }) => {
+      if (!groupId) return noGroupError();
+      const { data: itemRows } = await admin.from("checklist_task_items").select("*").eq("id", item_id).eq("group_id", groupId).eq("deleted", false);
+      const item = ((itemRows ?? []) as ChecklistTaskItem[])[0];
+      if (!item) return toolError("Checklist item not found");
+      const { data: listRows } = await admin.from("checklists").select("*").eq("id", item.checklist_id).eq("group_id", groupId).eq("deleted", false);
+      const list = ((listRows ?? []) as Checklist[])[0];
+      if (!list) return toolError("Checklist not found");
+      if (item.is_done === done) return { content: [{ type: "text", text: JSON.stringify({ ok: true, id: item.id, unchanged: true }) }] };
+
+      const patch: Record<string, unknown> = done ? checkItemPatch(userId) : uncheckItemPatch();
+      if (done && enabled.has("costs") && list.type === "shopping" && list.log_costs && (item.cost_cents ?? 0) > 0 && !item.linked_cost_item_id) {
+        const cost = buildLoggedCost({ item, checklist: list, createdBy: userId });
+        const { error } = await admin.from("cost_items").insert(cost);
+        if (error) return toolError(error.message);
+        patch.linked_cost_item_id = cost.id;
+      } else if (!done && item.linked_cost_item_id) {
+        await admin.from("cost_items").update({ deleted: true }).eq("id", item.linked_cost_item_id).eq("group_id", groupId);
+        patch.linked_cost_item_id = null;
+      }
+      const { error } = await admin.from("checklist_task_items").update(patch).eq("id", item.id).eq("group_id", groupId);
+      if (error) return toolError(error.message);
+
+      // Completion sync, as useChecklistToggle does in the apps.
+      const { data: siblingRows } = await admin.from("checklist_task_items").select("*").eq("checklist_id", list.id).eq("group_id", groupId).eq("deleted", false);
+      const projected = ((siblingRows ?? []) as ChecklistTaskItem[]).map((i) => (i.id === item.id ? { ...i, is_done: done } : i));
+      const { complete } = completion(projected);
+      const now = new Date().toISOString();
+      if (list.linked_task_id) {
+        await admin
+          .from("household_tasks")
+          .update(complete ? { done: true, completed_at: now } : { done: false, completed_at: null })
+          .eq("id", list.linked_task_id)
+          .eq("group_id", groupId);
+      }
+      if (list.type !== "repeating" && complete !== !!list.completed_at) {
+        await admin.from("checklists").update({ completed_at: complete ? now : null }).eq("id", list.id).eq("group_id", groupId);
+      }
+      return { content: [{ type: "text", text: JSON.stringify({ ok: true, id: item.id, checklist_complete: complete }) }] };
+    }
+  );
+
+  tool(
+    "get_setup_items",
+    {
+      description:
+        "Home Setup: the things the household is buying or installing for the home, by room, with priority and prices (amounts in cents). Pass status 'needed' for what is still to get.",
+      inputSchema: {
+        status: z.enum(["needed", "installed"]).optional(),
+        room: z.string().optional(),
+      },
+    },
+    async ({ status, room }) => {
+      if (!groupId) return { content: [{ type: "text", text: JSON.stringify([]) }] };
+      const { data, error } = await admin.from("setup_items").select("*").eq("group_id", groupId).eq("deleted", false);
+      if (error) return toolError(error.message);
+      const rows = ((data ?? []) as SetupItem[])
+        .filter((i) => !(i.private && i.assigned_to !== userId))
+        .filter((i) => (!status || i.status === status) && (!room || norm(i.room) === norm(room)))
+        .map((i) => basic(i, ["id", "name", "room", "status", "priority", "est_price", "actual_price", "where_to_buy", "url", "notes"] as const));
+      return { content: [{ type: "text", text: JSON.stringify(rows) }] };
+    }
+  );
+
+  tool(
+    "get_watchlist",
+    {
+      description:
+        "Shopper: things the household wants to buy, with the target and budget and the best price found so far (amounts in cents). Watching and idea items unless status says otherwise.",
+      inputSchema: {
+        status: z.enum(["watching", "idea", "bought"]).optional(),
+      },
+    },
+    async ({ status }) => {
+      if (!groupId) return { content: [{ type: "text", text: JSON.stringify([]) }] };
+      const { data, error } = await admin.from("shopper_wants").select("*").eq("group_id", groupId).eq("deleted", false);
+      if (error) return toolError(error.message);
+      const rows = ((data ?? []) as ShopperWant[])
+        .filter((w) => (status ? w.status === status : w.status !== "bought"))
+        .map((w) =>
+          basic(w, ["id", "title", "status", "target_cents", "budget_cents", "best_cents", "best_store", "need_by", "last_checked_at", "notes"] as const)
+        );
+      return { content: [{ type: "text", text: JSON.stringify(rows) }] };
     }
   );
 
