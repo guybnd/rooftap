@@ -95,7 +95,9 @@ export function HouseholdTaskModal({
   // apps/mobile/src/app/costs/cost-modal.tsx), so these initializers alone
   // are enough to re-seed the form — no resync effect needed.
   const [title, setTitle] = React.useState(task?.title ?? defaultTitle ?? '');
-  const [dueDate, setDueDate] = React.useState(task?.due_date ?? initialDueDate ?? '');
+  // A new to-do starts due today (matches the web modal); Clear still leaves
+  // it undated. An edited task keeps its saved date, including none.
+  const [dueDate, setDueDate] = React.useState(task ? task.due_date ?? '' : initialDueDate || todayISO());
   const [dueTime, setDueTime] = React.useState(task?.due_time?.slice(0, 5) ?? initialDueTime ?? '');
   const [priority, setPriority] = React.useState<Priority>((task?.priority ?? 'medium') as Priority);
   // Only default to self when creating — an edited task that's explicitly
