@@ -7,13 +7,16 @@ import { isPublicConfig, normalizeServerOrigin, type PublicConfig } from '@homeu
 
 export type { PublicConfig };
 
-// No canonical "Official" server domain exists anywhere in this repo (web
-// deploys to whatever Vercel project URL is configured at deploy time), so
-// this deliberately does NOT hardcode a guess — it must be set at Expo build
-// time. EXPO_PUBLIC_* vars are inlined by Expo's bundler automatically, no
-// extra config needed. Until set, the picker's "Official" option is
-// unavailable and self-host remains fully usable.
-export const OFFICIAL_SERVER_URL: string | null = process.env.EXPO_PUBLIC_OFFICIAL_SERVER_URL ?? null;
+// The hosted Rooftap service. EXPO_PUBLIC_OFFICIAL_SERVER_URL (inlined by
+// Expo's bundler at build/OTA time) overrides it, and setting it to an empty
+// string builds an app with no Official option, leaving self-host only. Kept
+// as a code default rather than build env so every APK and OTA gets it: the
+// env var was never set in CI or eas.json, so the picker said "Official
+// server unavailable" on every build.
+const DEFAULT_OFFICIAL_SERVER_URL = 'https://homeup.vercel.app';
+const officialOverride = process.env.EXPO_PUBLIC_OFFICIAL_SERVER_URL;
+export const OFFICIAL_SERVER_URL: string | null =
+  officialOverride === undefined ? DEFAULT_OFFICIAL_SERVER_URL : officialOverride.trim() || null;
 export const OFFICIAL_SERVER_LABEL = 'Official';
 
 const ORIGIN_KEY = 'homeup.serverOrigin';

@@ -25,17 +25,30 @@ function ThreadLoading() {
   );
 }
 
+/** A load that failed (offline, timed out): why, and Try again. */
+function LoadFailed({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <div className="flex items-center gap-3 rounded-2xl border border-border/60 bg-card px-4 py-3">
+      <p className="min-w-0 flex-1 text-sm text-muted-foreground">{message}</p>
+      <Button variant="outline" className="h-11" onClick={onRetry}>
+        Try again
+      </Button>
+    </div>
+  );
+}
+
 export function ThreadMessages({ thread, className }: { thread: AssistantThread; className?: string }) {
-  const { loading, messages, sending, kind, showCost, deciding, decide } = thread;
+  const { loading, loadError, reload, messages, sending, kind, showCost, deciding, decide } = thread;
   const endRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'end' });
   }, [messages.length, sending, loading]);
   return (
     <div className={cn('space-y-5 py-4', className)}>
+      {loadError && !loading && <LoadFailed message={loadError} onRetry={() => void reload()} />}
       {loading ? (
         <ThreadLoading />
-      ) : messages.length === 0 && !sending ? (
+      ) : loadError && messages.length === 0 ? null : messages.length === 0 && !sending ? (
         <p className="px-1 py-10 text-center text-sm text-muted-foreground">
           {kind === 'household'
             ? 'The thread the whole household shares. Ask about the week, the list or the bills.'

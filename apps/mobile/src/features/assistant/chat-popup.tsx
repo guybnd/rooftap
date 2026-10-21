@@ -2,11 +2,11 @@
 // hold the +, the capture sheet's "Chat with Rooftap", a tapped notification
 // or "Rooftap answered" banner) over whatever screen is open, and minimising
 // shrinks it back into the +. Minimised, the conversation stays: a reply that
-// lands meanwhile lights the + dot instead of a banner, and reopening shows
-// it. core's openAssistantPopup() reaches this one host, mounted at the app
+// lands meanwhile shows the "Rooftap answered" banner and lights the + dot,
+// and reopening shows it. core's openAssistantPopup() reaches this one host, mounted at the app
 // root. Web twin: apps/web/src/components/assistant-chat-popup.tsx.
 import * as React from 'react';
-import { AppState, Keyboard, Modal, Pressable, View } from 'react-native';
+import { AppState, Keyboard, Modal, Pressable, ScrollView, View } from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, {
   Easing,
@@ -18,23 +18,24 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useSafeAreaFrame, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronDown, Maximize2, SquarePen, Trash2 } from 'lucide-react-native';
+import { ChevronDown, Maximize2, MessagesSquare, SquarePen, Trash2 } from 'lucide-react-native';
 import {
   MOTION_DURATIONS_MS,
-  assistantUnread,
+  cachedConversations,
   conversationTitle,
+  groupConversations,
   onAssistantPopup,
-  setAssistantUnread,
+  openAssistantPopup,
   useAssistantThread,
   useModules,
-  type AnsweredElsewhere,
   type AssistantConversation,
   type ThreadTarget,
 } from '@homeup/core';
-import { Text, haptics, toast, useKeyboardOffset, useThemeMaterial } from '@homeup/ui';
+import { Button, ListGroup, Text, toast, useKeyboardOffset, useThemeMaterial } from '@homeup/ui';
 import { useDataCache } from '@/lib/data-cache';
 import { useOpenRoute } from '@/lib/tab-routes';
 import { assistantApi } from './assistant-api';
+import { ConversationRow } from './conversation-row';
 import { ThreadFooter, ThreadMessages } from './thread-body';
 
 const SWIFT_OUT = Easing.bezier(0.16, 1, 0.3, 1);
@@ -129,20 +130,12 @@ function PopupThread({
     openRef.current = open;
   }, [open]);
 
-  // Minimised with the app in front, a reply lights the + instead of a banner,
-  // and counts as seen so no push follows.
-  const quietAnswer = React.useCallback(({ conversation }: AnsweredElsewhere) => {
-    setAssistantUnread(assistantUnread() + 1);
-    haptics.tick();
-    void assistantApi.markRead(conversation.id, { seen: true }).catch(() => {});
-  }, []);
   const thread = useAssistantThread(target, {
     api: assistantApi,
     presence: () => (AppState.currentState !== 'active' ? 'background' : openRef.current ? 'here' : 'away'),
-    onAway: quietAnswer,
     toast: popupToast,
   });
-  const { conversation, send, reload } = thread;
+  const { conversation, loadError, send, reload } = thread;
 
   React.useEffect(() => onConversation(conversation), [conversation, onConversation]);
 
@@ -154,12 +147,12 @@ function PopupThread({
     void send(ask);
   }, [ask, send]);
 
-  // Reopening reads what landed while it was minimised (and clears the + dot).
+  // Reopening reads what landed while it was minimised (and clears the + dot), or retries a failed load.
   const wasOpen = React.useRef(open);
   React.useEffect(() => {
-    if (open && !wasOpen.current && conversation) void reload();
+    if (open && !wasOpen.current && (conversation || loadError)) void reload();
     wasOpen.current = open;
-  }, [open, conversation, reload]);
+  }, [open, conversation, loadError, reload]);
 
   const expand = () => {
     if (!conversation) return;
@@ -167,7 +160,18 @@ function PopupThread({
     openRoute(`/assistant/${conversation.id}`);
   };
 
-  const title = conversation ? conversationTitle(conversation) : target.id === 'new' ? 'Ask Rooftap' : '';
+  // The header's chats button swaps the thread for the list of chats; picking one opens it here.
+  const [showChats, setShowChats] = React.useState(false);
+  const pick = (id: string) => {
+    setShowChats(false);
+    if (id !== conversation?.id) openAssistantPopup({ conversationId: id });
+  };
+  const allChats = () => {
+    onMinimize();
+    openRoute('/assistant');
+  };
+
+  const title = showChats ? 'Chats' : conversation ? conversationTitle(conversation) : target.id === 'new' ? 'Ask Rooftap' : '';
 
   return (
     <PopupSurface
@@ -178,10 +182,19 @@ function PopupThread({
           <Text numberOfLines={1} className="min-w-0 flex-1 text-micro-label uppercase text-muted-foreground">
             {title}
           </Text>
+          <Pressable
+            onPress={() => setShowChats((v) => !v)}
+            accessibilityRole="button"
+            accessibilityLabel={showChats ? 'Back to this chat' : 'Your chats'}
+            accessibilityState={{ selected: showChats }}
+            className={`h-11 w-10 items-center justify-center rounded-lg ${showChats ? 'bg-muted' : ''}`}
+          >
+            <MessagesSquare size={18} className={showChats ? 'text-foreground' : 'text-muted-foreground'} />
+          </Pressable>
           <Pressable onPress={onFresh} accessibilityRole="button" accessibilityLabel="New quick ask" className="h-11 w-10 items-center justify-center rounded-lg">
             <SquarePen size={18} className="text-muted-foreground" />
           </Pressable>
-          {conversation && conversation.kind !== 'household' && (
+          {!showChats && conversation && conversation.kind !== 'household' && (
             <Pressable
               onPress={() => void thread.remove().then((gone) => gone && onFresh())}
               accessibilityRole="button"
@@ -191,7 +204,7 @@ function PopupThread({
               <Trash2 size={18} className="text-muted-foreground" />
             </Pressable>
           )}
-          {conversation && (
+          {!showChats && conversation && (
             <Pressable onPress={expand} accessibilityRole="button" accessibilityLabel="Open full screen" className="h-11 w-10 items-center justify-center rounded-lg">
               <Maximize2 size={18} className="text-muted-foreground" />
             </Pressable>
@@ -202,9 +215,64 @@ function PopupThread({
         </View>
       }
     >
-      <ThreadMessages thread={thread} />
-      <ThreadFooter thread={thread} offline={!isOnline} autoFocus={open && target.id === 'new' && !ask} onFresh={onFresh} />
+      {showChats ? (
+        <PopupChats currentId={conversation?.id ?? null} onPick={pick} onAll={allChats} />
+      ) : (
+        <>
+          <ThreadMessages thread={thread} />
+          <ThreadFooter thread={thread} offline={!isOnline} autoFocus={open && target.id === 'new' && !ask} onFresh={onFresh} />
+        </>
+      )}
     </PopupSurface>
+  );
+}
+
+/** How many closed quick asks the pop-up lists; the Assistant space has the rest. */
+const EARLIER_SHOWN = 6;
+
+/**
+ * The pop-up's list of chats: the Household thread, kept chats, open quick
+ * asks and the latest closed ones, the same rows as the Assistant space.
+ * Paints from the device's cache at once and refreshes from the server.
+ */
+function PopupChats({ currentId, onPick, onAll }: { currentId: string | null; onPick: (id: string) => void; onAll: () => void }) {
+  const [list, setList] = React.useState(() => cachedConversations());
+  const [error, setError] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    assistantApi
+      .conversations()
+      .then((rows) => {
+        setList(rows);
+        setError(null);
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : 'Could not load your chats.'));
+  }, []);
+  const groups = groupConversations(list);
+  const sections = [
+    { label: 'Chats', rows: [...(groups.household ? [groups.household] : []), ...groups.chats] },
+    { label: 'Quick asks', rows: groups.open },
+    { label: 'Earlier', rows: groups.earlier.slice(0, EARLIER_SHOWN) },
+  ].filter((section) => section.rows.length > 0);
+  return (
+    <ScrollView className="flex-1" contentContainerClassName="gap-4 px-4 py-3" keyboardShouldPersistTaps="handled">
+      {error && <Text className="px-1 text-sm text-muted-foreground">{error}</Text>}
+      {sections.length === 0 && !error && (
+        <Text className="px-1 py-10 text-center text-sm text-muted-foreground">No chats yet. Ask something and it shows here.</Text>
+      )}
+      {sections.map((section) => (
+        <View key={section.label} className="gap-2">
+          <Text className="px-1 text-micro-label uppercase text-muted-foreground">{section.label}</Text>
+          <ListGroup>
+            {section.rows.map((c) => (
+              <ConversationRow key={c.id} conversation={c} current={c.id === currentId} onPress={() => onPick(c.id)} />
+            ))}
+          </ListGroup>
+        </View>
+      ))}
+      <Button variant="ghost" onPress={onAll} className="h-11 self-center px-3.5">
+        <Text className="text-sm font-medium text-foreground">All chats</Text>
+      </Button>
+    </ScrollView>
   );
 }
 

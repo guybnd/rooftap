@@ -19,6 +19,7 @@ import {
   type AssistantMessage,
 } from './assistant-api';
 import { isConversationOpen, type ConversationKind } from './assistant';
+import { deviceKeyValue } from './data/store-environment';
 
 interface CachedThread {
   conversation: AssistantConversation;
@@ -28,22 +29,98 @@ interface CachedThread {
 const THREAD_CACHE_SIZE = 12;
 const threadCache = new Map<string, CachedThread>();
 
+// The cache is also kept on the device (the app's key-value store), so a
+// conversation already read opens at once after the app was closed, from a
+// notification or the list, while the network catches up. Only entries
+// under a conversation id are kept, never the `household` alias, so another
+// account signing in on the same device can't land on this one's threads;
+// clearThreadCache() empties it on sign-out.
+const DEVICE_KEY = 'rooftap.assistant.threads';
+/** Messages kept per thread on the device; the screen refreshes the rest. */
+const DEVICE_MESSAGES = 40;
+let hydrated = false;
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
+
+function hydrate(): void {
+  const store = deviceKeyValue();
+  if (hydrated || !store) return;
+  hydrated = true;
+  try {
+    const raw = store.getItem(DEVICE_KEY);
+    const entries = raw ? (JSON.parse(raw) as CachedThread[]) : [];
+    for (const entry of entries) {
+      if (entry?.conversation?.id && Array.isArray(entry.messages) && !threadCache.has(entry.conversation.id)) {
+        threadCache.set(entry.conversation.id, entry);
+      }
+    }
+  } catch {
+    // A cache that can't be read is just empty.
+  }
+}
+
+function saveSoon(): void {
+  const store = deviceKeyValue();
+  if (!store || saveTimer) return;
+  saveTimer = setTimeout(() => {
+    saveTimer = null;
+    const seen = new Set<string>();
+    const entries: CachedThread[] = [];
+    for (const [key, entry] of threadCache) {
+      if (key === 'household' || seen.has(entry.conversation.id)) continue;
+      seen.add(entry.conversation.id);
+      entries.push({
+        conversation: entry.conversation,
+        messages: entry.messages.filter((m) => !m.id.startsWith('local-')).slice(-DEVICE_MESSAGES),
+      });
+    }
+    try {
+      store.setItem(DEVICE_KEY, JSON.stringify(entries));
+    } catch {
+      // Full or unavailable storage only costs the instant reopen.
+    }
+  }, 400);
+}
+
 /** Keeps a thread for instant reopening, under its id (and `household` for the shared one). */
 export function rememberThread(conversation: AssistantConversation, messages: AssistantMessage[]): void {
+  hydrate();
   const entry = { conversation, messages };
   for (const key of conversation.kind === 'household' ? [conversation.id, 'household'] : [conversation.id]) {
     threadCache.delete(key);
     threadCache.set(key, entry);
   }
   while (threadCache.size > THREAD_CACHE_SIZE) threadCache.delete(threadCache.keys().next().value as string);
+  saveSoon();
 }
 
 export function cachedThread(id: string): CachedThread | null {
+  hydrate();
   return threadCache.get(id) ?? null;
 }
 
 export function forgetThread(id: string): void {
+  hydrate();
   threadCache.delete(id);
+  saveSoon();
+}
+
+/** Empties the cache, here and on the device (sign-out, switching servers). */
+export function clearThreadCache(): void {
+  threadCache.clear();
+  hydrated = true;
+  try {
+    deviceKeyValue()?.setItem(DEVICE_KEY, '[]');
+  } catch {
+    // Nothing to clear.
+  }
+}
+
+/** Recent conversations from the cache, newest first: what the pop-up's chat list shows before the network answers. */
+export function cachedConversations(): AssistantConversation[] {
+  hydrate();
+  const seen = new Map<string, AssistantConversation>();
+  for (const entry of threadCache.values()) seen.set(entry.conversation.id, entry.conversation);
+  return [...seen.values()].sort((a, b) => b.last_active_at.localeCompare(a.last_active_at));
 }
 
 /** Which conversation: an id, `household`, or `new` (with the kind to start). */
@@ -93,12 +170,16 @@ export function useAssistantThread(target: ThreadTarget, host: ThreadHost) {
   const [sending, setSending] = useState(false);
   const [deciding, setDeciding] = useState<string | null>(null);
   const [blocked, setBlocked] = useState<AssistantErrorCode | null>(null);
+  // Why the last load failed (offline, timed out), offered with Try again.
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [showCost, setShowCost] = useState(false);
   // A closed quick ask the person chose to carry on: the next send reopens it.
   const [resumed, setResumed] = useState(false);
   const resumedRef = useRef(false);
   const hostRef = useRef(host);
   hostRef.current = host;
+  const shownCount = useRef(messages.length);
+  shownCount.current = messages.length;
 
   const newKind: ConversationKind = target.kind === 'chat' ? 'chat' : 'quick';
   const kind: ConversationKind = conversation?.kind ?? (target.id === 'household' ? 'household' : newKind);
@@ -129,9 +210,15 @@ export function useAssistantThread(target: ThreadTarget, host: ThreadHost) {
 
   /** Re-reads the thread (opening it marks it read on the server, so the + dot may go). */
   const reload = useCallback(async () => {
-    const { api, toast } = hostRef.current;
+    const { api } = hostRef.current;
     let id: string | undefined = conversationIdRef.current ?? (isNew ? undefined : target.id);
-    if (!id) return;
+    if (!id) {
+      setLoading(false);
+      return;
+    }
+    setLoadError(null);
+    // A retry with nothing on screen shows the skeleton again; a refresh under messages doesn't.
+    if (shownCount.current === 0) setLoading(true);
     try {
       if (id === 'household') id = (await api.conversations()).find((c) => c.kind === 'household')?.id;
       if (id) {
@@ -142,7 +229,7 @@ export function useAssistantThread(target: ThreadTarget, host: ThreadHost) {
       }
     } catch (err) {
       if (err instanceof AssistantApiError && err.code) setBlocked(err.code);
-      else toast.error(errorText(err, 'Could not load this conversation.'));
+      else setLoadError(errorText(err, 'Could not load this conversation.'));
     } finally {
       setLoading(false);
     }
@@ -254,7 +341,7 @@ export function useAssistantThread(target: ThreadTarget, host: ThreadHost) {
   // Closed: a quick ask past its idle time, unless the person chose to carry on.
   const closed = !!conversation && !resumed && !isConversationOpen(conversation.kind, conversation.closes_at);
 
-  return { conversation, messages, kind, loading, sending, deciding, blocked, showCost, closed, resumed, send, decide, togglePin, remove, reload, resume };
+  return { conversation, messages, kind, loading, loadError, sending, deciding, blocked, showCost, closed, resumed, send, decide, togglePin, remove, reload, resume };
 }
 
 export type AssistantThread = ReturnType<typeof useAssistantThread>;

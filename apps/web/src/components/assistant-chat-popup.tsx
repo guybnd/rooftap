@@ -4,31 +4,33 @@
 // the mobile +, the capture sheet's "Chat with Rooftap", a "Rooftap answered"
 // toast) over whatever page is open, and minimising shrinks it back into the
 // +. Minimised, the conversation stays: a reply that lands meanwhile lights
-// the + dot instead of a toast, and reopening shows it. core's
+// the + dot and shows the "Rooftap answered" toast, and reopening shows it. core's
 // openAssistantPopup() reaches this one host, mounted inside the app shell.
 // Native twin: apps/mobile/src/features/assistant/chat-popup.tsx.
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ChevronDown, Maximize2, SquarePen, Trash2 } from "lucide-react";
+import { ChevronDown, Maximize2, MessagesSquare, SquarePen, Trash2 } from "lucide-react";
 import {
-  assistantUnread,
+  cachedConversations,
   conversationTitle,
+  groupConversations,
+  openAssistantPopup,
   onAssistantPopup,
-  setAssistantUnread,
   useAssistantThread,
   useModules,
-  type AnsweredElsewhere,
   type AssistantConversation,
   type ThreadTarget,
 } from "@homeup/core";
 import { cn } from "@/lib/utils";
-import { tick } from "@/lib/haptics";
 import { useDataCache } from "@/lib/data-cache";
 import { useKeyboardInset } from "@/hooks/use-keyboard-inset";
 import { assistantApi } from "@/lib/assistant-client";
 import { ThreadFooter, ThreadMessages } from "@/app/assistant/thread-body";
+import { ConversationRow } from "@/app/assistant/conversation-row";
+import { ListGroup } from "@/components/ui/list-item";
+import { Button } from "@/components/ui/button";
 
 const popupToast = { error: (m: string) => toast.error(m), message: (m: string) => toast(m) };
 
@@ -113,20 +115,12 @@ function PopupThread({
     openRef.current = open;
   }, [open]);
 
-  // Minimised in a visible tab, a reply lights the + instead of a toast, and
-  // counts as seen so no push follows.
-  const quietAnswer = useCallback(({ conversation }: AnsweredElsewhere) => {
-    setAssistantUnread(assistantUnread() + 1);
-    tick();
-    void assistantApi.markRead(conversation.id, { seen: true }).catch(() => {});
-  }, []);
   const thread = useAssistantThread(target, {
     api: assistantApi,
     presence: () => (document.visibilityState !== "visible" ? "background" : openRef.current ? "here" : "away"),
-    onAway: quietAnswer,
     toast: popupToast,
   });
-  const { conversation, send, reload } = thread;
+  const { conversation, loadError, send, reload } = thread;
 
   useEffect(() => onConversation(conversation), [conversation, onConversation]);
 
@@ -138,12 +132,12 @@ function PopupThread({
     void send(ask);
   }, [ask, send]);
 
-  // Reopening reads what landed while it was minimised (and clears the + dot).
+  // Reopening reads what landed while it was minimised (and clears the + dot), or retries a failed load.
   const wasOpen = useRef(open);
   useEffect(() => {
-    if (open && !wasOpen.current && conversation) void reload();
+    if (open && !wasOpen.current && (conversation || loadError)) void reload();
     wasOpen.current = open;
-  }, [open, conversation, reload]);
+  }, [open, conversation, loadError, reload]);
 
   const expand = () => {
     if (!conversation) return;
@@ -151,7 +145,18 @@ function PopupThread({
     router.push(`/assistant/${conversation.id}`);
   };
 
-  const title = conversation ? conversationTitle(conversation) : target.id === "new" ? "Ask Rooftap" : "";
+  // The header's chats button swaps the thread for the list of chats; picking one opens it here.
+  const [showChats, setShowChats] = useState(false);
+  const pick = (id: string) => {
+    setShowChats(false);
+    if (id !== conversation?.id) openAssistantPopup({ conversationId: id });
+  };
+  const allChats = () => {
+    onMinimize();
+    router.push("/assistant");
+  };
+
+  const title = showChats ? "Chats" : conversation ? conversationTitle(conversation) : target.id === "new" ? "Ask Rooftap" : "";
   const iconButton =
     "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground";
 
@@ -159,10 +164,19 @@ function PopupThread({
     <PopupSurface open={open} onMinimize={onMinimize} title={title || "Rooftap"}>
       <div className="flex items-center gap-1 pl-4 pr-1.5">
         <p className="min-w-0 flex-1 truncate text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">{title}</p>
+        <button
+          type="button"
+          onClick={() => setShowChats((v) => !v)}
+          aria-label={showChats ? "Back to this chat" : "Your chats"}
+          aria-pressed={showChats}
+          className={cn(iconButton, showChats && "bg-muted text-foreground")}
+        >
+          <MessagesSquare className="h-4.5 w-4.5" />
+        </button>
         <button type="button" onClick={onFresh} aria-label="New quick ask" className={iconButton}>
           <SquarePen className="h-4.5 w-4.5" />
         </button>
-        {conversation && conversation.kind !== "household" && (
+        {!showChats && conversation && conversation.kind !== "household" && (
           <button
             type="button"
             onClick={() => void thread.remove().then((gone) => gone && onFresh())}
@@ -172,7 +186,7 @@ function PopupThread({
             <Trash2 className="h-4.5 w-4.5" />
           </button>
         )}
-        {conversation && (
+        {!showChats && conversation && (
           <button type="button" onClick={expand} aria-label="Open full page" className={iconButton}>
             <Maximize2 className="h-4.5 w-4.5" />
           </button>
@@ -181,9 +195,66 @@ function PopupThread({
           <ChevronDown className="h-5 w-5" />
         </button>
       </div>
-      <ThreadMessages thread={thread} className="min-h-0 flex-1 overflow-y-auto px-4" />
-      <ThreadFooter thread={thread} offline={!isOnline} autoFocus={target.id === "new" && !ask} onFresh={onFresh} className="px-3 pb-3" />
+      {showChats ? (
+        <PopupChats currentId={conversation?.id ?? null} onPick={pick} onAll={allChats} />
+      ) : (
+        <>
+          <ThreadMessages thread={thread} className="min-h-0 flex-1 overflow-y-auto px-4" />
+          <ThreadFooter thread={thread} offline={!isOnline} autoFocus={target.id === "new" && !ask} onFresh={onFresh} className="px-3 pb-3" />
+        </>
+      )}
     </PopupSurface>
+  );
+}
+
+/** How many closed quick asks the pop-up lists; the Assistant space has the rest. */
+const EARLIER_SHOWN = 6;
+
+/**
+ * The pop-up's list of chats: the Household thread, kept chats, open quick
+ * asks and the latest closed ones, the same rows as the Assistant space.
+ * Paints from the cache at once and refreshes from the server.
+ */
+function PopupChats({ currentId, onPick, onAll }: { currentId: string | null; onPick: (id: string) => void; onAll: () => void }) {
+  const [list, setList] = useState(() => cachedConversations());
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    assistantApi
+      .conversations()
+      .then((rows) => {
+        setList(rows);
+        setError(null);
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : "Could not load your chats."));
+  }, []);
+  const groups = groupConversations(list);
+  const sections = [
+    { label: "Chats", rows: [...(groups.household ? [groups.household] : []), ...groups.chats] },
+    { label: "Quick asks", rows: groups.open },
+    { label: "Earlier", rows: groups.earlier.slice(0, EARLIER_SHOWN) },
+  ].filter((section) => section.rows.length > 0);
+  return (
+    <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-3">
+      {error && <p className="px-1 text-sm text-muted-foreground">{error}</p>}
+      {sections.length === 0 && !error && (
+        <p className="px-1 py-10 text-center text-sm text-muted-foreground">No chats yet. Ask something and it shows here.</p>
+      )}
+      {sections.map((section) => (
+        <div key={section.label} className="space-y-2">
+          <p className="px-1 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">{section.label}</p>
+          <ListGroup>
+            {section.rows.map((c) => (
+              <ConversationRow key={c.id} conversation={c} current={c.id === currentId} onSelect={() => onPick(c.id)} />
+            ))}
+          </ListGroup>
+        </div>
+      ))}
+      <div className="flex justify-center">
+        <Button variant="ghost" className="h-11" onClick={onAll}>
+          All chats
+        </Button>
+      </div>
+    </div>
   );
 }
 

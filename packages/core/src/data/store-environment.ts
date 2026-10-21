@@ -81,3 +81,12 @@ export function envRandomUUID(): string {
   if (hostCrypto?.randomUUID) return hostCrypto.randomUUID();
   throw new Error('No StoreEnvironment configured and no host randomUUID — configure the environment first (required on React Native).');
 }
+
+/**
+ * The device's key-value store when the app has registered one, else null:
+ * for conveniences that are fine to skip (tests, or before startup), unlike
+ * the stores above.
+ */
+export function deviceKeyValue(): StoreEnvironment['keyValue'] | null {
+  return current?.keyValue ?? null;
+}

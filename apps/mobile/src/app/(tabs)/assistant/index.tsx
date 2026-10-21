@@ -6,31 +6,13 @@ import * as React from 'react';
 import { RefreshControl, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter, type Href } from 'expo-router';
-import { MessageCircle, Plus, Users, WifiOff, Zap } from 'lucide-react-native';
-import {
-  Text,
-  Button,
-  HeroLede,
-  LeadingTile,
-  ListGroup,
-  ListItem,
-  ListItemContent,
-  ListItemMeta,
-  ListItemTitle,
-  ListItemTrailing,
-  Pill,
-  ScreenBackground,
-  useThemeMaterial,
-} from '@homeup/ui';
+import { Plus, WifiOff } from 'lucide-react-native';
+import { Text, Button, HeroLede, ListGroup, ScreenBackground } from '@homeup/ui';
 import {
   AssistantApiError,
-  conversationTitle,
   formatCents,
   groupConversations,
-  minutesLeft,
-  sectionHueSwatch,
   setAssistantUnread,
-  timeAgo,
   type AssistantConversation,
   type AssistantErrorCode,
   type AssistantStatus,
@@ -40,55 +22,7 @@ import { NoGroupScreen } from '@/components/no-group-screen';
 import { assistantApi } from '@/features/assistant/assistant-api';
 import { Composer } from '@/features/assistant/assistant-parts';
 import { AssistantNotice } from '@/features/assistant/assistant-notice';
-
-function ConversationRow({ conversation, onPress }: { conversation: AssistantConversation | null; onPress: () => void }) {
-  const { scheme } = useThemeMaterial();
-  const kind = conversation?.kind ?? 'household';
-  const Icon = kind === 'household' ? Users : kind === 'quick' ? Zap : MessageCircle;
-  const left = conversation ? minutesLeft(conversation) : null;
-  const meta =
-    kind === 'household'
-      ? 'Everyone in the home'
-      : left != null && left > 0
-        ? `Open for ${left} min`
-        : conversation
-          ? timeAgo(conversation.last_active_at)
-          : null;
-  return (
-    <ListItem onPress={onPress}>
-      {kind === 'household' ? (
-        <LeadingTile sectionId="assistant" Icon={Icon} size="md" />
-      ) : (
-        <View className="size-9 items-center justify-center rounded-[11px] bg-muted">
-          <Icon size={18} className="text-muted-foreground" />
-        </View>
-      )}
-      <ListItemContent>
-        <ListItemTitle numberOfLines={1} className={conversation?.unread ? 'font-semibold' : undefined}>
-          {conversation ? conversationTitle(conversation) : 'Household'}
-        </ListItemTitle>
-        {meta && (
-          <ListItemMeta>
-            <Text className="text-caption text-muted-foreground">{meta}</Text>
-          </ListItemMeta>
-        )}
-      </ListItemContent>
-      {conversation && (conversation.pending > 0 || conversation.unread) && (
-        <ListItemTrailing>
-          {conversation.pending > 0 ? (
-            <Pill variant="primary">{`${conversation.pending} to OK`}</Pill>
-          ) : (
-            <View
-              accessibilityLabel="New answer"
-              className="size-2.5 rounded-full"
-              style={{ backgroundColor: sectionHueSwatch('assistant', scheme).glow }}
-            />
-          )}
-        </ListItemTrailing>
-      )}
-    </ListItem>
-  );
-}
+import { ConversationRow } from '@/features/assistant/conversation-row';
 
 function Group({ label, rows, open }: { label: string; rows: AssistantConversation[]; open: (id: string) => void }) {
   if (rows.length === 0) return null;

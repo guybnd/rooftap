@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { MessageCircle, Plus, Users, Zap } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import {
   AssistantApiError,
   conversationTitle,
@@ -32,55 +32,7 @@ import { OfflineHint } from '@/components/offline-hint';
 import { SettingsLabel } from '@/components/settings-panel';
 import { Composer } from './assistant-parts';
 import { AssistantNotice } from './assistant-notice';
-
-function ConversationRow({ conversation, href }: { conversation: AssistantConversation | null; href: string }) {
-  const kind = conversation?.kind ?? 'household';
-  const Icon = kind === 'household' ? Users : kind === 'quick' ? Zap : MessageCircle;
-  const left = conversation ? minutesLeft(conversation) : null;
-  const meta =
-    kind === 'household'
-      ? 'Everyone in the home'
-      : left != null && left > 0
-        ? `Open for ${left} min`
-        : conversation
-          ? timeAgo(conversation.last_active_at)
-          : null;
-  return (
-    <ListItem asChild>
-      <Link href={href}>
-        <ListItemLeading>
-          {kind === 'household' ? (
-            <LeadingTile sectionId="assistant" Icon={Icon} size="md" />
-          ) : (
-            <span className="flex size-9 items-center justify-center rounded-[11px] bg-muted">
-              <Icon className="size-[18px]" />
-            </span>
-          )}
-        </ListItemLeading>
-        <ListItemContent>
-          <ListItemTitle className={conversation?.unread ? 'font-semibold' : undefined}>
-            {conversation ? conversationTitle(conversation) : 'Household'}
-          </ListItemTitle>
-          {meta && <ListItemMeta>{meta}</ListItemMeta>}
-        </ListItemContent>
-        {conversation && (conversation.pending > 0 || conversation.unread) && (
-          <ListItemTrailing>
-            {conversation.pending > 0 ? (
-              <Pill variant="primary">{conversation.pending} to OK</Pill>
-            ) : (
-              <span
-                role="img"
-                aria-label="New answer"
-                data-hue={sectionHue('assistant')}
-                className="size-2.5 rounded-full bg-[var(--hue-glow)]"
-              />
-            )}
-          </ListItemTrailing>
-        )}
-      </Link>
-    </ListItem>
-  );
-}
+import { ConversationRow } from './conversation-row';
 
 export default function AssistantPage() {
   const router = useRouter();

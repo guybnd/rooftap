@@ -1,6 +1,6 @@
 // HOUP-69: native Supabase client binding. A singleton, re-bound whenever
 // the resolved config changes (switching servers) — see `resetSupabaseClient`.
-import { createNativeClient, hasPersistedSession } from '@homeup/core';
+import { clearThreadCache, createNativeClient, hasPersistedSession } from '@homeup/core';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { authStorageAdapter } from './secure-storage-adapter';
 import { clearStoredServer, type PublicConfig } from './server-config';
@@ -97,6 +97,7 @@ export async function performFullReset(previousConfig: PublicConfig | null): Pro
     }
   }
   resetSupabaseClient();
+  clearThreadCache();
   await clearStoredServer();
 }
 
@@ -113,4 +114,5 @@ export async function signOut(config: PublicConfig): Promise<void> {
     // device points at it anymore.
   }
   resetSupabaseClient();
+  clearThreadCache();
 }
