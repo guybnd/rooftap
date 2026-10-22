@@ -47,7 +47,7 @@ import { OFFICIAL_SERVER_LABEL, getStoredServer, type ServerSelection } from '@/
 import { sectionIcons } from '@/lib/section-icons';
 import { signOut } from '@/lib/supabase-client';
 import { useAppTheme } from '@/lib/theme-context';
-import { themeMeta } from '@/lib/theme-meta';
+import { themePreferenceLabel } from '@/lib/theme-meta';
 import { useDataCache } from '@/lib/data-cache';
 import { globalMenus, sectionPanels, visiblePanels } from '@/features/settings/settings-registry';
 import { TOKEN_KEY as PUSH_TOKEN_KEY } from '@/features/settings/panels/notifications-settings';
@@ -130,7 +130,7 @@ export default function SettingsScreen() {
     (section) => visiblePanels(sectionPanels[section.id] ?? [], modules.enabled).length > 0
   );
 
-  const themeName = themeMeta.find((t) => t.id === preference)?.name ?? preference;
+  const themeName = themePreferenceLabel(preference);
   const memberCountLabel = `${groupMembers.length} member${groupMembers.length === 1 ? '' : 's'}`;
   const notificationsEnabled = notifGranted === null ? null : notifGranted && !!notifToken;
   const notificationsLabel = notificationsEnabled === null ? null : notificationsEnabled ? 'On' : 'Off';

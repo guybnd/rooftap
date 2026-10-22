@@ -13,10 +13,12 @@ import type { GroceryItem, HouseholdTask, WidgetGrocerySnapshotItem, WidgetTaskS
 // jest-expo/Metro preset wired for apps/mobile — see vitest.config.ts) —
 // TasksWidget.tsx is the only runtime importer of it reachable from
 // widgetTaskHandler.ts, so stub it out rather than pull the real widget
-// tree through this suite. `renderFromSnapshot` only constructs an element
-// (React.createElement) and hands it to the mocked `renderWidget` below —
-// the element is never reconciled, so the stub's shape doesn't matter.
-vi.mock('./TasksWidget', () => ({ TasksWidget: () => null }));
+// tree through this suite. `renderFromSnapshot` only asks it for the
+// light/dark pair and hands that to the mocked `renderWidget` below, so the
+// stub returns the props and theme preference each side would draw with.
+vi.mock('./TasksWidget', () => ({
+  tasksWidgetRepresentation: (props: unknown, preference: string) => ({ light: { props, preference }, dark: { props, preference } }),
+}));
 
 // weather-cache.ts (imported by widgetTaskHandler.ts for isWeatherStale, used
 // by recomputeWeatherStale) opens its own SQLiteStorage handle at module
@@ -53,7 +55,8 @@ vi.mock('../lib/legend/environment', () => ({}));
 
 const readWidgetSnapshot = vi.fn();
 const writeWidgetSnapshot = vi.fn();
-vi.mock('./widget-snapshot', () => ({ readWidgetSnapshot, writeWidgetSnapshot }));
+const readWidgetThemePreference = vi.fn(() => 'ember:auto');
+vi.mock('./widget-snapshot', () => ({ readWidgetSnapshot, readWidgetThemePreference, writeWidgetSnapshot }));
 
 const householdTasks$ = vi.fn();
 const groceryItems$ = vi.fn();
@@ -420,6 +423,25 @@ describe('widgetTaskHandler end-to-end (mocked store + headless context)', () =>
     const [writtenItems] = writeWidgetSnapshot.mock.calls[0];
     expect(writtenItems.find((i: WidgetTaskSnapshotItem) => i.id === 'task-1')?.done).toBe(true);
     expect(renderWidget).toHaveBeenCalledTimes(1);
+  });
+
+  it('repaints in the theme picked in the app', async () => {
+    const { widgetTaskHandler } = await import('./widgetTaskHandler');
+    readWidgetSnapshot.mockReturnValue(snapshot());
+    householdTasks$.mockReturnValue(fakeStore<HouseholdTask>({ 'task-1': task() }));
+    readWidgetThemePreference.mockReturnValueOnce('lavender:dark');
+    const renderWidget = vi.fn();
+
+    await widgetTaskHandler({
+      widgetInfo: widgetInfo(),
+      widgetAction: 'WIDGET_CLICK',
+      clickAction: 'TOGGLE_TASK',
+      clickActionData: { id: 'task-1', snapshotVersion: 4, snapshotDone: false, snapshotSourceUpdatedAt: '2026-08-01T00:00:00.000Z' },
+      renderWidget,
+    } as never);
+
+    expect(renderWidget.mock.calls[0][0].light.preference).toBe('lavender:dark');
+    expect(renderWidget.mock.calls[0][0].dark.preference).toBe('lavender:dark');
   });
 
   it('TOGGLE_TASK keeps the snapshot\'s event rows, which the headless task cannot rebuild', async () => {

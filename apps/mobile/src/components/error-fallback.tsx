@@ -12,7 +12,7 @@ import { Pressable, ScrollView, useColorScheme, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Updates from 'expo-updates';
 import { RefreshCw } from 'lucide-react-native';
-import { resolveThemePreference } from '@homeup/core';
+import { DEFAULT_THEME_PREFERENCE, resolveThemePreference } from '@homeup/core';
 import { Text, Button, ThemeProvider } from '@homeup/ui';
 
 type FixState = 'idle' | 'checking' | 'downloading' | 'restarting' | 'latest' | 'offline';
@@ -35,7 +35,7 @@ export function ErrorBoundary({ error, retry }: { error: Error; retry: () => Pro
   // The boundary sits above the app's theme provider (it can catch a throw
   // from inside it), so it brings its own: the phone's light or dark Ember.
   const scheme = useColorScheme();
-  const themeId = resolveThemePreference('system', scheme === 'dark' ? 'dark' : 'light');
+  const themeId = resolveThemePreference(DEFAULT_THEME_PREFERENCE, scheme === 'dark' ? 'dark' : 'light');
   return (
     <ThemeProvider themeId={themeId}>
       <ErrorScreen error={error} retry={retry} />

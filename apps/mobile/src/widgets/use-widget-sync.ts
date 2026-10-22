@@ -40,6 +40,7 @@ import { deriveBudgetPulseTone } from '@/features/home/budget-tile';
 import { isWeatherStale, readWeatherCache } from './weather-cache';
 import { writeWidgetSnapshot } from './widget-snapshot';
 import { tasksWidgetRepresentation } from './TasksWidget';
+import { useAppTheme } from '@/lib/theme-context';
 
 const SYNC_DEBOUNCE_MS = 400;
 
@@ -52,6 +53,8 @@ const SYNC_DEBOUNCE_MS = 400;
 // headless task, which never touches this hook).
 export function useWidgetSync(): void {
   const { group, currentUserId, userSettings } = useDataCache();
+  // The widget draws in the theme picked in the app; a change redraws it.
+  const { preference: themePreference } = useAppTheme();
   const groupId = group?.id;
   // Modules: a switched-off module leaves no trace on the widget (.docs/modules.md, section 7),
   // and its stores open with no group id so they don't sync (store-modules.ts).
@@ -161,7 +164,7 @@ export function useWidgetSync(): void {
       writeWidgetSnapshot(items, groceryItems, summary);
       void requestWidgetUpdate({
         widgetName: 'TodaysTasks',
-        renderWidget: () => tasksWidgetRepresentation({ items, groceries: groceryItems, summary }),
+        renderWidget: () => tasksWidgetRepresentation({ items, groceries: groceryItems, summary }, themePreference),
       });
     }, SYNC_DEBOUNCE_MS);
 
@@ -186,5 +189,6 @@ export function useWidgetSync(): void {
     viewingsOn,
     upcomingDays,
     currency,
+    themePreference,
   ]);
 }

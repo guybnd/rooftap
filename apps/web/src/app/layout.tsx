@@ -8,7 +8,18 @@ import "./globals.css";
 import "@/lib/legend/environment";
 import { Geist, Geist_Mono, Bricolage_Grotesque, Fraunces, Fredoka } from "next/font/google";
 import { cn } from "@/lib/utils";
-import { LIGHT_THEME_IDS, SYSTEM_THEME_IDS, THEME_IDS, THEME_PREFERENCE_STORAGE_KEY } from "@homeup/core";
+import {
+  DEFAULT_THEME_PREFERENCE,
+  LIGHT_THEME_IDS,
+  THEME_FAMILIES,
+  THEME_IDS,
+  THEME_MODES,
+  THEME_PREFERENCE_STORAGE_KEY,
+  parseThemePreference,
+  resolveThemePreference,
+  themePreference,
+  type ThemeId,
+} from "@homeup/core";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ChunkReload } from "@/components/chunk-reload";
@@ -45,11 +56,23 @@ const fraunces = Fraunces({
 });
 
 // Hearth v2: paints the right theme before first paint (no flash). Mirrors
-// ThemeProvider + @homeup/core's resolveThemePreference: a pinned theme id
-// wins, anything else ("system", unset, stale) follows the device scheme.
-const PINNABLE_THEMES = JSON.stringify(THEME_IDS);
+// ThemeProvider + @homeup/core's resolveThemePreference through a lookup
+// table: every value parseThemePreference accepts (family:mode, and the
+// older "system" or a theme id) maps to its light and dark theme; anything
+// else gets the default's.
+const BOOT_PREFS: Record<string, [ThemeId, ThemeId]> = {};
+for (const family of THEME_FAMILIES) {
+  for (const mode of THEME_MODES) {
+    const pref = themePreference(family.id, mode);
+    BOOT_PREFS[pref] = [resolveThemePreference(pref, "light"), resolveThemePreference(pref, "dark")];
+  }
+}
+for (const legacy of ["system", ...THEME_IDS]) {
+  const pref = parseThemePreference(legacy);
+  BOOT_PREFS[legacy] = [resolveThemePreference(pref, "light"), resolveThemePreference(pref, "dark")];
+}
 const LIGHT_THEMES = JSON.stringify(LIGHT_THEME_IDS);
-const THEME_BOOT_SCRIPT = `try{var p=localStorage.getItem(${JSON.stringify(THEME_PREFERENCE_STORAGE_KEY)}),ids=${PINNABLE_THEMES},light=${LIGHT_THEMES},t=ids.indexOf(p)>=0?p:(window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches?${JSON.stringify(SYSTEM_THEME_IDS.dark)}:${JSON.stringify(SYSTEM_THEME_IDS.light)});document.documentElement.setAttribute("data-theme",t);if(light.indexOf(t)<0)document.documentElement.classList.add("dark");if(localStorage.getItem(${JSON.stringify(DESKTOP_LAYOUT_STORAGE_KEY)})==="classic")document.documentElement.setAttribute("data-layout","classic")}catch(e){}`;
+const THEME_BOOT_SCRIPT = `try{var p=localStorage.getItem(${JSON.stringify(THEME_PREFERENCE_STORAGE_KEY)}),m=${JSON.stringify(BOOT_PREFS)},light=${LIGHT_THEMES},e=m[p]||m[${JSON.stringify(DEFAULT_THEME_PREFERENCE)}],t=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches?e[1]:e[0];document.documentElement.setAttribute("data-theme",t);if(light.indexOf(t)<0)document.documentElement.classList.add("dark");if(localStorage.getItem(${JSON.stringify(DESKTOP_LAYOUT_STORAGE_KEY)})==="classic")document.documentElement.setAttribute("data-layout","classic")}catch(e){}`;
 
 export const metadata: Metadata = {
   title: "Rooftap",

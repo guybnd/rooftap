@@ -12,11 +12,14 @@
 // disjoint key namespace from Legend's own persisted rows).
 import { SQLiteStorage } from 'expo-sqlite/kv-store';
 import {
+  THEME_PREFERENCE_STORAGE_KEY,
+  parseThemePreference,
   WIDGET_SNAPSHOT_KEY,
   WIDGET_SNAPSHOT_VERSION,
   type WidgetGrocerySnapshotItem,
   type WidgetSummary,
   type WidgetTaskSnapshotItem,
+  type ThemePreference,
   type WidgetTodaySnapshot,
 } from '@homeup/core';
 
@@ -30,6 +33,19 @@ export function readWidgetSnapshot(): WidgetTodaySnapshot | null {
     return parsed.version === WIDGET_SNAPSHOT_VERSION ? parsed : null;
   } catch {
     return null;
+  }
+}
+
+/**
+ * The theme preference the app mirrors into this same kv-store
+ * (lib/theme-context.tsx), so the widget draws in the picked theme. Missing
+ * or unreadable means "Match device".
+ */
+export function readWidgetThemePreference(): ThemePreference {
+  try {
+    return parseThemePreference(sqliteStorage.getItemSync(THEME_PREFERENCE_STORAGE_KEY));
+  } catch {
+    return parseThemePreference(null);
   }
 }
 

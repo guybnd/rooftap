@@ -3,7 +3,7 @@
 // component returning null throws there, and requestWidgetUpdate swallows the
 // error, so the widget silently stays blank. Build the real tree here.
 import { describe, expect, it, vi } from 'vitest';
-import type { WidgetSummary, WidgetTaskSnapshotItem } from '@homeup/core';
+import { THEME_FAMILIES, THEME_MODES, themePreference, type WidgetSummary, type WidgetTaskSnapshotItem } from '@homeup/core';
 
 vi.mock('react-native', () => ({
   Image: { resolveAssetSource: () => ({ uri: '' }) },
@@ -70,6 +70,26 @@ describe('TasksWidget tree', () => {
     const { light, dark } = tasksWidgetRepresentation(props) as { light: React.JSX.Element; dark: React.JSX.Element };
     expect(() => buildWidgetTree(light)).not.toThrow();
     expect(() => buildWidgetTree(dark)).not.toThrow();
+  });
+});
+
+describe('the picked theme', () => {
+  const prefs = THEME_FAMILIES.flatMap((f) => THEME_MODES.map((m) => themePreference(f.id, m)));
+  it.each(prefs)('builds both trees under %s', (pref) => {
+    const { light, dark } = tasksWidgetRepresentation(cases[0][1], pref) as { light: React.JSX.Element; dark: React.JSX.Element };
+    expect(() => buildWidgetTree(light)).not.toThrow();
+    expect(() => buildWidgetTree(dark)).not.toThrow();
+  });
+
+  it('follows the phone on Auto and pins a mode', () => {
+    // The root's ground: the `to` end of its glow gradient.
+    const backgroundOf = (el: React.JSX.Element) => JSON.stringify(buildWidgetTree(el)).match(/"to":"(#[0-9a-fA-F]{6})"/)?.[1];
+    const system = tasksWidgetRepresentation(cases[0][1], 'ember:auto') as { light: React.JSX.Element; dark: React.JSX.Element };
+    expect(backgroundOf(system.light)).toBeDefined();
+    expect(backgroundOf(system.light)).not.toBe(backgroundOf(system.dark));
+    const pinned = tasksWidgetRepresentation(cases[0][1], 'sorbet:light') as { light: React.JSX.Element; dark: React.JSX.Element };
+    expect(backgroundOf(pinned.light)).toBe(backgroundOf(pinned.dark));
+    expect(backgroundOf(pinned.light)).not.toBe(backgroundOf(system.light));
   });
 });
 

@@ -15,16 +15,16 @@ import { ThemeProvider, useThemeMaterial } from '@homeup/ui';
 import {
   DEFAULT_THEME_PREFERENCE,
   THEME_PREFERENCE_STORAGE_KEY,
-  isThemePreference,
+  parseThemePreference,
   resolveThemePreference,
   type ThemeId,
   type ThemePreference,
 } from '@homeup/core';
 import { nativeStoreEnvironment } from './legend/environment';
 
-// Hearth v2: what Appearance settings stores is a preference — "system"
-// (the default, follows the phone's light/dark setting via useColorScheme)
-// or a pinned ThemeId. `themeId` is what that resolves to right now.
+// Hearth v2: what Appearance settings stores is a preference: a theme family
+// plus Light, Dark or Auto (Auto follows the phone's light/dark setting via
+// useColorScheme). `themeId` is what that resolves to right now.
 interface AppThemeContextValue {
   preference: ThemePreference;
   themeId: ThemeId;
@@ -76,12 +76,13 @@ function NavigationThemeSync({ children }: { children: React.ReactNode }) {
 // kv-store and read in the useState initializer, so the first frame is
 // already the right theme (an async-only SecureStore read flashed the default
 // theme on every launch). SecureStore stays the fallback for a mirror that
-// failed to write. useColorScheme() is synchronous too, so "system" also
+// failed to write. useColorScheme() is synchronous too, so Auto also
 // paints correctly on the first frame.
 function readMirroredPreference(): ThemePreference | null {
   try {
+    // A value from before the Light/Dark/Auto switch parses too (core parseThemePreference).
     const stored = nativeStoreEnvironment.keyValue.getItem(THEME_PREFERENCE_STORAGE_KEY);
-    return isThemePreference(stored) ? stored : null;
+    return stored ? parseThemePreference(stored) : null;
   } catch {
     return null;
   }
@@ -104,9 +105,10 @@ export function AppThemeProvider({ children }: { children: React.ReactNode }) {
     if (mirrored) return;
     let cancelled = false;
     SecureStore.getItemAsync(THEME_PREFERENCE_STORAGE_KEY).then((stored) => {
-      if (cancelled || !isThemePreference(stored)) return;
-      setPreferenceState(stored);
-      mirrorPreference(stored);
+      if (cancelled || !stored) return;
+      const parsed = parseThemePreference(stored);
+      setPreferenceState(parsed);
+      mirrorPreference(parsed);
     });
     return () => {
       cancelled = true;

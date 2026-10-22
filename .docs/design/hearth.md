@@ -227,7 +227,7 @@ Hearth is composition; it must survive every theme untouched. Themes own hue, ra
 | **Sorbet** | `sorbet-day`, `sorbet-night` | The playful pastel pair (§10.3). Mango `--primary` with dark text, gummy section hues, a rainbow aura, a 1.75rem radius, Fredoka on the Hero. |
 | **Lavender** | `lavender-day`, `lavender-night` | The dreamy pastel pair (§10.3). Violet `--primary`, lilac and plum grounds, an opal aura, a 1.5rem radius, Fraunces on the Hero. |
 
-**The setting is a preference, not a theme** (`packages/core/src/theme-preference.ts`). The default preference `system` ("Match device") follows the phone or browser's light/dark setting and resolves to Ember Day or Ember Night; picking any theme pins it. Both platforms resolve through `resolveThemePreference`, so web and native never disagree. The preference is stored under `homeup-theme-pref`, a new key, so everyone starts on Match device.
+**The setting is a preference, not a theme** (`packages/core/src/theme-preference.ts`). Appearance lists the theme families (Ember, Sorbet, Lavender, E-Ink) and a Light / Dark / Auto switch above them. The mode applies to whichever family is picked: Auto follows the phone or browser's light/dark setting, Light and Dark pin a variant. E-Ink has one variant and wears it in every mode. The default is Ember on Auto. The preference is stored as one `family:mode` string under `homeup-theme-pref`; values saved before the switch (`system`, or a theme id) still parse. Both platforms and the Android widget resolve through `resolveThemePreference`, so they never disagree.
 
 ### 10.1 Axis Mundi (retired)
 

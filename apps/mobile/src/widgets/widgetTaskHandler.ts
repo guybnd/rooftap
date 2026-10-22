@@ -1,4 +1,3 @@
-import React from 'react';
 import { syncState } from '@legendapp/state';
 import type { WidgetTaskHandlerProps } from 'react-native-android-widget';
 import {
@@ -34,8 +33,8 @@ import { getSupabaseClient } from '../lib/supabase-client';
 import { readDataCacheSnapshot } from '../lib/legend/data-cache-snapshot';
 import { randomUUID } from '../lib/uuid';
 import { isWeatherStale } from './weather-cache';
-import { readWidgetSnapshot, writeWidgetSnapshot } from './widget-snapshot';
-import { TasksWidget } from './TasksWidget';
+import { readWidgetSnapshot, readWidgetThemePreference, writeWidgetSnapshot } from './widget-snapshot';
+import { tasksWidgetRepresentation } from './TasksWidget';
 
 const HYDRATION_TIMEOUT_MS = 4000;
 const HYDRATION_POLL_MS = 50;
@@ -56,11 +55,8 @@ function renderFromSnapshot(props: WidgetTaskHandlerProps, snapshot: WidgetToday
       weather: null,
     },
   };
-  // Hearth v2: an Ember Day and an Ember Night render; Android shows the one matching the phone's dark mode.
-  props.renderWidget({
-    light: React.createElement(TasksWidget, { ...widgetProps, scheme: 'light' }),
-    dark: React.createElement(TasksWidget, { ...widgetProps, scheme: 'dark' }),
-  });
+  // A light and a dark render in the app's picked theme; Android shows the one matching the phone's dark mode.
+  props.renderWidget(tasksWidgetRepresentation(widgetProps, readWidgetThemePreference()));
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

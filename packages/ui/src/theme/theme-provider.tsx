@@ -4,7 +4,7 @@
 //
 // Decision 2 (original plan, updated by HOUP-295 and Hearth v2): the static
 // fallback is Ember Day — `DEFAULT_THEME_ID` below is the ONE place it lives.
-// The app's real default is the "system" preference (apps/mobile's
+// The app's real default is the Ember on Auto preference (apps/mobile's
 // theme-context resolves it via @homeup/core's resolveThemePreference).
 // `themeId` is swappable per-render (src/lib/theme-context.tsx in apps/mobile
 // wraps this with a stateful/persisted theme switcher).

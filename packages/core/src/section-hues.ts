@@ -7,7 +7,8 @@
 // Plain hex, not oklch like THEME_TOKENS: React Native takes hex as is, and
 // web reads these through generated CSS variables (apps/web's
 // section-hue-css.ts), so there is no second copy to keep in step.
-import type { ColorScheme } from './theme-preference';
+import type { ThemeId } from './theme-colors';
+import { isLightTheme, isStillTheme, type ColorScheme } from './theme-preference';
 
 /**
  * A theme with its own section hue set instead of the Hearth light/dark
@@ -26,6 +27,13 @@ export type HueScheme = ColorScheme | 'ink' | HueSetId;
 
 export function isHueSetId(value: unknown): value is HueSetId {
   return typeof value === 'string' && (HUE_SET_IDS as readonly string[]).includes(value);
+}
+
+/** Which swatch set a theme wears: `ink` for e-paper, its own hue set, or light/dark by its ground. */
+export function themeHueScheme(themeId: ThemeId): HueScheme {
+  if (isStillTheme(themeId)) return 'ink';
+  if (isHueSetId(themeId)) return themeId;
+  return isLightTheme(themeId) ? 'light' : 'dark';
 }
 
 /** The ground a hue scheme sits on: light, dark, or the e-paper greys. */

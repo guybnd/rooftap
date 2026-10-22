@@ -4,16 +4,29 @@
 // ThemeProvider — see src/lib/theme-context.tsx) instead of rebuilding theming.
 import { View } from 'react-native';
 import { Gauge, Palette, Vibrate } from 'lucide-react-native';
-import { SYSTEM_THEME_IDS, THEME_TOKENS, setNavSpeed, useNavSpeed, type NavSpeed, type ThemeId } from '@homeup/core';
-import { resolveOklchToRgba } from '@homeup/ui';
+import { SegmentedControl, Text, resolveOklchToRgba } from '@homeup/ui';
+import {
+  THEME_TOKENS,
+  familyHasModes,
+  preferenceFamily,
+  preferenceMode,
+  setNavSpeed,
+  themeFamily,
+  themePreference,
+  useNavSpeed,
+  type NavSpeed,
+  type ThemeFamilyId,
+  type ThemeId,
+  type ThemeMode,
+} from '@homeup/core';
 import { useHapticsPref } from '@/lib/haptics-pref';
 import { useAppTheme } from '@/lib/theme-context';
-import { themeMeta, type ThemeMeta } from '@/lib/theme-meta';
+import { themeMeta, themeModes } from '@/lib/theme-meta';
 import { SettingsChoiceRow, SettingsInset, SettingsPanel, SettingsSwitchRow } from './settings-panel';
 
 // Preview tile: the theme's real ground with a dot of its accent (the same
-// THEME_TOKENS web reads), so Day and Night read apart at a glance where two
-// coral dots would not. "Match device" shows its two resolutions side by side.
+// THEME_TOKENS web reads). A family with two variants shows both side by
+// side, so the tile reads the same whatever the mode.
 function GroundHalf({ themeId }: { themeId: ThemeId }) {
   const colors = THEME_TOKENS[themeId].colors;
   return (
@@ -23,32 +36,43 @@ function GroundHalf({ themeId }: { themeId: ThemeId }) {
   );
 }
 
-function ThemePreview({ id }: { id: ThemeMeta['id'] }) {
+function ThemePreview({ id }: { id: ThemeFamilyId }) {
+  const { variants } = themeFamily(id);
   return (
     <View className="size-9 flex-row overflow-hidden rounded-[11px] border border-border">
-      {id === 'system' ? (
-        <>
-          <GroundHalf themeId={SYSTEM_THEME_IDS.light} />
-          <GroundHalf themeId={SYSTEM_THEME_IDS.dark} />
-        </>
-      ) : (
-        <GroundHalf themeId={id} />
-      )}
+      <GroundHalf themeId={variants.light} />
+      {variants.dark !== variants.light && <GroundHalf themeId={variants.dark} />}
     </View>
   );
 }
 
 export function AppearanceSettings() {
   const { preference, setPreference } = useAppTheme();
+  const family = preferenceFamily(preference);
+  const mode = preferenceMode(preference);
 
   return (
     <SettingsPanel icon={Palette} title="Appearance">
+      {/* H6: the control sits with the list it changes, above it. */}
+      <View className="gap-1.5">
+        <SegmentedControl<ThemeMode>
+          options={themeModes}
+          value={mode}
+          onChange={(next) => setPreference(themePreference(family, next))}
+          accessibilityLabel="Light or dark"
+        />
+        <Text className="px-1 text-caption text-muted-foreground">
+          {familyHasModes(family)
+            ? 'Auto follows your device. Light and Dark apply to any theme.'
+            : 'E-Ink has one look, so it stays light in every mode.'}
+        </Text>
+      </View>
       <SettingsInset accessibilityRole="radiogroup">
         {themeMeta.map((t) => (
           <SettingsChoiceRow
             key={t.id}
-            selected={t.id === preference}
-            onSelect={() => setPreference(t.id)}
+            selected={t.id === family}
+            onSelect={() => setPreference(themePreference(t.id, mode))}
             leading={<ThemePreview id={t.id} />}
             title={t.name}
             description={t.description}
