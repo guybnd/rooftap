@@ -43,6 +43,7 @@ import { memberLabel } from "@/app/setup/member-label";
 import { useLongPress } from "@/hooks/use-long-press";
 import { HouseholdTaskModal } from "@/app/tasks/household-task-modal";
 import { EventModal } from "@/app/calendar/event-modal";
+import { useRowContextMenu } from "@/components/ui/row-context-menu";
 import {
   eventCategoryClasses,
   householdTasks$,
@@ -70,6 +71,9 @@ import {
   hideViewingSuggestions,
   eventDetailLabel,
   daysBetweenISO,
+  mapsDirectionsUrl,
+  dialog,
+  type RowMenu,
 } from '@homeup/core';
 import { MonthDatePicker } from "@/components/month-date-picker";
 import type { Agent, Apartment, Appointment, GoogleCalendarEventWithAttribution, GroupEvent, HouseholdTask } from '@homeup/core';
@@ -751,6 +755,69 @@ function CalendarPage() {
     return "bg-secondary text-secondary-foreground border border-border hover:bg-secondary/80";
   };
 
+  // Hearth §13.7 "Row menu": right-click on any block in the grid. The blocks
+  // render inline, so the page holds one menu and each block names its own.
+  const blockMenuRef = useRef<RowMenu | null>(null);
+  const blockMenu = useRowContextMenu(() => blockMenuRef.current);
+  const openBlockMenu = (e: React.MouseEvent, menu: RowMenu) => {
+    blockMenuRef.current = menu;
+    if (blockMenu.onContextMenu(e)) e.stopPropagation();
+  };
+  const placeActions = (place: string | null | undefined, travelMode?: string | null): RowMenu["actions"] => {
+    const p = place?.trim();
+    if (!p) return [];
+    return [
+      { id: "directions", label: "Directions", group: "share", icon: "directions", run: () => window.open(mapsDirectionsUrl(p, travelMode), "_blank", "noopener") },
+      { id: "copy", label: "Copy address", group: "share", icon: "copy", run: () => void navigator.clipboard?.writeText(p) },
+    ];
+  };
+  const groupEventMenu = (ev: GroupEvent): RowMenu => ({
+    title: ev.title,
+    kind: "Event",
+    actions: [
+      { id: "open", label: "Open", group: "open", icon: "open", run: () => openEventDetail(ev) },
+      ...placeActions(ev.location, ev.travel_mode),
+      { id: "edit", label: "Edit event", group: "edit", icon: "edit", run: () => openEventDetail(ev) },
+      {
+        id: "delete",
+        label: "Delete",
+        group: "danger",
+        icon: "delete",
+        danger: true,
+        run: async () => {
+          if (await dialog.confirm({ title: `Delete "${ev.title}"?`, destructive: true })) deleteEventWithCost(ev);
+        },
+      },
+    ],
+  });
+  const googleEventMenu = (ev: GoogleCalendarEventWithAttribution): RowMenu => ({
+    title: ev.title || "Untitled event",
+    kind: "Calendar event",
+    actions: [
+      { id: "open", label: "Open", group: "open", icon: "open", run: () => openCalendarEventDetail(ev) },
+      !!ev.html_link && { id: "google", label: "Open in Google Calendar", group: "open", icon: "open", run: () => window.open(ev.html_link as string, "_blank", "noopener") },
+      ...placeActions(ev.location),
+    ],
+  });
+  const viewingMenu = (app: Appointment, apt: Apartment | undefined): RowMenu => ({
+    title: apt?.address ?? "Viewing",
+    kind: "Viewing",
+    actions: [
+      { id: "listing", label: "Open listing", group: "open", icon: "open", run: () => router.push(`/apartment/${app.apartment_id}`) },
+      ...placeActions(apt?.address),
+      {
+        id: "edit",
+        label: "Edit viewing",
+        group: "edit",
+        icon: "edit",
+        run: () => {
+          setEditAppointment(app);
+          setEditModalOpen(true);
+        },
+      },
+    ],
+  });
+
   const openCalendarEventDetail = (ev: GoogleCalendarEventWithAttribution) => {
     setSelectedCalendarEvent(ev);
     setImportApartmentPickerOpen(false);
@@ -1106,6 +1173,7 @@ function CalendarPage() {
                 e.stopPropagation();
                 openCalendarEventDetail(ev);
               }}
+              onContextMenu={(e) => openBlockMenu(e, googleEventMenu(ev))}
               onPointerDown={(e) => e.stopPropagation()}
               className={`absolute z-[15] px-1.5 py-1 rounded-md transition-colors cursor-pointer overflow-hidden ${getCalendarEventClasses(ev)}`}
               style={{
@@ -1133,6 +1201,7 @@ function CalendarPage() {
                 e.stopPropagation();
                 openEventDetail(ev);
               }}
+              onContextMenu={(e) => openBlockMenu(e, groupEventMenu(ev))}
               onPointerDown={(e) => e.stopPropagation()}
               // The category tints the block's fill and border; its text stays
               // foreground so it reads on both grounds (core's text-*-800 is
@@ -1172,11 +1241,7 @@ function CalendarPage() {
                 e.stopPropagation();
                 router.push(`/apartment/${app.apartment_id}`);
               }}
-              onContextMenu={(e) => {
-                e.preventDefault();
-                setEditAppointment(app);
-                setEditModalOpen(true);
-              }}
+              onContextMenu={(e) => openBlockMenu(e, viewingMenu(app, apt))}
               onTouchStart={(e) => {
                 e.stopPropagation();
                 cardTouchRef.current = {
@@ -1682,6 +1747,8 @@ function CalendarPage() {
           setDatePickerOpen(false);
         }}
       />
+
+      {blockMenu.menu}
 
       {/* Booking dialog. Modules: booking a viewing needs calendar and search (module-features.ts). */}
       <Dialog open={showViewings && bookingOpen} onOpenChange={setBookingOpen}>

@@ -12,6 +12,7 @@ import { navLinkClickHandler } from '@/lib/view-transitions';
 import { ListItem, ListItemContent, ListItemTitle, ListItemMeta, ListItemTrailing } from '@/components/ui/list-item';
 import { LeadingTile } from '@/components/ui/leading-tile';
 import { cn } from '@/lib/utils';
+import { useRowContextMenu } from '@/components/ui/row-context-menu';
 import { checklistTypeIcon, scheduledDateMeta, SCHEDULED_TONE_CLASS, InlineMeter } from './checklist-ui';
 
 export function ChecklistRow({
@@ -19,10 +20,16 @@ export function ChecklistRow({
   items,
   onStartAgain,
   onNavigate,
+  onSetDone,
+  onDelete,
 }: {
   list: Checklist;
   items: ChecklistTaskItem[];
   onStartAgain?: () => void;
+  /** Marks the list finished, or reopens a finished one. Omit and the menu leaves it out. */
+  onSetDone?: (done: boolean) => void;
+  /** Deletes the list (the caller confirms). Omit and the menu leaves it out. */
+  onDelete?: () => void;
   /** Runs before the descend navigation, e.g. the capture sheet closing itself. */
   onNavigate?: () => void;
 }) {
@@ -31,9 +38,39 @@ export function ChecklistRow({
   const router = useRouter();
   const href = `/checklists/${list.id}`;
   const date = list.scheduled_date && !list.completed_at ? scheduledDateMeta(list.scheduled_date) : null;
+  const open = () => {
+    onNavigate?.();
+    router.push(href);
+  };
+
+  // Hearth §13.7 "Row menu": right-click with a mouse.
+  const rowMenu = useRowContextMenu(() => ({
+    title: list.title,
+    kind: 'Checklist',
+    actions: [
+      { id: 'open', label: 'Open', group: 'open', icon: 'open', run: open },
+      onSetDone && {
+        id: 'done',
+        label: list.completed_at ? 'Reopen' : 'Mark complete',
+        group: 'state',
+        icon: list.completed_at ? 'undo' : 'done',
+        run: () => onSetDone(!list.completed_at),
+      },
+      onStartAgain && { id: 'again', label: 'Start again', group: 'state', icon: 'repeat', run: onStartAgain },
+      {
+        id: 'copy',
+        label: 'Copy link',
+        group: 'share',
+        icon: 'copy',
+        run: () => void navigator.clipboard?.writeText(new URL(href, window.location.href).toString()),
+      },
+      onDelete && { id: 'delete', label: 'Delete', group: 'danger', icon: 'delete', danger: true, run: onDelete },
+    ],
+  }));
 
   return (
-    <ListItem>
+    <ListItem onContextMenu={rowMenu.onContextMenu}>
+      {rowMenu.menu}
       {/* Hearth §8.1: descend — destination slides in from the right, this
           list draws back ~30% + dims. */}
       <Link

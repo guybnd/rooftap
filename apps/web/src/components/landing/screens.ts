@@ -145,3 +145,16 @@ export function ringAround(r: MarkRect, extra = 0): [number, number, number, num
   const b = Math.min(SCREEN_H - 3, y + h + pb + extra);
   return [l, t, right - l, b - t];
 }
+
+// The wide layout, shot at 1440 x 900 (`npm run landing:screens -w apps/web -- --desktop`).
+export const DESKTOP_SCREEN_IDS = ["home", "groceries-aisles", "costs", "tasks"] as const;
+export type DesktopScreenId = (typeof DESKTOP_SCREEN_IDS)[number];
+export const DESKTOP_W = 1440;
+export const DESKTOP_H = 900;
+export const DESKTOP_ALT: Record<DesktopScreenId, string> = {
+  home: "Home on a wide screen: today, the weather chart and the week board on the left, Groceries, Budget and Bills on the right",
+  "groceries-aisles": "Groceries on a wide screen: the aisles in two columns, with Running low and This trip beside them",
+  costs: "Costs on a wide screen: the year chart and the month on the left, the costs by category on the right",
+  tasks: "Tasks on a wide screen: this week and later in two columns",
+};
+export const desktopScreenSrc = (id: DesktopScreenId) => `landing/screens/desktop-${id}.webp`;

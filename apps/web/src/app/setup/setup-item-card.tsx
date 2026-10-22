@@ -52,6 +52,7 @@ import { StoreSelect } from '@/components/store-select';
 import { signedDocumentUrl, documentBucket, SIGNED_URL_TTL_SECONDS } from '@/lib/documents';
 import type { DocumentSource } from '@homeup/core';
 import { PopMenu, MenuItem, MenuLabel, MenuDivider } from './pop-menu';
+import { useRowContextMenu, withRowMenu } from '@/components/ui/row-context-menu';
 import { STATUS_FILL } from './setup-status';
 import { useLongPress as useSharedLongPress, HOLD_FILL_DELAY_MS } from '@/hooks/use-long-press';
 
@@ -239,6 +240,48 @@ export function SetupItemCard({
   };
 
   const longPress = useRowLongPress(() => onEdit(item));
+  // Hearth §13.7 "Row menu": right-click with a mouse; a touch hold still opens the editor.
+  const rowMenu = useRowContextMenu(() => ({
+    title: item.name,
+    kind: 'Home Setup item',
+    actions: [
+      !!item.url && { id: 'link', label: 'Open link', group: 'open', icon: 'open', run: openLink },
+      !!docLink && { id: 'doc', label: 'Open document', group: 'open', icon: 'open', run: () => void openDoc() },
+      {
+        id: 'status',
+        label: 'Status',
+        group: 'set',
+        icon: 'status',
+        value: SETUP_STATUS_LABEL[item.status as keyof typeof SETUP_STATUS_LABEL],
+        options: STATUS_ORDER.map((st) => ({
+          id: st,
+          label: SETUP_STATUS_LABEL[st],
+          swatch: STATUS_FILL[st],
+          checked: item.status === st,
+          run: () => handleStatusChange(st),
+        })),
+      },
+      {
+        id: 'priority',
+        label: 'Priority',
+        group: 'set',
+        icon: 'priority',
+        value: PRIORITY_LABEL[item.priority as keyof typeof PRIORITY_LABEL],
+        options: PRIORITY_ORDER.map((p) => ({ id: p, label: PRIORITY_LABEL[p], checked: item.priority === p, run: () => handlePriorityChange(p) })),
+      },
+      !!store?.url && { id: 'store', label: 'Visit store', group: 'share', icon: 'directions', run: () => window.open(store.url as string, '_blank', 'noopener,noreferrer') },
+      {
+        id: 'comments',
+        label: commentCount > 0 ? 'Comments' : 'Add a comment',
+        group: 'edit',
+        icon: 'comment',
+        value: commentCount > 0 ? String(commentCount) : undefined,
+        run: () => setShowComments(true),
+      },
+      { id: 'edit', label: 'Edit details', group: 'edit', icon: 'edit', run: () => onEdit(item) },
+      { id: 'delete', label: 'Delete', group: 'danger', icon: 'delete', danger: true, run: () => void handleDelete() },
+    ],
+  }));
 
   // Purchase-list framing (installed/needed), not a done/delete binary — the
   // leading checkbox and the Status entries in the overflow menu below remain
@@ -293,7 +336,7 @@ export function SetupItemCard({
       <ListItem
         expanded={showComments}
         holdProgress={longPress.progress}
-        {...longPress.handlers}
+        {...withRowMenu(longPress.handlers, rowMenu)}
         className={cn(
           'items-center gap-3 py-2.5 pr-3 pl-4 transition-colors select-none [-webkit-touch-callout:none]',
           'bg-card hover:bg-accent/50',
@@ -537,6 +580,7 @@ export function SetupItemCard({
         </ListItemTrailing>
       </ListItem>
       </SwipeActions>
+      {rowMenu.menu}
 
       {/* Comments section (expandable) — opened in place from the Comments portal chip */}
       {showComments && (

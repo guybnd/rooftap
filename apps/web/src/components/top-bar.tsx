@@ -2,24 +2,29 @@
 
 // Hearth §13 "Desktop shell": the wide-screen top bar. Every visible space
 // sits in one row as its glyph in its identity hue (H2 navigation exception),
-// each in a fixed slot so nothing shifts: the active space's name, or the
-// hovered one's, fades in underneath its glyph (globals.css .topbar-label).
+// each in a fixed slot so nothing shifts: the active space's name sits
+// underneath its glyph (globals.css .topbar-label), and a hovered or focused
+// one names itself in a tooltip under the bar (Guy, 2026-10-22: a second name
+// inside the bar ran into its neighbours).
 // The active slot rides the same gliding pebble as the phone tab bar (§8 "Tab
 // glide"), drawn horizontally on the page's Shift clock. Settings and the
 // profile menu sit at the right end. The roof + docks bottom right instead
 // (capture-buttons.tsx DockCaptureFab), and a space's own pages (Item Library,
 // Templates) show as a row of links under the bar (SectionSubnav).
 
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { LogOut, Settings, User } from "lucide-react";
-import { clearThreadCache, sectionHue, type Section } from "@homeup/core";
+import { clearThreadCache, openAssistantPopup, sectionHue, setAssistantCounts, useAssistantPending, type Section } from "@homeup/core";
+import { assistantApi } from "@/lib/assistant-client";
+import { PromptBadge } from "@/components/ui/prompt-badge";
 import { cn } from "@/lib/utils";
 import { sectionIcons } from "@/lib/section-icons";
 import { RooftapMark } from "@/components/brand/rooftap-mark";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { TabGlide, type TabGlideTarget } from "@/components/ui/tab-glide";
+import { TabDrip, type TabDripState } from "@/components/ui/tab-drip";
 import { PopMenu } from "@/app/setup/pop-menu";
 
 export interface TopBarUser {
@@ -54,6 +59,45 @@ export function TopBar({
   );
   const active = sections.some((s) => s.id === currentSectionId) && !onSettings ? currentSectionId : null;
   const [glideTarget, setGlideTarget] = useState<TabGlideTarget | null>(null);
+  // Changes waiting on your OK mark the Assistant's icon (Guy, 2026-10-22).
+  // The count comes from the status route: on load, when the tab comes back,
+  // and every few minutes; the chat refreshes it after each decision.
+  const hasAssistant = sections.some((s) => s.id === "assistant");
+  const assistantPending = useAssistantPending();
+  useEffect(() => {
+    if (!hasAssistant) return;
+    const refresh = () => {
+      if (document.visibilityState === "visible") void assistantApi.status().then(setAssistantCounts).catch(() => {});
+    };
+    refresh();
+    const timer = window.setInterval(refresh, 3 * 60_000);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [hasAssistant]);
+  const headerRef = useRef<HTMLElement>(null);
+  // The chip keeps its last place while it fades out.
+  const [tip, setTip] = useState<TabDripState>({ label: "", x: 0, y: 0, w: 0, h: 0, hue: "", on: false, seq: 0, slide: false });
+  const showTip = (label: string, hue: string, el: HTMLElement) => {
+    const header = headerRef.current;
+    if (!header) return;
+    const r = el.getBoundingClientRect();
+    const hr = header.getBoundingClientRect();
+    setTip((t) => ({
+      label,
+      hue,
+      x: r.left - hr.left,
+      y: r.top - hr.top,
+      w: r.width,
+      h: r.height,
+      on: true,
+      seq: t.on ? t.seq : t.seq + 1,
+      slide: t.on,
+    }));
+  };
+  const hideTip = () => setTip((t) => ({ ...t, on: false }));
   const keys = sections.map((s) => s.id).join(",");
   useLayoutEffect(() => {
     const bar = barRef.current;
@@ -80,13 +124,13 @@ export function TopBar({
   if (arrival.key !== active) setArrival({ key: active, popped: active });
 
   return (
-    <header className="desk-top relative z-30 hidden h-16 shrink-0 items-center gap-3 border-b border-border/60 bg-background/80 px-4 backdrop-blur-md md:flex lg:px-6">
+    <header ref={headerRef} className="desk-top relative z-30 hidden h-16 shrink-0 items-center gap-3 border-b border-border/60 bg-background/80 px-4 backdrop-blur-md md:flex lg:px-6">
       <Link
         href="/home"
         aria-label="Rooftap home"
         className="flex shrink-0 items-center gap-2 rounded-lg pr-1 text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <RooftapMark className="h-6 w-6" />
+        <RooftapMark spectrum className="h-6 w-6" />
         <span className="cap-inscription hidden font-heading text-[17px] font-semibold tracking-tight xl:inline">Rooftap</span>
       </Link>
 
@@ -97,6 +141,7 @@ export function TopBar({
             const Icon = sectionIcons[section.iconId];
             const current = section.id === active;
             const showBadge = overdueCount > 0 && section.navItems.some((i) => i.badge === "overdueTasks");
+            const waiting = section.id === "assistant" ? assistantPending : 0;
             return (
               <button
                 key={section.id}
@@ -104,8 +149,19 @@ export function TopBar({
                 type="button"
                 data-hue={sectionHue(section.id)}
                 aria-current={current ? "page" : undefined}
-                aria-label={showBadge ? `${section.label}, ${overdueCount} overdue` : section.label}
-                onClick={() => onSelect(section.id)}
+                aria-label={
+                  showBadge
+                    ? `${section.label}, ${overdueCount} overdue`
+                    : waiting > 0
+                      ? `${section.label}, ${waiting} waiting on your OK`
+                      : section.label
+                }
+                // The Assistant is a docked pop-up chat here, not a page (Guy, 2026-10-22).
+                onClick={() => (section.id === "assistant" && openAssistantPopup()) || onSelect(section.id)}
+                onPointerEnter={(e) => !current && e.pointerType === "mouse" && showTip(section.label, sectionHue(section.id), e.currentTarget)}
+                onPointerLeave={hideTip}
+                onFocus={(e) => !current && e.currentTarget.matches(":focus-visible") && showTip(section.label, sectionHue(section.id), e.currentTarget)}
+                onBlur={hideTip}
                 className={cn(
                   "topbar-tab relative flex h-12 w-11 shrink-0 flex-col items-center pt-1.5 transition-[scale] duration-[var(--motion-base)] ease-[var(--motion-ease-out)] focus-visible:outline-none active:scale-[0.94] lg:w-[52px]",
                   current ? "text-[var(--hue-glyph)]" : "text-muted-foreground"
@@ -123,21 +179,20 @@ export function TopBar({
                       {overdueCount}
                     </span>
                   )}
+                  {!showBadge && <PromptBadge count={waiting} className="-right-2.5 -top-1" />}
                 </span>
-                <span
-                  aria-hidden
-                  className={cn(
-                    "topbar-label pointer-events-none absolute left-1/2 top-[30px] -translate-x-1/2 whitespace-nowrap text-[11px] leading-none",
-                    current ? "font-semibold" : "font-medium text-foreground"
-                  )}
-                >
-                  {section.shortLabel}
-                </span>
+                {current && (
+                  <span aria-hidden className="topbar-label pointer-events-none absolute left-1/2 top-[30px] whitespace-nowrap text-[11px] font-semibold leading-none">
+                    {section.shortLabel}
+                  </span>
+                )}
               </button>
             );
           })}
         </div>
       </nav>
+      {/* The hovered space's name pops out under the bar, where it has room. */}
+      <TabDrip state={tip} />
 
       <div className="flex shrink-0 items-center gap-1">
         <Link

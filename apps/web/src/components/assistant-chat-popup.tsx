@@ -18,6 +18,7 @@ import {
   groupConversations,
   openAssistantPopup,
   onAssistantPopup,
+  useAssistantPending,
   useAssistantThread,
   useModules,
   type AssistantConversation,
@@ -26,11 +27,13 @@ import {
 import { cn } from "@/lib/utils";
 import { useDataCache } from "@/lib/data-cache";
 import { useKeyboardInset } from "@/hooks/use-keyboard-inset";
+import { useMediaQuery } from "@/lib/desktop-layout";
 import { assistantApi } from "@/lib/assistant-client";
 import { ThreadFooter, ThreadMessages } from "@/app/assistant/thread-body";
 import { ConversationRow } from "@/app/assistant/conversation-row";
 import { ListGroup } from "@/components/ui/list-item";
 import { Button } from "@/components/ui/button";
+import { PromptBadge } from "@/components/ui/prompt-badge";
 
 const popupToast = { error: (m: string) => toast.error(m), message: (m: string) => toast(m) };
 
@@ -147,6 +150,8 @@ function PopupThread({
 
   // The header's chats button swaps the thread for the list of chats; picking one opens it here.
   const [showChats, setShowChats] = useState(false);
+  // Changes waiting on your OK in your other chats (this one shows its own).
+  const pendingCount = Math.max(0, useAssistantPending() - (showChats ? 0 : conversation?.pending ?? 0));
   const pick = (id: string) => {
     setShowChats(false);
     if (id !== conversation?.id) openAssistantPopup({ conversationId: id });
@@ -169,9 +174,11 @@ function PopupThread({
           onClick={() => setShowChats((v) => !v)}
           aria-label={showChats ? "Back to this chat" : "Your chats"}
           aria-pressed={showChats}
-          className={cn(iconButton, showChats && "bg-muted text-foreground")}
+          className={cn(iconButton, "relative", showChats && "bg-muted text-foreground")}
         >
           <MessagesSquare className="h-4.5 w-4.5" />
+          {/* A change waits on your OK somewhere: the chats list shows where. */}
+          <PromptBadge count={pendingCount} className="right-0.5 top-0.5" />
         </button>
         <button type="button" onClick={onFresh} aria-label="New quick ask" className={iconButton}>
           <SquarePen className="h-4.5 w-4.5" />
@@ -218,7 +225,7 @@ const EARLIER_SHOWN = 6;
 function PopupChats({ currentId, onPick, onAll }: { currentId: string | null; onPick: (id: string) => void; onAll: () => void }) {
   const [list, setList] = useState(() => cachedConversations());
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
+  const reload = useCallback(() => {
     assistantApi
       .conversations()
       .then((rows) => {
@@ -227,6 +234,7 @@ function PopupChats({ currentId, onPick, onAll }: { currentId: string | null; on
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Could not load your chats."));
   }, []);
+  useEffect(reload, [reload]);
   const groups = groupConversations(list);
   const sections = [
     { label: "Chats", rows: [...(groups.household ? [groups.household] : []), ...groups.chats] },
@@ -244,7 +252,7 @@ function PopupChats({ currentId, onPick, onAll }: { currentId: string | null; on
           <p className="px-1 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">{section.label}</p>
           <ListGroup>
             {section.rows.map((c) => (
-              <ConversationRow key={c.id} conversation={c} current={c.id === currentId} onSelect={() => onPick(c.id)} />
+              <ConversationRow key={c.id} conversation={c} current={c.id === currentId} onSelect={() => onPick(c.id)} onChanged={reload} />
             ))}
           </ListGroup>
         </div>
@@ -268,6 +276,8 @@ function PopupSurface({ open, onMinimize, title, children }: { open: boolean; on
   const [mounted, setMounted] = useState(open);
   const [shown, setShown] = useState(false);
   const keyboardInset = useKeyboardInset(open);
+  // Docked (md and up) the page behind stays usable, so the card is not modal.
+  const docked = useMediaQuery("(min-width: 768px)");
 
   useEffect(() => {
     if (open) {
@@ -293,20 +303,22 @@ function PopupSurface({ open, onMinimize, title, children }: { open: boolean; on
 
   if (!mounted) return null;
   return createPortal(
-    <div className="fixed inset-0 z-50" role="presentation">
+    // On a desktop it docks like a Messenger chat: no scrim, the page behind
+    // stays usable, and it sits above the docked + (Hearth §13.7).
+    <div className="pointer-events-none fixed inset-0 z-50" role="presentation">
       <button
         type="button"
         aria-label="Minimise"
         tabIndex={-1}
         onClick={onMinimize}
         className={cn(
-          "absolute inset-0 bg-black/40 transition-opacity duration-[var(--motion-base)] md:bg-black/10",
+          "pointer-events-auto absolute inset-0 bg-black/40 transition-opacity duration-[var(--motion-base)] md:hidden",
           shown ? "opacity-100" : "opacity-0"
         )}
       />
       <div
         role="dialog"
-        aria-modal="true"
+        aria-modal={!docked}
         aria-label={title}
         onTransitionEnd={(e) => {
           // Tailwind v4's translate-* and scale-* set the translate and scale
@@ -318,8 +330,9 @@ function PopupSurface({ open, onMinimize, title, children }: { open: boolean; on
           maxHeight: keyboardInset > 0 ? `calc(100dvh - ${keyboardInset}px - 2rem)` : undefined,
         }}
         className={cn(
-          "absolute inset-x-2.5 bottom-[calc(env(safe-area-inset-bottom)+0.625rem)] flex h-[min(74dvh,680px)] flex-col overflow-hidden rounded-[28px] border border-border/60 bg-popover shadow-[var(--card-shadow)]",
-          "origin-bottom md:inset-x-auto md:bottom-6 md:right-6 md:w-[420px] md:origin-bottom-right",
+          "pointer-events-auto absolute inset-x-2.5 bottom-[calc(env(safe-area-inset-bottom)+0.625rem)] flex h-[min(74dvh,680px)] flex-col overflow-hidden rounded-[28px] border border-border/60 bg-popover shadow-[var(--card-shadow)]",
+          // Its own view-transition layer: a page change slides under it, not over it.
+          "origin-bottom md:inset-x-auto md:bottom-24 md:right-6 md:h-[min(78dvh,720px)] md:w-[420px] md:origin-bottom-right [view-transition-name:chat-dock]",
           "transition-[translate,scale,opacity] will-change-transform",
           shown
             ? "translate-y-0 scale-100 opacity-100 duration-[var(--motion-slow)] ease-[var(--motion-ease-out)]"

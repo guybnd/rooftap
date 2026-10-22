@@ -5,7 +5,11 @@
 // Native twin: apps/mobile/src/features/assistant/conversation-row.tsx.
 import Link from 'next/link';
 import { MessageCircle, Users, Zap } from 'lucide-react';
-import { conversationTitle, minutesLeft, sectionHue, timeAgo, type AssistantConversation } from '@homeup/core';
+import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
+import { conversationTitle, dialog, minutesLeft, sectionHue, timeAgo, type AssistantConversation } from '@homeup/core';
+import { assistantApi } from '@/lib/assistant-client';
+import { useRowContextMenu } from '@/components/ui/row-context-menu';
 import { LeadingTile } from '@/components/ui/leading-tile';
 import { ListItem, ListItemContent, ListItemLeading, ListItemMeta, ListItemTitle, ListItemTrailing } from '@/components/ui/list-item';
 import { Pill } from '@/components/ui/pill';
@@ -15,6 +19,7 @@ export function ConversationRow({
   href,
   onSelect,
   current,
+  onChanged,
 }: {
   conversation: AssistantConversation | null;
   /** A link (the Assistant space), or a tap handler (the pop-up's list). */
@@ -22,7 +27,10 @@ export function ConversationRow({
   onSelect?: () => void;
   /** The conversation already on show (the pop-up's list). */
   current?: boolean;
+  /** Reloads the list after a menu action (pin, mark read, delete). */
+  onChanged?: () => void;
 }) {
+  const router = useRouter();
   const kind = conversation?.kind ?? 'household';
   const Icon = kind === 'household' ? Users : kind === 'quick' ? Zap : MessageCircle;
   const left = conversation ? minutesLeft(conversation) : null;
@@ -68,8 +76,57 @@ export function ConversationRow({
         )}
     </>
   );
+  // Hearth §13.7 "Row menu": right-click with a mouse. The Household thread
+  // is everyone's, so it only opens and marks read.
+  const update = async (patch: { pinned?: boolean; deleted?: boolean }) => {
+    if (!conversation) return;
+    try {
+      await assistantApi.updateConversation(conversation.id, patch);
+      onChanged?.();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not change that chat.');
+    }
+  };
+  const rowMenu = useRowContextMenu(() =>
+    conversation
+      ? {
+          title: conversationTitle(conversation),
+          kind: kind === 'household' ? 'Household thread' : kind === 'quick' ? 'Quick ask' : 'Chat',
+          actions: [
+            { id: 'open', label: 'Open', group: 'open', icon: 'open', run: () => (onSelect ? onSelect() : href && router.push(href)) },
+            conversation.unread && {
+              id: 'read',
+              label: 'Mark as read',
+              group: 'state',
+              icon: 'done',
+              run: () => void assistantApi.markRead(conversation.id, { seen: true }).then(() => onChanged?.()),
+            },
+            kind !== 'household' && {
+              id: 'pin',
+              label: kind === 'quick' ? 'Keep as a chat' : conversation.pinned ? 'Unpin' : 'Pin',
+              group: 'set',
+              icon: 'star',
+              run: () => void update({ pinned: !conversation.pinned }),
+            },
+            kind !== 'household' && {
+              id: 'delete',
+              label: 'Delete',
+              group: 'danger',
+              icon: 'delete',
+              danger: true,
+              run: async () => {
+                if (await dialog.confirm({ title: `Delete "${conversationTitle(conversation)}"?`, destructive: true })) void update({ deleted: true });
+              },
+            },
+          ],
+        }
+      : null
+  );
+
   return (
-    <ListItem asChild>
+    <>
+    {rowMenu.menu}
+    <ListItem asChild onContextMenu={rowMenu.onContextMenu}>
       {href ? (
         <Link href={href}>{body}</Link>
       ) : (
@@ -78,5 +135,6 @@ export function ConversationRow({
         </button>
       )}
     </ListItem>
+    </>
   );
 }

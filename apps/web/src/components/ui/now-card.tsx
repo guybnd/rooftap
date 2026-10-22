@@ -52,9 +52,9 @@ export interface NowCardProps {
   onOpen?: () => void;
   onComplete?: () => void;
   /**
-   * How a finishable card is finished: the slide track (touch), or a plain
-   * "Mark done" button where a slide feels out of place (a desktop pointer,
-   * Hearth §13 "Desktop shell").
+   * How a finishable card is finished: the slide track (touch), or a round
+   * check beside the title where a slide feels out of place (a desktop
+   * pointer, Hearth §13 "Desktop shell").
    */
   finishAs?: "slide" | "button";
   className?: string;
@@ -92,6 +92,21 @@ function NowCardFrame({
   onToggleExpanded?: () => void;
 }) {
   const opensInPlace = body != null && !!onToggleExpanded;
+  // Desktop (Hearth §13.7): finishing is a round check beside the title, the
+  // same tick a task row has, grown to the card's scale. It fills success on
+  // hover so the colour arrives with intent, never as a resting accent.
+  const tick =
+    onComplete && finishAs === "button" ? (
+      <button
+        type="button"
+        onClick={onComplete}
+        aria-label="Mark done"
+        title="Mark done"
+        className="group/tick grid size-11 shrink-0 place-items-center rounded-full border-2 border-muted-foreground/40 text-transparent transition-[border-color,background-color,color,scale] duration-[var(--motion-fast)] hover:border-success hover:bg-success/15 hover:text-success focus-visible:border-success focus-visible:text-success focus-visible:outline-none active:scale-[0.92]"
+      >
+        <Check className="size-5" strokeWidth={2.5} />
+      </button>
+    ) : null;
   const head = (
     <>
       <LeadingTile sectionId={sectionId} Icon={Icon} />
@@ -108,6 +123,8 @@ function NowCardFrame({
       className={cn("flex flex-col gap-4 rounded-3xl border border-border/60 bg-card p-4 shadow-[var(--card-shadow)] md:p-5", className)}
     >
       <div {...headProps} className={cn("flex flex-col gap-2", headProps?.className)}>
+        <div className="flex items-center gap-3">
+        <div className="min-w-0 flex-1">
         {opensInPlace ? (
           <button
             type="button"
@@ -131,6 +148,9 @@ function NowCardFrame({
         ) : (
           <div className="flex items-center gap-3">{head}</div>
         )}
+        </div>
+        {tick}
+        </div>
         {meta != null && <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pl-[54px]">{meta}</div>}
         {progress && progress.total > 0 && (
           <div className="flex items-center gap-2.5 pl-[54px]">
@@ -144,19 +164,7 @@ function NowCardFrame({
       {opensInPlace && expanded && <div>{body}</div>}
       {/* mt-auto: in the pager every card is as tall as the tallest, and the
           track stays at the bottom edge where the thumb expects it. */}
-      {onComplete &&
-        (finishAs === "button" ? (
-          <button
-            type="button"
-            onClick={onComplete}
-            className="mt-auto inline-flex h-10 items-center gap-2 self-start rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground transition-[background-color,scale] hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card active:scale-[0.97]"
-          >
-            <Check className="h-4 w-4" />
-            Mark done
-          </button>
-        ) : (
-          <SlideToComplete onComplete={onComplete} className="mt-auto md:max-w-md" />
-        ))}
+      {onComplete && finishAs !== "button" && <SlideToComplete onComplete={onComplete} className="mt-auto md:max-w-md" />}
     </section>
   );
 }

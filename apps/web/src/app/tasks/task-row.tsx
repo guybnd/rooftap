@@ -48,7 +48,8 @@ import {
   ChevronLeft,
   Flag,
 } from 'lucide-react';
-import type { GroupMember, HouseholdTask, Checklist, ChecklistTaskItem, TaskSnooze } from '@homeup/core';
+import type { GroupMember, HouseholdTask, Checklist, ChecklistTaskItem, RowMenu, TaskSnooze } from '@homeup/core';
+import { useRowContextMenu, withRowMenu } from '@/components/ui/row-context-menu';
 import { daysBetweenISO, todayISO, addDaysISO } from './moving-tasks';
 import { EntityComments } from '@/components/entity-comments';
 import { TaskChecklistPanel } from './task-checklist-panel';
@@ -384,6 +385,148 @@ const PRIORITY_DOT: Record<string, string> = {
   medium: 'bg-warning',
   high: 'bg-destructive',
 };
+
+// Hearth §13.7 "Row menu": the right-click menu for a task, from the same
+// values and callbacks the hold sheet (TaskQuickMenuBody) gets, so the two
+// never offer different things. "Pick a date" hands over to the full sheet.
+interface TaskRowMenuInput {
+  title: string;
+  isDone: boolean;
+  dueDate: string | null;
+  recurrenceDays: number | null;
+  assignedTo: string | null;
+  priority: Priority;
+  groupMembers: GroupMember[];
+  memberProfiles: MemberProfiles;
+  commentCount: number;
+  hasChecklist: boolean;
+  onOpen?: () => void;
+  onToggleDone?: () => void;
+  onDateChange?: (v: string) => void;
+  onPickDate?: () => void;
+  onSnooze?: (dur: SnoozeDuration) => void;
+  onRecurrenceChange?: (days: number | null) => void;
+  onReassign?: (userId: string | null) => void;
+  onPriorityChange?: (priority: Priority) => void;
+  onAddChecklist?: () => void;
+  onOpenChecklist?: () => void;
+  onOpenComments?: () => void;
+  onAddDescription?: () => void;
+  onEdit: () => void;
+  onDelete?: () => void;
+}
+
+const PRIORITY_SWATCH: Record<Priority, string> = {
+  low: 'var(--muted-foreground)',
+  medium: 'var(--warning)',
+  high: 'var(--destructive)',
+};
+
+function taskRowMenu(t: TaskRowMenuInput): RowMenu {
+  const today = todayISO();
+  const days: { label: string; value: string }[] = [
+    { label: 'Today', value: today },
+    { label: 'Tomorrow', value: addDaysISO(today, 1) },
+    { label: 'Next week', value: addDaysISO(today, 7) },
+  ];
+  const onDate = t.onDateChange;
+  const onPick = t.onReassign;
+  const onRepeat = t.onRecurrenceChange;
+  const onPriority = t.onPriorityChange;
+  const onSnooze = t.onSnooze;
+  return {
+    title: t.title,
+    kind: 'Task',
+    actions: [
+      t.onOpen && { id: 'open', label: 'Open', group: 'open', icon: 'open', run: t.onOpen },
+      t.onToggleDone && {
+        id: 'done',
+        label: t.isDone ? 'Mark not done' : 'Mark done',
+        group: 'state',
+        icon: t.isDone ? 'undo' : 'done',
+        run: t.onToggleDone,
+      },
+      !t.isDone &&
+        onDate && {
+          id: 'due',
+          label: 'Due',
+          group: 'set',
+          icon: 'due',
+          value: t.dueDate ? dueMeta(t.dueDate).label : 'No date',
+          options: [
+            ...days.map((d) => ({ id: d.label, label: d.label, checked: t.dueDate === d.value, run: () => onDate(d.value) })),
+            { id: 'none', label: 'No date', checked: !t.dueDate, run: () => onDate('') },
+            ...(t.onPickDate ? [{ id: 'pick', label: 'Pick a date', run: t.onPickDate }] : []),
+          ],
+        },
+      !t.isDone &&
+        onSnooze && {
+          id: 'snooze',
+          label: 'Snooze',
+          group: 'set',
+          icon: 'snooze',
+          options: SNOOZE_PRESETS.map((o) => ({ id: o.dur, label: o.label, run: () => onSnooze(o.dur) })),
+        },
+      onRepeat && {
+        id: 'repeat',
+        label: 'Repeat',
+        group: 'set',
+        icon: 'repeat',
+        value: t.recurrenceDays ? recurrenceLabel(t.recurrenceDays) : undefined,
+        options: RECURRENCE_OPTIONS.map((o) => ({
+          id: String(o.days),
+          label: o.label,
+          checked: (t.recurrenceDays ?? null) === o.days,
+          run: () => onRepeat(o.days),
+        })),
+      },
+      onPick && {
+        id: 'assign',
+        label: 'Assign',
+        group: 'set',
+        icon: 'assign',
+        value: t.assignedTo ? memberLabel(t.assignedTo, t.memberProfiles) : undefined,
+        options: [
+          { id: 'none', label: 'Unassigned', checked: !t.assignedTo, run: () => onPick(null) },
+          ...t.groupMembers.map((m) => ({
+            id: m.user_id,
+            label: memberLabel(m.user_id, t.memberProfiles),
+            checked: t.assignedTo === m.user_id,
+            run: () => onPick(m.user_id),
+          })),
+        ],
+      },
+      onPriority && {
+        id: 'priority',
+        label: 'Priority',
+        group: 'set',
+        icon: 'priority',
+        value: PRIORITY_LABEL[t.priority],
+        options: (['high', 'medium', 'low'] as const).map((p) => ({
+          id: p,
+          label: p === 'medium' ? 'Medium' : PRIORITY_LABEL[p],
+          swatch: PRIORITY_SWATCH[p],
+          checked: t.priority === p,
+          run: () => onPriority(p),
+        })),
+      },
+      t.hasChecklist
+        ? t.onOpenChecklist && { id: 'checklist', label: 'Show checklist', group: 'edit', icon: 'checklist', run: t.onOpenChecklist }
+        : !t.isDone && t.onAddChecklist && { id: 'checklist', label: 'Add checklist', group: 'edit', icon: 'checklist', run: t.onAddChecklist },
+      t.onOpenComments && {
+        id: 'comments',
+        label: t.commentCount > 0 ? 'Comments' : 'Add a comment',
+        group: 'edit',
+        icon: 'comment',
+        value: t.commentCount > 0 ? String(t.commentCount) : undefined,
+        run: t.onOpenComments,
+      },
+      t.onAddDescription && { id: 'note', label: 'Add description', group: 'edit', icon: 'note', run: t.onAddDescription },
+      { id: 'edit', label: 'Edit details', group: 'edit', icon: 'edit', run: t.onEdit },
+      t.onDelete && { id: 'delete', label: 'Delete', group: 'danger', icon: 'delete', danger: true, run: t.onDelete },
+    ],
+  };
+}
 
 // FLUX-245: the shared quick-edit menu body — both TaskRow and HeroTaskRow
 // render this so their menus can't drift apart again (FLUX-239 unified only
@@ -977,6 +1120,36 @@ export function TaskRow({
 
   const longPress = useRowLongPress(() => setHoldMenuOpen(true));
   const priority = task.priority ?? 'medium';
+  const rowMenu = useRowContextMenu(() =>
+    taskRowMenu({
+      title: task.title,
+      isDone: task.done,
+      dueDate: task.due_date,
+      recurrenceDays: task.recurrence_days,
+      assignedTo: task.assigned_to,
+      priority,
+      groupMembers,
+      memberProfiles,
+      commentCount: commentCount.count,
+      hasChecklist: !!checklist,
+      onToggleDone: task.done ? () => onToggleComplete(task) : exit.startComplete,
+      onDateChange: (v) => handleFieldChange('due_date', v),
+      onPickDate: () => setHoldMenuOpen(true),
+      onSnooze: exit.startSnooze,
+      onRecurrenceChange: handleRecurrenceChange,
+      onReassign: (userId) => handleReassign(userId ?? ''),
+      onPriorityChange: handlePriorityChange,
+      onAddChecklist: checklistsOn ? handleAddChecklist : undefined,
+      onOpenChecklist: () => {
+        setAutoFocusChecklistAdd(false);
+        setShowChecklist(true);
+      },
+      onOpenComments: () => setShowComments(true),
+      onAddDescription: task.notes ? undefined : () => setEditingNotes(true),
+      onEdit: () => onEdit(task),
+      onDelete: () => onRequestDelete(task),
+    })
+  );
 
   // FLUX-1558: Comments + (when linked) Checklist portal chips — both
   // neutral-tone (open in place, Hearth PC5). Portal budget stays ≤3 (PC4).
@@ -1018,7 +1191,7 @@ export function TaskRow({
     <ListItem
       expanded={showComments || showChecklist}
       holdProgress={longPress.progress}
-      {...longPress.handlers}
+      {...withRowMenu(longPress.handlers, rowMenu)}
       className={cn(
         'items-start gap-3 py-2.5 pr-3 pl-4 transition-colors select-none [-webkit-touch-callout:none]',
         isDoneVisual && 'opacity-[0.55]',
@@ -1189,6 +1362,7 @@ export function TaskRow({
           onClose={() => setShowSnooze(false)}
         />
       )}
+      {rowMenu.menu}
 
       {/* Overflow menu — edit/delete + add-detail + recurrence. Hearth §6
           retires the inline ⋯ trigger (verbs live in tap/hold/swipe, not
@@ -1403,6 +1577,38 @@ export function HeroTaskRow({
       : {},
   );
 
+  const task = item.task;
+  const rowMenu = useRowContextMenu(() =>
+    taskRowMenu({
+      title: item.title,
+      isDone: item.done,
+      dueDate: item.dueDate,
+      recurrenceDays: task?.recurrence_days ?? null,
+      assignedTo: item.assignedTo,
+      priority: task?.priority ?? 'medium',
+      groupMembers,
+      memberProfiles: profiles,
+      commentCount: 0,
+      hasChecklist: !!checklist,
+      // A reminder for a module Tasks can't show opens its own screen.
+      onOpen: opensElsewhere ? () => onEdit(item) : undefined,
+      onToggleDone: item.done ? () => onToggle(item) : exit.startComplete,
+      onDateChange: !opensElsewhere && onUpdate ? (v) => onUpdate(item, { due_date: v || null }) : undefined,
+      onPickDate: opensElsewhere ? undefined : () => setHoldMenuOpen(true),
+      onSnooze: opensElsewhere ? undefined : exit.startSnooze,
+      onRecurrenceChange: onUpdate && task && !opensElsewhere ? (days) => onUpdate(item, { recurrence_days: days }) : undefined,
+      onReassign: onUpdate && task && !opensElsewhere ? (userId) => onUpdate(item, { assigned_to: userId || null }) : undefined,
+      onPriorityChange: onUpdate && task && !opensElsewhere ? (p) => onUpdate(item, { priority: p }) : undefined,
+      onAddChecklist: checklistsOn && !opensElsewhere ? handleAddChecklist : undefined,
+      onOpenChecklist: () => {
+        setAutoFocusChecklistAdd(false);
+        setShowChecklist(true);
+      },
+      onEdit: () => onEdit(item),
+      onDelete: onRequestDelete && task && !opensElsewhere ? () => onRequestDelete(item) : undefined,
+    })
+  );
+
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation(); // never navigate the enclosing tile
     if (consumeClick()) return; // long-press already opened the quick-edit menu
@@ -1434,7 +1640,7 @@ export function HeroTaskRow({
 
   const row = (
     <ListItem
-      {...handlers}
+      {...withRowMenu(handlers, rowMenu)}
       onClick={handleClick}
       expanded={showChecklist}
       holdProgress={showHold ? progress : undefined}
@@ -1536,6 +1742,7 @@ export function HeroTaskRow({
           onClose={() => setShowSnooze(false)}
         />
       )}
+      {rowMenu.menu}
 
       {/* FLUX-239: hero parity — hold opens this same quick-edit action-sheet the
           /tasks list uses (TaskRow above), instead of jumping straight to the full

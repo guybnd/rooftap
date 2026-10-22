@@ -12,6 +12,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Plus, ShoppingBag, Sparkles } from 'lucide-react';
 import {
+  dialog,
   shopperWants$,
   shopperPriceSnapshots$,
   shopperSearches$,
@@ -64,7 +65,13 @@ export default function ShopperPage() {
   const snaps$ = shopperPriceSnapshots$(group?.id);
   useReconnectSync(wants$);
   useReconnectSync(snaps$);
-  const { writeRow } = useStoreHelpers(wants$, currentUserId);
+  const { writeRow, patchRow: patchWant, softDeleteRow: deleteWant } = useStoreHelpers(wants$, currentUserId);
+  // The row menu's actions, as the item's own page does them.
+  const setBought = (want: ShopperWant, bought: boolean) =>
+    patchWant(want.id, bought ? { status: 'bought', bought_at: new Date().toISOString() } : { status: 'watching', bought_at: null });
+  const removeWant = async (want: ShopperWant) => {
+    if (await dialog.confirm({ title: `Delete "${want.title}"?`, destructive: true })) deleteWant(want.id);
+  };
   // HOUP-435: Scout needs a server with its tables.
   const scoutOn = useModules().server('shopper.scout');
   const searches$ = shopperSearches$(scoutOn ? group?.id : undefined);
@@ -207,7 +214,13 @@ export default function ShopperPage() {
           ) : (
             <WideList>
               {shown.map((row) => (
-                <WantRow key={row.want.id} row={row} currency={currency} />
+                <WantRow
+                  key={row.want.id}
+                  row={row}
+                  currency={currency}
+                  onSetBought={(bought) => setBought(row.want, bought)}
+                  onDelete={() => void removeWant(row.want)}
+                />
               ))}
             </WideList>
           )}

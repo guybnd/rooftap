@@ -16,10 +16,12 @@ import { navigate, setDemoRoute, useDemoRoute } from "./route";
 declare global {
   interface Window {
     __demo?: { scene: string; scenes: string[]; actions: unknown[]; marks: Record<string, string | [string, number]> };
+    /** A host page that cannot set the query (a sandboxed preview) passes it here instead. */
+    __demoSearch?: string;
   }
 }
 
-const params = new URLSearchParams(location.search);
+const params = new URLSearchParams(window.__demoSearch ?? location.search);
 const scene = findScene(params.get("scene"));
 /** The live demo: people tap through the pages, and their changes stay until they reload. */
 const live = params.has("live");

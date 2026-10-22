@@ -45,6 +45,10 @@ import {
   Wind,
   Sunset,
   CalendarDays,
+  Plus,
+  ListChecks,
+  ListTodo,
+  Wallet,
   type LucideIcon,
 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -67,6 +71,8 @@ import {
   ScreenBackground,
   TaskChecklistPanel,
   toast,
+  ActionMenu,
+  type ActionMenuAnchor,
   type NowCardPagerItem,
 } from '@homeup/ui';
 import {
@@ -167,6 +173,7 @@ import { SetupTile, HomeSearchTile, ShopperTile, AssistantTile } from '@/feature
 import { formatTime12h, localDateISO } from '@homeup/core';
 import { HeroTaskRow } from '@/features/tasks/task-row';
 import { HouseholdTaskModal } from '@/features/tasks/household-task-modal';
+import { CostModal } from '@/features/costs/cost-modal';
 import { EventModal } from '@/features/calendar/event-modal';
 import { EventRowGestures } from '@/features/home/event-row-gestures';
 import { useHomeHiddenEvents } from '@/lib/home-hidden-events';
@@ -296,11 +303,26 @@ function compareHeroItems(a: HeroItem, b: HeroItem, isToday: boolean): number {
 // Hearth v2 (Feed): the feed's day header (core groupFeedItems/feedDayLabel)
 // — mirrors web's FeedHeader. Earlier is the overdue pile, so it reads in
 // the danger hue (status hue as text, H2).
-function FeedHeader({ groupKey, label }: { groupKey: string; label: string }) {
+// A day's header also carries a small + (web's FeedHeader twin): it opens
+// the add menu for that day, anchored to the button.
+function FeedHeader({ groupKey, label, onAdd }: { groupKey: string; label: string; onAdd?: (anchor: ActionMenuAnchor) => void }) {
+  const ref = React.useRef<View>(null);
   return (
-    <Text className={`px-1 pt-1 text-micro-label uppercase ${groupKey === 'earlier' ? 'text-destructive' : 'text-muted-foreground'}`}>
-      {label}
-    </Text>
+    <View className="flex-row items-center justify-between px-1 pt-1">
+      <Text className={`text-micro-label uppercase ${groupKey === 'earlier' ? 'text-destructive' : 'text-muted-foreground'}`}>{label}</Text>
+      {onAdd && (
+        <Pressable
+          ref={ref}
+          accessibilityRole="button"
+          accessibilityLabel={`Add to ${label}`}
+          hitSlop={12}
+          onPress={() => ref.current?.measureInWindow((x, y, width, height) => onAdd({ x, y, width, height }))}
+          className="-my-1 h-7 w-7 items-center justify-center rounded-[9px] active:bg-card"
+        >
+          <Plus size={16} className="text-muted-foreground" />
+        </Pressable>
+      )}
+    </View>
   );
 }
 
@@ -441,6 +463,7 @@ export default function HomeSectionScreen() {
   const homeEvents = React.useMemo(() => eventsList.filter((e) => !hiddenEventIds.has(e.id)), [eventsList, hiddenEventIds]);
   const appointmentsList = use$(() => Object.values(appts$.get() ?? {}).filter((a): a is Appointment => !!a && !a.deleted));
   const apartmentsList = use$(() => Object.values(apts$.get() ?? {}).filter((a): a is Apartment => !!a && !a.deleted));
+  const { writeRow: writeCost } = useStoreHelpers(costs$, currentUserId);
   const costItemsList = use$(() => Object.values(costs$.get() ?? {}).filter((c): c is CostItem => !!c && !c.deleted));
   const setupItemsList = use$(() => Object.values(setup$.get() ?? {}).filter((s): s is SetupItem => !!s && !s.deleted));
   const groceryList = use$(() => Object.values(groceries$.get() ?? {}).filter((g): g is GroceryItem => !!g && !g.deleted));
@@ -671,6 +694,24 @@ export default function HomeSectionScreen() {
   const [typeFilter, setTypeFilter] = React.useState<TypeFilter>('all');
   const [mineOnly, setMineOnly] = React.useState(false);
   const [modalOpen, setModalOpen] = React.useState(false);
+  // Add to a day (the + on a feed day header): a to-do, event, dated
+  // checklist or cost, each opened already set to that day.
+  const [addOn, setAddOn] = React.useState<{ anchor: ActionMenuAnchor; date: string } | null>(null);
+  const [newTaskDue, setNewTaskDue] = React.useState<string | undefined>();
+  const [newEventOn, setNewEventOn] = React.useState<string | undefined>();
+  const [newCostOn, setNewCostOn] = React.useState<string | null>(null);
+  const addOnDayItems = (date: string) => [
+    ...(householdVisible
+      ? [{ key: 'todo', label: 'To-do', Icon: ListChecks, onPress: () => { setEditingTask(undefined); setNewTaskDue(date); setModalOpen(true); } }]
+      : []),
+    ...(eventsVisible
+      ? [{ key: 'event', label: 'Calendar event', Icon: CalendarDays, onPress: () => { setEditingEvent(null); setNewEventOn(date); setEventModalOpen(true); } }]
+      : []),
+    ...(!hidden.includes('checklists')
+      ? [{ key: 'checklist', label: 'Checklist', Icon: ListTodo, onPress: () => router.push(`/checklists/new?date=${date}` as Href) }]
+      : []),
+    ...(costsVisible ? [{ key: 'cost', label: 'Cost', Icon: Wallet, onPress: () => setNewCostOn(date) }] : []),
+  ];
   const [editingTask, setEditingTask] = React.useState<HouseholdTask | undefined>();
   // Hearth v2: the shortcut Home is filtered to (its Space, expanded; tap again for the dashboard).
   const [lensKey, setLens] = React.useState<HomeLensKey | null>(null);
@@ -1281,7 +1322,11 @@ export default function HomeSectionScreen() {
             ) : (
               feedGroups.map((feedGroup) => (
                 <View key={feedGroup.key} className="gap-1.5">
-                  <FeedHeader groupKey={feedGroup.key} label={feedGroup.label} />
+                  <FeedHeader
+                    groupKey={feedGroup.key}
+                    label={feedGroup.label}
+                    onAdd={/^\d{4}-\d{2}-\d{2}$/.test(feedGroup.key) && addOnDayItems(feedGroup.key).length ? (anchor) => setAddOn({ anchor, date: feedGroup.key }) : undefined}
+                  />
                   <Card className="gap-0 rounded-3xl py-0">
                     <View className="px-4">
                       <DividedRows>{feedGroup.items.map(renderHeroRow)}</DividedRows>
@@ -1360,8 +1405,30 @@ export default function HomeSectionScreen() {
           onCountdownFlush={flushCountdown}
         />
   
+        <ActionMenu
+          anchor={addOn?.anchor ?? null}
+          onClose={() => setAddOn(null)}
+          items={addOn ? addOnDayItems(addOn.date).map((it) => ({ ...it, onPress: () => { setAddOn(null); it.onPress(); } })) : []}
+        />
+
+        {newCostOn && (
+          <CostModal
+            key={newCostOn}
+            open
+            groupId={group.id}
+            currentUserId={currentUserId}
+            defaultStartDate={newCostOn}
+            onClose={() => setNewCostOn(null)}
+            onSave={(item) => {
+              writeCost(item);
+              setNewCostOn(null);
+            }}
+          />
+        )}
+
         <HouseholdTaskModal
-          key={editingTask?.id ?? 'new'}
+          key={editingTask?.id ?? `new-${newTaskDue ?? ''}`}
+          initialDueDate={editingTask ? undefined : newTaskDue}
           open={modalOpen}
           task={editingTask}
           groupId={group.id}
@@ -1378,13 +1445,17 @@ export default function HomeSectionScreen() {
           // exit animation finishes.
           onClose={() => {
             setModalOpen(false);
-            setTimeout(() => setEditingTask(undefined), MOTION_DURATIONS_MS.exit);
+            setTimeout(() => {
+              setEditingTask(undefined);
+              setNewTaskDue(undefined);
+            }, MOTION_DURATIONS_MS.exit);
           }}
           onSave={(saved) => {
             setModalOpen(false);
             setTimeout(() => {
               writeRow(saved);
               setEditingTask(undefined);
+              setNewTaskDue(undefined);
             }, MOTION_DURATIONS_MS.exit);
           }}
           onDelete={(taskId) => {
@@ -1400,7 +1471,8 @@ export default function HomeSectionScreen() {
 
         {eventsVisible && (
           <EventModal
-            key={editingEvent?.id ?? 'no-event'}
+            key={editingEvent?.id ?? `no-event-${newEventOn ?? ''}`}
+            defaultDate={editingEvent ? undefined : newEventOn}
             open={eventModalOpen}
             event={editingEvent ?? undefined}
             groupId={group.id}
@@ -1408,7 +1480,10 @@ export default function HomeSectionScreen() {
             costCents={linkedCostOf(editingEvent)?.amount ?? null}
             onClose={() => {
               setEventModalOpen(false);
-              setTimeout(() => setEditingEvent(null), MOTION_DURATIONS_MS.exit);
+              setTimeout(() => {
+                setEditingEvent(null);
+                setNewEventOn(undefined);
+              }, MOTION_DURATIONS_MS.exit);
             }}
             onSave={(saved, costCents) => {
               setEventModalOpen(false);

@@ -39,6 +39,18 @@ export interface WeatherData {
     precipitationProbability: number[];
   };
   /**
+   * The next 48 hours, for the wide-screen ribbon that scrolls ahead. A
+   * separate field so an app that reads `ahead` keeps getting 12 hours.
+   * Soft-optional like `ahead`.
+   */
+  aheadLong?: {
+    times: string[];
+    tempC: number[];
+    precipitationProbability: number[];
+    /** WMO codes per hour, for the hour readout. */
+    weatherCode?: number[];
+  };
+  /**
    * The week ahead, one entry per local day starting today, for the week
    * board's day headers on wide screens. Soft-optional: a server that
    * predates it leaves the headers without weather.
@@ -213,6 +225,12 @@ export interface RibbonHour {
   hasItem: boolean;
   /** Sunset falls in this hour. */
   isSunset: boolean;
+  /** The hour in full for a readout, e.g. "7 PM" ("Fri 1 AM" past today). */
+  fullLabel: string;
+  /** The first hour of a new day: its short weekday, e.g. "Fri". */
+  dayStart: string | null;
+  /** WMO code for the hour, when the series has one. */
+  weatherCode: number | null;
 }
 
 function shortHourLabel(hour: number): string {
@@ -226,19 +244,26 @@ function shortHourLabel(hour: number): string {
  * items to dot, as "YYYY-MM-DDTHH:MM" local strings. Returns [] when the
  * payload has no `ahead` series, so callers can hide the ribbon.
  */
-export function buildDayRibbon(weather: WeatherData, itemTimes: string[] = []): RibbonHour[] {
-  const ahead = weather.ahead;
+export function buildDayRibbon(weather: WeatherData, itemTimes: string[] = [], opts: { long?: boolean } = {}): RibbonHour[] {
+  const ahead = (opts.long && weather.aheadLong) || weather.ahead;
   if (!ahead || ahead.times.length === 0) return [];
+  const codes: number[] | undefined = opts.long && weather.aheadLong ? weather.aheadLong.weatherCode : undefined;
   const itemHours = new Set(itemTimes.map((t) => t.slice(0, 13)));
   const sunsetHour = weather.sunset ? weather.sunset.slice(0, 13) : null;
+  const firstDay = ahead.times[0].slice(0, 10);
   return ahead.times.map((time, i) => {
     const key = time.slice(0, 13);
+    const hour = Number(time.slice(11, 13));
     const temp = ahead.tempC[i];
     const prob = ahead.precipitationProbability[i];
     const probability = typeof prob === 'number' ? Math.max(0, Math.min(100, prob)) : 0;
+    const code = codes?.[i];
+    const weekday = WEEKDAY_SHORT[new Date(`${time.slice(0, 10)}T12:00`).getDay()];
+    const h12 = hour % 12 === 0 ? 12 : hour % 12;
+    const clock = `${h12} ${hour < 12 ? 'AM' : 'PM'}`;
     return {
       key,
-      label: i === 0 ? 'Now' : shortHourLabel(Number(time.slice(11, 13))),
+      label: i === 0 ? 'Now' : shortHourLabel(hour),
       isNow: i === 0,
       tempC: typeof temp === 'number' ? Math.round(temp) : null,
       showTemp: i % 3 === 0 && typeof temp === 'number',
@@ -246,9 +271,14 @@ export function buildDayRibbon(weather: WeatherData, itemTimes: string[] = []): 
       rainLikely: probability >= RIBBON_RAIN_LIKELY_PCT,
       hasItem: itemHours.has(key),
       isSunset: key === sunsetHour,
+      fullLabel: i === 0 ? 'Now' : time.slice(0, 10) === firstDay ? clock : `${weekday} ${clock}`,
+      dayStart: i > 0 && hour === 0 ? weekday : null,
+      weatherCode: typeof code === 'number' ? code : null,
     };
   });
 }
+
+const WEEKDAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 /**
  * One short line for the weather block beside the Hero: what the sky is about

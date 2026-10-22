@@ -47,6 +47,7 @@
     "pdfjs-dist": "^5.7.284",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-grid-layout": "^2.3.0",
     "react-map-gl": "^8.1.1",
     "react-native-web": "~0.21.0",
     "serwist": "^9.5.11",

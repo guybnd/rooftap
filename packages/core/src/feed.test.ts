@@ -275,6 +275,16 @@ describe("weekBoardColumns", () => {
     expect(cols[0].date).toBeNull();
   });
 
+  it("folds a run of empty days into one quiet column", () => {
+    const cols = weekBoardColumns([item({ id: "d" }), item({ id: "a", dueDate: "2026-10-20" })], TODAY, "2026-12-31", 7, { collapseQuiet: true });
+    expect(cols.map((c) => [c.key, c.label, c.quiet?.days ?? null])).toEqual([
+      [TODAY, "Today", null],
+      ["2026-10-19", "Tomorrow", null],
+      ["2026-10-20", "Tuesday", null],
+      ["quiet:2026-10-21", "Wed 21 to Sat 24", 4],
+    ]);
+  });
+
   it("stops at the range's end", () => {
     const cols = weekBoardColumns([item({ id: "d" })], TODAY, TODAY);
     expect(cols.map((c) => c.key)).toEqual([TODAY]);

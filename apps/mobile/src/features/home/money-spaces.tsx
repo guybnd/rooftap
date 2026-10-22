@@ -31,16 +31,16 @@ import { deriveBudgetPulseTone } from './budget-tile';
 import { TileHeader } from './section-tiles';
 
 const CATEGORY_BAR_FILL: Record<CostCategory | 'rest', string> = {
-  rent: 'bg-blue-500',
-  utilities: 'bg-yellow-400',
-  internet: 'bg-cyan-400',
-  insurance: 'bg-violet-500',
-  subscription: 'bg-pink-500',
-  grocery_estimate: 'bg-lime-500',
-  moving: 'bg-orange-400',
-  purchase: 'bg-fuchsia-500',
-  outing: 'bg-sky-300',
-  other: 'bg-slate-500',
+  rent: 'bg-blue-300',
+  utilities: 'bg-amber-200',
+  internet: 'bg-cyan-300',
+  insurance: 'bg-violet-300',
+  subscription: 'bg-pink-300',
+  grocery_estimate: 'bg-lime-200',
+  moving: 'bg-orange-300',
+  purchase: 'bg-fuchsia-300',
+  outing: 'bg-sky-200',
+  other: 'bg-slate-400',
   rest: 'bg-foreground/45',
 };
 

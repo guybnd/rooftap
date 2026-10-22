@@ -8,7 +8,7 @@ import * as React from 'react';
 import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { use$ } from '@legendapp/state/react';
-import { useRouter, type Href } from 'expo-router';
+import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import { ArrowLeft, CalendarDays, ChevronRight, Plus } from 'lucide-react-native';
 import {
   Text,
@@ -102,8 +102,11 @@ export default function NewChecklistScreen() {
 
   const [title, setTitle] = React.useState('');
   const [type, setType] = React.useState<ChecklistType>('plain');
-  const [dated, setDated] = React.useState(false);
-  const [date, setDate] = React.useState('');
+  // ?date=YYYY-MM-DD (Home's "add to this day") starts it dated.
+  const { date: dateParam } = useLocalSearchParams<{ date?: string }>();
+  const presetDate = typeof dateParam === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : '';
+  const [dated, setDated] = React.useState(!!presetDate);
+  const [date, setDate] = React.useState(presetDate);
 
   const linkTaskIfDated = (checklist: Checklist) => {
     if (!syncTask || !checklist.scheduled_date) return;

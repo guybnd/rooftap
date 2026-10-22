@@ -24,12 +24,17 @@ import {
   todayISO,
   DEAL_META,
   hitTarget,
+  openAssistantPopup,
+  setAssistantCounts,
 } from '@homeup/core';
 import { SegmentedBar } from '@/app/setup/segmented-bar';
 import { assistantApi } from '@/lib/assistant-client';
+import { useDesktopShell } from '@/lib/desktop-layout';
 import { HubTile, TileHeader, formatTime12h, pad2 } from './hub-shared';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { WantRow } from '@/app/shopper/want-row';
+import { Sparkline } from '@/app/shopper/price-chart';
 
 // ── Home Setup ──────────────────────────────────────────────────────────────────
 export function SetupTile({ group }: { group: Group }) {
@@ -179,16 +184,20 @@ export function ShopperTile({ group, expanded = false }: { group: Group; expande
             </span>
           </div>
           {top && top.want.best_cents != null && (
-            <div className="min-w-0 text-sm">
-              <div className="truncate text-foreground">{top.want.title}</div>
-              <div className="text-xs text-muted-foreground tabular-nums">
-                <span className="text-success">
-                  {hitTarget(top.want) ? 'Hit target' : top.verdict.rating ? DEAL_META[top.verdict.rating].label : ''}
-                </span>
-                {' · '}
-                {formatMoney(top.want.best_cents, { currency })}
-                {top.want.best_store ? ` at ${top.want.best_store}` : ''}
+            <div className="flex items-end gap-3 text-sm">
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-foreground">{top.want.title}</div>
+                <div className="text-xs text-muted-foreground tabular-nums">
+                  <span className="text-success">
+                    {hitTarget(top.want) ? 'Hit target' : top.verdict.rating ? DEAL_META[top.verdict.rating].label : ''}
+                  </span>
+                  {' · '}
+                  {formatMoney(top.want.best_cents, { currency })}
+                  {top.want.best_store ? ` at ${top.want.best_store}` : ''}
+                </div>
               </div>
+              {/* The same price trend the Shopper row carries. */}
+              <Sparkline series={top.trend} rating={top.verdict.rating} />
             </div>
           )}
         </div>
@@ -200,12 +209,17 @@ export function ShopperTile({ group, expanded = false }: { group: Group; expande
 // ── Assistant (HOUP-443) ────────────────────────────────────────────────────────
 // Only what waits on you: changes the assistant proposed that need your OK.
 export function AssistantTile() {
+  const shell = useDesktopShell();
+  const router = useRouter();
   const [pending, setPending] = useState<number | null>(null);
   useEffect(() => {
     let live = true;
     assistantApi
       .status()
-      .then((s) => live && setPending(s.access === 'none' || !s.ready ? null : s.pending))
+      .then((s) => {
+        setAssistantCounts(s);
+        if (live) setPending(s.access === 'none' || !s.ready ? null : s.pending);
+      })
       .catch(() => {});
     return () => {
       live = false;
@@ -213,7 +227,12 @@ export function AssistantTile() {
   }, []);
 
   return (
-    <HubTile href="/assistant" ariaLabel="Assistant">
+    // Under the desktop top bar the tile opens the docked pop-up chat (Hearth §13.7).
+    <HubTile
+      href="/assistant"
+      onActivate={shell ? () => openAssistantPopup() || router.push('/assistant') : undefined}
+      ariaLabel="Assistant"
+    >
       <TileHeader sectionId="assistant" Icon={Sparkles} title="Assistant" />
       {pending ? (
         <div className="flex items-baseline gap-2">

@@ -16,6 +16,7 @@ import {
   type RecipeIngredient,
 } from '@homeup/core';
 import { navLinkClickHandler } from '@/lib/view-transitions';
+import { useRowContextMenu } from '@/components/ui/row-context-menu';
 import { ListItem, ListItemLeading, ListItemContent, ListItemTitle, ListItemMeta } from '@/components/ui/list-item';
 
 /** H3: ingredients-you-have progress, scoped to the row (~52px x 3px). */
@@ -40,6 +41,8 @@ export function RecipeRow({
   groceryItems,
   groceriesLinked,
   onNavigate,
+  onEdit,
+  onDelete,
 }: {
   recipe: Recipe;
   ingredients: RecipeIngredient[];
@@ -48,6 +51,9 @@ export function RecipeRow({
   groceriesLinked: boolean;
   /** Runs before the descend navigation, e.g. the capture sheet closing itself. */
   onNavigate?: () => void;
+  /** The row menu's Edit and Delete; omitted ones are left out. */
+  onEdit?: () => void;
+  onDelete?: () => void;
 }) {
   const meta = methodMeta(recipe.method);
   const { have, total } = recipeHaveCount(ingredients, groceryItems);
@@ -58,8 +64,32 @@ export function RecipeRow({
   // method when one is set, then the cuisines.
   const kind = [...(recipe.method ? [meta.label] : []), ...recipeCuisines(recipe).map(capitalize)].join(', ');
 
+  // Hearth §13.7 "Row menu": right-click with a mouse.
+  const rowMenu = useRowContextMenu(() => ({
+    title: recipe.title,
+    kind: 'Recipe',
+    actions: [
+      {
+        id: 'open',
+        label: 'Open',
+        group: 'open',
+        icon: 'open',
+        run: () => {
+          onNavigate?.();
+          router.push(href);
+        },
+      },
+      { id: 'copy', label: 'Copy link', group: 'share', icon: 'copy', run: () => void navigator.clipboard?.writeText(new URL(href, window.location.href).toString()) },
+      onEdit && { id: 'edit', label: 'Edit recipe', group: 'edit', icon: 'edit', run: onEdit },
+      onDelete && { id: 'delete', label: 'Delete', group: 'danger', icon: 'delete', danger: true, run: onDelete },
+    ],
+  }));
+
   return (
-    <ListItem asChild>
+    <>
+    {/* The menu sits beside the row, not in it: a click inside it must not reach the link. */}
+    {rowMenu.menu}
+    <ListItem asChild onContextMenu={rowMenu.onContextMenu}>
       {/* Hearth §8.1: descend — destination slides in from the right, this
           list draws back ~30% + dims. */}
       <Link
@@ -92,6 +122,7 @@ export function RecipeRow({
         </ListItemContent>
       </Link>
     </ListItem>
+    </>
   );
 }
 

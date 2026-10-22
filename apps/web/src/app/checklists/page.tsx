@@ -13,7 +13,7 @@ import { useRouter } from 'next/navigation';
 import { use$ } from '@legendapp/state/react';
 import { Plus, ListChecks } from 'lucide-react';
 import { useDataCache } from '@/lib/data-cache';
-import { checklists$, checklistItems$, householdTasks$, useReconnectSync, useStoreHelpers, useStoreLoaded, useModules } from '@homeup/core';
+import { dialog, checklists$, checklistItems$, householdTasks$, useReconnectSync, useStoreHelpers, useStoreLoaded, useModules } from '@homeup/core';
 import type { Checklist, ChecklistTaskItem } from '@homeup/core';
 import {
   cloneRun,
@@ -40,9 +40,20 @@ export default function ChecklistsPage() {
   useReconnectSync(items$);
   useReconnectSync(tasks$);
 
-  const { writeRow: writeList, patchRow: patchList } = useStoreHelpers(lists$, currentUserId);
+  const { writeRow: writeList, patchRow: patchList, softDeleteRow: softDeleteList } = useStoreHelpers(lists$, currentUserId);
   const { writeRow: writeItem } = useStoreHelpers(items$, currentUserId);
-  const { writeRow: writeTask } = useStoreHelpers(tasks$, currentUserId);
+  const { writeRow: writeTask, softDeleteRow: softDeleteTask } = useStoreHelpers(tasks$, currentUserId);
+
+  // The row menu's Delete, as the list's own page does it: confirm, then take
+  // the linked to-do with it (logged costs stay as real spend).
+  const deleteList = async (list: Checklist) => {
+    const confirmed = await dialog.confirm({ title: `Delete "${list.title}"?`, message: 'This removes the whole list.', destructive: true });
+    if (!confirmed) return;
+    if (list.linked_task_id) softDeleteTask(list.linked_task_id);
+    softDeleteList(list.id);
+  };
+  const setDone = (list: Checklist, done: boolean) =>
+    patchList(list.id, { completed_at: done ? new Date().toISOString() : null } as Partial<Checklist>);
   const storeLoaded = useStoreLoaded(lists$, items$);
 
   const lists = use$(() =>
@@ -127,7 +138,13 @@ export default function ChecklistsPage() {
         <>
           <WideList>
             {active.map((l) => (
-              <ChecklistRow key={l.id} list={l} items={itemsByList.get(l.id) ?? []} />
+              <ChecklistRow
+                key={l.id}
+                list={l}
+                items={itemsByList.get(l.id) ?? []}
+                onSetDone={(done) => setDone(l, done)}
+                onDelete={() => void deleteList(l)}
+              />
             ))}
           </WideList>
 
@@ -143,6 +160,8 @@ export default function ChecklistsPage() {
                     list={l}
                     items={itemsByList.get(l.id) ?? []}
                     onStartAgain={() => startAgain(l)}
+                    onSetDone={(done) => setDone(l, done)}
+                    onDelete={() => void deleteList(l)}
                   />
                 ))}
               </WideList>

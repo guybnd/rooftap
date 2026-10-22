@@ -135,4 +135,5 @@ export * from './assistant-telegram';
 export * from './assistant-answers';
 export * from './assistant-popup';
 export * from './brand-mark';
+export * from './row-actions';
 export * from './assistant-thread';

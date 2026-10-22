@@ -10,7 +10,7 @@
 // a blank screen waiting on the network.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { announceAnswer, setAssistantUnread, type AnsweredElsewhere } from './assistant-answers';
+import { announceAnswer, setAssistantCounts, type AnsweredElsewhere } from './assistant-answers';
 import {
   AssistantApiError,
   type AssistantApi,
@@ -196,7 +196,7 @@ export function useAssistantThread(target: ThreadTarget, host: ThreadHost) {
   const refreshUnread = useCallback(() => {
     void hostRef.current.api
       .status()
-      .then((s) => setAssistantUnread(s.unread ?? 0))
+      .then((s) => setAssistantCounts(s))
       .catch(() => {});
   }, []);
 
@@ -322,6 +322,7 @@ export function useAssistantThread(target: ThreadTarget, host: ThreadHost) {
       try {
         const res = await api.decide(messageId, decision);
         setMessages((m) => [...m.map((x) => (x.id === messageId ? res.message : x)), ...(res.outcome ? [res.outcome] : [])]);
+        refreshUnread();
       } catch (err) {
         toast.error(errorText(err, 'Could not do that.'));
         void reload();
@@ -329,7 +330,7 @@ export function useAssistantThread(target: ThreadTarget, host: ThreadHost) {
         setDeciding(null);
       }
     },
-    [reload]
+    [reload, refreshUnread]
   );
 
   const togglePin = useCallback(async () => {

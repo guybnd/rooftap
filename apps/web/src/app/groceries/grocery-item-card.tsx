@@ -34,6 +34,7 @@ import {
 import { AssigneePicker } from '../setup/assignee-picker';
 import { memberLabel } from '../setup/member-label';
 import { PopMenu, MenuItem, MenuLabel, MenuDivider } from '../setup/pop-menu';
+import { useRowContextMenu, withRowMenu } from '@/components/ui/row-context-menu';
 import {
   ListItem,
   ListItemLeading,
@@ -466,6 +467,61 @@ function GroceryItemCardInner({
     ...(customAisles ?? []).map((a) => ({ id: a.name, label: a.name, dot: getAisleColor(a.name, customAisles).dot })),
   ];
 
+  // Hearth §13.7 "Row menu": right-click with a mouse. The status changes
+  // lead, then who and where, then the item's own settings; touch keeps the
+  // hold sheet below.
+  const rowMenu = useRowContextMenu(() => ({
+    title: item.name,
+    kind: 'Grocery item',
+    actions: [
+      !bought && { id: 'bought', label: 'Got it', group: 'state', icon: 'done', run: () => setDisposition('bought') },
+      !have && { id: 'have', label: 'Have it', group: 'state', icon: 'hide', run: () => setDisposition('have') },
+      item.status !== 'needed' && { id: 'needed', label: 'Need it again', group: 'state', icon: 'undo', run: () => setDisposition('needed') },
+      {
+        id: 'assign',
+        label: 'Assign',
+        group: 'set',
+        icon: 'assign',
+        value: item.assigned_to ? memberLabel(item.assigned_to, memberProfiles) : undefined,
+        options: [
+          { id: 'none', label: 'Unassigned', checked: !item.assigned_to, run: () => void patch({ assigned_to: null }) },
+          ...groupMembers.map((m) => ({
+            id: m.user_id,
+            label: memberLabel(m.user_id, memberProfiles),
+            checked: item.assigned_to === m.user_id,
+            run: () => void patch({ assigned_to: m.user_id }),
+          })),
+        ],
+      },
+      {
+        id: 'aisle',
+        label: 'Move to aisle',
+        group: 'set',
+        icon: 'move',
+        value: am.label,
+        options: allAisles.map((a) => ({
+          id: a.id,
+          label: a.label,
+          swatch: a.dot,
+          checked: item.aisle === a.id,
+          run: () => {
+            if (a.id !== item.aisle) void patch({ aisle: a.id });
+          },
+        })),
+      },
+      {
+        id: 'essential',
+        label: item.is_essential ? 'Not essential' : 'Mark essential',
+        group: 'edit',
+        icon: 'star',
+        run: () => void patch({ is_essential: !item.is_essential }),
+      },
+      { id: 'edit', label: 'Edit details', group: 'edit', icon: 'edit', run: () => onEdit(item) },
+      onArchive && { id: 'archive', label: 'Archive', group: 'danger', icon: 'archive', run: () => onArchive(item) },
+      { id: 'delete', label: 'Delete', group: 'danger', icon: 'delete', danger: true, run: () => onRequestDelete(item) },
+    ],
+  }));
+
   // ── Drag-to-adjust qty & price ──────────────────────────────────────────────
   const qtyDrag = useDragNumber({
     current: item.quantity ?? 1,
@@ -601,7 +657,8 @@ function GroceryItemCardInner({
   //    fragments — only present ones contribute a dot (mirrors
   //    costs/cost-card.tsx's metaParts idiom). ─────────────────────────────────
   const metaParts: React.ReactNode[] = [];
-  if (showQty) {
+  // The editor also opens from the hover "+ qty" on a quantity of 1, which shows no chip.
+  if (showQty || editingQty) {
     metaParts.push(
       editingQty ? (
         <span key="qty">{qtyEditor}</span>
@@ -651,7 +708,7 @@ function GroceryItemCardInner({
       >
         <ListItem
           holdProgress={longPress.progress}
-          {...longPress.handlers}
+          {...withRowMenu(longPress.handlers, rowMenu)}
           className={cn(
             'items-center gap-2.5 py-2.5 pr-2.5 pl-3 transition-[opacity,transform,background-color] duration-200 select-none [-webkit-touch-callout:none]',
             // Hearth v2 (H2/H4): the FLUX-1559 whole-row tints are gone; inside
@@ -976,6 +1033,7 @@ function GroceryItemCardInner({
           </ListItemTrailing>
         </ListItem>
       </SwipeActions>
+      {rowMenu.menu}
 
       {/* PC5/PC6 fallback: a recipe note with no real recipe entity to link to
           opens its text in a neutral bottom sheet instead of inventing a route. */}

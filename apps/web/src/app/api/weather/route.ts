@@ -20,6 +20,12 @@ interface WeatherPayload {
     tempC: number[];
     precipitationProbability: number[];
   };
+  aheadLong?: {
+    times: string[];
+    tempC: number[];
+    precipitationProbability: number[];
+    weatherCode?: number[];
+  };
   days?: {
     dates: string[];
     weatherCode: number[];
@@ -31,6 +37,8 @@ interface WeatherPayload {
 
 /** Hourly entries Home's day ribbon shows, starting at the current hour. */
 const AHEAD_HOURS = 12;
+/** The wide-screen ribbon scrolls this far ahead. */
+const AHEAD_LONG_HOURS = 48;
 /** Open-Meteo hourly series run from local midnight, so today is the first 24 entries. */
 const HOURS_PER_DAY = 24;
 
@@ -74,7 +82,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(cached.data);
   }
 
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,weather_code,relative_humidity_2m,wind_speed_10m&hourly=temperature_2m,precipitation,precipitation_probability,uv_index&daily=temperature_2m_max,temperature_2m_min,sunset,uv_index_max,weather_code,precipitation_probability_max&timezone=auto&forecast_days=7`;
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,weather_code,relative_humidity_2m,wind_speed_10m&hourly=temperature_2m,precipitation,precipitation_probability,uv_index,weather_code&daily=temperature_2m_max,temperature_2m_min,sunset,uv_index_max,weather_code,precipitation_probability_max&timezone=auto&forecast_days=7`;
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
@@ -144,6 +152,14 @@ export async function GET(request: NextRequest) {
           times: times.slice(start, end),
           tempC: temperature.slice(start, end),
           precipitationProbability: precipitationProbability.slice(start, end),
+        };
+        const longEnd = start + AHEAD_LONG_HOURS;
+        const codes = raw.hourly?.weather_code;
+        data.aheadLong = {
+          times: times.slice(start, longEnd),
+          tempC: temperature.slice(start, longEnd),
+          precipitationProbability: precipitationProbability.slice(start, longEnd),
+          ...(Array.isArray(codes) ? { weatherCode: codes.slice(start, longEnd) } : {}),
         };
       }
     }

@@ -85,21 +85,24 @@ export const CATEGORY_META: Record<CostCategory, { label: string; color: string 
 // cyan, violet, pink, lime, orange, fuchsia, sky, slate) so neighbouring
 // segments never blur. They key a chart series next to a legend, so yellow
 // and lime don't read as warning or success, and none is the coral accent.
-// One swatch holds on both grounds (Hearth §3, chart series).
+// One swatch holds on both grounds (Hearth §3, chart series). The fills are
+// pastel (Guy, 2026-10-22) so the category reads as content, not alarm;
+// `text` and `tile` (the row glyph and the group title) darken on a light
+// ground so they stay legible.
 export const CATEGORY_COLOR: Record<
   CostCategory,
-  { fill: string; border: string; dot: string; text: string }
+  { fill: string; border: string; dot: string; text: string; tile: string }
 > = {
-  rent: { fill: "bg-blue-500 cat-idx-0", border: "border-l-blue-500/60 cat-idx-0", dot: "bg-blue-500 cat-idx-0", text: "text-blue-500 cat-idx-0" },
-  utilities: { fill: "bg-yellow-400 cat-idx-1", border: "border-l-yellow-400/60 cat-idx-1", dot: "bg-yellow-400 cat-idx-1", text: "text-yellow-400 cat-idx-1" },
-  internet: { fill: "bg-cyan-400 cat-idx-2", border: "border-l-cyan-400/60 cat-idx-2", dot: "bg-cyan-400 cat-idx-2", text: "text-cyan-400 cat-idx-2" },
-  insurance: { fill: "bg-violet-500 cat-idx-3", border: "border-l-violet-500/60 cat-idx-3", dot: "bg-violet-500 cat-idx-3", text: "text-violet-500 cat-idx-3" },
-  subscription: { fill: "bg-pink-500 cat-idx-4", border: "border-l-pink-500/60 cat-idx-4", dot: "bg-pink-500 cat-idx-4", text: "text-pink-500 cat-idx-4" },
-  grocery_estimate: { fill: "bg-lime-500 cat-idx-5", border: "border-l-lime-500/60 cat-idx-5", dot: "bg-lime-500 cat-idx-5", text: "text-lime-500 cat-idx-5" },
-  moving: { fill: "bg-orange-400 cat-idx-6", border: "border-l-orange-400/60 cat-idx-6", dot: "bg-orange-400 cat-idx-6", text: "text-orange-400 cat-idx-6" },
-  purchase: { fill: "bg-fuchsia-500 cat-idx-7", border: "border-l-fuchsia-500/60 cat-idx-7", dot: "bg-fuchsia-500 cat-idx-7", text: "text-fuchsia-500 cat-idx-7" },
-  outing: { fill: "bg-sky-300 cat-idx-8", border: "border-l-sky-300/60 cat-idx-8", dot: "bg-sky-300 cat-idx-8", text: "text-sky-300 cat-idx-8" },
-  other: { fill: "bg-slate-500 cat-idx-9", border: "border-l-slate-500/60 cat-idx-9", dot: "bg-slate-500 cat-idx-9", text: "text-slate-500 cat-idx-9" },
+  rent: { fill: "bg-blue-300 cat-idx-0", border: "border-l-blue-300/60 cat-idx-0", dot: "bg-blue-300 cat-idx-0", text: "text-blue-600 dark:text-blue-200 cat-idx-0", tile: "bg-blue-300/20 text-blue-700 dark:bg-blue-300/15 dark:text-blue-200 cat-idx-0" },
+  utilities: { fill: "bg-amber-200 cat-idx-1", border: "border-l-amber-200/60 cat-idx-1", dot: "bg-amber-200 cat-idx-1", text: "text-amber-600 dark:text-amber-100 cat-idx-1", tile: "bg-amber-200/20 text-amber-700 dark:bg-amber-200/15 dark:text-amber-100 cat-idx-1" },
+  internet: { fill: "bg-cyan-300 cat-idx-2", border: "border-l-cyan-300/60 cat-idx-2", dot: "bg-cyan-300 cat-idx-2", text: "text-cyan-600 dark:text-cyan-200 cat-idx-2", tile: "bg-cyan-300/20 text-cyan-700 dark:bg-cyan-300/15 dark:text-cyan-200 cat-idx-2" },
+  insurance: { fill: "bg-violet-300 cat-idx-3", border: "border-l-violet-300/60 cat-idx-3", dot: "bg-violet-300 cat-idx-3", text: "text-violet-600 dark:text-violet-200 cat-idx-3", tile: "bg-violet-300/20 text-violet-700 dark:bg-violet-300/15 dark:text-violet-200 cat-idx-3" },
+  subscription: { fill: "bg-pink-300 cat-idx-4", border: "border-l-pink-300/60 cat-idx-4", dot: "bg-pink-300 cat-idx-4", text: "text-pink-600 dark:text-pink-200 cat-idx-4", tile: "bg-pink-300/20 text-pink-700 dark:bg-pink-300/15 dark:text-pink-200 cat-idx-4" },
+  grocery_estimate: { fill: "bg-lime-200 cat-idx-5", border: "border-l-lime-200/60 cat-idx-5", dot: "bg-lime-200 cat-idx-5", text: "text-lime-600 dark:text-lime-100 cat-idx-5", tile: "bg-lime-200/20 text-lime-700 dark:bg-lime-200/15 dark:text-lime-100 cat-idx-5" },
+  moving: { fill: "bg-orange-300 cat-idx-6", border: "border-l-orange-300/60 cat-idx-6", dot: "bg-orange-300 cat-idx-6", text: "text-orange-600 dark:text-orange-200 cat-idx-6", tile: "bg-orange-300/20 text-orange-700 dark:bg-orange-300/15 dark:text-orange-200 cat-idx-6" },
+  purchase: { fill: "bg-fuchsia-300 cat-idx-7", border: "border-l-fuchsia-300/60 cat-idx-7", dot: "bg-fuchsia-300 cat-idx-7", text: "text-fuchsia-600 dark:text-fuchsia-200 cat-idx-7", tile: "bg-fuchsia-300/20 text-fuchsia-700 dark:bg-fuchsia-300/15 dark:text-fuchsia-200 cat-idx-7" },
+  outing: { fill: "bg-sky-200 cat-idx-8", border: "border-l-sky-200/60 cat-idx-8", dot: "bg-sky-200 cat-idx-8", text: "text-sky-600 dark:text-sky-100 cat-idx-8", tile: "bg-sky-200/20 text-sky-700 dark:bg-sky-200/15 dark:text-sky-100 cat-idx-8" },
+  other: { fill: "bg-slate-400 cat-idx-9", border: "border-l-slate-400/60 cat-idx-9", dot: "bg-slate-400 cat-idx-9", text: "text-slate-600 dark:text-slate-300 cat-idx-9", tile: "bg-slate-400/20 text-slate-700 dark:bg-slate-400/15 dark:text-slate-300 cat-idx-9" },
 };
 
 /** Monthly-equivalent of a recurring cost (minor units). One-off → 0. */

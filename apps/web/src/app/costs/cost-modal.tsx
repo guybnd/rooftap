@@ -26,6 +26,8 @@ interface CostModalProps {
   defaultCategory?: CostCategory;
   /** Pre-fill the name for new costs (ignored when `item` is provided). */
   defaultName?: string;
+  /** Pre-fill the date for new costs, YYYY-MM-DD (ignored when `item` is provided). */
+  defaultStartDate?: string;
   onClose: () => void;
   onSave: (item: CostItem) => void;
   /** When provided, a Delete button is shown (edit mode only). */
@@ -42,7 +44,7 @@ const CADENCE_OPTIONS = [
   { value: 'yearly' as const, label: 'Yearly' },
 ];
 
-export function CostModal({ isOpen, item, groupId, defaultCategory, defaultName, onClose, onSave, onDelete }: CostModalProps) {
+export function CostModal({ isOpen, item, groupId, defaultCategory, defaultName, defaultStartDate, onClose, onSave, onDelete }: CostModalProps) {
   const buildInitialForm = useCallback(
     () => ({
       name: item?.name ?? defaultName ?? '',
@@ -52,12 +54,12 @@ export function CostModal({ isOpen, item, groupId, defaultCategory, defaultName,
       cadence: (item?.cadence ?? 'one_off') as CostCadence,
       is_estimate: item?.is_estimate ?? false,
       provider: item?.provider ?? '',
-      start_date: item?.start_date ?? '',
+      start_date: item?.start_date ?? defaultStartDate ?? '',
       end_date: item?.end_date ?? '',
       discount_end_date: item?.discount_end_date ?? '',
       notes: item?.notes ?? '',
     }),
-    [item, defaultCategory, defaultName],
+    [item, defaultCategory, defaultName, defaultStartDate],
   );
   const [form, setForm] = useState(buildInitialForm);
 

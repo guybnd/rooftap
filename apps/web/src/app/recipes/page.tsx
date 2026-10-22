@@ -18,7 +18,7 @@ import { toast } from 'sonner';
 import { Plus, ChefHat, Camera, ImagePlus, Loader2 } from 'lucide-react';
 import { useDataCache } from '@/lib/data-cache';
 import { createClient } from '@/lib/supabase/client';
-import { recipes$, recipeIngredients$, groceryItems$, useReconnectSync, useStoreHelpers, useStoreLoaded, useModules } from '@homeup/core';
+import { dialog, recipes$, recipeIngredients$, groceryItems$, useReconnectSync, useStoreHelpers, useStoreLoaded, useModules } from '@homeup/core';
 import type { GroceryItem, Recipe, RecipeIngredient } from '@homeup/core';
 import {
   RECIPE_METHODS,
@@ -159,6 +159,18 @@ export default function RecipesPage() {
     for (const prev of prevIngredients) {
       if (!keptIds.has(prev.id)) softDeleteIngredient(prev.id);
     }
+  };
+
+  // The row menu's Delete, as the recipe's own page does it.
+  const deleteRecipe = async (recipe: Recipe) => {
+    const confirmed = await dialog.confirm({
+      title: `Delete "${recipe.title}"?`,
+      message: 'This removes the recipe and its ingredients.',
+      destructive: true,
+    });
+    if (!confirmed) return;
+    for (const ing of ingredientsByRecipe.get(recipe.id) ?? []) softDeleteIngredient(ing.id);
+    softDeleteRecipe(recipe.id);
   };
 
   // Discard a draft: soft-delete the recipe + its ingredients and remove the
@@ -395,6 +407,8 @@ export default function RecipesPage() {
               ingredients={ingredientsByRecipe.get(r.id) ?? []}
               groceryItems={groceryItems}
               groceriesLinked={groceriesLinked}
+              onEdit={() => openReview(r)}
+              onDelete={() => void deleteRecipe(r)}
             />
           ))}
         </WideList>

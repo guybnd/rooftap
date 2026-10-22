@@ -6,7 +6,7 @@
 // Hero to the answer, best perk first (H1). The Perks tab lists what the
 // cards get you, ending soon first. Tapping a card opens it ready to scan.
 // Native twin: apps/mobile/src/app/(tabs)/rewards/index.tsx.
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Plus, Search, WalletCards } from 'lucide-react';
 import {
   cardExpiryCaption,
@@ -26,12 +26,15 @@ import {
   useHouseholdCurrency,
   useRewards,
   walletOrder,
+  dialog,
   type LoyaltyCard,
+  type RowMenu,
   type RewardPerk,
   type RewardScheme,
   type StoreMatch,
 } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
+import { useRowContextMenu } from '@/components/ui/row-context-menu';
 import { HeroLede } from '@/components/ui/hero-lede';
 import { ListGroup, ListItem, ListItemContent, ListItemMeta, ListItemTitle } from '@/components/ui/list-item';
 import { SegmentedControl } from '@/components/ui/segmented-control';
@@ -80,6 +83,11 @@ export default function RewardsPage() {
   const shown = shownId ? cards.find((c) => c.id === shownId) : undefined;
   const editingCard = editing?.id ? cards.find((c) => c.id === editing.id) : undefined;
   const openScheme = schemeId ? schemeById.get(schemeId) : undefined;
+
+  // Hearth §13.7 "Row menu": one menu for the wallet, filled by the face
+  // that was right-clicked.
+  const faceMenuRef = useRef<RowMenu | null>(null);
+  const faceMenu = useRowContextMenu(() => faceMenuRef.current);
 
   if (cacheLoading || (!rewards.loaded && cards.length === 0)) return <div className="p-6 text-muted-foreground">Loading…</div>;
   if (!group) return <div className="p-6 text-muted-foreground">No group selected</div>;
@@ -223,6 +231,29 @@ export default function RewardsPage() {
                         holder={holder(card)}
                         detail={detail || undefined}
                         onClick={() => setShownId(card.id)}
+                        onContextMenu={(e) => {
+                          faceMenuRef.current = {
+                            title: cardTitle(card, scheme),
+                            kind: 'Card',
+                            actions: [
+                              { id: 'show', label: 'Show card', group: 'open', icon: 'open', run: () => setShownId(card.id) },
+                              { id: 'copy', label: 'Copy number', group: 'share', icon: 'copy', run: () => void navigator.clipboard?.writeText(card.number) },
+                              { id: 'edit', label: 'Edit card', group: 'edit', icon: 'edit', run: () => setEditing({ id: card.id }) },
+                              { id: 'stores', label: 'Edit stores and perks', group: 'edit', icon: 'edit', run: () => editStoresFor(card) },
+                              {
+                                id: 'delete',
+                                label: 'Delete',
+                                group: 'danger',
+                                icon: 'delete',
+                                danger: true,
+                                run: async () => {
+                                  if (await dialog.confirm({ title: 'Delete this card?', destructive: true })) rewards.deleteCard(card.id);
+                                },
+                              },
+                            ],
+                          };
+                          faceMenu.onContextMenu(e);
+                        }}
                       />
                     );
                   })}
@@ -247,6 +278,8 @@ export default function RewardsPage() {
           )}
         </div>
       )}
+
+      {faceMenu.menu}
 
       {shown && (
         <CardSheet

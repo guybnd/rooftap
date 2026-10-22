@@ -30,6 +30,8 @@ import {
 } from 'lucide-react';
 import { AssigneePicker } from '../setup/assignee-picker';
 import { PopMenu, MenuItem, MenuLabel, MenuDivider } from '../setup/pop-menu';
+import { memberLabel } from '../setup/member-label';
+import { useRowContextMenu, withRowMenu } from '@/components/ui/row-context-menu';
 import { EntityComments } from '@/components/entity-comments';
 import { CostDocuments } from './cost-documents';
 import { LinkedDocuments } from '@/components/documents/linked-documents';
@@ -217,6 +219,57 @@ export function CostCard({
     'flex items-center justify-center h-8 w-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted flex-shrink-0 transition-colors';
 
   const longPress = useRowLongPress(() => setHoldMenuOpen(true));
+  // Hearth §13.7 "Row menu": right-click with a mouse; touch keeps the hold sheet.
+  const rowMenu = useRowContextMenu(() => ({
+    title: item.name,
+    kind: 'Cost',
+    actions: [
+      !!reminderTaskId && { id: 'reminder', label: 'Open reminder', group: 'open', icon: 'open', run: () => router.push(`/tasks?focus=${reminderTaskId}`) },
+      {
+        id: 'cadence',
+        label: 'Cadence',
+        group: 'set',
+        icon: 'repeat',
+        value: CADENCE_LABEL[item.cadence],
+        options: CADENCE_OPTIONS.map((c) => ({ id: c, label: CADENCE_LABEL[c], checked: item.cadence === c, run: () => patch({ cadence: c }) })),
+      },
+      {
+        id: 'category',
+        label: 'Category',
+        group: 'set',
+        icon: 'move',
+        value: CATEGORY_META[item.category].label,
+        options: CATEGORY_OPTIONS.map((c) => ({ id: c, label: CATEGORY_META[c].label, checked: item.category === c, run: () => patch({ category: c }) })),
+      },
+      {
+        id: 'assign',
+        label: 'Paid by',
+        group: 'set',
+        icon: 'assign',
+        value: item.assigned_to ? memberLabel(item.assigned_to, memberProfiles) : undefined,
+        options: [
+          { id: 'none', label: 'Nobody yet', checked: !item.assigned_to, run: () => patch({ assigned_to: null }) },
+          ...groupMembers.map((m) => ({
+            id: m.user_id,
+            label: memberLabel(m.user_id, memberProfiles),
+            checked: item.assigned_to === m.user_id,
+            run: () => patch({ assigned_to: m.user_id }),
+          })),
+        ],
+      },
+      { id: 'files', label: 'Files', group: 'edit', icon: 'note', value: docCount ? String(docCount) : undefined, run: () => setExpanded('docs') },
+      {
+        id: 'comments',
+        label: commentCount.count > 0 ? 'Comments' : 'Add a comment',
+        group: 'edit',
+        icon: 'comment',
+        value: commentCount.count > 0 ? String(commentCount.count) : undefined,
+        run: () => setExpanded('comments'),
+      },
+      { id: 'edit', label: 'Edit details', group: 'edit', icon: 'edit', run: () => onEdit(item) },
+      { id: 'delete', label: 'Delete', group: 'danger', icon: 'delete', danger: true, run: () => onRequestDelete(item) },
+    ],
+  }));
 
   // FLUX-1560: the date fragment applying to the month in view — a one-off
   // always shows its own start_date; a recurring cost shows the cadence-
@@ -307,7 +360,7 @@ export function CostCard({
       <ListItem
         expanded={!!expanded}
         holdProgress={longPress.progress}
-        {...longPress.handlers}
+        {...withRowMenu(longPress.handlers, rowMenu)}
         className={cn(
           'items-center gap-2.5 py-2.5 pr-3 pl-4 transition-colors select-none [-webkit-touch-callout:none]',
           'bg-card hover:bg-accent/50',
@@ -572,6 +625,7 @@ export function CostCard({
           </PopMenu>
         </ListItemTrailing>
       </ListItem>
+      {rowMenu.menu}
 
       {/* Expandable: documents or comments */}
       {expanded && (

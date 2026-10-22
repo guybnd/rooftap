@@ -15,7 +15,9 @@ import {
   formatCents,
   groupConversations,
   minutesLeft,
+  openAssistantPopup,
   sectionHue,
+  setAssistantPending,
   setAssistantUnread,
   timeAgo,
   type AssistantConversation,
@@ -33,12 +35,13 @@ import { SettingsLabel } from '@/components/settings-panel';
 import { Composer } from './assistant-parts';
 import { AssistantNotice } from './assistant-notice';
 import { ConversationRow } from './conversation-row';
-import { useWideLayout } from '@/lib/desktop-layout';
+import { useDesktopShell, useWideLayout } from '@/lib/desktop-layout';
 import { cn } from '@/lib/utils';
 
 export default function AssistantPage() {
   const router = useRouter();
   const wide = useWideLayout();
+  const shell = useDesktopShell();
   const { group, isOnline } = useDataCache();
   const [status, setStatus] = useState<AssistantStatus | null>(null);
   const [conversations, setConversations] = useState<AssistantConversation[] | null>(null);
@@ -54,6 +57,7 @@ export default function AssistantPage() {
       const list = await assistantApi.conversations();
       setConversations(list);
       setAssistantUnread(list.filter((c) => c.unread).length);
+      setAssistantPending(s.pending);
       setError(null);
     } catch (err) {
       if (err instanceof AssistantApiError && err.code) setBlocked(err.code);
@@ -69,10 +73,16 @@ export default function AssistantPage() {
 
   if (!group) return <div className="p-6 text-muted-foreground">No group selected</div>;
 
+  // Hearth §13.7 (Guy, 2026-10-22): under the desktop top bar a chat opens
+  // in the docked pop-up, Messenger style, and the page stays the list.
   const ask = (text: string) => {
-    router.push(`/assistant/new?kind=quick&ask=${encodeURIComponent(text)}`);
+    if (!(shell && openAssistantPopup({ ask: text }))) router.push(`/assistant/new?kind=quick&ask=${encodeURIComponent(text)}`);
     return true;
   };
+  const rowProps = (c: AssistantConversation | null, href: string) => ({
+    ...(shell && c ? { onSelect: () => openAssistantPopup({ conversationId: c.id }) || router.push(href) } : { href }),
+    onChanged: () => void load(),
+  });
 
   const caption = [
     `${groups.chats.length} ${groups.chats.length === 1 ? 'chat' : 'chats'}`,
@@ -112,7 +122,7 @@ export default function AssistantPage() {
           {blocked && <AssistantNotice code={blocked} />}
 
           <ListGroup>
-            <ConversationRow conversation={groups.household} href="/assistant/household" />
+            <ConversationRow conversation={groups.household} {...rowProps(groups.household, '/assistant/household')} />
           </ListGroup>
           </div>
 
@@ -124,7 +134,7 @@ export default function AssistantPage() {
               <SettingsLabel>Chats</SettingsLabel>
               <ListGroup>
                 {groups.chats.map((c) => (
-                  <ConversationRow key={c.id} conversation={c} href={`/assistant/${c.id}`} />
+                  <ConversationRow key={c.id} conversation={c} {...rowProps(c, `/assistant/${c.id}`)} />
                 ))}
               </ListGroup>
             </div>
@@ -135,7 +145,7 @@ export default function AssistantPage() {
               <SettingsLabel>Quick asks</SettingsLabel>
               <ListGroup>
                 {groups.open.map((c) => (
-                  <ConversationRow key={c.id} conversation={c} href={`/assistant/${c.id}`} />
+                  <ConversationRow key={c.id} conversation={c} {...rowProps(c, `/assistant/${c.id}`)} />
                 ))}
               </ListGroup>
             </div>
@@ -146,7 +156,7 @@ export default function AssistantPage() {
               <SettingsLabel>Earlier</SettingsLabel>
               <ListGroup>
                 {groups.earlier.slice(0, 20).map((c) => (
-                  <ConversationRow key={c.id} conversation={c} href={`/assistant/${c.id}`} />
+                  <ConversationRow key={c.id} conversation={c} {...rowProps(c, `/assistant/${c.id}`)} />
                 ))}
               </ListGroup>
             </div>

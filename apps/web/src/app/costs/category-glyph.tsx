@@ -16,7 +16,7 @@ import {
   Zap,
   type LucideIcon,
 } from 'lucide-react';
-import type { CostCategory } from '@homeup/core';
+import { CATEGORY_COLOR, type CostCategory } from '@homeup/core';
 import { cn } from '@/lib/utils';
 
 export const CATEGORY_ICON: Record<CostCategory, LucideIcon> = {
@@ -37,7 +37,7 @@ export function CategoryGlyph({ category, className }: { category: CostCategory;
   return (
     <span
       aria-hidden
-      className={cn('inline-flex size-7 shrink-0 items-center justify-center rounded-[9px] bg-muted text-muted-foreground', className)}
+      className={cn('inline-flex size-7 shrink-0 items-center justify-center rounded-[9px]', CATEGORY_COLOR[category]?.tile ?? 'bg-muted text-muted-foreground', className)}
     >
       <Icon className="size-[15px]" strokeWidth={2} />
     </span>

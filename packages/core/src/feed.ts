@@ -293,7 +293,12 @@ export interface WeekBoardColumn {
   /** The day's date, for a day column (its weather and its number). */
   date: string | null;
   items: HeroItem[];
+  /** A run of empty days folded into one slim column (`collapseQuiet`). */
+  quiet?: { from: string; to: string; days: number };
 }
+
+const SHORT_WEEKDAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const shortDay = (iso: string) => `${SHORT_WEEKDAY[parseLocalISODate(iso).getDay()]} ${Number(iso.slice(8, 10))}`;
 
 /**
  * Home's week board on a wide screen (Hearth §13 "Desktop shell"): the same
@@ -309,6 +314,7 @@ export function weekBoardColumns(
   todayISO: string,
   windowEnd: string,
   days = 7,
+  opts: { collapseQuiet?: boolean } = {},
 ): WeekBoardColumn[] {
   let last = addDaysISO(todayISO, days - 1);
   if (windowEnd < last) last = windowEnd < todayISO ? todayISO : windowEnd;
@@ -327,7 +333,22 @@ export function weekBoardColumns(
   }
   const columns: WeekBoardColumn[] = [];
   if (earlier.length) columns.push({ key: 'earlier', label: 'Earlier', date: null, items: earlier });
-  for (const d of dayKeys) columns.push({ key: d, label: feedDayLabel(d, todayISO), date: d, items: byDay.get(d) ?? [] });
+  // collapseQuiet: two or more empty days in a row after today fold into one
+  // column, so a quiet stretch never has to be scrolled through.
+  for (let i = 0; i < dayKeys.length; i++) {
+    const d = dayKeys[i];
+    let end = i;
+    if (opts.collapseQuiet && d !== todayISO) {
+      while (end + 1 < dayKeys.length && !byDay.get(dayKeys[end])?.length && !byDay.get(dayKeys[end + 1])?.length) end++;
+    }
+    if (end > i && !byDay.get(d)?.length) {
+      const to = dayKeys[end];
+      columns.push({ key: `quiet:${d}`, label: `${shortDay(d)} to ${shortDay(to)}`, date: d, items: [], quiet: { from: d, to, days: end - i + 1 } });
+      i = end;
+      continue;
+    }
+    columns.push({ key: d, label: feedDayLabel(d, todayISO), date: d, items: byDay.get(d) ?? [] });
+  }
   if (later.length) columns.push({ key: 'later', label: 'Later', date: null, items: later });
   if (undated.length) columns.push({ key: 'none', label: 'No date', items: undated, date: null });
   return columns;

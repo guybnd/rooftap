@@ -4,9 +4,10 @@ import { Fragment, useEffect, useRef, type MouseEvent } from "react";
 import { cn } from "@/lib/utils";
 import { AskPanel } from "./ask";
 import { SectionTile } from "./cards";
-import { APK_URL, ASSISTANT_ENV, ASSISTANT_FACTS, COMPARE, FAQ, HERO_FACTS, FEATURE_GROUPS, LICENCE_URL, SELF_HOST_FACTS, SELF_HOST_STEPS, WEB_APP_URL } from "./content";
+import { APK_URL, ASSISTANT_ENV, ASSISTANT_FACTS, COMPARE, FAQ, HERO_FACTS, FEATURE_GROUPS, LAYOUT_FACTS, LICENCE_URL, SELF_HOST_FACTS, SELF_HOST_STEPS, WEB_APP_URL } from "./content";
 import { Fits } from "./fits";
 import { HeroPhone } from "./hero-phone";
+import { DESKTOP_ALT, SCREEN_ALT, desktopScreenSrc, screenSrc } from "./screens";
 import styles from "./landing.module.css";
 import { SignIn, SignInHref } from "./sign-in";
 import { HERO_STORIES, ROOM_STORIES } from "./stories";
@@ -154,6 +155,46 @@ export function LandingPage({
                 <p className={styles.sectionLede}>You enter a thing once. The modules after it pick it up.</p>
               </div>
               <Fits />
+            </div>
+          </section>
+
+          <section id="layouts" className={styles.section} aria-labelledby="layouts-title">
+            <div className={styles.wrap}>
+              <div className={styles.sectionHead}>
+                <p className={styles.eyebrow}>Phone, tablet and desktop</p>
+                <h2 id="layouts-title" className={cn(styles.display, styles.sectionTitle)}>
+                  One app, laid out for the screen
+                </h2>
+                <p className={styles.sectionLede}>The same household and the same data. The layout changes with the width of the screen.</p>
+              </div>
+              <div className={styles.layouts}>
+                <div className={styles.layoutsShots}>
+                  <div className={styles.browser}>
+                    <div className={styles.browserBar} aria-hidden="true">
+                      <span />
+                      <span />
+                      <span />
+                    </div>
+                    <div className={styles.browserScreen}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={desktopScreenSrc("home")} alt={DESKTOP_ALT.home} width={1440} height={900} loading="lazy" decoding="async" className={cn(styles.frame, styles.frameOn)} />
+                    </div>
+                  </div>
+                  <div className={cn(styles.phone, styles.layoutsPhone)}>
+                    <div className={styles.phoneScreen}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={screenSrc("home")} alt={SCREEN_ALT.home} width={390} height={844} loading="lazy" decoding="async" className={cn(styles.frame, styles.frameOn)} />
+                    </div>
+                  </div>
+                </div>
+                <ul className={styles.layoutsList}>
+                  {LAYOUT_FACTS.map((f) => (
+                    <li key={f.title}>
+                      <b>{f.title}.</b> {f.text}
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
           </section>
 

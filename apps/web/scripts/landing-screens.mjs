@@ -5,6 +5,7 @@
 //
 //   npm run landing:screens -w apps/web            every scene
 //   npm run landing:screens -w apps/web -- home    one scene
+//   npm run landing:screens -w apps/web -- --desktop   the desktop shots
 //
 // Needs Playwright with Chromium (`npx playwright install chromium`, or set
 // PLAYWRIGHT_MODULE to an installed playwright package).
@@ -20,11 +21,15 @@ const dist = join(web, "landing-static/demo/dist");
 const out = join(web, "public/landing/screens");
 // Where the marks (the rects of the things the stories tap) go, for the page to read.
 const marksFile = join(web, "src/components/landing/screen-marks.json");
-const only = process.argv.slice(2);
+const desktop = process.argv.includes("--desktop");
+const only = process.argv.slice(2).filter((a) => a !== "--desktop");
 
-// The device the screens are shot on: a 390 pt phone at 2x.
-const VIEWPORT = { width: 390, height: 844 };
-const SCALE = 2;
+// The device the screens are shot on: a 390 pt phone at 2x, or with
+// --desktop a 1440 x 900 browser window (the wide layout), written as
+// desktop-<scene>.webp. The desktop shots carry no marks.
+const VIEWPORT = desktop ? { width: 1440, height: 900 } : { width: 390, height: 844 };
+const SCALE = desktop ? 1.5 : 2;
+export const DESKTOP_SCENES = ["home", "groceries-aisles", "costs", "tasks"];
 
 async function loadPlaywright() {
   const candidates = [process.env.PLAYWRIGHT_MODULE, "playwright", "/opt/node-tools/node_modules/playwright/index.mjs"].filter(Boolean);
@@ -212,7 +217,7 @@ async function main() {
   const { server, port } = await serve();
   mkdirSync(out, { recursive: true });
   const browser = await chromium.launch();
-  const context = await browser.newContext({ viewport: VIEWPORT, deviceScaleFactor: SCALE, colorScheme: "dark", isMobile: true, hasTouch: true, locale: "en-AU", timezoneId: "Australia/Melbourne" });
+  const context = await browser.newContext({ viewport: VIEWPORT, deviceScaleFactor: SCALE, colorScheme: "dark", isMobile: !desktop, hasTouch: !desktop, locale: "en-AU", timezoneId: "Australia/Melbourne" });
   // Every shot is taken on this week's Monday at 2 PM in the household's time
   // zone, so the weather, the countdowns and how many days are left before
   // Saturday (and so where each row sits, which the marks record) are the same
@@ -235,7 +240,8 @@ async function main() {
   // The scene list lives in the page.
   await page.goto(`http://127.0.0.1:${port}/?scene=__list`, { waitUntil: "networkidle" });
   const scenes = await page.evaluate(() => window.__demo?.scenes ?? []);
-  const wanted = only.length ? scenes.filter((s) => only.includes(s)) : scenes;
+  const pool = desktop ? scenes.filter((s) => DESKTOP_SCENES.includes(s)) : scenes;
+  const wanted = only.length ? pool.filter((s) => only.includes(s)) : pool;
   if (!wanted.length) throw new Error(`no scenes match ${only.join(", ")}`);
   const marks = existsSync(marksFile) ? JSON.parse(readFileSync(marksFile, "utf8")) : {};
 
@@ -255,7 +261,11 @@ async function main() {
     await page.evaluate(() => document.fonts.ready);
     await page.waitForTimeout(300);
     const png = await page.screenshot({ type: "png" });
-    writeFileSync(join(out, `${id}.webp`), await toWebp(png));
+    writeFileSync(join(out, `${desktop ? "desktop-" : ""}${id}.webp`), await toWebp(png));
+    if (desktop) {
+      console.log(`desktop-${id}${errors.length ? `  (page errors: ${errors.join(" | ").slice(0, 300)})` : ""}`);
+      continue;
+    }
     // Measure the marks: the rects of what the story taps or points at, in CSS px.
     const wantedMarks = await page.evaluate(() => window.__demo?.marks ?? {});
     const found = {};
@@ -278,7 +288,7 @@ async function main() {
     console.log(`${id}${errors.length ? `  (page errors: ${errors.join(" | ").slice(0, 300)})` : ""}`);
   }
 
-  writeFileSync(marksFile, JSON.stringify(marks, null, 2) + "\n");
+  if (!desktop) writeFileSync(marksFile, JSON.stringify(marks, null, 2) + "\n");
   await browser.close();
   server.close();
 }

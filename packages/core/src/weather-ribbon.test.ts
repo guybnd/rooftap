@@ -34,6 +34,19 @@ describe('buildDayRibbon', () => {
     expect(cols.findIndex((c) => c.isSunset)).toBe(5);
   });
 
+  it('names the hour in full and marks the start of a new day', () => {
+    const cols = buildDayRibbon({ ...base, ahead: ahead([0, 0, 0, 0], 22) });
+    expect(cols.map((c) => c.fullLabel)).toEqual(['Now', '11 PM', 'Tue 12 AM', 'Tue 1 AM']);
+    expect(cols.map((c) => c.dayStart)).toEqual([null, null, 'Tue', null]);
+  });
+
+  it('uses the 48-hour series and its weather codes when asked for the long ribbon', () => {
+    const long = { ...ahead([0, 0, 0], 13)!, weatherCode: [0, 3, 61] };
+    const weather = { ...base, ahead: ahead([0], 13), aheadLong: long };
+    expect(buildDayRibbon(weather)).toHaveLength(1);
+    expect(buildDayRibbon(weather, [], { long: true }).map((c) => c.weatherCode)).toEqual([0, 3, 61]);
+  });
+
   it('shows the temperature on every third column, rounded', () => {
     const cols = buildDayRibbon({ ...base, ahead: ahead([0, 0, 0, 0], 13, [17.6, 18, 18, 19.4]) });
     expect(cols.map((c) => (c.showTemp ? c.tempC : null))).toEqual([18, null, null, 19]);

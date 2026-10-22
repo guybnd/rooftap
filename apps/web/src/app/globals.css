@@ -539,6 +539,23 @@
     display: none;
   }
 
+  /* The docked capture card, its + and the chat pop-up (Hearth §13.7) float
+     over the page. Each gets its own still group, so a page change runs
+     beneath them instead of painting over them. */
+  ::view-transition-group(capture-dock),
+  ::view-transition-group(capture-dock-fab),
+  ::view-transition-group(chat-dock),
+  ::view-transition-new(capture-dock),
+  ::view-transition-new(capture-dock-fab),
+  ::view-transition-new(chat-dock) {
+    animation: none;
+  }
+  ::view-transition-old(capture-dock),
+  ::view-transition-old(capture-dock-fab),
+  ::view-transition-old(chat-dock) {
+    display: none;
+  }
+
   /* Lateral tab switch, and portal jump: plain crossfade. */
   html[data-nav-transition="crossfade"]::view-transition-old(route-content),
   html[data-nav-transition="portal"]::view-transition-old(route-content) {
@@ -899,28 +916,218 @@ html:not([data-layout="classic"]) .desk-classic {
   display: none !important;
 }
 
-/* Top bar tabs: an icon in a fixed slot, its name fading in underneath, so a
-   label never pushes its neighbours. One name shows at a time: the active
-   tab's, or the hovered or focused tab's in its place. */
+/* Top bar tabs: an icon in a fixed slot, the active space's name centred
+   underneath it so a label never pushes its neighbours. A hovered or focused
+   tab drips its name into a pool under the bar (.tab-drip). Both
+   centre with `translate` here, so no Tailwind translate class may fight it. */
 .topbar-label {
-  opacity: 0;
-  translate: 0 -2px;
-  transition: opacity var(--motion-fast) var(--motion-ease-out), translate var(--motion-fast) var(--motion-ease-out);
+  translate: -50% 0;
+  animation: topbar-label-in var(--motion-fast) var(--motion-ease-out);
 }
-.topbar-tab[aria-current="page"] .topbar-label,
-.topbar-tab:hover .topbar-label,
-.topbar-tab:focus-visible .topbar-label {
+@keyframes topbar-label-in {
+  from { opacity: 0; translate: -50% -2px; }
+}
+/* The hover name drips out of its tab into a pool below (components/ui/tab-drip.tsx). */
+.tab-drip {
+  opacity: 0;
+  transition-duration: var(--motion-fast);
+  transition-timing-function: var(--motion-ease-out);
+}
+.tab-drip[data-on] {
   opacity: 1;
-  translate: 0 0;
+  transition-duration: 60ms;
 }
-.topbar-tabs:has(.topbar-tab:hover, .topbar-tab:focus-visible)
-  .topbar-tab[aria-current="page"]:not(:hover):not(:focus-visible)
-  .topbar-label {
-  opacity: 0;
+.tab-drip-pour {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+.tab-drip-shape {
+  position: absolute;
+  overflow: visible;
+  /* Pours from the tab down: the outline is revealed top to bottom. */
+  animation: tab-drip-pour 170ms cubic-bezier(0.3, 0.7, 0.2, 1) both;
+}
+.tab-drip-shape path {
+  stroke: color-mix(in oklch, var(--hue-glyph) 38%, transparent);
+  stroke-width: 1;
+}
+.tab-drip-stop-tab {
+  stop-color: var(--hue-tile);
+  stop-opacity: 0.35;
+}
+.tab-drip-stop-pool {
+  stop-color: var(--hue-tile);
+  stop-opacity: 1;
+}
+.tab-drip-name {
+  position: absolute;
+  left: 0;
+  translate: -50% 0;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  padding: 0 13px;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--hue-glyph);
+  animation: tab-drip-name 120ms 70ms var(--motion-ease-out) both;
+}
+@keyframes tab-drip-pour {
+  from { clip-path: inset(0 0 100% 0); }
+  to { clip-path: inset(0 0 -2px 0); }
+}
+@keyframes tab-drip-name {
+  from { opacity: 0; transform: translateY(-3px); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .topbar-label {
+  .topbar-label,
+  .tab-drip-shape,
+  .tab-drip-name { animation: none; }
+  .tab-drip { transition: none; }
+}
+
+/* ── Scrollbars (Guy, 2026-10-22) ─────────────────────────────────────────
+   The browser's scroll bars follow the theme: `color-scheme` tells it the
+   ground is dark (without it Chrome on Windows paints a white bar on Night),
+   and every scroller gets the same thin bar in the border tone, with the
+   thumb lifting to the muted text tone on hover. */
+:root { color-scheme: light; }
+:root.dark { color-scheme: dark; }
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklch, var(--muted-foreground) 45%, transparent) transparent;
+}
+*:hover {
+  scrollbar-color: color-mix(in oklch, var(--muted-foreground) 70%, transparent) transparent;
+}
+/* A scroller inside a module shows its bar only while the pointer is on it,
+   so a page of modules never stacks bars beside each other. */
+.scroll-quiet:not(:hover) {
+  scrollbar-color: transparent transparent;
+}
+
+/* ── Home grid (Hearth §13.7, Guy 2026-10-22) ─────────────────────────────
+   app/home/desk-home.tsx lays Home's modules on react-grid-layout. These are
+   the few rules the grid needs (its own stylesheet is not loaded), themed:
+   the drop target is a soft primary wash, and the resize handles are short
+   bars on a module's edges that only show in Arrange. */
+.desk-grid .react-grid-layout {
+  position: relative;
+  transition: height var(--motion-base) var(--motion-ease-out);
+}
+.desk-grid .react-grid-item {
+  transition: height var(--motion-base) var(--motion-ease-out);
+}
+/* Modules glide to a new spot only in Arrange; a window resize follows at once. */
+.desk-grid.desk-arranging .react-grid-item {
+  transition: transform var(--motion-base) var(--motion-ease-out), width var(--motion-base) var(--motion-ease-out),
+    height var(--motion-base) var(--motion-ease-out);
+}
+.desk-grid .react-grid-item.resizing,
+.desk-grid .react-grid-item.react-draggable-dragging {
+  transition: none;
+  z-index: 3;
+}
+.desk-grid .react-grid-item.react-draggable-dragging > div {
+  filter: drop-shadow(0 18px 30px rgb(0 0 0 / 0.35));
+}
+.desk-grid .react-grid-item.react-grid-placeholder {
+  z-index: 2;
+  border-radius: 24px;
+  background: color-mix(in oklch, var(--primary) 14%, transparent);
+  outline: 2px dashed color-mix(in oklch, var(--primary) 55%, transparent);
+  outline-offset: -2px;
+  /* The item's own gap sits inside it; the placeholder leaves the same room. */
+  clip-path: inset(0 10px 20px 10px round 24px);
+  transition-duration: 100ms;
+  user-select: none;
+}
+.desk-grid:not(.desk-arranging) .desk-resize {
+  display: none;
+}
+.desk-resize {
+  position: absolute;
+  z-index: 4;
+  display: block;
+  touch-action: none;
+}
+.desk-resize::after {
+  content: "";
+  position: absolute;
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--primary) 75%, transparent);
+  opacity: 0.55;
+  transition: opacity var(--motion-fast) var(--motion-ease-out), scale var(--motion-fast) var(--motion-ease-out);
+}
+.desk-resize:hover::after,
+.react-grid-item.resizing .desk-resize::after {
+  opacity: 1;
+  scale: 1.15;
+}
+/* Edges: the module's card ends 20px above the item (its gap), and 10px in from each side. */
+.desk-resize-e,
+.desk-resize-w {
+  top: 0;
+  bottom: 20px;
+  width: 16px;
+  cursor: ew-resize;
+}
+.desk-resize-e { right: 2px; }
+.desk-resize-w { left: 2px; }
+.desk-resize-e::after,
+.desk-resize-w::after {
+  top: 50%;
+  left: 6px;
+  width: 4px;
+  height: 36px;
+  margin-top: -18px;
+}
+.desk-resize-s {
+  left: 10px;
+  right: 10px;
+  bottom: 12px;
+  height: 16px;
+  cursor: ns-resize;
+}
+.desk-resize-s::after {
+  left: 50%;
+  top: 6px;
+  width: 44px;
+  height: 4px;
+  margin-left: -22px;
+}
+.desk-resize-se,
+.desk-resize-sw {
+  bottom: 12px;
+  width: 22px;
+  height: 22px;
+}
+.desk-resize-se { right: 2px; cursor: nwse-resize; }
+.desk-resize-sw { left: 2px; cursor: nesw-resize; }
+.desk-resize-se::after,
+.desk-resize-sw::after {
+  width: 12px;
+  height: 12px;
+  bottom: 4px;
+  background: transparent;
+  border-bottom: 3px solid color-mix(in oklch, var(--primary) 75%, transparent);
+  border-radius: 0 0 6px 0;
+}
+.desk-resize-se::after {
+  right: 4px;
+  border-right: 3px solid color-mix(in oklch, var(--primary) 75%, transparent);
+}
+.desk-resize-sw::after {
+  left: 4px;
+  border-left: 3px solid color-mix(in oklch, var(--primary) 75%, transparent);
+  border-radius: 0 0 0 6px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .desk-grid .react-grid-layout,
+  .desk-grid .react-grid-item {
     transition: none;
-    translate: none;
   }
 }

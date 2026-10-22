@@ -76,3 +76,10 @@ export function useWideLayout(): boolean {
   const wide = useMediaQuery(`(min-width: ${WIDE_MIN_WIDTH}px)`);
   return layout === "top" && wide;
 }
+
+/** True under the top bar: the top-bar layout on a screen at least `md` wide (the bar's own breakpoint). */
+export function useDesktopShell(): boolean {
+  const layout = useDesktopLayout();
+  const desk = useMediaQuery(`(min-width: ${DESKTOP_MIN_WIDTH}px)`);
+  return layout === "top" && desk;
+}

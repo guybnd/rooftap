@@ -3,7 +3,7 @@
 // Rewards: a card drawn in its scheme's colour. The colour is content (like a
 // grocery glyph), never chrome, so it stays inside the face. Native twin:
 // apps/mobile/src/features/rewards/card-face.tsx.
-import type { ReactNode } from 'react';
+import type { MouseEvent, ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
 /** The wallet face: scheme name, who holds it, and one line of facts. */
@@ -13,17 +13,20 @@ export function CardFace({
   holder,
   detail,
   onClick,
+  onContextMenu,
 }: {
   color: string;
   title: string;
   holder: string;
   detail?: ReactNode;
   onClick: () => void;
+  onContextMenu?: (e: MouseEvent) => void;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      onContextMenu={onContextMenu}
       style={{ backgroundColor: color }}
       className="flex min-h-[88px] w-full flex-col justify-between gap-3 rounded-[20px] p-4 text-left text-white shadow-[0_-4px_14px_rgb(0_0_0/0.25)] outline-none transition-transform focus-visible:ring-3 focus-visible:ring-ring/60 active:scale-[0.99]"
     >

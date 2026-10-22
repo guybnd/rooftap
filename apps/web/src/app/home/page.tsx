@@ -49,13 +49,15 @@ import { HouseholdTaskModal } from '@/app/tasks/household-task-modal';
 import { todayISO, addDaysISO, nextOccurrenceISO } from '@/app/tasks/moving-tasks';
 import { HOUSEHOLD_TASKS_CHANGED_EVENT } from '@/hooks/use-overdue-task-count';
 import { buildHeroItems, heroRangeWindow, parseLocalISODate, type HeroItem, type HeroRange } from './hub-shared';
-import { TodayHero } from './today-hero';
+import { TodayHero, type AddOnDayKind } from './today-hero';
+import { CostModal } from '@/app/costs/cost-modal';
 import { SummaryHero } from './summary-hero';
 import { useWeather } from './use-weather';
 import { useWideLayout } from '@/lib/desktop-layout';
 import { BudgetSpace, BillsSpace } from './money-spaces';
 import { GroceriesWidget } from './groceries-widget';
 import { SetupTile, HomeSearchTile, ShopperTile, AssistantTile } from './section-tiles';
+import { DeskHome } from './desk-home';
 
 export default function HomeHubPage() {
   const { group, memberProfiles, groupMembers, currentUserId, userSettings, loading: cacheLoading } =
@@ -157,6 +159,7 @@ export default function HomeHubPage() {
   // ── Costs store ───────────────────────────────────────────────────────────
   const costs$ = costItems$(syncedGroup(costItems$));
   useReconnectSync(costs$);
+  const { writeRow: writeCost } = useStoreHelpers(costs$, currentUserId);
 
   // FLUX-255: summary-hero budgetPulse/billsDue modules read the live cost items.
   const costItemsList = use$(() =>
@@ -398,6 +401,13 @@ export default function HomeHubPage() {
   const { linkedCostOf, saveEvent, deleteEvent } = useEventSave(eventsVisible ? group?.id : undefined, currentUserId, showEventBudget);
   const [editingEvent, setEditingEvent] = useState<GroupEvent | null>(null);
 
+  const addOnDayKinds: AddOnDayKind[] = [
+    ...(householdVisible ? [{ id: 'todo' as const, label: 'To-do' }] : []),
+    ...(eventsVisible ? [{ id: 'event' as const, label: 'Calendar event' }] : []),
+    ...(!isHidden('checklists') ? [{ id: 'checklist' as const, label: 'Checklist' }] : []),
+    ...(costsVisible ? [{ id: 'cost' as const, label: 'Cost' }] : []),
+  ];
+
   // ── Hero items ────────────────────────────────────────────────────────────
   const today = todayISO();
   const showCalendarEventsInTodo = userSettings?.calendar_show_pulled_events_in_todo ?? true;
@@ -557,6 +567,21 @@ export default function HomeHubPage() {
 
   // ── Task modal state ──────────────────────────────────────────────────────
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+  // The week board's per-day add: a new to-do due on that day.
+  const [newTaskDue, setNewTaskDue] = useState<string | undefined>();
+  // ...or an event, a dated checklist or a cost on that day, by module.
+  const [newEventOn, setNewEventOn] = useState<string | null>(null);
+  const [newCostOn, setNewCostOn] = useState<string | null>(null);
+  const addOnDay = (kind: AddOnDayKind['id'], dateISO: string) => {
+    if (kind === 'todo') {
+      setEditingTask(undefined);
+      setNewTaskTitle('');
+      setNewTaskDue(dateISO);
+      setIsTaskModalOpen(true);
+    } else if (kind === 'event') setNewEventOn(dateISO);
+    else if (kind === 'cost') setNewCostOn(dateISO);
+    else router.push(`/checklists/new?date=${dateISO}`);
+  };
   const [editingTask, setEditingTask] = useState<HouseholdTask | undefined>();
   const [newTaskTitle, setNewTaskTitle] = useState('');
 
@@ -638,6 +663,83 @@ export default function HomeHubPage() {
   // in the "+" capture menu, and the top bar already names the section.
   return (
     <div className={cn('mx-auto space-y-4 p-4 md:p-6 pb-24', wide ? 'max-w-[1680px] lg:px-8 lg:pt-8' : 'max-w-6xl')}>
+      {/* Hearth §13.7 "Desktop shell" (Guy, 2026-10-22): on a wide screen
+          the narrower Spaces stack in a right-hand sidebar beside the
+          summary, the week and Groceries, instead of stretching across the
+          full width. A shortcut (lens) still filters Home to one Space. */}
+      {wide && !lens ? (
+        // Hearth §13.7 (Guy, 2026-10-22): every module, the summary too, sits
+        // on a grid you can rearrange and resize (desk-home.tsx).
+        <DeskHome
+          modules={{
+            summary: { label: 'Today', node: (
+            <SummaryHero
+                lat={group.home_lat ?? null}
+                lng={group.home_lng ?? null}
+                todayCount={todayCount}
+                todayItems={todayHeroItems}
+                memberProfiles={memberProfiles}
+                currentUserId={currentUserId}
+                tasks={tasks}
+                budgetCents={userSettings?.costs_budget_monthly ?? null}
+                costItems={costItemsList}
+                groceryToBuyCount={groceryToBuyCount}
+                setup={setupSummary}
+                shopperShortcut={shopperShortcut}
+                today={today}
+                onOpenItem={onNowOpen}
+                onCompleteItem={onNowComplete}
+                checklistsById={taskChecklistsVisible ? checklistsById : undefined}
+                checklistItemsByChecklistId={taskChecklistsVisible ? checklistItemsByChecklistId : undefined}
+                lens={lens}
+                onLensChange={setLens}
+                wide={wide}
+              />
+            ) },
+            board: { label: 'Upcoming', node: agendaVisible ? (cols: number) => (
+              <TodayHero
+                addOnDayKinds={addOnDayKinds}
+                onAddOnDay={addOnDay}
+                items={heroItems}
+                profiles={memberProfiles}
+                currentUserId={currentUserId}
+                householdVisible={householdVisible}
+                searchVisible={viewingsVisible}
+                calendarVisible={calendarEventsVisible}
+                eventsVisible={eventsVisible}
+                today={today}
+                range={heroRange}
+                onRangeChange={setHeroRange}
+                itemsForRange={heroItemsFor}
+                onToggle={onHeroToggle}
+                onSnooze={onHeroSnooze}
+                onEdit={onHeroEdit}
+                onUpdate={onHeroUpdate}
+                groupMembers={groupMembers}
+                onRequestDelete={onHeroDelete}
+                onDismissCalendar={dismissCalendarEvent}
+                onEditEvent={setEditingEvent}
+                onHideEvent={hideEvent}
+                checklistsById={taskChecklistsVisible ? checklistsById : undefined}
+                checklistItemsByChecklistId={taskChecklistsVisible ? checklistItemsByChecklistId : undefined}
+                layout={cols >= 6 ? 'board' : 'feed'}
+                windowEnd={heroRangeWindow(today, heroRange, upcomingDays).to}
+                weatherDays={weather?.days}
+              />
+            ) : null },
+            // The desk has room for the whole list, not just the essentials (Guy, 2026-10-22).
+            groceries: { label: 'Groceries', node: !isHidden('groceries') ? <GroceriesWidget group={group} currentUserId={currentUserId} expanded /> : null },
+            budget: { label: 'Budget', node: costsVisible ? (
+              <BudgetSpace group={group} currentUserId={currentUserId} costItems={costItemsList} budgetCents={userSettings?.costs_budget_monthly ?? null} expanded={false} now={new Date()} />
+            ) : null },
+            bills: { label: 'Bills', node: costsVisible ? <BillsSpace costItems={costItemsList} expanded={false} now={new Date()} /> : null },
+            setup: { label: 'Home Setup', node: !isHidden('setup') ? <SetupTile group={group} /> : null },
+            search: { label: 'Home Search', node: searchVisible ? <HomeSearchTile apartments={apartments} appointments={appointments} /> : null },
+            shopper: { label: 'Shopper', node: !isHidden('shopper') ? <ShopperTile group={group} expanded={false} /> : null },
+            assistant: { label: 'Assistant', node: !isHidden('assistant') ? <AssistantTile /> : null },
+          }}
+        />
+      ) : (
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="lg:col-span-3 space-y-4">
           <SummaryHero
@@ -664,6 +766,8 @@ export default function HomeHubPage() {
           />
           {!lens && agendaVisible && (
             <TodayHero
+              addOnDayKinds={addOnDayKinds}
+                onAddOnDay={addOnDay}
               items={heroItems}
               profiles={memberProfiles}
               currentUserId={currentUserId}
@@ -724,6 +828,7 @@ export default function HomeHubPage() {
         )}
         {!lens && !isHidden('assistant') && <AssistantTile />}
       </div>
+      )}
 
       {/* ── Modals ── */}
 
@@ -735,12 +840,14 @@ export default function HomeHubPage() {
       />
 
       <HouseholdTaskModal
-        key={editingTask?.id ?? `new-task-${newTaskTitle}`}
+        key={editingTask?.id ?? `new-task-${newTaskTitle}-${newTaskDue ?? ''}`}
         isOpen={isTaskModalOpen}
         task={editingTask}
         groupId={group.id}
         defaultTitle={newTaskTitle || undefined}
+        defaultDueDate={newTaskDue}
         onClose={() => {
+          setNewTaskDue(undefined);
           setIsTaskModalOpen(false);
           setEditingTask(undefined);
           setNewTaskTitle('');
@@ -748,6 +855,7 @@ export default function HomeHubPage() {
         onSave={(task) => {
           const isNew = !editingTask;
           writeTask(task);
+          setNewTaskDue(undefined);
           setIsTaskModalOpen(false);
           setEditingTask(undefined);
           setNewTaskTitle('');
@@ -768,6 +876,35 @@ export default function HomeHubPage() {
           bumpBadge();
         }}
       />
+
+      {newEventOn && group && (
+        <EventModal
+          isOpen
+          groupId={group.id}
+          defaultDate={newEventOn}
+          showBudget={showEventBudget}
+          costCents={null}
+          onClose={() => setNewEventOn(null)}
+          onSave={(saved, costCents) => {
+            saveEvent(saved, costCents);
+            setNewEventOn(null);
+          }}
+        />
+      )}
+
+      {newCostOn && group && (
+        <CostModal
+          key={newCostOn}
+          isOpen
+          groupId={group.id}
+          defaultStartDate={newCostOn}
+          onClose={() => setNewCostOn(null)}
+          onSave={(item) => {
+            writeCost(item);
+            setNewCostOn(null);
+          }}
+        />
+      )}
 
       {editingEvent && group && (
         <EventModal

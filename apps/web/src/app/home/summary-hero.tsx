@@ -184,7 +184,7 @@ export function SummaryHero({
   const ribbonOpen = wide || ribbonPref;
   const sky = isOn('weather') ? weather : null;
   const showSky = sky != null;
-  const ribbon = sky ? buildDayRibbon(sky, todayItems.filter((i) => i.dueTime && !i.done).map((i) => `${today}T${i.dueTime}`)) : [];
+  const ribbon = sky ? buildDayRibbon(sky, todayItems.filter((i) => i.dueTime && !i.done).map((i) => `${today}T${i.dueTime}`), { long: wide }) : [];
   const headline = sky ? skyHeadline(sky, ctx.now).text : '';
   // Weather on but nothing to show: say why instead of leaving the spot empty.
   const skyNote: 'noLocation' | 'unavailable' | null =
@@ -281,7 +281,7 @@ export function SummaryHero({
   const ribbonNode =
     showSky && ribbonOpen && ribbon.length > 0 ? (
       <div className="relative z-10">
-        <DayRibbon hours={ribbon} />
+        <DayRibbon hours={ribbon} scroll={wide && ribbon.length > 12} />
       </div>
     ) : null;
   const nowNode =

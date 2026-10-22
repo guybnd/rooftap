@@ -243,3 +243,12 @@ export const COMPARE: ReadonlyArray<[job: string, separate: string, homeup: stri
   ["An AI for the house", "A chatbot with no access", "The Assistant, with your tasks, calendar, budget, list and Home Assistant. In the app or on Telegram."],
   ["Where the data lives", "Each app's own servers", "One Postgres database, on your server."],
 ];
+
+/** One app, two layouts: what each screen size gets. */
+export const LAYOUT_FACTS: readonly { title: string; text: string }[] = [
+  { title: "Phone layout", text: "On a phone or a narrow window, you get one column, a tab bar, swipes and press-and-hold. The Android app uses this layout too." },
+  { title: "Desktop layout", text: "On a screen 1024 pixels wide or more, a top bar replaces the tab bar. Upcoming becomes a week board with the weather for each day." },
+  { title: "Your Home grid", text: "Drag the Home modules into place and change their size. Each browser keeps its own arrangement." },
+  { title: "Mouse and keyboard", text: "Right-click any row for its actions. Double-click a day on the board to add a to-do, an event, a checklist or a cost to it." },
+  { title: "Your choice", text: "Settings, then Appearance, switches a wide screen back to the classic sidebar layout." },
+];

@@ -55,11 +55,13 @@ interface CostModalProps {
   currentUserId: string | null;
   /** HOUP-147: pre-fill a new item's name (global search "Add as..."). Ignored when `item` is set (editing). */
   defaultName?: string;
+  /** Pre-fill a new item's date, YYYY-MM-DD (Home's "add to this day"). */
+  defaultStartDate?: string;
   onClose: () => void;
   onSave: (item: CostItem) => void;
 }
 
-function buildInitialForm(item: CostItem | undefined, defaultName: string | undefined) {
+function buildInitialForm(item: CostItem | undefined, defaultName: string | undefined, defaultStartDate?: string) {
   return {
     name: item?.name ?? defaultName ?? '',
     // FLUX-182 parity: new costs default to a one-off Purchase, matching web.
@@ -68,15 +70,15 @@ function buildInitialForm(item: CostItem | undefined, defaultName: string | unde
     cadence: item?.cadence ?? 'one_off',
     isEstimate: item?.is_estimate ?? false,
     provider: item?.provider ?? '',
-    startDate: item?.start_date ?? '',
+    startDate: item?.start_date ?? defaultStartDate ?? '',
     endDate: item?.end_date ?? '',
     discountEndDate: item?.discount_end_date ?? '',
     notes: item?.notes ?? '',
   };
 }
 
-export function CostModal({ open, item, groupId, currentUserId, defaultName, onClose, onSave }: CostModalProps) {
-  const [form, setForm] = React.useState(() => buildInitialForm(item, defaultName));
+export function CostModal({ open, item, groupId, currentUserId, defaultName, defaultStartDate, onClose, onSave }: CostModalProps) {
+  const [form, setForm] = React.useState(() => buildInitialForm(item, defaultName, defaultStartDate));
 
   const isRecurring = form.cadence !== 'one_off';
   const modules = useModules();

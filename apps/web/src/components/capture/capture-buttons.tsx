@@ -177,7 +177,7 @@ function CaptureFab({ dock = false }: { dock?: boolean }) {
       }}
       className={cn(
         dock
-          ? "desk-top fixed bottom-6 right-6 z-40 hidden h-14 w-14 md:flex"
+          ? "desk-top fixed bottom-6 right-6 z-40 hidden h-14 w-14 md:flex [view-transition-name:capture-dock-fab]"
           : "md:hidden absolute left-1/2 -top-5 z-30 flex h-12 w-12 [view-transition-name:capture-fab]",
         "select-none touch-none [-webkit-touch-callout:none] items-center justify-center rounded-full bg-primary text-primary-foreground",
         "shadow-lg ring-4 ring-background disabled:opacity-50 disabled:pointer-events-none motion-safe:transition-[transform,box-shadow]",

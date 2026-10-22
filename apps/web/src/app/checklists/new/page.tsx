@@ -6,9 +6,9 @@
 // to-do. Instantiation is centralised in @/lib/checklists so this and the
 // templates manager stay in lockstep.
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { use$ } from '@legendapp/state/react';
 import { ArrowLeft, CalendarDays, ChevronRight, Plus } from 'lucide-react';
 import { useDataCache } from '@/lib/data-cache';
@@ -35,7 +35,16 @@ import { SegmentedControl } from '@/components/ui/segmented-control';
 import { DateScrollField } from '@/components/date-scroll-field';
 import { checklistTypeIcon } from '../checklist-ui';
 
+// useSearchParams needs a Suspense boundary for the static build.
 export default function NewChecklistPage() {
+  return (
+    <Suspense>
+      <NewChecklist />
+    </Suspense>
+  );
+}
+
+function NewChecklist() {
   const router = useRouter();
   const { group, currentUserId, loading: cacheLoading } = useDataCache();
   const modules = useModules();
@@ -90,8 +99,10 @@ export default function NewChecklistPage() {
   // ── from-scratch form state ──────────────────────────────────────────────────
   const [title, setTitle] = useState('');
   const [type, setType] = useState<ChecklistType>('plain');
-  const [dated, setDated] = useState(false);
-  const [date, setDate] = useState('');
+  // ?date=YYYY-MM-DD (Home's week board "add to this day") starts it dated.
+  const presetDate = useSearchParams().get('date')?.match(/^\d{4}-\d{2}-\d{2}$/)?.[0] ?? '';
+  const [dated, setDated] = useState(!!presetDate);
+  const [date, setDate] = useState(presetDate);
 
   const linkTaskIfDated = (checklist: Checklist) => {
     if (!syncTask || !checklist.scheduled_date) return;

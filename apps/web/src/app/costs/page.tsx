@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/client';
 import { use$ } from '@legendapp/state/react';
 import { syncState } from '@legendapp/state';
 import type { CostItem, CostCadence, CostCategory, Apartment } from '@homeup/core';
-import { dialog } from '@homeup/core';
+import { CATEGORY_COLOR, dialog } from '@homeup/core';
 import {
   Plus,
   RotateCw,
@@ -627,7 +627,7 @@ export default function CostsPage() {
                   >
                     <ChevronDown className={`h-4 w-4 text-muted-foreground flex-shrink-0 transition-transform ${collapsed ? '-rotate-90' : ''}`} />
                     <span className="flex items-baseline gap-1.5 flex-shrink-0 min-w-0">
-                      <span className="text-[10.5px] font-medium uppercase tracking-[0.1em] text-muted-foreground truncate">
+                      <span className={cn('text-[10.5px] font-semibold uppercase tracking-[0.1em] truncate', CATEGORY_COLOR[cat as CostCategory].text)}>
                         {CATEGORY_META[cat as CostCategory].label}
                       </span>
                       <span className="text-xs text-muted-foreground flex-shrink-0">{catItems.length}</span>

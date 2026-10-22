@@ -25,6 +25,7 @@ import {
   type UnifiedDocument,
 } from '@/lib/documents';
 import { PopMenu, MenuItem, MenuDivider } from '@/app/setup/pop-menu';
+import { useRowContextMenu, withRowMenu } from '@/components/ui/row-context-menu';
 import {
   reminderKey,
   parseReminderKey,
@@ -1156,6 +1157,34 @@ function DocumentCard({
   const [holdMenuOpen, setHoldMenuOpen] = useState(false);
 
   const longPress = useRowLongPress(() => (selecting ? onToggleSelect() : setHoldMenuOpen(true)));
+  // Hearth §13.7 "Row menu": right-click with a mouse (outside select mode).
+  const rowMenu = useRowContextMenu(() =>
+    selecting
+      ? null
+      : {
+          title: doc.title || doc.filename,
+          kind: 'Document',
+          actions: [
+            { id: 'preview', label: 'Preview', group: 'open', icon: 'open', run: () => setPreviewing(true) },
+            !!reminderTaskId && !!onOpenReminder && { id: 'reminder', label: 'Open reminder', group: 'open', icon: 'due', run: () => onOpenReminder(reminderTaskId) },
+            !reminderTaskId && { id: 'remind', label: 'Set reminder', group: 'set', icon: 'due', run: () => void createReminder() },
+            { id: 'move', label: 'Move to folder', group: 'set', icon: 'move', run: () => void ensureStored().then((id) => id && onMoveToFolder(id)) },
+            !!onAddToCalendar && { id: 'calendar', label: 'Add to calendar', group: 'set', icon: 'calendar', run: () => void ensureStored().then((id) => id && onAddToCalendar(id)) },
+            { id: 'share', label: 'Share', group: 'share', icon: 'share', run: () => void share() },
+            { id: 'select', label: 'Select', group: 'edit', icon: 'select', run: onSelect },
+            { id: 'edit', label: 'Edit details', group: 'edit', icon: 'edit', run: () => void ensureStored().then((id) => id && setEditing(true)) },
+            {
+              id: 'delete',
+              label: 'Delete',
+              group: 'danger',
+              icon: 'delete',
+              danger: true,
+              disabled: busy,
+              run: () => (doc.storeId ? void remove() : void removeLegacy()),
+            },
+          ],
+        }
+  );
 
   // Meta (FLUX-125, Hearth §6 Document row): type, then one fact. A
   // document with an expiry shows when it expires (warn < 30d), since that
@@ -1319,8 +1348,9 @@ function DocumentCard({
       // Legacy files get the same hold-to-edit menu; ensureStored adopts one
       // the first time an action needs a store row.
       holdProgress={longPress.progress}
-      {...longPress.handlers}
+      {...withRowMenu(longPress.handlers, rowMenu)}
     >
+      {rowMenu.menu}
       <ListItemLeading>
         {/* Select mode swaps the type glyph for its tick, same place and
             size as Costs' select mode. */}

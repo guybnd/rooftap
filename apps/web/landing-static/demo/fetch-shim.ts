@@ -23,6 +23,8 @@ const hour = new Date();
 hour.setMinutes(0, 0, 0);
 const localIso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}T${String(d.getHours()).padStart(2, "0")}:00`;
 const ahead = Array.from({ length: 12 }, (_, i) => new Date(hour.getTime() + i * 3_600_000));
+const aheadLong = Array.from({ length: 48 }, (_, i) => new Date(hour.getTime() + i * 3_600_000));
+const demoRain = (i: number) => (i >= rainFrom && i < rainFrom + 4) || (i >= 26 && i < 30);
 // Clear now, rain from two hours on.
 const rainFrom = 2;
 
@@ -45,6 +47,12 @@ const weather = {
     times: ahead.map(localIso),
     tempC: ahead.map((_, i) => Math.round(18 + 3 * Math.sin((i - 2) / 4))),
     precipitationProbability: ahead.map((_, i) => (i >= rainFrom && i < rainFrom + 4 ? 80 : 10)),
+  },
+  aheadLong: {
+    times: aheadLong.map(localIso),
+    tempC: aheadLong.map((_, i) => Math.round(16 + 4 * Math.sin((i - 8) / 3.8))),
+    precipitationProbability: aheadLong.map((_, i) => (demoRain(i) ? 80 : 10)),
+    weatherCode: aheadLong.map((_, i) => (demoRain(i) ? 61 : i % 7 === 3 ? 3 : 1)),
   },
   // A week of spring: today's rain, a clear weekend, showers after.
   days: {

@@ -1,7 +1,7 @@
 'use client';
 
 import { HeroLede } from '@/components/ui/hero-lede';
-import { Fragment, useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { Fragment, useState, useEffect, useCallback, useRef, useMemo, type ReactNode } from 'react';
 import { use$ } from '@legendapp/state/react';
 import {
   DndContext,
@@ -89,7 +89,7 @@ import { useSuggestDismiss } from './use-suggest-dismiss';
 import { toastUndoDelete } from '@/lib/undo-toast';
 import { useGroceryUndo } from './use-grocery-undo';
 import { GroceryGlyph } from '@/components/grocery-glyph';
-import { useWideLayout } from '@/lib/desktop-layout';
+import { useMediaQuery, useWideLayout } from '@/lib/desktop-layout';
 
 const SHOPPING_TOOLTIP_KEY = 'homeup_shopping_tooltip_dismissed';
 
@@ -243,6 +243,7 @@ export default function GroceriesPage() {
 
   const [aisleOrder, setAisleOrder] = useState<string[]>(AISLE_ORDER as string[]);
   const wide = useWideLayout();
+  const twoAisleColumns = useMediaQuery('(min-width: 1280px)');
   const [collapsedAisles, setCollapsedAisles] = useState<Set<string>>(new Set());
   const [selectMode, setSelectMode] = useState(false);
   // Reorder aisles (More menu, By aisle only): aisles fold to their headers
@@ -1045,7 +1046,7 @@ export default function GroceriesPage() {
   // Reorder only means something in By aisle.
   const reordering = reorderMode && sortMode === 'aisle';
   // Hearth §13.7 "Desktop shell": on a wide screen the aisles flow into
-  // columns like a store map, Running low leading the first one. Reorder
+  // columns like a store map, beside the Running low sidebar. Reorder
   // aisles stays one column so the drag reads top to bottom.
   // One list stays a single centred column.
   const wideAisles = wide && sortMode === 'aisle';
@@ -1141,9 +1142,61 @@ export default function GroceriesPage() {
     ...customAisles.map((a) => ({ id: a.name, label: a.name, dot: getAisleColor(a.name, customAisles).dot })),
   ];
 
+  // Running low (re-add suggestions) as its own group, in the aisle
+  // header grammar, ahead of the aisles. Steps aside while searching so
+  // the results sit directly under the search bar.
+  const runningLowGroup = !searching ? (
+    <ReAddSuggestions
+      variant="group"
+      runningLow={reAddSuggestions}
+      onAdd={needAgainWithPop}
+      onAddAll={() => needAgainWithPop(reAddSuggestions)}
+      onSnooze={groceryUndo.snooze}
+      dismissAction={suggestDismiss.dismissAction}
+      onDismiss={suggestDismiss.dismiss}
+    />
+  ) : null;
+
+  // This trip (end of the list): the estimate the old pulse strip's Est
+  // total tile carried, as a card's Display lede (H1: never a second
+  // Hero), its caption, then the trip's quiet verbs as secondary pills.
+  // Hidden while searching and when there's nothing to buy.
+  const tripCard = !searching && buyableItems.length > 0 ? (
+      <section aria-label="This trip" className="rounded-3xl border border-border/60 bg-card p-4 shadow-[var(--card-shadow)]">
+        <p className="cap-inscription text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">This trip</p>
+        <p className="mt-1 font-heading text-2xl font-bold tracking-[-0.02em] tabular-nums text-foreground">~{formatMoney(totalEstimate)}</p>
+        <p className="text-xs tabular-nums text-muted-foreground">
+          estimated for {buyableItems.length} item{buyableItems.length === 1 ? '' : 's'}
+          {unpricedCount > 0 && <span className="text-warning"> · {unpricedCount} unpriced</span>}
+        </p>
+        {(session?.tracking === 'skipped' || bought > 0 || (!sessionBarActive && boughtToday.length > 0)) && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {/* Done shopping lives on the shop pill while tracking; with
+                no tracked shop it stays reachable here (FLUX-1559). */}
+            {!sessionBarActive && boughtToday.length > 0 && (
+              <button onClick={() => void doneShopping()} className={TRIP_PILL_CLASS}>
+                Done shopping
+              </button>
+            )}
+            {session?.tracking === 'skipped' && (
+              <TrackShopLink session={session} onChange={onSessionChange} className={TRIP_PILL_CLASS} />
+            )}
+            {bought > 0 && (
+              <button onClick={() => void resetBought()} className={TRIP_PILL_CLASS}>
+                Reset bought ({bought})
+              </button>
+            )}
+          </div>
+        )}
+      </section>
+  ) : null;
+
+  // Hearth §13.7 (Guy, 2026-10-22): on a wide screen Running low and This
+  // trip sit in a right sidebar, so the list keeps a readable width.
+
   return (
     // The floating ask or pill reserves room so it never covers the list's end.
-    <div className={cn('space-y-5 p-4 md:p-6 mx-auto', wideAisles ? 'max-w-[1400px] lg:px-8' : 'max-w-3xl', showTrackPrompt || showShopPill ? 'pb-44' : 'pb-28')}>
+    <div className={cn('space-y-5 p-4 md:p-6 mx-auto', wideAisles ? 'max-w-[1400px] lg:px-8' : wide ? 'max-w-[1200px] lg:px-8' : 'max-w-3xl', showTrackPrompt || showShopPill ? 'pb-44' : 'pb-28')}>
       {/* Collapsed bar: a zero-height sticky anchor (so it never shifts the
           page or re-trips the observer) holding a slim bar that slides in
           once the head has scrolled away. MO: transform + opacity only, base
@@ -1301,20 +1354,9 @@ export default function GroceriesPage() {
         )}
       </div>
 
-      {/* Running low (re-add suggestions) as its own group, in the aisle
-          header grammar, ahead of the aisles. Steps aside while searching so
-          the results sit directly under the search bar. */}
-      {!searching && !(aisleColumns && sortMode === 'aisle' && orderedAisles.length > 0) && (
-        <ReAddSuggestions
-          variant="group"
-          runningLow={reAddSuggestions}
-          onAdd={needAgainWithPop}
-          onAddAll={() => needAgainWithPop(reAddSuggestions)}
-          onSnooze={groceryUndo.snooze}
-          dismissAction={suggestDismiss.dismissAction}
-          onDismiss={suggestDismiss.dismiss}
-        />
-      )}
+      <SideRail on={wide}>
+        <div className="min-w-0 space-y-5">
+      {!wide && runningLowGroup}
 
       {/* Empty state */}
       {items.length === 0 && (
@@ -1445,19 +1487,8 @@ export default function GroceriesPage() {
           onDragEnd={handleDragEnd}
         >
           <SortableContext items={orderedAisles} strategy={verticalListSortingStrategy}>
-            <div className={aisleColumns ? 'columns-2 gap-5 xl:columns-3 [&>*]:mb-5 [&>*]:break-inside-avoid' : 'space-y-3'}>
-              {aisleColumns && !searching && (
-                <ReAddSuggestions
-                  variant="group"
-                  runningLow={reAddSuggestions}
-                  onAdd={needAgainWithPop}
-                  onAddAll={() => needAgainWithPop(reAddSuggestions)}
-                  onSnooze={groceryUndo.snooze}
-                  dismissAction={suggestDismiss.dismissAction}
-                  onDismiss={suggestDismiss.dismiss}
-                />
-              )}
-              {orderedAisles.map((aisle) => {
+            {(() => {
+              const renderAisle = (aisle: string) => {
                 const aisleItems = grouped[aisle] ?? [];
                 const collapsed = collapsedAisles.has(aisle);
                 const am = getAisleMeta(aisle, customAisles);
@@ -1600,8 +1631,22 @@ export default function GroceriesPage() {
                     )}
                   </SortableAisleGroup>
                 );
-              })}
-            </div>
+              };
+              if (!aisleColumns) return <div className="space-y-3">{orderedAisles.map(renderAisle)}</div>;
+              // Two fixed columns, filled by item count. CSS columns rebalance
+              // whenever a card's height changes, so a hover that grew a card
+              // threw it into the other column and back (Guy, 2026-10-22).
+              const columns = splitAisleColumns(orderedAisles, (a) => (grouped[a] ?? []).length + 2, twoAisleColumns ? 2 : 1);
+              return (
+                <div className="flex items-start gap-5">
+                  {columns.map((col, i) => (
+                    <div key={i} className="flex min-w-0 flex-1 flex-col gap-5">
+                      {col.map(renderAisle)}
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
           </SortableContext>
 
           {/* Drag overlay */}
@@ -1621,39 +1666,7 @@ export default function GroceriesPage() {
         </DndContext>
       )}
 
-      {/* This trip (end of the list): the estimate the old pulse strip's Est
-          total tile carried, as a card's Display lede (H1: never a second
-          Hero), its caption, then the trip's quiet verbs as secondary pills.
-          Hidden while searching and when there's nothing to buy. */}
-      {!searching && buyableItems.length > 0 && (
-        <section aria-label="This trip" className="rounded-3xl border border-border/60 bg-card p-4 shadow-[var(--card-shadow)]">
-          <p className="cap-inscription text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">This trip</p>
-          <p className="mt-1 font-heading text-2xl font-bold tracking-[-0.02em] tabular-nums text-foreground">~{formatMoney(totalEstimate)}</p>
-          <p className="text-xs tabular-nums text-muted-foreground">
-            estimated for {buyableItems.length} item{buyableItems.length === 1 ? '' : 's'}
-            {unpricedCount > 0 && <span className="text-warning"> · {unpricedCount} unpriced</span>}
-          </p>
-          {(session?.tracking === 'skipped' || bought > 0 || (!sessionBarActive && boughtToday.length > 0)) && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {/* Done shopping lives on the shop pill while tracking; with
-                  no tracked shop it stays reachable here (FLUX-1559). */}
-              {!sessionBarActive && boughtToday.length > 0 && (
-                <button onClick={() => void doneShopping()} className={TRIP_PILL_CLASS}>
-                  Done shopping
-                </button>
-              )}
-              {session?.tracking === 'skipped' && (
-                <TrackShopLink session={session} onChange={onSessionChange} className={TRIP_PILL_CLASS} />
-              )}
-              {bought > 0 && (
-                <button onClick={() => void resetBought()} className={TRIP_PILL_CLASS}>
-                  Reset bought ({bought})
-                </button>
-              )}
-            </div>
-          )}
-        </section>
-      )}
+      {!wide && tripCard}
 
       {/* Search add options — under the matches (or alone when nothing matched). */}
       {items.length > 0 && searching && (
@@ -1737,6 +1750,14 @@ export default function GroceriesPage() {
           )}
         </div>
       )}
+        </div>
+        {wide && (
+          <aside aria-label="Running low and this trip" className="sticky top-16 space-y-5">
+            {runningLowGroup}
+            {tripCard}
+          </aside>
+        )}
+      </SideRail>
 
       {/* Bulk action bar */}
       {selectMode && selectedIds.size > 0 && (
@@ -1895,6 +1916,12 @@ export default function GroceriesPage() {
 // ── Sortable aisle group wrapper ──────────────────────────────────────────────
 type AisleHandleProps = { attributes: object; listeners: object | undefined; disabled: boolean };
 
+/** Hearth §13.7: the list and a right sidebar side by side, or the children as they are. */
+function SideRail({ on, children }: { on: boolean; children: ReactNode }) {
+  if (!on) return <>{children}</>;
+  return <div className="grid grid-cols-[minmax(0,1fr)_320px] items-start gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">{children}</div>;
+}
+
 function SortableAisleGroup({
   id,
   children,
@@ -1951,4 +1978,20 @@ function GroceryQuickAdd({ onAdd, onOpenModal }: { onAdd: (name: string) => Prom
       </button>
     </div>
   );
+}
+
+/**
+ * Deals aisles into a fixed number of columns in shop order, each to the
+ * column with the least weight so far. The split depends only on the list,
+ * never on rendered heights, so cards stay put while they animate.
+ */
+function splitAisleColumns(aisles: string[], weight: (aisle: string) => number, count: number): string[][] {
+  const columns: string[][] = Array.from({ length: count }, () => []);
+  const totals = new Array<number>(count).fill(0);
+  for (const aisle of aisles) {
+    const i = totals.indexOf(Math.min(...totals));
+    columns[i].push(aisle);
+    totals[i] += weight(aisle);
+  }
+  return columns;
 }

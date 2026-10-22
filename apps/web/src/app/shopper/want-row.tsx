@@ -10,10 +10,24 @@ import { ShoppingBag } from 'lucide-react';
 import { DEAL_META, formatMoney, hitTarget, type ShopperRowSummary } from '@homeup/core';
 import { navLinkClickHandler } from '@/lib/view-transitions';
 import { LeadingTile } from '@/components/ui/leading-tile';
+import { useRowContextMenu } from '@/components/ui/row-context-menu';
 import { ListItem, ListItemContent, ListItemMeta, ListItemTitle, ListItemTrailing } from '@/components/ui/list-item';
 import { Sparkline, dealToneClass } from './price-chart';
 
-export function WantRow({ row, currency, onNavigate }: { row: ShopperRowSummary; currency: string; onNavigate?: () => void }) {
+export function WantRow({
+  row,
+  currency,
+  onNavigate,
+  onSetBought,
+  onDelete,
+}: {
+  row: ShopperRowSummary;
+  currency: string;
+  onNavigate?: () => void;
+  /** The row menu's Mark bought (true) or Watch again (false); omitted, it's left out. */
+  onSetBought?: (bought: boolean) => void;
+  onDelete?: () => void;
+}) {
   const router = useRouter();
   const { want, verdict, trend } = row;
   const href = `/shopper/${want.id}`;
@@ -29,8 +43,38 @@ export function WantRow({ row, currency, onNavigate }: { row: ShopperRowSummary;
           ? `usual ${formatMoney(verdict.stats.median, { currency })}`
           : want.best_store ?? null;
 
+  // Hearth §13.7 "Row menu": right-click with a mouse.
+  const rowMenu = useRowContextMenu(() => ({
+    title: want.title,
+    kind: 'Shopper item',
+    actions: [
+      {
+        id: 'open',
+        label: 'Open',
+        group: 'open',
+        icon: 'open',
+        run: () => {
+          onNavigate?.();
+          router.push(href);
+        },
+      },
+      onSetBought && {
+        id: 'bought',
+        label: want.status === 'bought' ? 'Watch again' : 'Mark bought',
+        group: 'state',
+        icon: want.status === 'bought' ? 'undo' : 'done',
+        run: () => onSetBought(want.status !== 'bought'),
+      },
+      { id: 'copy', label: 'Copy link', group: 'share', icon: 'copy', run: () => void navigator.clipboard?.writeText(new URL(href, window.location.href).toString()) },
+      onDelete && { id: 'delete', label: 'Delete', group: 'danger', icon: 'delete', danger: true, run: onDelete },
+    ],
+  }));
+
   return (
-    <ListItem asChild>
+    <>
+    {/* Beside the row, not in it: a click inside the menu must not reach the link. */}
+    {rowMenu.menu}
+    <ListItem asChild onContextMenu={rowMenu.onContextMenu}>
       <Link
         href={href}
         onClick={(e) => {
@@ -57,6 +101,7 @@ export function WantRow({ row, currency, onNavigate }: { row: ShopperRowSummary;
         </ListItemTrailing>
       </Link>
     </ListItem>
+    </>
   );
 }
 

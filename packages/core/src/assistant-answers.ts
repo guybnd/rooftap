@@ -59,3 +59,35 @@ function subscribeUnread(listener: () => void): () => void {
 export function useAssistantUnread(): number {
   return useSyncExternalStore(subscribeUnread, assistantUnread, assistantUnread);
 }
+
+let pending = 0;
+const pendingListeners = new Set<() => void>();
+
+/** Changes the assistant proposed that wait on this person's OK (status `pending`). */
+export function setAssistantPending(count: number): void {
+  const next = Math.max(0, Math.floor(count));
+  if (next === pending) return;
+  pending = next;
+  for (const listener of pendingListeners) listener();
+}
+
+export function assistantPending(): number {
+  return pending;
+}
+
+function subscribePending(listener: () => void): () => void {
+  pendingListeners.add(listener);
+  return () => {
+    pendingListeners.delete(listener);
+  };
+}
+
+export function useAssistantPending(): number {
+  return useSyncExternalStore(subscribePending, assistantPending, assistantPending);
+}
+
+/** Takes both counts from an /api/assistant/status answer. */
+export function setAssistantCounts(status: { unread?: number; pending?: number }): void {
+  setAssistantUnread(status.unread ?? 0);
+  setAssistantPending(status.pending ?? 0);
+}

@@ -1805,3 +1805,115 @@ button.liveHint:focus-visible {
     animation: none;
   }
 }
+
+/* ---------- phone or desktop, in the hero ---------- */
+.deviceSwitch {
+  display: inline-flex;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--card) 70%, transparent);
+}
+.deviceOption {
+  min-height: 34px;
+  min-width: 86px;
+  padding: 4px 14px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted-foreground);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.deviceOption:hover {
+  color: var(--foreground);
+}
+.deviceOption:focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 1px;
+}
+.deviceOn {
+  background: color-mix(in oklab, var(--primary) 22%, transparent);
+  color: var(--foreground);
+}
+/* The desktop layout needs the hero's width: the text goes above it. */
+.heroInner:has(.heroDesktop) {
+  grid-template-columns: minmax(0, 1fr);
+}
+.heroDesktop {
+  width: 100%;
+}
+.browser {
+  width: min(100%, 1180px, calc((100svh - 230px) * 1.6 + 0px));
+  min-width: min(100%, 520px);
+  border-radius: 14px;
+  overflow: hidden;
+  background: #121016;
+  box-shadow:
+    0 40px 80px -30px rgba(0, 0, 0, 0.7),
+    0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+.browserBar {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  height: 30px;
+  padding-inline: 14px;
+  background: linear-gradient(180deg, #2a2730, #1d1b22);
+}
+.browserBar > span {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16);
+}
+.browserScreen {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1440 / 900;
+  overflow: hidden;
+}
+
+/* ---------- one app, two layouts ---------- */
+.layouts {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  gap: clamp(28px, 5vw, 64px);
+  align-items: center;
+}
+/* The phone sits over the browser's lower right corner. */
+.layoutsShots {
+  position: relative;
+  padding: 0 clamp(36px, 7vw, 90px) clamp(36px, 6vw, 70px) 0;
+}
+.layoutsShots .browser {
+  width: 100%;
+  min-width: 0;
+}
+.layoutsPhone {
+  --phone-w: clamp(120px, 15vw, 190px);
+  position: absolute;
+  right: 0;
+  bottom: 0;
+}
+.layoutsList {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+}
+.layoutsList b {
+  color: var(--foreground);
+  font-weight: 650;
+}
+@media (max-width: 860px) {
+  .layouts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
