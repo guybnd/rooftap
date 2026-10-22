@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { CostItem } from './types';
 import {
+  bankDayLabel,
+  bankTransactionView,
+  groupByDay,
   bankMatchFits,
   bankNudges,
   bankPayees,
@@ -244,5 +247,30 @@ describe('monthRange', () => {
   it('refuses a non-month', () => {
     expect(monthRange('2026-13')).toBeNull();
     expect(monthRange('soon')).toBeNull();
+  });
+});
+
+describe('Money view helpers', () => {
+  it('labels days relative to now', () => {
+    const now = new Date(2026, 9, 22, 12);
+    expect(bankDayLabel(new Date(2026, 9, 22, 8).toISOString(), now)).toBe('Today');
+    expect(bankDayLabel(new Date(2026, 9, 21, 23).toISOString(), now)).toBe('Yesterday');
+    expect(bankDayLabel(new Date(2026, 9, 3, 9).toISOString(), now)).toMatch(/^3 Oct$/);
+    expect(bankDayLabel(new Date(2025, 9, 3, 9).toISOString(), now)).toMatch(/2025$/);
+  });
+  it('groups a newest-first list by day', () => {
+    const now = new Date(2026, 9, 22, 12);
+    const at = (d: number, h: number) => ({ occurredAt: new Date(2026, 9, d, h).toISOString() });
+    const groups = groupByDay([at(22, 9), at(22, 8), at(21, 20), at(3, 1)], now);
+    expect(groups.map((g) => [g.label, g.rows.length])).toEqual([
+      ['Today', 2],
+      ['Yesterday', 1],
+      [expect.stringMatching(/3 Oct/), 1],
+    ]);
+  });
+  it('marks whether the viewer owns a transaction and carries its edits', () => {
+    const r = row({ user_id: 'u1', note: 'bond', hidden: true, cost_item_id: 'rent', link_kind: 'manual', tags: ['rent'] });
+    expect(bankTransactionView(r, 'u1')).toMatchObject({ mine: true, note: 'bond', hidden: true, costItemId: 'rent', linkKind: 'manual', tags: ['rent'] });
+    expect(bankTransactionView(r, 'u2').mine).toBe(false);
   });
 });

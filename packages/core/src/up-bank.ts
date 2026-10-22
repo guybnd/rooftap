@@ -565,6 +565,75 @@ export function bankNudges(items: readonly CostItem[], links: readonly CostBankL
   return out;
 }
 
+
+/** One transaction in the Money view. */
+export interface BankTransactionView extends SpendingTransaction {
+  accountName: string | null;
+  message: string | null;
+  tags: string[];
+  note: string | null;
+  hidden: boolean;
+  costItemId: string | null;
+  /** 'manual' when picked by hand, 'rule' when a link rule filed it. */
+  linkKind: 'rule' | 'manual' | null;
+  isTransfer: boolean;
+  /** The viewer connected the account it came from, so they may change it. */
+  mine: boolean;
+}
+
+export interface BankTransactionPage {
+  transactions: BankTransactionView[];
+  /** Pass as `before` for the next, older page; null at the end. */
+  next: string | null;
+}
+
+/** What a person may change on one of their own transactions. */
+export interface BankTransactionPatch {
+  hidden?: boolean;
+  note?: string | null;
+  /** A cost line picked by hand, or null to leave it to the link rules. */
+  costItemId?: string | null;
+}
+
+/** Maps a stored row to what the Money view shows. */
+export function bankTransactionView(r: BankTransaction, viewerId: string): BankTransactionView {
+  return {
+    ...toSpendingTransaction(r),
+    accountName: r.account_name,
+    message: r.message,
+    tags: r.tags ?? [],
+    note: r.note ?? null,
+    hidden: !!r.hidden,
+    costItemId: r.cost_item_id ?? null,
+    linkKind: r.link_kind ?? null,
+    isTransfer: r.is_transfer,
+    mine: r.user_id === viewerId,
+  };
+}
+
+/** A day heading for the Money list: Today, Yesterday, or "3 Oct". */
+export function bankDayLabel(iso: string, now: Date = new Date()): string {
+  const d = new Date(iso);
+  const day = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((day(now) - day(d)) / 86_400_000);
+  if (diff === 0) return 'Today';
+  if (diff === 1) return 'Yesterday';
+  const label = d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
+  return d.getFullYear() === now.getFullYear() ? label : `${label} ${d.getFullYear()}`;
+}
+
+/** Groups a newest-first list by day, keeping the order. */
+export function groupByDay<T extends { occurredAt: string }>(rows: readonly T[], now: Date = new Date()): { label: string; rows: T[] }[] {
+  const groups: { label: string; rows: T[] }[] = [];
+  for (const r of rows) {
+    const label = bankDayLabel(r.occurredAt, now);
+    const last = groups[groups.length - 1];
+    if (last && last.label === label) last.rows.push(r);
+    else groups.push({ label, rows: [r] });
+  }
+  return groups;
+}
+
 // ── Client ───────────────────────────────────────────────────────────────
 
 export type UpBankCall = <T>(path: string, init?: { method?: string; body?: unknown }) => Promise<T>;
@@ -599,6 +668,14 @@ export function createUpBankApi(call: UpBankCall) {
     costLink: (costItemId: string) => call<CostBankDetail>(`/api/up-bank/links/${encodeURIComponent(costItemId)}`),
     setCostLink: (costItemId: string, rule: BankLinkRule) =>
       call<CostBankDetail>(`/api/up-bank/links/${encodeURIComponent(costItemId)}`, { method: 'PUT', body: rule }),
+    transactions: (input: { before?: string | null; hidden?: boolean } = {}) => {
+      const q = new URLSearchParams();
+      if (input.before) q.set('before', input.before);
+      if (input.hidden) q.set('hidden', '1');
+      return call<BankTransactionPage>(`/api/up-bank/transactions?${q.toString()}`);
+    },
+    updateTransaction: (id: string, patch: BankTransactionPatch) =>
+      call<BankTransactionView>(`/api/up-bank/transactions/${encodeURIComponent(id)}`, { method: 'PATCH', body: patch }),
     removeCostLink: (costItemId: string) =>
       call<CostBankDetail>(`/api/up-bank/links/${encodeURIComponent(costItemId)}`, { method: 'DELETE' }),
   };

@@ -97,6 +97,7 @@ import { CostRow, categoryTint } from '@/features/costs/cost-card';
 import { CostModal } from '@/features/costs/cost-modal';
 import { UpSpendingCard } from '@/features/costs/up-spending';
 import { upBankApi } from '@/features/costs/up-bank-api';
+import { CostsViewSwitch, MoneyView, type CostsView } from '@/features/costs/money-view';
 import { sectionIconFor } from '@/lib/section-icons';
 
 const PERIODS: Period[] = ['weekly', 'monthly', 'yearly'];
@@ -205,6 +206,8 @@ export default function CostsSectionScreen() {
   const [bulkCadence, setBulkCadence] = React.useState<CostCadence>('monthly');
   const [modalOpen, setModalOpen] = React.useState(false);
   const [editingItem, setEditingItem] = React.useState<CostItem | undefined>();
+  // Up Bank: Plan | Money, once this person has Up connected (money-view.tsx).
+  const [view, setView] = React.useState<CostsView>('plan');
   // Two "Add" opens in a row both key to 'new' — this nonce forces a remount
   // on each open so CostModal's useState initializers re-seed a blank form.
   const [addNonce, setAddNonce] = React.useState(0);
@@ -589,6 +592,7 @@ export default function CostsSectionScreen() {
   const listHeader = React.useMemo(
     () => (
     <View className="gap-4 pb-4">
+      <CostsViewSwitch value={view} onChange={setView} />
       {/* Header row (Select + Add right) — mirrors
           apps/mobile/src/app/(tabs)/groceries/index.tsx's header row structure.
           Hearth v2 (Pulse): the month's total is the Hero lede beneath it. */}
@@ -791,7 +795,7 @@ export default function CostsSectionScreen() {
       momDelta, prevMonthBucket, projectedRestOfYear, yearToDate, editingBudget, budgetDraft,
       budget, budgetDelta, budgetCents, daysLeft, period, selectedMonthIdx, selectedMonthStart, isEmptyList, isNoMatch,
       yearBuckets, currentMonthIdx, selectedCategory, byPayer, whoPaysCollapsed, memberProfiles,
-      items, patchRow,
+      items, patchRow, view,
     ]
   );
 
@@ -926,6 +930,29 @@ export default function CostsSectionScreen() {
   return (
     <UpOverviewProvider api={upBankApi} enabled={modules.server('connectors.up-bank')} linking={modules.server('connectors.up-bank-links')}>
     <ScreenBackground>
+      {view === 'money' ? (
+        <KeyboardAwareScrollView
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{
+            paddingHorizontal: 16,
+            paddingTop: insets.top + 16,
+            paddingBottom: insets.bottom + 96,
+            gap: 16,
+          }}
+        >
+          <CostsViewSwitch value={view} onChange={setView} />
+          <MoneyView
+            items={items}
+            currentUserId={currentUserId ?? null}
+            nameOf={(uid) => memberLabel(uid, memberProfiles)}
+            onOpenItem={(it) => {
+              setEditingItem(it);
+              setModalOpen(true);
+            }}
+            onSetAmount={(item, cents) => patchRow(item.id, { amount: cents })}
+          />
+        </KeyboardAwareScrollView>
+      ) : (
       <FlashList
         ref={listRef}
         data={flatData}
@@ -943,6 +970,7 @@ export default function CostsSectionScreen() {
           paddingBottom: insets.bottom + 96,
         }}
       />
+      )}
 
       {selectMode && selectedIds.size > 0 && (
         <View

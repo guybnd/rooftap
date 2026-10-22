@@ -48,6 +48,7 @@ import { PopMenu, MenuItem, MenuLabel } from '../setup/pop-menu';
 import { memberLabel, memberAvatar } from '../setup/member-label';
 import { UpSpendingCard } from './up-spending';
 import { UpOverviewProvider } from '@homeup/core';
+import { CostsViewSwitch, MoneyView, type CostsView } from './money-view';
 import { upBankApi } from '@/lib/up-bank-client';
 import { useWideLayout } from '@/lib/desktop-layout';
 import { cn } from '@/lib/utils';
@@ -98,6 +99,7 @@ export default function CostsPage() {
   );
 
   const [period, setPeriod] = useState<Period>('monthly');
+  const [view, setView] = useState<CostsView>('plan');
   const [search, setSearch] = useState('');
   const wide = useWideLayout();
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -410,6 +412,22 @@ export default function CostsPage() {
   return (
     <UpOverviewProvider api={upBankApi} enabled={upBank} linking={upLinks}>
     <div className={cn('space-y-5 p-4 md:p-6 mx-auto pb-24', wide ? 'max-w-[1400px] lg:px-8' : 'max-w-5xl')}>
+      {/* Up Bank: Plan | Money, once this person has Up connected (money-view.tsx). */}
+      <CostsViewSwitch value={view} onChange={setView} />
+
+      {view === 'money' ? (
+        <MoneyView
+          items={items}
+          currentUserId={currentUserId}
+          nameOf={(uid) => memberLabel(uid, memberProfiles)}
+          onOpenItem={(it) => {
+            setEditingItem(it);
+            setIsModalOpen(true);
+          }}
+          onSetAmount={(item, cents) => patchRow(item.id, { amount: cents })}
+        />
+      ) : (
+      <>
       {/* Section head (Hearth v2 §11): the screen's actions on the right; the
           Hero lede below is the first thing on the ground. */}
       <div className="flex items-center justify-end gap-2">
@@ -699,6 +717,8 @@ export default function CostsPage() {
       )}
       </div>
       </div>
+      </>
+      )}
 
       {/* Bulk action bar */}
       {selectMode && selectedIds.size > 0 && (
