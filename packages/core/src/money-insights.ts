@@ -67,6 +67,30 @@ export function monthForecast(items: CostItem[], bank: BankActuals | undefined, 
   return { spentCents, forecastCents, toComeCents: forecastCents - spentCents };
 }
 
+/** This month with the bank's data: where it ends, what's paid, what's to come, and the end total per category. */
+export interface MonthTotals {
+  totalCents: number;
+  paidCents: number;
+  toComeCents: number;
+  /** Category to cents. Spending no line holds sits under 'other'. */
+  byCategory: Partial<Record<CostCategory, number>>;
+}
+
+/**
+ * The month's totals for the Costs total and Home's Budget space. `items`
+ * are the lines that count (targets left out); `spentCents` is what the bank
+ * shows went out this month, filed or not.
+ */
+export function monthTotals(items: CostItem[], bank: BankActuals, spentCents: number, now: Date = new Date()): MonthTotals {
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const bucket = monthlyProjection(items, start, 1, now, bank)[0];
+  const forecast = monthForecast(items, bank, spentCents, now);
+  const byCategory: Partial<Record<CostCategory, number>> = { ...(bucket.byCategory as Partial<Record<CostCategory, number>>) };
+  const unfiled = forecast.forecastCents - bucket.total;
+  if (unfiled > 0) byCategory.other = (byCategory.other ?? 0) + unfiled;
+  return { totalCents: forecast.forecastCents, paidCents: forecast.spentCents, toComeCents: forecast.toComeCents, byCategory };
+}
+
 // ── Bills due ────────────────────────────────────────────────────────────
 
 export interface BillDue {

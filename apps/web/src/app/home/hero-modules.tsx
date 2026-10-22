@@ -53,6 +53,8 @@ export interface HeroModuleContext {
   tasks: HouseholdTask[];
   budgetCents: number | null;
   costItems: CostItem[];
+  /** Where this month ends with the bank's data (core useMonthTotals); null without it. */
+  monthTotalCents: number | null;
   groceryToBuyCount: number;
   setup: { done: number; total: number };
   /** HOUP-434: the Shopper shortcut's figure (core shopperShortcutValue), null with nothing watched. */
@@ -427,7 +429,7 @@ export const HERO_MODULES: HeroModule[] = [
       if (ctx.budgetCents == null) return null;
       // The same monthly recurring total the Costs tile, the Costs page and
       // mobile compare against the budget, so Home never shows two figures.
-      const spend = totalForPeriod(ctx.costItems.filter((i) => !isOneOff(i)), 'monthly');
+      const spend = ctx.monthTotalCents ?? totalForPeriod(ctx.costItems.filter((i) => !isOneOff(i)), 'monthly');
       const overBudget = spend >= (ctx.budgetCents * HUB.BUDGET_RED_PCT) / 100;
       const tone = overBudget
         ? 'bg-destructive'

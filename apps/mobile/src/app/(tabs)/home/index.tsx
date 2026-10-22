@@ -122,6 +122,8 @@ import {
   checklistItems$,
   hiddenWithDisabledModules,
   useModules,
+  useMonthTotals,
+  UpOverviewProvider,
   syncedGroupId,
   useReconnectSync,
   useEventSave,
@@ -174,6 +176,7 @@ import { formatTime12h, localDateISO } from '@homeup/core';
 import { HeroTaskRow } from '@/features/tasks/task-row';
 import { HouseholdTaskModal } from '@/features/tasks/household-task-modal';
 import { CostModal } from '@/features/costs/cost-modal';
+import { upBankApi } from '@/features/costs/up-bank-api';
 import { EventModal } from '@/features/calendar/event-modal';
 import { EventRowGestures } from '@/features/home/event-row-gestures';
 import { useHomeHiddenEvents } from '@/lib/home-hidden-events';
@@ -356,7 +359,20 @@ function DividedRows({ children }: { children: React.ReactNode }) {
 
 const HIDDEN = { display: 'none' } as const;
 
+// The bank overview wraps Home so the Budget figures follow real payments and
+// the Budget space can show the latest ones. Opening Home reads Up once.
 export default function HomeSectionScreen() {
+  const modules = useModules();
+  return (
+    <UpOverviewProvider api={upBankApi} enabled={modules.server('connectors.up-bank')} linking={modules.server('connectors.up-bank-links')}
+      sharing={modules.server('connectors.up-bank-sharing')}
+    >
+      <HomeSectionBody />
+    </UpOverviewProvider>
+  );
+}
+
+function HomeSectionBody() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const openRoute = useOpenRoute();
@@ -786,15 +802,16 @@ export default function HomeSectionScreen() {
   const showUnassignedChip = heroOn('unassignedNudge') && unassigned > 0;
 
   const budgetCents = userSettings?.costs_budget_monthly ?? null;
+  const month = useMonthTotals(costItemsList);
   const { costs, setup } = React.useMemo(() => {
     const recurring = costItemsList.filter((c) => !isOneOff(c));
-    const monthlyTotalCents = totalForPeriod(recurring, 'monthly');
+    const monthlyTotalCents = month ? month.totalCents : totalForPeriod(recurring, 'monthly');
     const setupDone = setupItemsList.filter((s) => s.status === 'installed').length;
     return {
       costs: { monthlyTotalCents },
       setup: { done: setupDone, total: setupItemsList.length },
     };
-  }, [costItemsList, setupItemsList]);
+  }, [costItemsList, setupItemsList, month]);
 
   // HOUP-222: web parity — the hero's own togglable budgetPulse tile
   // (apps/web/src/app/home/hero-modules.tsx:378-408). HOUP-223: CostsTile

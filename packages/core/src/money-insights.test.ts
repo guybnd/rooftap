@@ -4,6 +4,7 @@ import {
   billsDue,
   isBill,
   monthForecast,
+  monthTotals,
   moneyNudgeCopy,
   moneyNudges,
   nextDue,
@@ -103,6 +104,31 @@ describe('monthForecast', () => {
     const g = monthForecast(items, undefined, 50000, NOW);
     expect(g.forecastCents).toBeGreaterThanOrEqual(200000);
     expect(g.toComeCents).toBe(g.forecastCents - 50000);
+  });
+});
+
+describe('monthTotals', () => {
+  it('ends at the forecast, splits paid from to come, and puts unfiled spending under other', () => {
+    const items = [
+      line({ id: 'rent', name: 'Rent', category: 'rent', amount: 200000, start_date: '2026-01-01' }),
+      line({ id: 'coles', name: 'Coles', category: 'grocery_estimate', amount: 8000, cadence: 'one_off', is_estimate: true, start_date: '2026-10-20' }),
+    ];
+    const bank = bankActualsOf(
+      [
+        { costItemId: 'rent', month: '2026-10', cents: 200000 },
+        { costItemId: 'coles', month: '2026-10', cents: 30000 },
+      ],
+      [],
+      '2026-10',
+    );
+    // 2,300 filed plus 500 nobody filed.
+    const t = monthTotals(items, bank, 280000, NOW);
+    expect(t.paidCents).toBe(280000);
+    expect(t.byCategory.rent).toBe(200000);
+    expect(t.byCategory.grocery_estimate).toBe(30000);
+    expect(t.byCategory.other).toBe(50000);
+    expect(t.totalCents).toBe(280000);
+    expect(t.toComeCents).toBe(0);
   });
 });
 

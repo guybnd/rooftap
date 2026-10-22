@@ -36,6 +36,7 @@ import {
   skyHeadline,
   todayProgress,
   useModules,
+  useMonthTotals,
 } from '@homeup/core';
 import { cn } from '@/lib/utils';
 import { memberLabel } from '@/app/setup/member-label';
@@ -149,6 +150,7 @@ export function SummaryHero({
   const modules = useModules();
   const isOn = (key: string) => isModuleShown(key, config, modules.feature);
 
+  const month = useMonthTotals(costItems);
   const ctx: HeroModuleContext = {
     todayCount,
     weather,
@@ -159,6 +161,7 @@ export function SummaryHero({
     now: new Date(),
     budgetCents,
     costItems,
+    monthTotalCents: month?.totalCents ?? null,
     groceryToBuyCount,
     setup,
     shopperShortcut,

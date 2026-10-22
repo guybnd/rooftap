@@ -13,8 +13,9 @@
 export type UpViewScope = Exclude<BankScope, 'all'>;
 
 import { createContext, createElement, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import type { BankActuals } from './costs';
-import { bankActualsOf } from './money-insights';
+import { costTargets, type BankActuals } from './costs';
+import { bankActualsOf, monthTotals, type MonthTotals } from './money-insights';
+import type { CostItem } from './types';
 import { monthStartOf, type BankScope, type CostBankLink, type UpBankApi, type UpBankStatus, type UpOverview, type UpSpending } from './up-bank';
 
 export interface UpOverviewState {
@@ -176,6 +177,22 @@ export function useBankActuals(): BankActuals | undefined {
     if (!data?.actuals) return undefined;
     return bankActualsOf(data.actuals, data.links ?? [], data.actualsSince ?? null);
   }, [data]);
+}
+
+/**
+ * This month's totals from the bank (monthTotals), for the household view
+ * with lines linked to payments; null otherwise, and the caller keeps its
+ * plan figure. Targets are left out here, as on the Costs screen.
+ */
+export function useMonthTotals(items: readonly CostItem[]): MonthTotals | null {
+  const { data, month, scope } = useUpOverview();
+  const bank = useBankActuals();
+  return useMemo(() => {
+    const now = new Date();
+    if (!data || !bank || bank.linked.size === 0 || scope === 'mine' || month !== monthStartOf(now)) return null;
+    const targets = costTargets(items);
+    return monthTotals(items.filter((i) => !i.deleted && !targets.has(i.id)), bank, data.spentCents, now);
+  }, [data, bank, scope, month, items]);
 }
 
 /** What a cost line was really paid in a YYYY-MM month, or null when the bank has nothing for it. */

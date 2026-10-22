@@ -59,8 +59,21 @@ import { isModuleShown } from './hero-modules';
 import { GroceriesWidget } from './groceries-widget';
 import { SetupTile, HomeSearchTile, ShopperTile, AssistantTile } from './section-tiles';
 import { DeskHome } from './desk-home';
+import { UpOverviewProvider } from '@homeup/core';
+import { upBankApi } from '@/lib/up-bank-client';
 
+// The bank overview wraps Home so the Budget figures follow real payments and
+// the Budget space can show the latest ones. Opening Home reads Up once.
 export default function HomeHubPage() {
+  const modules = useModules();
+  return (
+    <UpOverviewProvider api={upBankApi} enabled={modules.server('connectors.up-bank')} linking={modules.server('connectors.up-bank-links')} sharing={modules.server('connectors.up-bank-sharing')}>
+      <HomeHub />
+    </UpOverviewProvider>
+  );
+}
+
+function HomeHub() {
   const { group, memberProfiles, groupMembers, currentUserId, userSettings, loading: cacheLoading } =
     useDataCache();
   const { settings } = useSectionSettings();

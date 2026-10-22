@@ -13,7 +13,7 @@ import {
   parseLocalDateOnly,
   totalForPeriod,
 } from './costs';
-import { isBill } from './money-insights';
+import { isBill, type MonthTotals } from './money-insights';
 
 /** The shortcuts that open a lens. Setup and countdown keep their plain behaviour. Shopper's (HOUP-434) shows its watched items. */
 export type HomeLensKey = 'budgetPulse' | 'billsDue' | 'shoppingList' | 'shopperWatch';
@@ -62,8 +62,10 @@ export interface EndingDiscount {
 
 export interface BudgetLens {
   budgetCents: number | null;
-  /** Recurring spend expressed per month (the shortcut's own figure). */
+  /** Where the month ends with the bank's data, else recurring spend per month (the shortcut's own figure). */
   spentCents: number;
+  /** Paid so far this month, from the bank; null without it. */
+  paidCents: number | null;
   /** Budget minus spend; negative when over. Null with no budget. */
   leftCents: number | null;
   /** Spend as a share of the budget, rounded percent. Null with no budget. */
@@ -84,12 +86,17 @@ export function endingDiscounts(items: CostItem[], now: Date, windowDays = LENS_
   return out.sort((a, b) => a.days - b.days);
 }
 
-export function buildBudgetLens(items: CostItem[], budgetCents: number | null, now: Date): BudgetLens {
+export function buildBudgetLens(items: CostItem[], budgetCents: number | null, now: Date, month?: MonthTotals | null): BudgetLens {
   const recurring = items.filter((c) => !isOneOff(c));
-  const spentCents = Math.round(totalForPeriod(recurring, 'monthly'));
+  // With the bank's month the figure is where the month ends; without, the regular plan.
+  const spentCents = month ? month.totalCents : Math.round(totalForPeriod(recurring, 'monthly'));
   const byCategory = new Map<CostCategory, number>();
-  for (const item of recurring) {
-    byCategory.set(item.category, (byCategory.get(item.category) ?? 0) + monthlyAmount(item));
+  if (month) {
+    for (const [category, cents] of Object.entries(month.byCategory)) byCategory.set(category as CostCategory, cents ?? 0);
+  } else {
+    for (const item of recurring) {
+      byCategory.set(item.category, (byCategory.get(item.category) ?? 0) + monthlyAmount(item));
+    }
   }
   const ranked = [...byCategory.entries()].filter(([, cents]) => cents > 0).sort((a, b) => b[1] - a[1]);
   const share = (cents: number) => (spentCents > 0 ? cents / spentCents : 0);
@@ -104,6 +111,7 @@ export function buildBudgetLens(items: CostItem[], budgetCents: number | null, n
   return {
     budgetCents,
     spentCents,
+    paidCents: month ? month.paidCents : null,
     leftCents: budgetCents != null ? budgetCents - spentCents : null,
     committedPct: budgetCents != null && budgetCents > 0 ? Math.round((spentCents / budgetCents) * 100) : null,
     categories,

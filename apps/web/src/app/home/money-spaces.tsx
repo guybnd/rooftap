@@ -20,6 +20,9 @@ import {
   costItems$,
   daysUntilLabel,
   formatMoney,
+  timeAgo,
+  useMonthTotals,
+  useUpOverview,
   useStoreHelpers,
   type BudgetLens,
 } from '@homeup/core';
@@ -52,7 +55,12 @@ export function BudgetSpace({
 }) {
   const { writeRow } = useStoreHelpers(costItems$(group.id), currentUserId);
   const [modalOpen, setModalOpen] = useState(false);
-  const lens = buildBudgetLens(costItems, budgetCents, now);
+  const month = useMonthTotals(costItems);
+  const { data: bankData } = useUpOverview();
+  const lens = buildBudgetLens(costItems, budgetCents, now, month);
+  // The latest payments, so Home shows the money moving.
+  const latest = month ? (bankData?.recent ?? []).slice(0, expanded ? 5 : 3) : [];
+  const lineById = new Map(costItems.map((c) => [c.id, c]));
   const over = lens.leftCents != null && lens.leftCents < 0;
   const discount = lens.endingDiscounts[0];
   const bars = expanded ? lens.categories : lens.categories.slice(0, SPACE_COLLAPSED_ROWS);
@@ -74,7 +82,7 @@ export function BudgetSpace({
           ) : (
             <p className="tabular-nums">
               <span className="font-heading text-2xl font-bold tracking-tight text-foreground">{formatMoney(lens.spentCents)}</span>{' '}
-              <span className="text-xs text-muted-foreground">/ month</span>
+              <span className="text-xs text-muted-foreground">{month ? 'this month' : '/ month'}</span>
             </p>
           )}
           {lens.budgetCents != null ? (
@@ -82,9 +90,15 @@ export function BudgetSpace({
           ) : (
             <p className="text-xs text-muted-foreground">Set a monthly budget in Costs to track spend against it.</p>
           )}
-          {(lens.committedPct != null || discount) && (
+          {(lens.paidCents != null || lens.committedPct != null || discount) && (
             <p className="text-xs text-muted-foreground">
-              {lens.committedPct != null && <span className="tabular-nums">{lens.committedPct}% committed. </span>}
+              {lens.paidCents != null ? (
+                <span className="tabular-nums">
+                  {formatMoney(lens.paidCents)} paid · {formatMoney(Math.max(0, lens.spentCents - lens.paidCents))} to come.{' '}
+                </span>
+              ) : (
+                lens.committedPct != null && <span className="tabular-nums">{lens.committedPct}% committed. </span>
+              )}
               {discount && (
                 <span className="text-warning">
                   {discount.label} discount ends {daysUntilLabel(discount.days)}.
@@ -109,6 +123,27 @@ export function BudgetSpace({
                 />
               </li>
             ))}
+          </ul>
+        )}
+        {latest.length > 0 && (
+          <ul className="divide-y divide-border/60" aria-label="Latest payments">
+            {latest.map((t) => {
+              const line = t.costItemId ? lineById.get(t.costItemId) : undefined;
+              return (
+                <li key={t.id} className="flex min-h-10 items-center gap-3 py-1.5 text-sm">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-foreground">{t.description}</p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {[t.pending ? 'Pending' : null, timeAgo(t.occurredAt), line ? line.name : t.categoryLabel].filter(Boolean).join(' · ')}
+                    </p>
+                  </div>
+                  <span className={`text-xs tabular-nums ${t.amountCents > 0 ? 'text-success' : 'text-foreground'}`}>
+                    {t.amountCents > 0 ? '+' : ''}
+                    {formatMoney(Math.abs(t.amountCents))}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
         )}
         <button

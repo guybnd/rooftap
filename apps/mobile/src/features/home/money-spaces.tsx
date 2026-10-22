@@ -20,7 +20,10 @@ import {
   costItems$,
   daysUntilLabel,
   formatMoney,
+  timeAgo,
+  useMonthTotals,
   useStoreHelpers,
+  useUpOverview,
   type CostCategory,
   type CostItem,
   type Group,
@@ -70,7 +73,12 @@ export function BudgetSpace({
   const router = useRouter();
   const { writeRow } = useStoreHelpers(costItems$(group.id), currentUserId);
   const [modalOpen, setModalOpen] = React.useState(false);
-  const lens = buildBudgetLens(costItems, budgetCents, now);
+  const month = useMonthTotals(costItems);
+  const { data: bankData } = useUpOverview();
+  const lens = buildBudgetLens(costItems, budgetCents, now, month);
+  // The latest payments, so Home shows the money moving.
+  const latest = month ? (bankData?.recent ?? []).slice(0, expanded ? 5 : 3) : [];
+  const lineById = new Map(costItems.map((c) => [c.id, c]));
   const over = lens.leftCents != null && lens.leftCents < 0;
   const discount = lens.endingDiscounts[0];
   const tone = lens.budgetCents != null ? deriveBudgetPulseTone(lens.budgetCents, lens.spentCents) : 'success';
@@ -97,7 +105,7 @@ export function BudgetSpace({
                   <Text className="text-title font-semibold text-foreground" style={tabular}>
                     {formatMoney(lens.spentCents)}
                   </Text>
-                  <Text className="text-caption text-muted-foreground">/ month</Text>
+                  <Text className="text-caption text-muted-foreground">{month ? 'this month' : '/ month'}</Text>
                 </View>
               )}
               {lens.budgetCents != null ? (
@@ -105,9 +113,13 @@ export function BudgetSpace({
               ) : (
                 <Text className="text-caption text-muted-foreground">Set a monthly budget in Costs to track spend against it.</Text>
               )}
-              {(lens.committedPct != null || discount) && (
+              {(lens.paidCents != null || lens.committedPct != null || discount) && (
                 <Text className="text-caption text-muted-foreground" style={tabular}>
-                  {lens.committedPct != null ? `${lens.committedPct}% committed. ` : ''}
+                  {lens.paidCents != null
+                    ? `${formatMoney(lens.paidCents)} paid · ${formatMoney(Math.max(0, lens.spentCents - lens.paidCents))} to come. `
+                    : lens.committedPct != null
+                      ? `${lens.committedPct}% committed. `
+                      : ''}
                   {discount && (
                     <Text className="text-caption text-warning">
                       {discount.label} discount ends {daysUntilLabel(discount.days)}.
@@ -131,6 +143,29 @@ export function BudgetSpace({
                     <ProgressBar value={c.cents} total={lens.spentCents} fillClassName={CATEGORY_BAR_FILL[c.key]} className="h-[3px]" />
                   </View>
                 ))}
+              </View>
+            )}
+            {latest.length > 0 && (
+              <View accessibilityLabel="Latest payments">
+                {latest.map((t, i) => {
+                  const line = t.costItemId ? lineById.get(t.costItemId) : undefined;
+                  return (
+                    <View key={t.id} className={`min-h-11 flex-row items-center gap-3 py-1.5 ${i > 0 ? 'border-t border-border/60' : ''}`}>
+                      <View className="min-w-0 flex-1">
+                        <Text numberOfLines={1} className="text-body text-foreground">
+                          {t.description}
+                        </Text>
+                        <Text numberOfLines={1} className="text-caption text-muted-foreground">
+                          {[t.pending ? 'Pending' : null, timeAgo(t.occurredAt), line ? line.name : t.categoryLabel].filter(Boolean).join(' · ')}
+                        </Text>
+                      </View>
+                      <Text className={`text-caption ${t.amountCents > 0 ? 'text-success' : 'text-foreground'}`} style={tabular}>
+                        {t.amountCents > 0 ? '+' : ''}
+                        {formatMoney(Math.abs(t.amountCents))}
+                      </Text>
+                    </View>
+                  );
+                })}
               </View>
             )}
             <Pressable
