@@ -12,8 +12,12 @@ import {
   type SetupStore,
   SETUP_STATUS_LABEL,
   currencySymbol,
+  scoutPrefillFromSetupItem,
+  scoutPrefillHref,
+  useModules,
 } from '@homeup/core';
 import { dialog } from '@homeup/core';
+import { useRouter } from 'next/navigation';
 import {
   ExternalLink,
   MessageSquare,
@@ -28,6 +32,7 @@ import {
   Check,
   CheckCircle2,
   RotateCcw,
+  Sparkles,
   type LucideIcon,
 } from 'lucide-react';
 import { EditableText } from '@/components/ui/editable-text';
@@ -138,6 +143,12 @@ export function SetupItemCard({
   onStoreCreated,
 }: SetupItemCardProps) {
   const [showComments, setShowComments] = useState(false);
+  const router = useRouter();
+  const modules = useModules();
+  // Shopper's Scout can research a still-needed item. Hidden when Shopper is
+  // off or the server has no Scout tables; the brief sheet itself explains a
+  // plan without AI.
+  const canScout = item.status === 'needed' && modules.isEnabled('shopper') && modules.server('shopper.scout');
   const [justChanged, setJustChanged] = useState(false);
 
   // Flash the checkbox briefly when status changes for clear confirmation
@@ -483,6 +494,18 @@ export function SetupItemCard({
                 >
                   {item.url ? 'Open link' : 'Add link'}
                 </MenuItem>
+
+                {canScout && (
+                  <MenuItem
+                    icon={<Sparkles className="h-4 w-4" />}
+                    onClick={() => {
+                      close();
+                      router.push(scoutPrefillHref(scoutPrefillFromSetupItem(item)));
+                    }}
+                  >
+                    Find with Scout
+                  </MenuItem>
+                )}
 
                 {store?.url && (
                   <MenuItem

@@ -18,6 +18,7 @@ import {
   isAiBlockedCode,
   parsePriceInput,
   todayISO,
+  type ScoutPrefill,
   type ScoutWhere,
 } from '@homeup/core';
 import { ItemFormSheet, FormSection, FieldRow } from '@/components/ui/item-form-sheet';
@@ -30,11 +31,22 @@ const SCOUT_SECTION = { id: 'shopper', Icon: Sparkles };
 const WHERE: ScoutWhere[] = ['nearby', 'online', 'secondhand'];
 type NeedBy = (typeof SCOUT_NEED_BY_OPTIONS)[number]['value'];
 
-export function ScoutBriefSheet({ isOpen, currency, onClose }: { isOpen: boolean; currency: string; onClose: () => void }) {
+export function ScoutBriefSheet({
+  isOpen,
+  currency,
+  prefill,
+  onClose,
+}: {
+  isOpen: boolean;
+  currency: string;
+  /** A brief handed over from another section (a Home Setup item). */
+  prefill?: ScoutPrefill | null;
+  onClose: () => void;
+}) {
   const router = useRouter();
-  const [text, setText] = useState('');
+  const [text, setText] = useState(prefill?.text ?? '');
   const [from, setFrom] = useState('');
-  const [upTo, setUpTo] = useState('');
+  const [upTo, setUpTo] = useState(prefill?.upTo ?? '');
   const [needBy, setNeedBy] = useState<NeedBy>('none');
   const [where, setWhere] = useState<ScoutWhere[]>(['nearby', 'online']);
   const [saving, setSaving] = useState(false);

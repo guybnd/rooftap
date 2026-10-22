@@ -42,6 +42,7 @@ import {
   MoreVertical,
   Pencil,
   RotateCcw,
+  Sparkles,
   Store as StoreIcon,
   Trash2,
   type LucideIcon,
@@ -56,8 +57,12 @@ import {
   type DocumentSource,
   SETUP_STATUS_LABEL,
   currencySymbol,
+  scoutPrefillFromSetupItem,
+  scoutPrefillHref,
+  useModules,
 } from '@homeup/core';
 import { openDocumentExternally } from '@/components/documents/document-preview';
+import { useOpenRoute } from '@/lib/tab-routes';
 import { STATUS_FILL } from './setup-status';
 
 type MemberProfiles = Record<string, { email: string; name: string | null; avatar: string | null }>;
@@ -132,6 +137,12 @@ export function SetupItemCard({
   memberProfiles,
 }: SetupItemCardProps) {
   const [menuOpen, setMenuOpen] = React.useState(false);
+  const openRoute = useOpenRoute();
+  const modules = useModules();
+  // Shopper's Scout can research a still-needed item. Hidden when Shopper is
+  // off or the server has no Scout tables; the brief sheet itself explains a
+  // plan without AI.
+  const canScout = item.status === 'needed' && modules.isEnabled('shopper') && modules.server('shopper.scout');
   const [showComments, setShowComments] = React.useState(false);
   // HOUP-198: hold-to-edit arming fill — wired through SwipeActions' onLongPress
   // (see swipe-actions.tsx header comment for why a bare ListItem.onLongPress
@@ -404,6 +415,21 @@ export function SetupItemCard({
               <ListItemTitle>{item.url ? 'Open link' : 'Add link'}</ListItemTitle>
             </ListItemContent>
           </ListItem>
+          {canScout ? (
+            <ListItem
+              onPress={() => {
+                setMenuOpen(false);
+                openRoute(scoutPrefillHref(scoutPrefillFromSetupItem(item)));
+              }}
+            >
+              <ListItemLeading>
+                <Sparkles size={16} className="text-muted-foreground" />
+              </ListItemLeading>
+              <ListItemContent>
+                <ListItemTitle>Find with Scout</ListItemTitle>
+              </ListItemContent>
+            </ListItem>
+          ) : null}
           {store?.url ? (
             <ListItem
               onPress={() => {

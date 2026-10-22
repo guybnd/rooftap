@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isOverBudget, parseScoutBrief, scoutFailure, scoutRunStatus, scoutStoresCaption, scoutTitle, SCOUT_STALE_MS } from './shopper-scout';
+import { isOverBudget, parseScoutBrief, readScoutPrefill, scoutPrefillFromSetupItem, scoutPrefillHref, scoutFailure, scoutRunStatus, scoutStoresCaption, scoutTitle, SCOUT_STALE_MS } from './shopper-scout';
 
 describe('parseScoutBrief', () => {
   it('needs some words, and keeps it short', () => {
@@ -37,5 +37,29 @@ describe('scout helpers', () => {
   it('counts stores in the caption', () => {
     expect(scoutStoresCaption({ stores_checked: 1 })).toBe('checked 1 store');
     expect(scoutStoresCaption({ stores_checked: 0 })).toBeNull();
+  });
+});
+
+describe('scout prefill', () => {
+  it('turns a setup item into a brief with its estimate as the budget', () => {
+    expect(scoutPrefillFromSetupItem({ name: ' Robot vacuum ', notes: 'Pet hair, mostly tiles', est_price: 600 })).toEqual({
+      text: 'Robot vacuum. Pet hair, mostly tiles',
+      upTo: '600',
+    });
+    expect(scoutPrefillFromSetupItem({ name: 'Kettle', notes: null, est_price: null })).toEqual({ text: 'Kettle', upTo: '' });
+  });
+
+  it('round-trips through the Shopper route', () => {
+    const href = scoutPrefillHref({ text: 'Bar fridge & ice', upTo: '300' });
+    expect(href.startsWith('/shopper?')).toBe(true);
+    const params = Object.fromEntries(new URLSearchParams(href.split('?')[1]));
+    expect(readScoutPrefill(params)).toEqual({ text: 'Bar fridge & ice', upTo: '300' });
+    expect(scoutPrefillHref({ text: 'Lamp', upTo: '' })).toBe('/shopper?scout=Lamp');
+  });
+
+  it('ignores an empty or missing brief', () => {
+    expect(readScoutPrefill({})).toBeNull();
+    expect(readScoutPrefill({ scout: ['  '] })).toBeNull();
+    expect(readScoutPrefill({ scout: ['Desk'], upto: '$1,200' })).toEqual({ text: 'Desk', upTo: '1200' });
   });
 });

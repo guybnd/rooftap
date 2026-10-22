@@ -167,3 +167,37 @@ export const SCOUT_NEED_BY_OPTIONS: { value: 'none' | '7' | '14' | '30'; label: 
 export function isAiBlockedCode(code: string | null | undefined): code is 'ai_requires_plus' | 'ai_allowance_used' | 'ai_not_configured' {
   return code === 'ai_requires_plus' || code === 'ai_allowance_used' || code === 'ai_not_configured';
 }
+
+/** What another section hands Scout to start a brief from: the words and an upper budget, as typed. */
+export interface ScoutPrefill {
+  text: string;
+  upTo: string;
+}
+
+/**
+ * A Home Setup item as a Scout brief: its name, its notes when it has some,
+ * and its estimate (whole currency units) as the "up to" budget.
+ */
+export function scoutPrefillFromSetupItem(item: { name: string; notes?: string | null; est_price?: number | null }): ScoutPrefill {
+  const name = item.name.trim();
+  const notes = item.notes?.trim();
+  const text = (notes ? `${name}. ${notes}` : name).slice(0, SCOUT_BRIEF_MAX);
+  const upTo = item.est_price && item.est_price > 0 ? String(item.est_price) : '';
+  return { text, upTo };
+}
+
+/** The Shopper route that opens the Scout brief with this prefill. Both apps use it. */
+export function scoutPrefillHref(prefill: ScoutPrefill): string {
+  // Built by hand: React Native's URLSearchParams has no set().
+  const query = `scout=${encodeURIComponent(prefill.text)}${prefill.upTo ? `&upto=${encodeURIComponent(prefill.upTo)}` : ''}`;
+  return `/shopper?${query}`;
+}
+
+/** Reads a prefill back from route params (web query string or expo-router params). */
+export function readScoutPrefill(params: Record<string, string | string[] | null | undefined>): ScoutPrefill | null {
+  const first = (v: string | string[] | null | undefined) => (Array.isArray(v) ? v[0] : v) ?? '';
+  const text = first(params.scout).trim().slice(0, SCOUT_BRIEF_MAX);
+  if (!text) return null;
+  const upTo = first(params.upto).replace(/[^0-9.]/g, '');
+  return { text, upTo };
+}

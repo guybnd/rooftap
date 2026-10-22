@@ -8,7 +8,7 @@ import { ActivityIndicator, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FlashList, type ListRenderItem } from '@shopify/flash-list';
 import { use$ } from '@legendapp/state/react';
-import { useRouter, type Href } from 'expo-router';
+import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import { Plus, ShoppingBag, Sparkles, WifiOff } from 'lucide-react-native';
 import {
   Text,
@@ -33,6 +33,7 @@ import {
   shopperPriceSnapshots$,
   shopperSearches$,
   useModules,
+  readScoutPrefill,
   scoutRunStatus,
   scoutTitle,
   timeAgo,
@@ -50,6 +51,7 @@ import {
   type ShopperWant,
   type ShopperWantStatus,
   type ShopperPriceSnapshot,
+  type ScoutPrefill,
   type ShopperSearch,
 } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
@@ -139,8 +141,26 @@ export default function ShopperScreen() {
   };
   const closeScout = () => {
     setScoutOpen(false);
-    setTimeout(() => setScouting(false), MOTION_DURATIONS_MS.exit);
+    setTimeout(() => {
+      setScouting(false);
+      setPrefill(null);
+    }, MOTION_DURATIONS_MS.exit);
   };
+
+  // A Home Setup item's "Find with Scout" lands here with ?scout=…&upto=…:
+  // keep the brief, clear the params (this tab stays mounted, so the next
+  // hand-off is a fresh change) and open the sheet once Scout is known on.
+  const params = useLocalSearchParams<{ scout?: string; upto?: string }>();
+  const [prefill, setPrefill] = React.useState<ScoutPrefill | null>(null);
+  React.useEffect(() => {
+    const found = readScoutPrefill({ scout: params.scout, upto: params.upto });
+    if (!found) return;
+    setPrefill(found);
+    router.setParams({ scout: undefined, upto: undefined });
+  }, [params.scout, params.upto, router]);
+  React.useEffect(() => {
+    if (prefill && scoutOn) openScout();
+  }, [prefill, scoutOn]);
 
   const save = (want: ShopperWant, isNew: boolean) => {
     writeRow(want);
@@ -254,6 +274,7 @@ export default function ShopperScreen() {
             if (!next) closeScout();
           }}
           currency={currency}
+          prefill={prefill}
         />
       )}
       {adding && (

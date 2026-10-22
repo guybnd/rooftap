@@ -16,6 +16,7 @@ import {
   shopperPriceSnapshots$,
   shopperSearches$,
   useModules,
+  readScoutPrefill,
   scoutRunStatus,
   scoutTitle,
   timeAgo,
@@ -31,6 +32,7 @@ import {
   type ShopperWant,
   type ShopperWantStatus,
   type ShopperPriceSnapshot,
+  type ScoutPrefill,
   type ShopperSearch,
 } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
@@ -74,6 +76,21 @@ export default function ShopperPage() {
       .slice(0, 3),
   );
   const [scouting, setScouting] = useState(false);
+  const router = useRouter();
+  // A Home Setup item's "Find with Scout" lands here as ?scout=…&upto=…: open
+  // the brief prefilled once Scout is known to be on, then drop the params so
+  // a reload or Back does not open it again.
+  const [prefill, setPrefill] = useState<ScoutPrefill | null>(null);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const found = readScoutPrefill({ scout: params.get('scout'), upto: params.get('upto') });
+    if (!found) return;
+    setPrefill(found);
+    router.replace('/shopper');
+  }, [router]);
+  useEffect(() => {
+    if (prefill && scoutOn) setScouting(true);
+  }, [prefill, scoutOn]);
   const wide = useWideLayout();
   const storeLoaded = useStoreLoaded(wants$, snaps$);
 
@@ -197,7 +214,17 @@ export default function ShopperPage() {
         </div>
       )}
 
-      {scouting && <ScoutBriefSheet isOpen currency={currency} onClose={() => setScouting(false)} />}
+      {scouting && (
+        <ScoutBriefSheet
+          isOpen
+          currency={currency}
+          prefill={prefill}
+          onClose={() => {
+            setScouting(false);
+            setPrefill(null);
+          }}
+        />
+      )}
 
       {adding && (
         <WantFormSheet

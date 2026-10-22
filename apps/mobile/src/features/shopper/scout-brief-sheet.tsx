@@ -17,6 +17,7 @@ import {
   isAiBlockedCode,
   parsePriceInput,
   todayISO,
+  type ScoutPrefill,
   type ScoutWhere,
 } from '@homeup/core';
 import { randomUUID } from '@/lib/uuid';
@@ -30,15 +31,18 @@ export function ScoutBriefSheet({
   open,
   onOpenChange,
   currency,
+  prefill,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   currency: string;
+  /** A brief handed over from another section (a Home Setup item). */
+  prefill?: ScoutPrefill | null;
 }) {
   const router = useRouter();
-  const [text, setText] = React.useState('');
+  const [text, setText] = React.useState(prefill?.text ?? '');
   const [from, setFrom] = React.useState('');
-  const [upTo, setUpTo] = React.useState('');
+  const [upTo, setUpTo] = React.useState(prefill?.upTo ?? '');
   const [needBy, setNeedBy] = React.useState<NeedBy>('none');
   const [where, setWhere] = React.useState<ScoutWhere[]>(['nearby', 'online']);
   const [saving, setSaving] = React.useState(false);
