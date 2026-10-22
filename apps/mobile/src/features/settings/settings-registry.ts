@@ -6,7 +6,7 @@
 // component refs).
 import type { ComponentType } from 'react';
 import type { ModuleId } from '@homeup/core';
-import { AppearanceSettings, HapticsSettings } from './panels/appearance-settings';
+import { AppearanceSettings, HapticsSettings, MotionSettings } from './panels/appearance-settings';
 import { SectionPreferences } from './panels/section-preferences';
 import { HomeProfileSettings } from './panels/home-profile-settings';
 import { NavigationSettings } from './panels/navigation-settings';
@@ -46,7 +46,7 @@ export const globalMenus: GlobalMenu[] = [
   { key: 'global', label: 'Global settings', panels: [SectionPreferences, HomeProfileSettings, NavigationSettings] },
   { key: 'modules', label: 'Modules', panels: [ModulesSettings] },
   { key: 'users', label: 'Users', panels: [GroupManager, UsersManager] },
-  { key: 'appearance', label: 'Appearance', panels: [AppearanceSettings, HapticsSettings] },
+  { key: 'appearance', label: 'Appearance', panels: [AppearanceSettings, MotionSettings, HapticsSettings] },
   { key: 'notifications', label: 'Notifications', panels: [NotificationsSettings] },
   { key: 'integrations', label: 'Integrations & keys', panels: [HouseholdAiKeys, AiProvidersSettings, ApiKeysSettings, PatSettings, McpSettings] },
   { key: 'about', label: 'About & updates', panels: [AppUpdates] },

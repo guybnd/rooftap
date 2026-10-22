@@ -13,11 +13,12 @@
 // Native twin: packages/ui/src/components/tab-glide.tsx.
 
 import { useEffect, useRef } from "react";
-import { MOTION_DURATIONS_MS, TAB_GLIDE_SIZE, motionEaseOut, tabBlobPath, tabGlideEdges } from "@homeup/core";
+import { NAV_SPEED_MS, TAB_GLIDE_SIZE, getNavSpeed, motionEaseOut, tabBlobPath, tabGlideEdges } from "@homeup/core";
 import { navShiftElapsedMs } from "@/lib/view-transitions";
 import { prefersStillMotion } from "@/lib/still-motion";
 
-const GLIDE_MS = MOTION_DURATIONS_MS.slow;
+// The page shift's duration: the device's navigation speed (core nav-speed.ts).
+const glideMs = () => NAV_SPEED_MS[getNavSpeed()];
 
 export interface TabGlideTarget {
   /** Centre of the active tab's face, in the bar's own coordinates. */
@@ -115,7 +116,7 @@ export function TabGlide({ target, hue }: { target: TabGlideTarget | null; hue: 
         g.start ??= now - g.elapsed;
         g.elapsed = Math.max(g.elapsed, now - g.start);
       }
-      const t = g.elapsed / GLIDE_MS;
+      const t = g.elapsed / glideMs();
       if (t >= 1) {
         g.dir = 0;
         draw(1);

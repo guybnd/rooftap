@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { Tabs } from 'expo-router';
 import { Easing, useWindowDimensions } from 'react-native';
-import { MOTION_DURATIONS_MS, TAB_SHIFT_FRACTION, getSectionByPath } from '@homeup/core';
+import { TAB_SHIFT_FRACTION, getSectionByPath, glowDriftX, useNavShiftMs } from '@homeup/core';
 import { SectionProvider, TabGround, useStillMotion } from '@homeup/ui';
 import { TabFreeze } from '@/components/nav/tab-freeze';
 import { TabWarmup } from '@/components/nav/tab-warmup';
@@ -38,11 +38,18 @@ export default function TabsLayout() {
   const orderKey = tabScreenOrder(orderedSections).join(',');
   const screens = React.useMemo(() => (orderKey ? orderKey.split(',') : []), [orderKey]);
 
+  // The glow drifts along the top in the same order, so it travels the way
+  // the page slides (Hearth §13.1 "Glow drift").
+  const driftX = glowDriftX(
+    orderedSections.map((s) => s.id),
+    currentSection.id
+  );
+
   // The ground (fill, texture and the section glow) sits behind every
   // section root, so the glow holds still and blends into the next
   // section's hue while the pages shift over it (Hearth §13.1).
   return (
-    <TabGround sectionId={currentSection.id}>
+    <TabGround sectionId={currentSection.id} driftX={driftX}>
       <TabsNavigator screens={screens} />
       <TabWarmup pathname={pathname} visibleSections={visibleSections} />
     </TabGround>
@@ -58,6 +65,9 @@ export default function TabsLayout() {
 const TabsNavigator = React.memo(function TabsNavigator({ screens }: { screens: readonly string[] }) {
   const { width } = useWindowDimensions();
   const reduceMotion = useStillMotion();
+  // The device's navigation speed (Settings > Appearance), shared with the
+  // pebble and the glow so all three move as one.
+  const shiftMs = useNavShiftMs();
   const shift = Math.round(width * TAB_SHIFT_FRACTION);
 
   const screenOptions = React.useMemo<React.ComponentProps<typeof Tabs>['screenOptions']>(
@@ -71,7 +81,7 @@ const TabsNavigator = React.memo(function TabsNavigator({ screens }: { screens: 
       // The bar's pebble (TabGlide) glides on this same spec.
       transitionSpec: {
         animation: 'timing',
-        config: { duration: MOTION_DURATIONS_MS.slow, easing: SWIFT_OUT },
+        config: { duration: shiftMs, easing: SWIFT_OUT },
       },
       sceneStyleInterpolator: ({ current }) => ({
         sceneStyle: {
@@ -91,7 +101,7 @@ const TabsNavigator = React.memo(function TabsNavigator({ screens }: { screens: 
       }),
       sceneStyle: { backgroundColor: 'transparent' },
     }),
-    [reduceMotion, shift]
+    [reduceMotion, shift, shiftMs]
   );
 
   return (

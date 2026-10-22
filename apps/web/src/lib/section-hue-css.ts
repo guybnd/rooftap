@@ -28,8 +28,8 @@ function auraLayer(layer: GlowAuraLayer): string {
 }
 
 // The section's own wash (globals.css .section-glow), phone and wide shapes.
-const WASH = "radial-gradient(ellipse 85% 78% at 88% -8%,var(--glow-hue) 0%,color-mix(in srgb,var(--glow-hue) 35%,transparent) 55%,transparent 100%)";
-const WASH_WIDE = "radial-gradient(ellipse 55% 85% at 92% -10%,var(--glow-hue) 0%,color-mix(in srgb,var(--glow-hue) 35%,transparent) 55%,transparent 100%)";
+const WASH = "radial-gradient(ellipse 85% 78% at var(--glow-x) -8%,var(--glow-hue) 0%,color-mix(in srgb,var(--glow-hue) 35%,transparent) 55%,transparent 100%)";
+const WASH_WIDE = "radial-gradient(ellipse 55% 85% at var(--glow-x) -10%,var(--glow-hue) 0%,color-mix(in srgb,var(--glow-hue) 35%,transparent) 55%,transparent 100%)";
 
 export function sectionHueCss(): string {
   const rules = [`:root{--glow-opacity:${SECTION_GLOW_OPACITY.light}}`, `.dark{--glow-opacity:${SECTION_GLOW_OPACITY.dark}}`];

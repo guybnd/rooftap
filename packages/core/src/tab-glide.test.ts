@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  GLOW_DRIFT_RANGE,
+  GLOW_DRIFT_REST,
+  glowDriftX,
   TAB_GLIDE_MAX_HOP,
   TAB_GLIDE_SIZE,
   TAB_GLIDE_STRETCH,
@@ -154,5 +157,18 @@ describe('tabPebbleMetrics', () => {
     expect(forward.lean).toBeCloseTo(0.5);
     expect(back.lean).toBeCloseTo(-0.5);
     expect(tabPebbleMetrics(0, W * 0.8, W, H, 1).height).toBeGreaterThan(H);
+  });
+});
+
+describe('glowDriftX', () => {
+  const order = ['home', 'household', 'groceries', 'costs', 'calendar'];
+  it('runs from the first section on the left to the last on the right', () => {
+    expect(glowDriftX(order, 'home')).toBeCloseTo(GLOW_DRIFT_RANGE[0]);
+    expect(glowDriftX(order, 'calendar')).toBeCloseTo(GLOW_DRIFT_RANGE[1]);
+    expect(glowDriftX(order, 'groceries')).toBeCloseTo((GLOW_DRIFT_RANGE[0] + GLOW_DRIFT_RANGE[1]) / 2);
+  });
+  it('rests in the corner for a section outside the order, or a single section', () => {
+    expect(glowDriftX(order, 'settings')).toBe(GLOW_DRIFT_REST);
+    expect(glowDriftX(['home'], 'home')).toBe(GLOW_DRIFT_REST);
   });
 });

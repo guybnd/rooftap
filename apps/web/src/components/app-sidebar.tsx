@@ -23,7 +23,7 @@ import { WhatsNewDialog } from "@/components/whats-new";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { OfflineIndicator } from "@/components/offline-indicator";
 import { RevalidatingIndicator } from "@/components/revalidating-indicator";
-import { clearThreadCache, sections, assignTabSlot, reorderVisibleSections, getSectionByPath, getEnabledSections, getModuleIdForPath, orderSections, tabTravelDirection, useModules } from "@homeup/core";
+import { clearThreadCache, sections, assignTabSlot, reorderVisibleSections, getSectionByPath, getEnabledSections, getModuleIdForPath, orderSections, tabTravelDirection, glowDriftX, useModules } from "@homeup/core";
 import { sectionIcons } from "@/lib/section-icons";
 import { globalMenus, sectionPanels, visiblePanels } from "@/app/settings/settings-registry";
 import { SectionSwitcherGrid, SectionTabBar } from "@/components/section-switcher";
@@ -36,6 +36,7 @@ import { CaptureSheet } from "@/components/capture/capture-sheet";
 import { DesktopCaptureButton, DockCaptureFab } from "@/components/capture/capture-buttons";
 import { SectionSubnav, TopBar } from "@/components/top-bar";
 import { SectionGlow } from "@/components/ui/section-glow";
+import { useApplyNavSpeed } from "@/lib/nav-speed";
 
 function OfflineBanner() {
   return <OfflineIndicator />;
@@ -137,6 +138,8 @@ export function AppSidebar({ children }: { children: React.ReactNode }) {
   // (usePathname) says "/" while the matched route segment says "landing".
   const segment = useSelectedLayoutSegment();
   const router = useRouter();
+  // The device's navigation speed drives --motion-nav (globals.css).
+  useApplyNavSpeed();
   const [open, setOpen] = useState(false);
   const [user, setUser] = useState<{ name: string; avatarUrl: string | null } | null>(null);
   const { settings, updateLastUsedSection, updateHiddenSections, updateSectionOrder } = useSectionSettings();
@@ -556,7 +559,13 @@ export function AppSidebar({ children }: { children: React.ReactNode }) {
             switch shifts the page and blends into the next section's hue on
             the same timing (globals.css .section-glow). */}
         <div className="relative isolate flex min-h-0 flex-1 flex-col">
-          <SectionGlow sectionId={currentSection.id} />
+          <SectionGlow
+            sectionId={currentSection.id}
+            driftX={glowDriftX(
+              visibleSections.map((s) => s.id),
+              currentSection.id
+            )}
+          />
           {!onSettings && <SectionSubnav section={currentSection} isActive={isActive} />}
           <div
             className="route-transition-region relative isolate flex-1 overflow-y-auto origin-top transition-[transform,filter] duration-[var(--motion-slow)] ease-[var(--motion-ease-out)]"

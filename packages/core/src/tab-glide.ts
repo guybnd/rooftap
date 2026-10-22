@@ -144,3 +144,23 @@ export function tabBlobPath(
     `C${r(bottomX - a * (bottomX - left))} ${r(bottom)} ${r(left)} ${r(leftY + bLeft * (bottom - leftY))} ${r(left)} ${r(leftY)}Z`
   );
 }
+
+// Hearth §13.1 "Glow drift": the section glow is one wash that drifts along
+// the top of the screen as you move between sections, in the bar's order:
+// the first section glows from the top left, the last from the top right.
+// It travels the same way the page slides, on the page's own clock (the
+// device's navigation speed, nav-speed.ts), so the two move as one.
+
+/** Where the glow's centre sits across the screen, first section to last (share of the width). */
+export const GLOW_DRIFT_RANGE = [0.12, 0.9] as const;
+
+/** The glow's centre when the section isn't in the order (today's corner). */
+export const GLOW_DRIFT_REST = 0.88;
+
+/** The glow's centre for a section, as a share of the screen width, by its place in `order`. */
+export function glowDriftX(order: readonly string[], sectionId: string): number {
+  const index = order.indexOf(sectionId);
+  if (index === -1 || order.length < 2) return GLOW_DRIFT_REST;
+  const [from, to] = GLOW_DRIFT_RANGE;
+  return from + ((to - from) * index) / (order.length - 1);
+}

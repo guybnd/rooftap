@@ -9,14 +9,14 @@
 import * as React from 'react';
 import { InteractionManager } from 'react-native';
 import { useRouter, type Href } from 'expo-router';
-import { MOTION_DURATIONS_MS, splitTabBar, type Section } from '@homeup/core';
+import { NAV_SPEED_MS, splitTabBar, type Section } from '@homeup/core';
 
 /** Wait after launch before the first warm-up, so Home paints and loads first. */
 const START_DELAY_MS = 2500;
 /** Gap between two warm-ups, so each screen's mount has the JS thread to itself. */
 const STEP_DELAY_MS = 900;
 /** Quiet time after a tab switch before a warm-up may run. */
-const AFTER_NAV_MS = MOTION_DURATIONS_MS.slow + 300;
+const AFTER_NAV_MS = NAV_SPEED_MS.smooth + 300;
 
 export function TabWarmup({ pathname, visibleSections }: { pathname: string; visibleSections: readonly Section[] }) {
   const router = useRouter();

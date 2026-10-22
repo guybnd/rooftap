@@ -324,6 +324,7 @@
     --motion-slow: 0ms;
     --motion-exit: 0ms;
     --motion-settle: 0ms;
+    --motion-nav: 0ms;
     --motion-ease-out: linear;
     --motion-ease-in: linear;
   }
@@ -652,11 +653,19 @@
    the page's content; Axis Mundi keeps its meridian as its one decorative
    element instead. It is ground (§13.1): on a section change it stays put
    and its hue blends into the next one on the page shift's timing, through
-   the registered --glow-hue (a plain custom property can't transition). */
+   the registered --glow-hue (a plain custom property can't transition).
+   It also drifts along the top to the section's place in the bar's order
+   (--glow-x, set by SectionGlow from core glowDriftX), on the page shift's
+   clock so the two move as one ("Glow drift"). */
 @property --glow-hue {
   syntax: "<color>";
   inherits: false;
   initial-value: transparent;
+}
+@property --glow-x {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 88%;
 }
 .hue-tile {
   background-color: var(--hue-tile);
@@ -669,9 +678,11 @@
   z-index: -1;
   pointer-events: none;
   --glow-hue: var(--hue-glow);
-  transition: --glow-hue var(--motion-slow) var(--motion-ease-out);
+  transition:
+    --glow-hue var(--motion-nav) var(--motion-ease-out),
+    --glow-x var(--motion-nav) var(--motion-ease-out);
   background: radial-gradient(
-    ellipse 85% 78% at 88% -8%,
+    ellipse 85% 78% at var(--glow-x) -8%,
     var(--glow-hue) 0%,
     color-mix(in srgb, var(--glow-hue) 35%, transparent) 55%,
     transparent 100%
@@ -681,7 +692,7 @@
 @media (min-width: 768px) {
   .section-glow {
     background: radial-gradient(
-      ellipse 55% 85% at 92% -10%,
+      ellipse 55% 85% at var(--glow-x) -10%,
       var(--glow-hue) 0%,
       color-mix(in srgb, var(--glow-hue) 35%, transparent) 55%,
       transparent 100%
@@ -849,6 +860,10 @@
     --motion-slow: 300ms;
     --motion-exit: 250ms;
     --motion-settle: 240ms;
+    /* Moving between spaces: the page shift, and the pebble and glow with it.
+       --nav-speed-ms is the device's navigation speed (core nav-speed.ts),
+       set on the root by useApplyNavSpeed; Fast is the slow step. */
+    --motion-nav: var(--nav-speed-ms, 300ms);
     --motion-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
     --motion-ease-in: ease-in;
   }
@@ -860,6 +875,7 @@
       --motion-slow: 0ms;
       --motion-exit: 0ms;
       --motion-settle: 0ms;
+      --motion-nav: 0ms;
       --motion-ease-out: linear;
       --motion-ease-in: linear;
     }
@@ -940,16 +956,16 @@
     overflow: clip;
   }
   html[data-nav-transition="shift-forward"]::view-transition-old(route-content) {
-    animation: var(--motion-slow) var(--motion-ease-out) both nav-shift-out-forward;
+    animation: var(--motion-nav) var(--motion-ease-out) both nav-shift-out-forward;
   }
   html[data-nav-transition="shift-forward"]::view-transition-new(route-content) {
-    animation: var(--motion-slow) var(--motion-ease-out) both nav-shift-in-forward;
+    animation: var(--motion-nav) var(--motion-ease-out) both nav-shift-in-forward;
   }
   html[data-nav-transition="shift-back"]::view-transition-old(route-content) {
-    animation: var(--motion-slow) var(--motion-ease-out) both nav-shift-out-back;
+    animation: var(--motion-nav) var(--motion-ease-out) both nav-shift-out-back;
   }
   html[data-nav-transition="shift-back"]::view-transition-new(route-content) {
-    animation: var(--motion-slow) var(--motion-ease-out) both nav-shift-in-back;
+    animation: var(--motion-nav) var(--motion-ease-out) both nav-shift-in-back;
   }
 
   /* Descend (list -> detail): destination slides in from the right at

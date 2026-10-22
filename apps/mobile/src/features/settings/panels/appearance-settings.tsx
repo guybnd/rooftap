@@ -3,9 +3,9 @@
 // stateful/persisted wrapper this ticket adds around @homeup/ui's
 // ThemeProvider — see src/lib/theme-context.tsx) instead of rebuilding theming.
 import { View } from 'react-native';
-import { Palette, Vibrate } from 'lucide-react-native';
+import { Gauge, Palette, Vibrate } from 'lucide-react-native';
+import { SYSTEM_THEME_IDS, THEME_TOKENS, setNavSpeed, useNavSpeed, type NavSpeed, type ThemeId } from '@homeup/core';
 import { resolveOklchToRgba } from '@homeup/ui';
-import { SYSTEM_THEME_IDS, THEME_TOKENS, type ThemeId } from '@homeup/core';
 import { useHapticsPref } from '@/lib/haptics-pref';
 import { useAppTheme } from '@/lib/theme-context';
 import { themeMeta, type ThemeMeta } from '@/lib/theme-meta';
@@ -71,6 +71,31 @@ export function HapticsSettings() {
           checked={on}
           onChange={setOn}
         />
+      </SettingsInset>
+    </SettingsPanel>
+  );
+}
+
+const NAV_SPEED_CHOICES: { id: NavSpeed; title: string; description: string }[] = [
+  { id: 'fast', title: 'Fast', description: 'Pages snap into place.' },
+  { id: 'smooth', title: 'Smooth', description: 'Pages and the colour glow glide in a little slower.' },
+];
+
+/** Hearth §8 "Navigation speed": how fast pages move when you switch spaces, on this device. */
+export function MotionSettings() {
+  const speed = useNavSpeed();
+  return (
+    <SettingsPanel icon={Gauge} title="Animation speed">
+      <SettingsInset accessibilityRole="radiogroup">
+        {NAV_SPEED_CHOICES.map((choice) => (
+          <SettingsChoiceRow
+            key={choice.id}
+            selected={choice.id === speed}
+            onSelect={() => setNavSpeed(choice.id)}
+            title={choice.title}
+            description={choice.description}
+          />
+        ))}
       </SettingsInset>
     </SettingsPanel>
   );

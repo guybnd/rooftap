@@ -25,18 +25,12 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
-import {
-  MOTION_DURATIONS_MS,
-  TAB_GLIDE_SIZE,
-  motionEaseOut,
-  tabGlideEdges,
-  tabPebbleMetrics,
-} from '@homeup/core';
+import { TAB_GLIDE_SIZE, motionEaseOut, tabGlideEdges, tabPebbleMetrics, useNavShiftMs } from '@homeup/core';
 import { useStillMotion } from '../theme/theme-provider';
 
-// The page shift's spec ((tabs) navigator transitionSpec): Hearth `slow`,
-// swift-out.
-const GLIDE = { duration: MOTION_DURATIONS_MS.slow, easing: Easing.bezier(0.16, 1, 0.3, 1) };
+// The page shift's curve ((tabs) navigator transitionSpec), swift-out; its
+// duration is the device's navigation speed (core nav-speed.ts).
+const SWIFT_OUT = Easing.bezier(0.16, 1, 0.3, 1);
 const HALF = TAB_GLIDE_SIZE.width / 2;
 const REST_W = TAB_GLIDE_SIZE.width;
 const REST_H = TAB_GLIDE_SIZE.height;
@@ -58,6 +52,8 @@ export interface TabGlideProps {
 
 export function TabGlide({ target, color }: TabGlideProps) {
   const reduceMotion = useStillMotion();
+  const shiftMs = useNavShiftMs();
+  const glide = React.useMemo(() => ({ duration: shiftMs, easing: SWIFT_OUT }), [shiftMs]);
   // One glide: from one tab centre to the next, `progress` 0 to 1 eased.
   const fromCx = useSharedValue(0);
   const toCx = useSharedValue(0);
@@ -83,8 +79,8 @@ export function TabGlide({ target, color }: TabGlideProps) {
       return;
     }
     mix.value = 0;
-    mix.value = withTiming(1, GLIDE);
-  }, [color, reduceMotion, fromColor, toColor, mix]);
+    mix.value = withTiming(1, glide);
+  }, [color, reduceMotion, fromColor, toColor, mix, glide]);
 
   const cx = target?.cx;
   const targetCy = target?.cy;
@@ -108,15 +104,15 @@ export function TabGlide({ target, color }: TabGlideProps) {
       return;
     }
     if (last.to === cx) return;
-    const t = (now - last.at) / GLIDE.duration;
+    const t = (now - last.at) / glide.duration;
     const from = t < 1 ? last.from + (last.to - last.from) * motionEaseOut(t) : last.to;
     trip.current = { from, to: cx, at: now };
     dir.value = cx > from ? 1 : -1;
     fromCx.value = from;
     toCx.value = cx;
     progress.value = 0;
-    progress.value = withTiming(1, GLIDE);
-  }, [cx, targetCy, reduceMotion, fromCx, toCx, progress, cy, dir, shown]);
+    progress.value = withTiming(1, glide);
+  }, [cx, targetCy, reduceMotion, fromCx, toCx, progress, cy, dir, shown, glide]);
 
   const pebbleStyle = useAnimatedStyle(() => {
     const { left, right } = tabGlideEdges(fromCx.value, toCx.value, progress.value, REST_W);

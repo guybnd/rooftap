@@ -13,10 +13,10 @@
 // reads the latest. A tab thaws in the same commit that focuses it, before
 // its slide starts, and freezes once the slide out has finished.
 import * as React from 'react';
-import { MOTION_DURATIONS_MS } from '@homeup/core';
+import { NAV_SPEED_MS } from '@homeup/core';
 
-/** After a blur: the slide out (Hearth `slow`) plus a frame or two of slack. */
-export const TAB_FREEZE_DELAY_MS = MOTION_DURATIONS_MS.slow + 100;
+/** After a blur: the slide out (at the slower navigation speed) plus a frame or two of slack. */
+export const TAB_FREEZE_DELAY_MS = NAV_SPEED_MS.smooth + 100;
 
 /**
  * A screen that mounts unfocused (a tab warmed up ahead of its first visit)
