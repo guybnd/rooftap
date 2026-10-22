@@ -32,7 +32,6 @@ import {
 import { sectionIcons } from "@/lib/section-icons";
 import { LeadingTile } from "@/components/ui/leading-tile";
 import { MobileCaptureFab } from "@/components/capture/capture-buttons";
-import { MeridianAxis } from "@/components/ui/meridian-axis";
 import { TabGlide, type TabGlideTarget } from "@/components/ui/tab-glide";
 import { suppressNextSheetTidy } from "@/hooks/use-sheet-gestures";
 import {
@@ -696,9 +695,6 @@ export function SectionTabBar({
           {/* Dedicated, always-centered slot the raised "+" lives in. */}
           <div className="relative w-16 shrink-0">
             <MobileCaptureFab />
-            {/* FLUX-1570: the dock's meridian tick — anchored near the bottom of
-                this column, clear of the FAB's -top-5/48px footprint. */}
-            <MeridianAxis variant="dock" />
           </div>
           {/* Right group: 3rd primary tab + More (if overflow exists) */}
           <div className="flex flex-1 justify-around">

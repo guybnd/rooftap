@@ -146,14 +146,9 @@ module.exports = {
       transitionTimingFunction: MOTION_EASE,
     },
   },
-  // HOUP-170: `.cap-inscription` (Axis Mundi's lapidary-capitals exception,
-  // Hearth T1) can't be a plain `fontFamily` theme entry — it must resolve to
-  // Cinzel only under the two Axis Mundi themes and fall back to the body
-  // face everywhere else. Web expresses that with a `[data-theme=...]`
-  // selector in globals.css; NativeWind has no such selector story, so this
-  // reads the per-theme `--font-inscription` CSS var instead (same `var()`
-  // runtime-resolution mechanism the colors/radii above already rely on) —
-  // see packages/ui/src/theme/theme-vars.ts for the per-theme value.
+  // `.cap-inscription` marks group labels. It used to switch to Cinzel under
+  // the retired Axis Mundi themes; it now reads `--font-inscription`, which
+  // theme-vars.ts sets to the body face on every theme.
   plugins: [
     plugin(function ({ addUtilities }) {
       addUtilities({

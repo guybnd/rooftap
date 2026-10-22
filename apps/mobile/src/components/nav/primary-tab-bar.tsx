@@ -31,7 +31,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { MoreHorizontal } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Text, cn, haptics, MeridianAxis, TabGlide, useThemeMaterial, useStillMotion } from '@homeup/ui';
+import { Text, cn, haptics, TabGlide, useThemeMaterial, useStillMotion } from '@homeup/ui';
 import {
   MOTION_DURATIONS_MS,
   assignTabSlot,
@@ -314,9 +314,6 @@ export function PrimaryTabBar() {
             onAsk={canAsk ? () => openAssistantPopup() || openRoute('/assistant/new?kind=quick') : undefined}
             unread={canAsk && assistantUnread > 0}
           />
-          {/* HOUP-171: the dock's meridian tick — anchored near the bottom of
-              this column, clear of the FAB's raised footprint. */}
-          <MeridianAxis variant="dock" />
         </View>
         <View
           className="flex-1 flex-row justify-around"

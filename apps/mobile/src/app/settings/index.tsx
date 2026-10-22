@@ -38,10 +38,11 @@ import {
   ListItemMeta,
   ListItemTitle,
   ListItemTrailing,
+  LeadingTile,
   SectionScreen,
   haptics,
 } from '@homeup/ui';
-import { getEnabledSections, useModules, dialog } from '@homeup/core';
+import { getEnabledSections, settingsMenuHue, useModules, dialog } from '@homeup/core';
 import { OFFICIAL_SERVER_LABEL, getStoredServer, type ServerSelection } from '@/lib/server-config';
 import { sectionIcons } from '@/lib/section-icons';
 import { signOut } from '@/lib/supabase-client';
@@ -72,8 +73,8 @@ function GroupLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-// HOUP-174: 28px rounded-lg tinted icon square, the idiom already used for
-// leading icons elsewhere (e.g. home/index.tsx's hero-row + tile icons).
+// HOUP-174: 28px tinted icon square, kept for the Sign out row only. The
+// other rows lead with a coloured LeadingTile (core SETTINGS_MENU_HUES).
 function IconSquare({ icon: Icon, tint = 'bg-muted', tone = 'text-muted-foreground' }: { icon: LucideIcon; tint?: string; tone?: string }) {
   return (
     <View className={`h-7 w-7 items-center justify-center rounded-lg ${tint}`}>
@@ -176,7 +177,7 @@ export default function SettingsScreen() {
             return (
               <ListItem key={menu.key} onPress={() => router.push({ pathname: '/settings/[key]', params: { key: menu.key } })}>
                 <ListItemLeading>
-                  <IconSquare icon={Icon} />
+                  <LeadingTile hue={settingsMenuHue(menu.key)} Icon={Icon} size="sm" />
                 </ListItemLeading>
                 <ListItemContent>
                   <ListItemTitle>{menu.label}</ListItemTitle>
@@ -205,7 +206,7 @@ export default function SettingsScreen() {
                   onPress={() => router.push({ pathname: '/settings/[key]', params: { key: section.id } })}
                 >
                   <ListItemLeading>
-                    <IconSquare icon={Icon} />
+                    <LeadingTile sectionId={section.id} Icon={Icon} size="sm" />
                   </ListItemLeading>
                   <ListItemContent>
                     <ListItemTitle>{section.label}</ListItemTitle>
@@ -225,7 +226,7 @@ export default function SettingsScreen() {
         <ListGroup>
           <ListItem onPress={() => router.push({ pathname: '/server-picker', params: { mode: 'switch' } })}>
             <ListItemLeading>
-              <IconSquare icon={Server} />
+              <LeadingTile hue={settingsMenuHue('server')} Icon={Server} size="sm" />
             </ListItemLeading>
             <ListItemContent>
               <ListItemTitle>Server</ListItemTitle>

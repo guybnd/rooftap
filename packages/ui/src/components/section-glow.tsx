@@ -1,8 +1,7 @@
 // Hearth v2 (Pulse): the section glow. One radial wash in the section's
 // identity hue (core section-hues.ts) at the top corner of the screen,
 // behind the lede. Never behind body text; it is the surface's one
-// decorative element, the job the meridian had under Axis Mundi (which
-// keeps its meridian and gets no glow: material.sectionGlow).
+// decorative element (off under the flat e-paper theme: material.sectionGlow).
 //
 // The section comes from SectionProvider (apps/mobile's tabs layout gives
 // each section root its own), so ScreenBackground paints the right glow

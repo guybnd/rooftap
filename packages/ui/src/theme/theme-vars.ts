@@ -19,13 +19,6 @@ export type ThemeVars = Record<
   string
 >;
 
-// HOUP-170: mirrors web's `[data-theme="axis-mundi-night"|"axis-mundi-day"]
-// .cap-inscription` gating (apps/web/src/app/globals.css) — Cinzel under the
-// Axis Mundi themes, the ambient body face (matches tailwind-preset.js's
-// `sans` entry) otherwise. Since HOUP-295 the roster is Axis-only, so this
-// covers every shipping theme; the gate stays for any future non-Axis theme.
-const AXIS_MUNDI_THEME_IDS: ReadonlySet<ThemeId> = new Set(['axis-mundi-night', 'axis-mundi-day']);
-
 const cache = new Map<ThemeId, ThemeVars>();
 
 /** Resolved once per theme id and cached — 30-ish oklch->hex conversions, not a per-render cost. */
@@ -54,7 +47,9 @@ export function themeVars(themeId: ThemeId): ThemeVars {
   vars['--glass-highlight'] = resolveOklchToRgba(tokens.material.glass.highlight);
   vars['--glass-shadow'] = resolveOklchToRgba(tokens.material.glass.shadow);
   vars['--texture-opacity'] = String(tokens.material.texture.opacity);
-  vars['--font-inscription'] = AXIS_MUNDI_THEME_IDS.has(themeId) ? 'Cinzel_600SemiBold' : 'Geist_500Medium';
+  // `.cap-inscription` group labels: the body face on every theme since the
+  // Axis Mundi pair (whose Cinzel capitals this var carried) was retired.
+  vars['--font-inscription'] = 'Geist_500Medium';
   // The Hero type step's face: Sorbet's round Fredoka, Lavender's Fraunces,
   // Bricolage elsewhere (mirrors web's `[data-theme^=...] .text-hero` rules).
   vars['--font-hero'] = themeId.startsWith('sorbet')
@@ -81,18 +76,9 @@ export interface ResolvedThemeMaterial {
   /** `rgb(r, g, b)` — the theme's `--color-border`, the same hairline color web's body-texture patterns draw with. */
   textureColor: string;
   /**
-   * HOUP-171: `rgba(...)` form of `--color-axis`, or `null` under any
-   * non-Axis-Mundi theme — the gate `<MeridianAxis>`
-   * (components/meridian-axis.tsx) renders against, mirroring
-   * `--font-inscription`'s AXIS_MUNDI_THEME_IDS gating above (HOUP-170) and
-   * web's `.meridian-axis { display: none }` default (globals.css).
-   * Consumers must treat `null` as "render nothing."
-   */
-  axisColor: string | null;
-  /**
    * HOUP-199: expo-status-bar `style` value for this theme — 'dark' icons on
-   * this theme's light `background` (axis-mundi-day), 'light' icons on its
-   * dark one (axis-mundi-night). Derived from the same `background` token
+   * this theme's light `background`, 'light' icons on its
+   * dark one. Derived from the same `background` token
    * `ScreenBackground`'s `bg-background` paints with, so it never drifts from
    * what's actually on screen.
    */
@@ -110,9 +96,8 @@ export interface ResolvedThemeMaterial {
    */
   scheme: HueScheme;
   /**
-   * Hearth v2: the section glow is Ember material. Axis Mundi keeps its
-   * meridian as its one decorative element instead, so it gets no glow;
-   * neither does the flat e-paper theme.
+   * Hearth v2: the section glow. Every theme wears it except the flat
+   * e-paper theme.
    */
   sectionGlow: boolean;
   /**
@@ -136,11 +121,10 @@ export function themeMaterial(themeId: ThemeId): ResolvedThemeMaterial {
     textureKind: texture.kind,
     textureOpacity: texture.opacity,
     textureColor: `rgb(${vars['--color-border'].split(' ').join(', ')})`,
-    axisColor: AXIS_MUNDI_THEME_IDS.has(themeId) ? resolveOklchToRgba(THEME_TOKENS[themeId].colors.axis) : null,
     statusBarStyle: isLightOklch(THEME_TOKENS[themeId].colors.background) ? 'dark' : 'light',
     background: `rgb(${vars['--color-background'].split(' ').join(', ')})`,
     scheme: isStillTheme(themeId) ? 'ink' : isHueSetId(themeId) ? themeId : isLightOklch(THEME_TOKENS[themeId].colors.background) ? 'light' : 'dark',
-    sectionGlow: !AXIS_MUNDI_THEME_IDS.has(themeId) && !isStillTheme(themeId),
+    sectionGlow: !isStillTheme(themeId),
     still: isStillTheme(themeId),
   };
 }

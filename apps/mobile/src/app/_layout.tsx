@@ -21,7 +21,6 @@ import {
   BricolageGrotesque_700Bold,
   BricolageGrotesque_800ExtraBold,
 } from '@expo-google-fonts/bricolage-grotesque';
-import { Cinzel_600SemiBold } from '@expo-google-fonts/cinzel';
 import { Fraunces_700Bold } from '@expo-google-fonts/fraunces';
 import { Fredoka_700Bold } from '@expo-google-fonts/fredoka';
 import { Geist_500Medium, Geist_600SemiBold, Geist_700Bold } from '@expo-google-fonts/geist';
@@ -109,7 +108,7 @@ function RootEffects() {
 
 export default function RootLayout() {
   // HOUP-170: Hearth's native type foundation — Bricolage Grotesque (heading),
-  // Geist (sans), Geist Mono (mono), Cinzel (cap-inscription, Axis Mundi only),
+  // Geist (sans), Geist Mono (mono),
   // Fredoka and Fraunces (the Hero number, Sorbet and Lavender only).
   // Blocks the splash (already held by preventAutoHideAsync() above) until
   // these are registered, so no surface flashes stock Roboto for a frame.
@@ -126,7 +125,6 @@ export default function RootLayout() {
     Geist_600SemiBold,
     Geist_700Bold,
     GeistMono_600SemiBold,
-    Cinzel_600SemiBold,
     Fraunces_700Bold,
     Fredoka_700Bold,
   });

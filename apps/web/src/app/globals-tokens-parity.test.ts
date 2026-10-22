@@ -15,9 +15,12 @@ const css = fs.readFileSync(CSS_PATH, "utf8");
 
 function extractThemeBlock(themeId: string): string {
   const escaped = themeId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const re = new RegExp(`\\[data-theme="${escaped}"\\]\\s*\\{`);
+  return extractBlock(new RegExp(`\\[data-theme="${escaped}"\\]\\s*\\{`), `[data-theme="${themeId}"]`);
+}
+
+function extractBlock(re: RegExp, label: string): string {
   const m = re.exec(css);
-  if (!m) throw new Error(`no [data-theme="${themeId}"] block found in globals.css`);
+  if (!m) throw new Error(`no ${label} block found in globals.css`);
   const start = m.index + m[0].length;
   let depth = 1;
   let i = start;
@@ -55,9 +58,9 @@ function resolve(vars: Record<string, string>, value: string, seen = new Set<str
   return resolve(vars, vars[ref], seen);
 }
 
-// HOUP-295: axis-mundi-day is the `:root` default block every other theme
-// block overrides (it was obsidian before the roster cut).
-const rootVars = parseVars(extractThemeBlock("axis-mundi-day"));
+// The `:root` fallback block (Ember Day's values) that every theme block
+// overrides; a theme that leaves a var out inherits it from here.
+const rootVars = parseVars(extractBlock(/@layer base \{\s*:root\s*\{/, ":root"));
 
 // HOUP-132: whitespace-insensitive compare for --card-shadow — globals.css
 // wraps multi-layer shadows across indented lines; theme-colors.ts's
@@ -69,7 +72,7 @@ function normalizeShadow(value: string): string {
 
 describe("Hearth token parity (packages/core theme-colors.ts vs globals.css)", () => {
   it.each(THEME_IDS)("theme '%s' color set matches globals.css", (themeId) => {
-    const vars = themeId === "axis-mundi-day" ? rootVars : { ...rootVars, ...parseVars(extractThemeBlock(themeId)) };
+    const vars = { ...rootVars, ...parseVars(extractThemeBlock(themeId)) };
     for (const key of THEME_COLOR_KEYS) {
       expect(vars).toHaveProperty(key);
       const expected = resolve(vars, vars[key]);
@@ -78,7 +81,7 @@ describe("Hearth token parity (packages/core theme-colors.ts vs globals.css)", (
   });
 
   it.each(THEME_IDS)("theme '%s' radius matches globals.css", (themeId) => {
-    const vars = themeId === "axis-mundi-day" ? rootVars : { ...rootVars, ...parseVars(extractThemeBlock(themeId)) };
+    const vars = { ...rootVars, ...parseVars(extractThemeBlock(themeId)) };
     expect(THEME_TOKENS[themeId].radius).toBe(vars.radius);
   });
 
@@ -86,7 +89,7 @@ describe("Hearth token parity (packages/core theme-colors.ts vs globals.css)", (
   // inheritance-aware merge as the color/radius checks above — a theme block
   // that doesn't redeclare a material var inherits the root's via :root.
   it.each(THEME_IDS)("theme '%s' material matches globals.css", (themeId) => {
-    const vars = themeId === "axis-mundi-day" ? rootVars : { ...rootVars, ...parseVars(extractThemeBlock(themeId)) };
+    const vars = { ...rootVars, ...parseVars(extractThemeBlock(themeId)) };
     const material = THEME_TOKENS[themeId].material;
 
     expect(normalizeShadow(resolve(vars, vars["card-shadow"]))).toBe(normalizeShadow(material.cardShadow));

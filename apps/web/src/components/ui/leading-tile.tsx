@@ -2,7 +2,7 @@
 // packages/ui's LeadingTile. A rounded square in a section's identity hue
 // holding that section's glyph; with the section glow, the only place a
 // section hue may appear. Colours come from `data-hue` (lib/section-hue-css.ts).
-import { sectionHue } from "@homeup/core";
+import { sectionHue, type SectionHue } from "@homeup/core";
 import { cn } from "@/lib/utils";
 
 export type LeadingTileSize = "sm" | "md" | "lg" | "xl";
@@ -17,12 +17,15 @@ const SIZE_CLASS: Record<LeadingTileSize, { box: string; icon: string }> = {
 
 export function LeadingTile({
   sectionId,
+  hue,
   Icon,
   size = "lg",
   className,
 }: {
   /** A sections.ts id. */
-  sectionId: string;
+  sectionId?: string;
+  /** A hue to wear instead of a section's (Settings menu rows). Wins over sectionId. */
+  hue?: SectionHue;
   Icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
   size?: LeadingTileSize;
   className?: string;
@@ -31,7 +34,7 @@ export function LeadingTile({
   return (
     <span
       aria-hidden
-      data-hue={sectionHue(sectionId)}
+      data-hue={hue ?? sectionHue(sectionId ?? "home")}
       className={cn("hue-tile inline-flex shrink-0 items-center justify-center", dims.box, className)}
     >
       <Icon className={dims.icon} strokeWidth={2.1} />

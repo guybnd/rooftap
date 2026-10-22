@@ -18,7 +18,7 @@ describe('theme preference', () => {
   });
 
   it('pins a concrete theme regardless of the device', () => {
-    expect(resolveThemePreference('axis-mundi-night', 'light')).toBe('axis-mundi-night');
+    expect(resolveThemePreference('lavender-night', 'light')).toBe('lavender-night');
     expect(resolveThemePreference('ember-day', 'dark')).toBe('ember-day');
   });
 
@@ -30,11 +30,14 @@ describe('theme preference', () => {
     expect(isThemePreference('system')).toBe(true);
   });
 
+  it('falls back to "system" for a stored Axis Mundi preference (retired theme)', () => {
+    expect(parseThemePreference('axis-mundi-day')).toBe('system');
+    expect(parseThemePreference('axis-mundi-night')).toBe('system');
+  });
+
   it('knows which themes are light', () => {
     expect(isLightTheme('ember-day')).toBe(true);
-    expect(isLightTheme('axis-mundi-day')).toBe(true);
     expect(isLightTheme('ember-night')).toBe(false);
-    expect(isLightTheme('axis-mundi-night')).toBe(false);
     expect(isLightTheme('e-ink')).toBe(true);
     expect(isLightTheme('sorbet-day')).toBe(true);
     expect(isLightTheme('sorbet-night')).toBe(false);

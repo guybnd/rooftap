@@ -348,7 +348,7 @@ export function CaptureSearchResults({
     <div className="max-h-[34dvh] space-y-3 overflow-y-auto">
       {groups.map((group) => (
         <section key={group.label} aria-label={group.label}>
-          <h3 className="cap-inscription mb-1 px-1 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+          <h3 className="mb-1 px-1 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
             {group.label}
           </h3>
           <ListGroup>

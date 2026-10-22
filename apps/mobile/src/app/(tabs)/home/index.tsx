@@ -64,7 +64,6 @@ import {
   ListItemMeta,
   ListItemTitle,
   ListItemTrailing,
-  MeridianAxis,
   Moment,
   NowCardPager,
   PulseTile,
@@ -1184,10 +1183,8 @@ export default function HomeSectionScreen() {
         keyboardShouldPersistTaps="handled"
       >
         {/* H1: one lede. Hearth v2 (Pulse): the Hero count sits on the ground
-            under the coral glow; no card around it. The Axis Mundi themes
-            keep their meridian here instead of a glow. */}
+            under the coral glow; no card around it. */}
         <View className="relative gap-3 px-1">
-          <MeridianAxis variant="hero" />
           {/* HOUP-305: `gap-3` + shrink/truncate on the hint side, so a long
               location hint truncates instead of running into the date. */}
           <View className="flex-row items-center justify-between gap-3">

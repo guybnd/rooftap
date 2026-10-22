@@ -131,7 +131,7 @@ export function TopBar({
         className="flex shrink-0 items-center gap-2 rounded-lg pr-1 text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <RooftapMark spectrum className="h-6 w-6" />
-        <span className="cap-inscription hidden font-heading text-[17px] font-semibold tracking-tight xl:inline">Rooftap</span>
+        <span className="hidden font-heading text-[17px] font-semibold tracking-tight xl:inline">Rooftap</span>
       </Link>
 
       <nav aria-label="Spaces" className="flex min-w-0 flex-1 justify-center overflow-x-auto [scrollbar-width:none]">

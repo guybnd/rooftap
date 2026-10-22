@@ -77,9 +77,8 @@ export function resolveOklchToRgba(oklch: string): string {
 
 /**
  * True when an oklch token's lightness (L) is above the midpoint — the
- * threshold that separates the app's dark theme (axis-mundi-night) from its
- * bright one (axis-mundi-day). Used to
- * pick native chrome (status bar) icon contrast: dark icons on light
+ * threshold that separates the app's dark themes from its bright ones.
+ * Used to pick native chrome (status bar) icon contrast: dark icons on light
  * surfaces, light icons on dark ones.
  */
 export function isLightOklch(oklch: string): boolean {

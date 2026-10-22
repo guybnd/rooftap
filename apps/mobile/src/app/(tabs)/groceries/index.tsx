@@ -1482,9 +1482,8 @@ export default function GroceriesSectionScreen() {
                 <ChevronDown size={14} className="text-muted-foreground" />
               )}
               <GroceryGlyph emoji={row.icon} size={13} />
-              {/* HOUP-298: cap-inscription parity with web's aisle header —
-                  resolves to Cinzel under Axis Mundi themes, body face
-                  elsewhere. H2: group headers stay neutral; "all done"
+              {/* HOUP-298: cap-inscription parity with web's aisle header.
+                  H2: group headers stay neutral; "all done"
                   reads from the ratio (5/5), not a green tint. */}
               <Text className="cap-inscription text-[10.5px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
                 {row.label}

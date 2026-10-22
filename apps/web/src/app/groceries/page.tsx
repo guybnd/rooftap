@@ -1164,7 +1164,7 @@ export default function GroceriesPage() {
   // Hidden while searching and when there's nothing to buy.
   const tripCard = !searching && buyableItems.length > 0 ? (
       <section aria-label="This trip" className="rounded-3xl border border-border/60 bg-card p-4 shadow-[var(--card-shadow)]">
-        <p className="cap-inscription text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">This trip</p>
+        <p className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">This trip</p>
         <p className="mt-1 font-heading text-2xl font-bold tracking-[-0.02em] tabular-nums text-foreground">~{formatMoney(totalEstimate)}</p>
         <p className="text-xs tabular-nums text-muted-foreground">
           estimated for {buyableItems.length} item{buyableItems.length === 1 ? '' : 's'}
@@ -1440,7 +1440,7 @@ export default function GroceriesPage() {
           {flatItems.map((item, i) => (
             <Fragment key={item.id}>
               {i === flatTailStart && (
-                <div className="cap-inscription px-3 py-2 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+                <div className="px-3 py-2 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
                   Not needed
                 </div>
               )}
@@ -1550,7 +1550,7 @@ export default function GroceriesPage() {
                           <GroceryGlyph emoji={am.icon} size={16} />
                           {/* H2: group headers stay neutral; "all done"
                               reads from the ratio (5/5), not a tint. */}
-                          <span className="cap-inscription text-[10.5px] font-semibold uppercase tracking-[0.1em] flex-shrink-0 text-muted-foreground">
+                          <span className="text-[10.5px] font-semibold uppercase tracking-[0.1em] flex-shrink-0 text-muted-foreground">
                             {am.label}
                           </span>
                           <span className="text-xs text-muted-foreground/70 tabular-nums flex-shrink-0">{aisleItems.length}</span>

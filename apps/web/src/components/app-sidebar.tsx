@@ -12,6 +12,14 @@ import {
   LogOut,
   User,
   ArrowLeft,
+  Bell,
+  Blocks,
+  KeyRound,
+  Palette,
+  Sparkles,
+  SlidersHorizontal,
+  Users,
+  type LucideIcon,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
@@ -23,7 +31,7 @@ import { WhatsNewDialog } from "@/components/whats-new";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { OfflineIndicator } from "@/components/offline-indicator";
 import { RevalidatingIndicator } from "@/components/revalidating-indicator";
-import { clearThreadCache, sections, assignTabSlot, reorderVisibleSections, getSectionByPath, getEnabledSections, getModuleIdForPath, orderSections, tabTravelDirection, glowDriftX, useModules } from "@homeup/core";
+import { clearThreadCache, sections, assignTabSlot, reorderVisibleSections, getSectionByPath, getEnabledSections, getModuleIdForPath, orderSections, settingsMenuHue, tabTravelDirection, glowDriftX, useModules } from "@homeup/core";
 import { sectionIcons } from "@/lib/section-icons";
 import { globalMenus, sectionPanels, visiblePanels } from "@/app/settings/settings-registry";
 import { SectionSwitcherGrid, SectionTabBar } from "@/components/section-switcher";
@@ -37,10 +45,23 @@ import { DesktopCaptureButton, DockCaptureFab } from "@/components/capture/captu
 import { SectionSubnav, TopBar } from "@/components/top-bar";
 import { SectionGlow } from "@/components/ui/section-glow";
 import { useApplyNavSpeed } from "@/lib/nav-speed";
+import { LeadingTile } from "@/components/ui/leading-tile";
 
 function OfflineBanner() {
   return <OfflineIndicator />;
 }
+
+// Glyph for each General settings row; the tile colour comes from core's
+// SETTINGS_MENU_HUES so web and the app's Settings screen match.
+const GLOBAL_MENU_ICONS: Record<string, LucideIcon> = {
+  global: SlidersHorizontal,
+  modules: Blocks,
+  users: Users,
+  appearance: Palette,
+  notifications: Bell,
+  integrations: KeyRound,
+  "whats-new": Sparkles,
+};
 
 // HOUP-48: the settings menu (General + App sections) — shared by the
 // desktop nav and the mobile drawer so there is one source of truth for
@@ -66,7 +87,7 @@ function SettingsMenuNav({
   const itemClass = (active: boolean) =>
     cn(
       "relative flex items-center gap-3 rounded-lg px-3 font-medium transition-all duration-150",
-      compact ? "py-2 text-[13px]" : "py-2.5 text-sm",
+      compact ? "py-1 text-[13px]" : "py-1.5 text-sm",
       active
         ? "bg-sidebar-accent text-sidebar-accent-foreground before:content-[''] before:absolute before:-left-0.5 before:top-1/2 before:-translate-y-1/2 before:h-4 before:w-[3px] before:rounded-full before:bg-primary"
         : "text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/40"
@@ -87,7 +108,7 @@ function SettingsMenuNav({
           {backLabel}
         </button>
       )}
-      <div className="cap-inscription px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-sidebar-foreground/50">
+      <div className="px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-sidebar-foreground/50">
         General
       </div>
       {globalMenus.map((menu) => {
@@ -100,6 +121,7 @@ function SettingsMenuNav({
             onClick={onNavigate}
             className={itemClass(isActive(href))}
           >
+            <LeadingTile hue={settingsMenuHue(menu.key)} Icon={GLOBAL_MENU_ICONS[menu.key] ?? SlidersHorizontal} size="sm" />
             {menu.label}
           </Link>
         );
@@ -107,7 +129,7 @@ function SettingsMenuNav({
 
       {settingsSectionRows.length > 0 && (
         <>
-          <div className="cap-inscription px-3 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-[0.1em] text-sidebar-foreground/50">
+          <div className="px-3 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-[0.1em] text-sidebar-foreground/50">
             App sections
           </div>
           {settingsSectionRows.map((section) => {
@@ -121,7 +143,7 @@ function SettingsMenuNav({
                 onClick={onNavigate}
                 className={itemClass(isActive(href))}
               >
-                <Icon className="h-4 w-4 shrink-0" />
+                <LeadingTile sectionId={section.id} Icon={Icon} size="sm" />
                 {section.label}
               </Link>
             );
@@ -308,7 +330,7 @@ export function AppSidebar({ children }: { children: React.ReactNode }) {
             <div className="size-7 rounded-lg bg-primary/15 flex items-center justify-center ring-1 ring-primary/20">
               <span className="text-primary font-semibold text-sm">H</span>
             </div>
-            <span className="cap-inscription font-semibold text-[15px] tracking-tight text-sidebar-foreground">Rooftap</span>
+            <span className="font-semibold text-[15px] tracking-tight text-sidebar-foreground">Rooftap</span>
           </div>
 
           {/* Section switcher: always-visible tile grid */}
@@ -433,7 +455,7 @@ export function AppSidebar({ children }: { children: React.ReactNode }) {
               <div className="size-7 rounded-lg bg-primary/15 flex items-center justify-center ring-1 ring-primary/20">
                 <span className="text-primary font-semibold text-sm">H</span>
               </div>
-              <span className="cap-inscription font-semibold text-[15px] tracking-tight text-sidebar-foreground">Rooftap</span>
+              <span className="font-semibold text-[15px] tracking-tight text-sidebar-foreground">Rooftap</span>
             </div>
             <button onClick={() => setOpen(false)} className="p-2 -mr-1 rounded-lg hover:bg-sidebar-accent text-sidebar-foreground/50">
               <X className="h-5 w-5" />
@@ -454,7 +476,7 @@ export function AppSidebar({ children }: { children: React.ReactNode }) {
           ) : (
             <>
               {/* Current section context */}
-              <div className="cap-inscription flex items-center gap-2 px-3 pb-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-sidebar-foreground/50">
+              <div className="flex items-center gap-2 px-3 pb-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-sidebar-foreground/50">
                 <CurrentSectionIcon className="h-3.5 w-3.5 shrink-0" />
                 {currentSection.label}
               </div>

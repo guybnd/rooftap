@@ -21,23 +21,23 @@ describe('resolveOklchToRgbTriplet', () => {
 
 describe('themeVars', () => {
   it('produces one --color-* var per THEME_COLOR_KEYS entry plus the 4 radius vars, memoized per theme', () => {
-    const vars = themeVars('axis-mundi-night');
+    const vars = themeVars('ember-night');
     const colorKeys = Object.keys(vars).filter((k) => k.startsWith('--color-'));
-    expect(colorKeys).toHaveLength(Object.keys(THEME_TOKENS['axis-mundi-night'].colors).length);
+    expect(colorKeys).toHaveLength(Object.keys(THEME_TOKENS['ember-night'].colors).length);
     expect(vars['--radius-sm']).toBeDefined();
     expect(vars['--radius-lg']).toBeDefined();
     // Same object reference on a second call for the same theme id (cache hit).
-    expect(themeVars('axis-mundi-night')).toBe(vars);
+    expect(themeVars('ember-night')).toBe(vars);
   });
 
   it('emits the material vars alpha-preserved', () => {
-    const vars = themeVars('axis-mundi-night');
-    // Axis Night's --card-shadow: "0 1px 0 oklch(0.08 0.01 300 / 0.6), 0 3px 10px oklch(0 0 0 / 0.4)"
+    const vars = themeVars('ember-day');
+    // Ember Day's --card-shadow: "0 1px 2px oklch(0.3 0.03 50 / 0.05), 0 10px 28px oklch(0.3 0.03 50 / 0.07)"
     // — both oklch layers rewritten to comma-rgba with their alphas intact.
     expect(vars['--card-shadow']).toMatch(
-      /^0 1px 0 rgba\(\d+, \d+, \d+, 0\.6\), 0 3px 10px rgba\(0, 0, 0, 0\.4\)$/
+      /^0 1px 2px rgba\(\d+, \d+, \d+, 0\.05\), 0 10px 28px rgba\(\d+, \d+, \d+, 0\.07\)$/
     );
-    // --glass-bg: "oklch(0.215 0.016 297 / 1)" — alpha survives, unlike resolveOklchToRgbTriplet.
+    // --glass-bg is opaque ("/ 1") — alpha survives, unlike resolveOklchToRgbTriplet.
     expect(vars['--glass-bg']).toMatch(/^rgba\(\d+, \d+, \d+, 1\)$/);
     expect(vars['--texture-opacity']).toBe('0');
   });
@@ -73,10 +73,10 @@ describe('resolveBoxShadowOklch (HOUP-132)', () => {
 });
 
 describe('themeMaterial (HOUP-132)', () => {
-  it('is a no-op background texture for both axis-mundi themes (kind "none")', () => {
-    expect(themeMaterial('axis-mundi-night').textureKind).toBe('none');
-    expect(themeMaterial('axis-mundi-night').textureOpacity).toBe(0);
-    expect(themeMaterial('axis-mundi-day').textureKind).toBe('none');
+  it('is a no-op background texture for both Ember themes (kind "none")', () => {
+    expect(themeMaterial('ember-night').textureKind).toBe('none');
+    expect(themeMaterial('ember-night').textureOpacity).toBe(0);
+    expect(themeMaterial('ember-day').textureKind).toBe('none');
   });
 
   it('formats textureColor as a comma rgb(...) string every theme can consume', () => {
@@ -85,28 +85,16 @@ describe('themeMaterial (HOUP-132)', () => {
     }
   });
 
-  it('HOUP-171: axisColor resolves for both axis-mundi themes and is null under Ember (no meridian)', () => {
-    expect(themeMaterial('axis-mundi-day').axisColor).toMatch(/^rgba\(\d+, \d+, \d+, 1\)$/);
-    expect(themeMaterial('axis-mundi-night').axisColor).toMatch(/^rgba\(\d+, \d+, \d+, 1\)$/);
-    expect(themeMaterial('ember-day').axisColor).toBeNull();
-    expect(themeMaterial('ember-night').axisColor).toBeNull();
-  });
-
   it('HOUP-199: statusBarStyle tracks background lightness — dark icons by day, light by night', () => {
-    expect(themeMaterial('axis-mundi-day').statusBarStyle).toBe('dark');
-    expect(themeMaterial('axis-mundi-night').statusBarStyle).toBe('light');
     expect(themeMaterial('ember-day').statusBarStyle).toBe('dark');
     expect(themeMaterial('ember-night').statusBarStyle).toBe('light');
   });
 
-  it('Hearth v2: picks the section-hue scheme from the ground and glows only under Ember', () => {
+  it('Hearth v2: picks the section-hue scheme from the ground and glows under Ember', () => {
     expect(themeMaterial('ember-day').scheme).toBe('light');
     expect(themeMaterial('ember-night').scheme).toBe('dark');
-    expect(themeMaterial('axis-mundi-night').scheme).toBe('dark');
     expect(themeMaterial('ember-day').sectionGlow).toBe(true);
     expect(themeMaterial('ember-night').sectionGlow).toBe(true);
-    expect(themeMaterial('axis-mundi-day').sectionGlow).toBe(false);
-    expect(themeMaterial('axis-mundi-night').sectionGlow).toBe(false);
   });
 
   it('E-Ink: grey hue scheme, no glow, still motion, dark status bar icons', () => {
@@ -139,17 +127,12 @@ describe('themeMaterial (HOUP-132)', () => {
   });
 });
 
-describe('themeVars --font-inscription (HOUP-170 web-parity contract)', () => {
-  // Mirrors web's `[data-theme="axis-mundi-night"|"axis-mundi-day"] .cap-inscription`
-  // gating (apps/web/src/app/globals.css) — Cinzel under the Axis Mundi themes,
-  // which is the whole roster since HOUP-295.
-  it('resolves to Cinzel under both Axis Mundi themes', () => {
-    expect(themeVars('axis-mundi-night')['--font-inscription']).toBe('Cinzel_600SemiBold');
-    expect(themeVars('axis-mundi-day')['--font-inscription']).toBe('Cinzel_600SemiBold');
-  });
-
-  it('falls back to the body face under Ember (Hearth v2 retires inscription capitals)', () => {
-    expect(themeVars('ember-night')['--font-inscription']).toBe('Geist_500Medium');
-    expect(themeVars('ember-day')['--font-inscription']).toBe('Geist_500Medium');
+describe('themeVars --font-inscription', () => {
+  // Group labels (`.cap-inscription`) use the body face on every theme since
+  // the Axis Mundi pair and its Cinzel capitals were retired.
+  it('is the body face on every theme', () => {
+    for (const themeId of Object.keys(THEME_TOKENS) as Array<keyof typeof THEME_TOKENS>) {
+      expect(themeVars(themeId)['--font-inscription']).toBe('Geist_500Medium');
+    }
   });
 });

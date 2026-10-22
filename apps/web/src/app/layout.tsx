@@ -6,7 +6,7 @@ import "./globals.css";
 // run on every route, including ~offline and share-target — import for its
 // side effect only, here, not per-route.
 import "@/lib/legend/environment";
-import { Geist, Geist_Mono, Bricolage_Grotesque, Cinzel, Fraunces, Fredoka } from "next/font/google";
+import { Geist, Geist_Mono, Bricolage_Grotesque, Fraunces, Fredoka } from "next/font/google";
 import { cn } from "@/lib/utils";
 import { LIGHT_THEME_IDS, SYSTEM_THEME_IDS, THEME_IDS, THEME_PREFERENCE_STORAGE_KEY } from "@homeup/core";
 import { AppSidebar } from "@/components/app-sidebar";
@@ -25,18 +25,6 @@ const bricolage = Bricolage_Grotesque({
   weight: ["600", "700", "800"],
   variable: "--font-heading",
   display: "swap",
-});
-// FLUX-1569: Axis Mundi's lapidary-capitals type role (wordmark, section
-// names, column/group headers only — never Display/Title/Body prose). Fixed
-// 600 weight ("never bold" per Hearth T1 deviation) and `preload: false` so
-// the file is only ever fetched when a `.cap-inscription` rule actually
-// matches under an `axis-mundi-*` theme — zero payload cost on the other 8.
-const cinzel = Cinzel({
-  subsets: ["latin"],
-  weight: "600",
-  variable: "--font-inscription",
-  display: "swap",
-  preload: false,
 });
 // Sorbet's Hero number face (globals.css `[data-theme^="sorbet"] .text-hero`).
 // Not preloaded, so only a Sorbet theme ever fetches it.
@@ -96,7 +84,6 @@ export default function RootLayout({
         geist.variable,
         geistMono.variable,
         bricolage.variable,
-        cinzel.variable,
         fredoka.variable,
         fraunces.variable
       )}

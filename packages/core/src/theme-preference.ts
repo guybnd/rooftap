@@ -20,13 +20,12 @@ export const SYSTEM_THEME_IDS: Record<ColorScheme, ThemeId> = {
 /**
  * Storage key for the preference on both platforms. Deliberately not the
  * pre-v2 `homeup-theme` key: that one only ever held an Axis Mundi id, and
- * starting fresh moves everyone onto the redesign's default ("system")
- * while Axis stays one tap away in settings.
+ * starting fresh moved everyone onto the redesign's default ("system").
  */
 export const THEME_PREFERENCE_STORAGE_KEY = 'homeup-theme-pref';
 
 /** Themes whose ground is light (dark status-bar icons, no `.dark` class on web). */
-export const LIGHT_THEME_IDS: readonly ThemeId[] = ['ember-day', 'axis-mundi-day', 'e-ink', 'sorbet-day', 'lavender-day'];
+export const LIGHT_THEME_IDS: readonly ThemeId[] = ['ember-day', 'e-ink', 'sorbet-day', 'lavender-day'];
 
 /**
  * Themes for e-paper screens: flat (no glow, shadow or blur), greyscale

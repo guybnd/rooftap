@@ -278,6 +278,29 @@ export function sectionHue(sectionId: string): SectionHue {
   return SECTION_HUE_BY_SECTION[sectionId] ?? 'slate';
 }
 
+/**
+ * The fixed hue each Settings menu row wears on its leading tile, so the
+ * menu reads in colour like the rest of the app. Section rows in Settings
+ * wear their section's own hue (sectionHue); these cover the rows that are
+ * not sections. Keys are the settings-registry menu keys of both apps.
+ */
+export const SETTINGS_MENU_HUES: Readonly<Record<string, SectionHue>> = {
+  global: 'indigo',
+  modules: 'orchid',
+  users: 'lilac',
+  appearance: 'rose',
+  notifications: 'coral',
+  integrations: 'sun',
+  about: 'sky',
+  'whats-new': 'mint',
+  server: 'teal',
+};
+
+/** A Settings menu row's hue; anything unknown wears slate. */
+export function settingsMenuHue(key: string): SectionHue {
+  return SETTINGS_MENU_HUES[key] ?? 'slate';
+}
+
 /** A section's tile, glyph and glow colours for one colour scheme. */
 export function sectionHueSwatch(sectionId: string, scheme: HueScheme): SectionHueSwatch {
   return hueSwatch(sectionHue(sectionId), scheme);

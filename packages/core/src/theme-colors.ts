@@ -90,8 +90,9 @@ export interface ThemeTokens {
 }
 
 // Hearth v2: the Ember pair leads (it is what the default "follow the
-// device" preference resolves to, see theme-preference.ts); the Axis Mundi
-// pair (HOUP-295) stays selectable. Day before night within each pair.
+// device" preference resolves to, see theme-preference.ts). The Axis Mundi
+// pair (HOUP-295) was retired; a stored Axis preference no longer parses and
+// falls back to "system". Day before night within each pair.
 // E-Ink (revived after HOUP-295 cut the old one) is a single flat, still,
 // greyscale theme for e-paper screens (see STILL_THEME_IDS). The Sorbet
 // pair is the playful pastel one: gummy section hues (section-hues.ts
@@ -101,8 +102,6 @@ export interface ThemeTokens {
 export const THEME_IDS = [
   "ember-day",
   "ember-night",
-  "axis-mundi-day",
-  "axis-mundi-night",
   "e-ink",
   "sorbet-day",
   "sorbet-night",
@@ -200,100 +199,6 @@ export const THEME_TOKENS: Record<ThemeId, ThemeTokens> = {
         bg: "oklch(0.221 0.018 300.2 / 1)",
         border: "oklch(0.286 0.022 300.2 / 1)",
         highlight: "oklch(1 0 0 / 0.03)",
-        shadow: "oklch(0 0 0 / 0)",
-      },
-      texture: { kind: "none", opacity: 0 },
-    },
-  },
-  "axis-mundi-day": {
-    radius: "0.3125rem",
-    colors: {
-      "background": "oklch(0.953 0.010 88)",
-      "foreground": "oklch(0.258 0.015 297)",
-      "card": "oklch(0.982 0.008 92)",
-      "card-foreground": "oklch(0.258 0.015 297)",
-      "popover": "oklch(0.982 0.008 92)",
-      "popover-foreground": "oklch(0.258 0.015 297)",
-      "primary": "oklch(0.610 0.116 79.4)",
-      "primary-foreground": "oklch(0.166 0.006 301)",
-      "secondary": "oklch(0.90 0.01 88)",
-      "secondary-foreground": "oklch(0.32 0.015 296)",
-      "muted": "oklch(0.91 0.008 88)",
-      "muted-foreground": "oklch(0.50 0.014 293)",
-      "accent": "oklch(0.89 0.012 88)",
-      "accent-foreground": "oklch(0.258 0.015 297)",
-      "destructive": "oklch(0.55 0.20 25)",
-      "success": "oklch(59.6% 0.145 163.225)",
-      "success-foreground": "oklch(1 0 0)",
-      "warning": "oklch(66.6% 0.179 58.318)",
-      "warning-foreground": "oklch(1 0 0)",
-      "border": "oklch(0.84 0.012 88)",
-      "input": "oklch(0.94 0.008 90)",
-      "ring": "oklch(0.52 0.19 258)",
-      "axis": "oklch(0.610 0.116 79.4)",
-      "sidebar": "oklch(0.22 0.014 296)",
-      "sidebar-foreground": "oklch(0.90 0.01 88)",
-      "sidebar-primary": "oklch(0.610 0.116 79.4)",
-      "sidebar-primary-foreground": "oklch(0.166 0.006 301)",
-      "sidebar-accent": "oklch(0.28 0.016 296)",
-      "sidebar-accent-foreground": "oklch(0.93 0.01 88)",
-      "sidebar-border": "oklch(0.34 0.016 296)",
-      "sidebar-ring": "oklch(0.62 0.17 258)",
-    },
-    material: {
-      // HOUP-169: halved from 0.6/0.12 - full-strength shadow stacked with
-      // the card's own border read as a doubled edge on this light theme.
-      cardShadow: "0 1px 0 oklch(0.80 0.015 90 / 0.3), 0 2px 8px oklch(0.30 0.02 90 / 0.06)",
-      glass: {
-        bg: "oklch(0.982 0.008 92 / 1)",
-        border: "oklch(0.84 0.012 88 / 1)",
-        highlight: "oklch(1 0 0 / 0)",
-        shadow: "oklch(0 0 0 / 0)",
-      },
-      texture: { kind: "none", opacity: 0 },
-    },
-  },
-  "axis-mundi-night": {
-    radius: "0.3125rem",
-    colors: {
-      "background": "oklch(0.166 0.006 301)",
-      "foreground": "oklch(0.932 0.013 87)",
-      "card": "oklch(0.245 0.016 297)",
-      "card-foreground": "oklch(0.932 0.013 87)",
-      "popover": "oklch(0.245 0.016 297)",
-      "popover-foreground": "oklch(0.932 0.013 87)",
-      "primary": "oklch(0.751 0.130 79.8)",
-      "primary-foreground": "oklch(0.166 0.006 301)",
-      "secondary": "oklch(0.25 0.012 298)",
-      "secondary-foreground": "oklch(0.85 0.012 87)",
-      "muted": "oklch(0.305 0.01 298)",
-      "muted-foreground": "oklch(0.68 0.015 90)",
-      "accent": "oklch(0.235 0.014 297)",
-      "accent-foreground": "oklch(0.932 0.013 87)",
-      "destructive": "oklch(0.60 0.20 22)",
-      "success": "oklch(59.6% 0.145 163.225)",
-      "success-foreground": "oklch(1 0 0)",
-      "warning": "oklch(66.6% 0.179 58.318)",
-      "warning-foreground": "oklch(1 0 0)",
-      "border": "oklch(0.36 0.014 298)",
-      "input": "oklch(0.24 0.012 297)",
-      "ring": "oklch(0.70 0.15 255)",
-      "axis": "oklch(0.751 0.130 79.8)",
-      "sidebar": "oklch(0.198 0.018 295)",
-      "sidebar-foreground": "oklch(0.85 0.012 87)",
-      "sidebar-primary": "oklch(0.751 0.130 79.8)",
-      "sidebar-primary-foreground": "oklch(0.166 0.006 301)",
-      "sidebar-accent": "oklch(0.25 0.016 296)",
-      "sidebar-accent-foreground": "oklch(0.932 0.013 87)",
-      "sidebar-border": "oklch(0.34 0.016 296)",
-      "sidebar-ring": "oklch(0.70 0.15 255)",
-    },
-    material: {
-      cardShadow: "0 1px 0 oklch(0.08 0.01 300 / 0.6), 0 3px 10px oklch(0 0 0 / 0.4)",
-      glass: {
-        bg: "oklch(0.245 0.016 297 / 1)",
-        border: "oklch(0.36 0.014 298 / 1)",
-        highlight: "oklch(1 0 0 / 0.04)",
         shadow: "oklch(0 0 0 / 0)",
       },
       texture: { kind: "none", opacity: 0 },

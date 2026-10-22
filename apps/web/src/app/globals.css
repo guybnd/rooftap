@@ -15,7 +15,6 @@
 @theme inline {
   --font-heading: var(--font-heading);
   --font-mono: var(--font-mono);
-  --font-inscription: var(--font-inscription);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -54,122 +53,56 @@
 }
 
 /* ==========================================================================
-   THEME: Axis Mundi — Day (default)
-   HOUP-295 cut the roster to the two Axis Mundi themes, Day as the app-wide
-   default. Daylight face of the monument: sunlit limestone and plaster, ink
-   text, deepened gilt that holds contrast on white. Independently selectable
-   (not an OS-follow of Night — see FLUX-1568 completion notes).
-     - Background: limestone
-     - Card/popover: plaster (paler than the limestone floor)
-     - Sidebar: kept dark (ink-anchored) — a dark dock against a light
-       working surface.
-     - Primary (interactive): working blue, deepened for light-bg contrast
-     - Ring/axis identity: gilt, deepened
+   Fallback values: :root carries Ember Day's tokens, so a page without a
+   data-theme attribute still paints the default light theme. Every theme
+   block below sets its own values on top. The Axis Mundi pair that used to
+   live here was retired; a stored Axis preference falls back to "Match
+   device" (core parseThemePreference).
    ========================================================================== */
 @layer base {
-  :root,
-  [data-theme="axis-mundi-day"] {
-    --background: oklch(0.953 0.010 88);
-    --foreground: oklch(0.258 0.015 297);
-    --card: oklch(0.982 0.008 92);
-    --card-foreground: oklch(0.258 0.015 297);
-    --popover: oklch(0.982 0.008 92);
-    --popover-foreground: oklch(0.258 0.015 297);
-    --primary: oklch(0.610 0.116 79.4);
-    --primary-foreground: oklch(0.166 0.006 301);
-    --secondary: oklch(0.90 0.01 88);
-    --secondary-foreground: oklch(0.32 0.015 296);
-    --muted: oklch(0.91 0.008 88);
-    --muted-foreground: oklch(0.50 0.014 293);
-    --accent: oklch(0.89 0.012 88);
-    --accent-foreground: oklch(0.258 0.015 297);
-    --destructive: oklch(0.55 0.20 25);
-    /* FLUX-252: shared success/warning tokens — defined once here so both
-       themes render byte-identical status hues. */
-    --success: var(--color-emerald-600);
+  :root {
+    --background: oklch(0.965 0.006 75.4);
+    --foreground: oklch(0.222 0.018 305.1);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.222 0.018 305.1);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.222 0.018 305.1);
+    --primary: oklch(0.571 0.171 33.8);
+    --primary-foreground: oklch(1 0 0);
+    --secondary: oklch(0.93 0.01 72.7);
+    --secondary-foreground: oklch(0.295 0.021 305.7);
+    --muted: oklch(0.939 0.01 72.7);
+    --muted-foreground: oklch(0.517 0.023 304.9);
+    --accent: oklch(0.93 0.01 72.7);
+    --accent-foreground: oklch(0.222 0.018 305.1);
+    --destructive: oklch(0.572 0.197 15.9);
+    --success: oklch(0.553 0.118 160.1);
     --success-foreground: oklch(1 0 0);
-    --warning: var(--color-amber-600);
+    --warning: oklch(0.551 0.125 63.9);
     --warning-foreground: oklch(1 0 0);
-    --border: oklch(0.84 0.012 88);
-    --input: oklch(0.94 0.008 90);
-    /* HOUP-296 (supersedes FLUX-1571's split): gilt leads interactive —
-       --primary is filled gilt, --ring demotes working blue to focus/links,
-       --axis stays the gilt identity line (meridian, avatar ring). */
-    --ring: oklch(0.52 0.19 258);
-    --axis: oklch(0.610 0.116 79.4);
-    --radius: 0.3125rem;
-    --sidebar: oklch(0.22 0.014 296);
-    --sidebar-foreground: oklch(0.90 0.01 88);
-    --sidebar-primary: oklch(0.610 0.116 79.4);
-    --sidebar-primary-foreground: oklch(0.166 0.006 301);
-    --sidebar-accent: oklch(0.28 0.016 296);
-    --sidebar-accent-foreground: oklch(0.93 0.01 88);
-    --sidebar-border: oklch(0.34 0.016 296);
-    --sidebar-ring: oklch(0.62 0.17 258);
+    --border: oklch(0.909 0.012 71.9);
+    --input: oklch(0.945 0.01 72.7);
+    --ring: oklch(0.571 0.171 33.8);
+    --axis: oklch(0.571 0.171 33.8);
+    --radius: 1.125rem;
+    --sidebar: oklch(0.983 0.005 78.3);
+    --sidebar-foreground: oklch(0.295 0.021 305.7);
+    --sidebar-primary: oklch(0.571 0.171 33.8);
+    --sidebar-primary-foreground: oklch(1 0 0);
+    --sidebar-accent: oklch(0.939 0.01 72.7);
+    --sidebar-accent-foreground: oklch(0.222 0.018 305.1);
+    --sidebar-border: oklch(0.909 0.012 71.9);
+    --sidebar-ring: oklch(0.571 0.171 33.8);
 
-    --noise-opacity: 0.015;
+    --noise-opacity: 0;
     --noise-blend: multiply;
     --texture-opacity: 0;
     --body-texture: none;
-    --glass-bg: oklch(0.982 0.008 92 / 1);
-    --glass-border: oklch(0.84 0.012 88 / 1);
+    --glass-bg: oklch(1 0 0 / 1);
+    --glass-border: oklch(0.909 0.012 71.9 / 1);
     --glass-highlight: oklch(1 0 0 / 0);
     --glass-shadow: oklch(0 0 0 / 0);
-    /* HOUP-169: halved from 0.6/0.12 - full-strength shadow stacked with the
-       card's own border read as a doubled edge on this light theme. */
-    --card-shadow: 0 1px 0 oklch(0.80 0.015 90 / 0.3), 0 2px 8px oklch(0.30 0.02 90 / 0.06);
-  }
-
-  /* ========================================================================
-     THEME: Axis Mundi — Night
-     Cut-stone monument, not glass. A single gilt meridian is the only glow;
-     everything else is matte basalt/ashlar stone lit by working blue.
-       - Background: basalt slab
-       - Card: ashlar block
-       - Popover: ashlar block (same cut as card)
-       - Sidebar/inset: sky (the darkest stone, recessed)
-       - Primary (interactive): working blue — gilt never does this job
-       - Ring/axis identity: gilt — reserved for focus + the meridian
-     ======================================================================== */
-  [data-theme="axis-mundi-night"] {
-    --background: oklch(0.166 0.006 301);
-    --foreground: oklch(0.932 0.013 87);
-    --card: oklch(0.245 0.016 297);
-    --card-foreground: oklch(0.932 0.013 87);
-    --popover: oklch(0.245 0.016 297);
-    --popover-foreground: oklch(0.932 0.013 87);
-    --primary: oklch(0.751 0.130 79.8);
-    --primary-foreground: oklch(0.166 0.006 301);
-    --secondary: oklch(0.25 0.012 298);
-    --secondary-foreground: oklch(0.85 0.012 87);
-    --muted: oklch(0.305 0.01 298);
-    --muted-foreground: oklch(0.68 0.015 90);
-    --accent: oklch(0.235 0.014 297);
-    --accent-foreground: oklch(0.932 0.013 87);
-    --destructive: oklch(0.60 0.20 22);
-    --border: oklch(0.36 0.014 298);
-    --input: oklch(0.24 0.012 297);
-    --ring: oklch(0.70 0.15 255);
-    --axis: oklch(0.751 0.130 79.8);
-    --radius: 0.3125rem;
-    --sidebar: oklch(0.198 0.018 295);
-    --sidebar-foreground: oklch(0.85 0.012 87);
-    --sidebar-primary: oklch(0.751 0.130 79.8);
-    --sidebar-primary-foreground: oklch(0.166 0.006 301);
-    --sidebar-accent: oklch(0.25 0.016 296);
-    --sidebar-accent-foreground: oklch(0.932 0.013 87);
-    --sidebar-border: oklch(0.34 0.016 296);
-    --sidebar-ring: oklch(0.70 0.15 255);
-
-    --noise-opacity: 0.02;
-    --noise-blend: overlay;
-    --texture-opacity: 0;
-    --body-texture: none;
-    --glass-bg: oklch(0.245 0.016 297 / 1);
-    --glass-border: oklch(0.36 0.014 298 / 1);
-    --glass-highlight: oklch(1 0 0 / 0.04);
-    --glass-shadow: oklch(0 0 0 / 0);
-    --card-shadow: 0 1px 0 oklch(0.08 0.01 300 / 0.6), 0 3px 10px oklch(0 0 0 / 0.4);
+    --card-shadow: 0 1px 2px oklch(0.3 0.03 50 / 0.05), 0 10px 28px oklch(0.3 0.03 50 / 0.07);
   }
 
   /* ========================================================================
@@ -178,8 +111,7 @@
      device's light/dark setting (see lib/themes.ts `resolveThemePreference`).
      Warm ink and paper grounds, one coral accent that means "interactive"
      and nothing else (H2), status hues kept to text, dots and meters. Cards
-     are a fill step with a hairline, rounder corners than Axis Mundi.
-     Both blocks declare every key so neither inherits Axis Day's :root.
+     are a fill step with a hairline and round corners.
      ======================================================================== */
   [data-theme="ember-night"] {
     --background: oklch(0.178 0.013 300.4);
@@ -545,113 +477,11 @@
   }
 }
 
-/* ========================================================================
-   FLUX-1569: Axis Mundi inscription capitals — lapidary caps (Cinzel),
-   scoped to the wordmark, section-name capitals, and column/group headers
-   ONLY. Never Display/Title/Body prose (Geist stays) or data (Geist Mono
-   stays). Sanctioned, scoped exception to Hearth T1 "no per-theme fonts"
-   — see hearth.md §5 and FLUX-1567 (epic sign-off).
-
-   Gated on `[data-theme="axis-mundi-*"]` so the Cinzel file — loaded with
-   `preload: false` in layout.tsx — is never fetched unless one of these
-   rules actually matches, i.e. never outside Axis Mundi (the whole roster
-   since HOUP-295; the gate stays for any future non-Axis theme).
-
-   Deliberately left UNLAYERED (not inside @layer base/utilities): Tailwind
-   v4's `@layer theme, base, components, utilities` cascade means layered
-   utilities (e.g. `tracking-tight`) always beat `@layer base` regardless of
-   selector specificity. An unlayered rule outranks every layered rule, so
-   these declarations stay authoritative even on call sites that carry a
-   conflicting `tracking-*`/`normal-case` utility.
-   ======================================================================== */
-[data-theme="axis-mundi-night"] .cap-inscription,
-[data-theme="axis-mundi-day"] .cap-inscription {
-  font-family: var(--font-inscription), Georgia, serif;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-}
-
-/* ========================================================================
-   FLUX-1570: Axis Mundi meridian — "one vertical gilt axis per surface"
-   (hearth.md §10, Axis Mundi subsection). `.meridian-axis` is `display:none`
-   by default so mounting `<MeridianAxis>` is a structural no-op under any
-   non-Axis theme; only axis-mundi-night/day reveal it. Deliberately
-   left UNLAYERED for the same cascade reason as .cap-inscription above.
-
-   --hero: the home lede's full-height center line + a small glowing node at
-   the top (the only glow this product allows outside focus — masonry
-   principle). --dock: a short tick marking the mobile tab bar's axis, kept
-   well clear of the raised capture FAB's footprint by its host (see
-   section-switcher.tsx). Never a running spine through list rows — legibility
-   (epic FLUX-1567 risk note).
-
-   Reduced motion: nothing here is animated (no keyframe/transition — the
-   "glow" is a static box-shadow), but a reduced-motion user still gets the
-   quieter face: the node's blur collapses to a flat gilt dot.
-   ======================================================================== */
-.meridian-axis {
-  display: none;
-}
-
-[data-theme="axis-mundi-night"] .meridian-axis--hero,
-[data-theme="axis-mundi-day"] .meridian-axis--hero {
-  display: block;
-  position: absolute;
-  inset: 0 auto 0 50%;
-  width: 1px;
-  transform: translateX(-50%);
-  background: linear-gradient(
-    to bottom,
-    var(--axis) 0%,
-    color-mix(in oklch, var(--axis) 35%, transparent) 40%,
-    transparent 100%
-  );
-  pointer-events: none;
-  z-index: 0;
-}
-
-[data-theme="axis-mundi-night"] .meridian-axis__node,
-[data-theme="axis-mundi-day"] .meridian-axis__node {
-  position: absolute;
-  top: -3px;
-  left: 50%;
-  width: 6px;
-  height: 6px;
-  transform: translateX(-50%);
-  border-radius: 9999px;
-  background: var(--axis);
-  box-shadow: 0 0 8px 2px color-mix(in oklch, var(--axis) 65%, transparent);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  [data-theme="axis-mundi-night"] .meridian-axis__node,
-  [data-theme="axis-mundi-day"] .meridian-axis__node {
-    box-shadow: none;
-  }
-}
-
-[data-theme="axis-mundi-night"] .meridian-axis--dock,
-[data-theme="axis-mundi-day"] .meridian-axis--dock {
-  display: block;
-  position: absolute;
-  left: 50%;
-  bottom: 6px;
-  width: 2px;
-  height: 6px;
-  transform: translateX(-50%);
-  border-radius: 1px;
-  background: var(--axis);
-  pointer-events: none;
-  z-index: 0;
-}
-
 /* Hearth v2 (H2): section identity. Each section's hue lives in exactly two
    places, its leading tile and its screen glow (core section-hues.ts; the
    values arrive as --hue-* variables from lib/section-hue-css.ts via
    `data-hue`). The glow is one radial wash at the top corner, painted under
-   the page's content; Axis Mundi keeps its meridian as its one decorative
-   element instead. It is ground (§13.1): on a section change it stays put
+   the page's content. It is ground (§13.1): on a section change it stays put
    and its hue blends into the next one on the page shift's timing, through
    the registered --glow-hue (a plain custom property can't transition).
    It also drifts along the top to the section's place in the bar's order
@@ -699,10 +529,6 @@
     );
   }
 }
-[data-theme^="axis-mundi"] .section-glow {
-  display: none;
-}
-
 /* E-Ink: flat and still. Nothing glows, blurs or casts a shadow, and nothing
    moves: e-paper redraws slowly and ghosts every in-between frame. Focus
    rings stay (they are Tailwind ring shadows, not --tw-shadow). Category
@@ -748,8 +574,7 @@
 }
 
 /* Sorbet and Lavender give the Hero number its own face (Hearth T1
-   deviation, like Axis Mundi's inscription capitals): Sorbet's round
-   Fredoka, Lavender's soft Fraunces serif. Both stop at 700. */
+   deviation): Sorbet's round Fredoka, Lavender's soft Fraunces serif. Both stop at 700. */
 [data-theme^="sorbet"] .text-hero,
 [data-theme^="sorbet"] .text-hero-section {
   font-family: var(--font-hero-sorbet), var(--font-heading);

@@ -4,7 +4,7 @@
 // and item sheets lead with it so a mixed list reads by section at a glance.
 import * as React from 'react';
 import { View, type ViewProps } from 'react-native';
-import { sectionHueSwatch } from '@homeup/core';
+import { hueSwatch, sectionHue, type SectionHue } from '@homeup/core';
 import { cn } from '../lib/cn';
 import { useThemeMaterial } from '../theme/theme-provider';
 import { useSectionId } from './section-glow';
@@ -24,14 +24,16 @@ const SIZES: Record<LeadingTileSize, { box: number; radius: number; icon: number
 export interface LeadingTileProps extends ViewProps {
   /** A sections.ts id. Defaults to the nearest SectionProvider's. */
   sectionId?: string;
+  /** A hue to wear instead of a section's (Settings menu rows). Wins over sectionId. */
+  hue?: SectionHue;
   Icon: LeadingTileIcon;
   size?: LeadingTileSize;
 }
 
-export function LeadingTile({ sectionId, Icon, size = 'lg', className, style, ...props }: LeadingTileProps) {
+export function LeadingTile({ sectionId, hue, Icon, size = 'lg', className, style, ...props }: LeadingTileProps) {
   const contextSection = useSectionId();
   const material = useThemeMaterial();
-  const swatch = sectionHueSwatch(sectionId ?? contextSection ?? 'home', material.scheme);
+  const swatch = hueSwatch(hue ?? sectionHue(sectionId ?? contextSection ?? 'home'), material.scheme);
   const dims = SIZES[size];
   return (
     <View

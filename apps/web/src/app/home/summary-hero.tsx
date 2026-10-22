@@ -39,7 +39,6 @@ import {
 } from '@homeup/core';
 import { cn } from '@/lib/utils';
 import { memberLabel } from '@/app/setup/member-label';
-import { MeridianAxis } from '@/components/ui/meridian-axis';
 import { HeroLede } from '@/components/ui/hero-lede';
 import { NowCardPager, type NowCardPagerItem } from '@/components/ui/now-card';
 import { sectionIconFor } from '@/lib/section-icons';
@@ -296,10 +295,9 @@ export function SummaryHero({
   return (
     <>
       {/* Hearth v2 (Pulse): no card around the lede; it sits on the ground
-          under the coral glow. Axis Mundi keeps its meridian here instead. */}
+          under the coral glow. */}
       <div className={cn(aside && 'grid grid-cols-12 items-start gap-x-10 gap-y-4')}>
       <section className={cn('relative flex flex-col gap-3 px-1 pt-1', aside && 'col-span-5')} aria-label="Today summary">
-        <MeridianAxis variant="hero" />
         <div className="relative z-10 flex items-center justify-between gap-4">
           <p className="text-xs text-muted-foreground">
             {ctx.now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
