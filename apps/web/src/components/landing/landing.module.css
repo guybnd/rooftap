@@ -323,13 +323,10 @@
 .featurePlay {
   cursor: pointer;
 }
-.featurePlay:hover,
 .featurePlay:focus-visible {
-  background: color-mix(in oklab, var(--hue-tile) 70%, transparent);
   outline: none;
 }
-.featureOn,
-.featurePlay.featureOn:hover {
+.featureOn {
   background: var(--hue-tile);
   border-color: color-mix(in oklab, var(--hue-glyph) 45%, transparent);
   color: var(--foreground);
@@ -540,7 +537,7 @@
   stroke: var(--hue-glyph);
   stroke-width: 1.5;
   stroke-linecap: round;
-  opacity: 0.3;
+  opacity: 0;
   transition: opacity 200ms ease;
 }
 .lineOn {
@@ -557,18 +554,19 @@
   }
 }
 
-/* A spot a feature points at: ringed faintly the whole time, lit in its turn. */
+/* A spot a feature points at: ringed only in its turn, so one ring shows at a time. */
 .pin {
   position: absolute;
   z-index: 2;
   border-radius: 4cqw;
-  box-shadow: 0 0 0 1.5px color-mix(in oklab, var(--hue-glyph) 45%, transparent);
+  opacity: 0;
   transition:
     box-shadow 220ms ease,
     opacity 220ms ease;
   pointer-events: none;
 }
 .pinOn {
+  opacity: 1;
   box-shadow:
     0 0 0 2px var(--hue-glyph),
     0 0 24px 2px var(--hue-glow);
@@ -674,6 +672,10 @@
   }
   .featureIdx {
     font-size: 11.5px;
+  }
+  /* Stacked, the lit row and the one ring say enough: a line up the margin would cross the other rows. */
+  .lines {
+    display: none;
   }
   .stageLabel {
     top: max(70px, calc(env(safe-area-inset-top, 0px) + 66px));

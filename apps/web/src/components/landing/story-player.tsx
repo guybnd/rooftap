@@ -14,8 +14,9 @@ import type { Rect as PxRect, StreamsScene } from "./scenes/streams";
 // each showing a real app screen (or a drawn screen, for the chat), and a
 // list of features. A feature can point at a spot on a phone, or play a
 // short timeline there: a finger taps or swipes, a screen changes, the other
-// phone pops with the result. The features play in turn, the playing one is
-// lit, and a line runs from it to the spot on the phone. A click on a
+// phone pops with the result. The features play in turn, and only one is lit
+// at a time: its row, its ring and (side by side) one line to the spot on the
+// phone. A mouse over another feature lights that one instead. A click on a
 // feature plays it again. The stage is sticky; the page's scroll picks the
 // step; the step plays on its own.
 
@@ -223,8 +224,7 @@ function Phone({
   screens,
   shown,
   pins,
-  lit,
-  hover,
+  shownFeature,
   touch,
   highlight,
   pop,
@@ -237,8 +237,8 @@ function Phone({
   screens: readonly Screen[];
   shown: Screen | undefined;
   pins: readonly Pin[];
-  lit: number;
-  hover: number;
+  /** The one feature that is lit: the hovered one, else the playing one. */
+  shownFeature: number;
   touch: Touch | null;
   highlight: Highlight | null;
   pop: { on: Slot; key: number } | null;
@@ -297,7 +297,7 @@ function Phone({
           // A feature that plays can show another frame first, and a pin measured on a frame must not ring that one.
           .filter((p) => p.on === slot && (!p.scene || p.scene === shown))
           .map((p) => (
-            <span key={p.i} ref={(el) => pinRef(p.i, el)} className={cn(styles.pin, (p.i === lit || p.i === hover) && styles.pinOn)} style={pct(p.rect)} aria-hidden="true" />
+            <span key={p.i} ref={(el) => pinRef(p.i, el)} className={cn(styles.pin, p.i === shownFeature && styles.pinOn)} style={pct(p.rect)} aria-hidden="true" />
           ))}
         {h && <span ref={highlightRef} className={styles.highlight} style={pct(h.rect)} aria-hidden="true" />}
         {t && (
@@ -400,6 +400,10 @@ export function StoryPlayer({ stories, eager = false }: { stories: readonly Stor
   const current = flat[active];
   const { screens, lit, touch, highlight, pop } = useTimeline(current.step, visible, replay);
   if (pop) popRef.current = pop.key;
+  // One feature is lit at a time: the one the mouse is over, else the playing one.
+  const shown = hover >= 0 ? hover : lit;
+  // The playing feature's ring (and its line) steps aside while another is previewed.
+  const ring = shown === lit ? highlight : null;
   const litRef = useRef(-1);
   litRef.current = lit;
 
@@ -633,15 +637,16 @@ export function StoryPlayer({ stories, eager = false }: { stories: readonly Stor
                             ref={(el) => {
                               if (on) featureEls.current[j] = el;
                             }}
-                            className={cn(styles.feature, styles.featurePlay, on && lit === j && styles.featureOn)}
+                            className={cn(styles.feature, styles.featurePlay, on && shown === j && styles.featureOn)}
                             aria-pressed={on && lit === j}
                             aria-labelledby={`${id}-name`}
                             aria-describedby={`${id}-text`}
                             tabIndex={on ? 0 : -1}
                             onClick={() => setReplay({ step: s, feature: j, key: Date.now() })}
-                            onMouseEnter={() => setHover(j)}
-                            onMouseLeave={() => setHover(-1)}
-                            onFocus={() => setHover(j)}
+                            // Only a mouse or the keyboard previews a feature: a tap leaves no hover or focus behind to light a second one.
+                            onPointerEnter={(e) => e.pointerType === "mouse" && setHover(j)}
+                            onPointerLeave={() => setHover(-1)}
+                            onFocus={(e) => e.currentTarget.matches(":focus-visible") && setHover(j)}
                             onBlur={() => setHover(-1)}
                           >
                             {body}
@@ -665,10 +670,9 @@ export function StoryPlayer({ stories, eager = false }: { stories: readonly Stor
               screens={screensA}
               shown={screens.a}
               pins={pins}
-              lit={lit}
-              hover={hover}
+              shownFeature={shown}
               touch={touch}
-              highlight={highlight}
+              highlight={ring}
               pop={pop}
               eager={eager && current.storyIndex === 0}
               phoneRef={(el) => {
@@ -687,10 +691,9 @@ export function StoryPlayer({ stories, eager = false }: { stories: readonly Stor
                 screens={screensB}
                 shown={screens.b}
                 pins={pins}
-                lit={lit}
-                hover={hover}
+                shownFeature={shown}
                 touch={touch}
-                highlight={highlight}
+                highlight={ring}
                 pop={pop}
                 eager={false}
                 phoneRef={(el) => {
@@ -715,7 +718,7 @@ export function StoryPlayer({ stories, eager = false }: { stories: readonly Stor
                   ref={(el) => {
                     pathEls.current[j] = el;
                   }}
-                  className={cn(styles.line, (j === lit || j === hover) && styles.lineOn)}
+                  className={cn(styles.line, j === shown && styles.lineOn)}
                 />
               ) : null
             )}
