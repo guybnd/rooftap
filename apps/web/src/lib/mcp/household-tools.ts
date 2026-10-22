@@ -5,8 +5,8 @@ import { listCostItems, isTaskOwnerEnabled, type ModuleId } from "@homeup/core";
 import { aiBlockedMessage, parseScoutBrief, scoutLatestRun, scoutRunStatus, scoutTitle, SCOUT_BRIEF_MAX, type Group } from "@homeup/core";
 import { hasOfferSources, scoutBrain, startScoutRun } from "@/lib/shopper/scout";
 import { readThread } from "@/lib/shopper/scout-thread";
-import { totalForPeriod, monthlyAmount, CATEGORY_META, summariseAccounts, summariseSpending } from "@homeup/core";
-import { visibleBankAccounts, visibleBankTransactions } from "@/lib/up-bank";
+import { totalForPeriod, monthlyAmount, CATEGORY_META, summariseAccounts, summariseSpending, bankRowJoint, costCategoryFromUp } from "@homeup/core";
+import { bankSharing, visibleBankAccounts, visibleBankTransactions } from "@/lib/up-bank";
 import { changeBankTransaction, makeCostFromPayment, mergeCostLine, removeBankLinkRule, setBankLinkRule } from "@/lib/bank-actions";
 import {
   buildChecklistItem,
@@ -1152,16 +1152,18 @@ export function householdTools({ admin, userId, groupId, enabled }: HouseholdToo
     "get_bank_spending",
     {
       description:
-        "Up Bank: account balances and spending from the bank data this person may see (their own, plus household members who share theirs). Current balances per account, totals by category and the matching transactions, newest first. Each transaction has an id for update_bank_payment and make_cost_from_payment, and cost_item_id when it is filed under a cost line. Amounts in cents; money out is negative. Transfers between their own accounts and payments hidden from spending are left out. Defaults to the last 30 days.",
+        "Up Bank: account balances and spending from the bank data this person may see (their own, plus household members who share theirs). Current balances per account, totals and the matching transactions, newest first. spent_cents, by_category (Up's categories) and by_cost_category (the Costs categories) count every payment in the range, however many there are; transactions lists only the newest ones (limit), so add up the totals, never the list. accounts narrows it to joint or personal accounts; unfiled lists only payments no cost line holds. Each transaction has an id for update_bank_payment and make_cost_from_payment, and cost_item_id when it is filed under a cost line. Amounts in cents; money out is negative. Transfers between their own accounts and payments hidden from spending are left out. Defaults to the last 30 days.",
       inputSchema: {
         from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe("First day, YYYY-MM-DD."),
         to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe("Last day, YYYY-MM-DD, included."),
         search: z.string().max(100).optional().describe("Words in the description, e.g. a store name."),
         category: z.string().max(60).optional().describe("Up category id, e.g. takeaway, groceries, fuel."),
+        accounts: z.enum(["all", "joint", "personal"]).optional().describe("Joint accounts only, personal accounts only, or all (the default)."),
+        unfiled: z.boolean().optional().describe("Only payments not filed under any cost line, to reconcile them."),
         limit: z.number().int().min(1).max(100).optional(),
       },
     },
-    async ({ from, to, search, category, limit }) => {
+    async ({ from, to, search, category, accounts, unfiled, limit }) => {
       if (!groupId) return noGroupError();
       const end = to ? new Date(`${to}T00:00:00Z`).getTime() + 86_400_000 : Date.now();
       const start = from ? new Date(`${from}T00:00:00Z`).getTime() : end - 30 * 86_400_000;
@@ -1176,6 +1178,11 @@ export function householdTools({ admin, userId, groupId, enabled }: HouseholdToo
       const words = search?.trim().toLowerCase();
       if (words) rows = rows.filter((r) => `${r.description} ${r.message ?? ""} ${(r.tags ?? []).join(" ")}`.toLowerCase().includes(words));
       if (category) rows = rows.filter((r) => r.category === category || r.parent_category === category);
+      if (accounts && accounts !== "all") {
+        const sharing = await bankSharing(admin, userId, groupId);
+        rows = rows.filter((r) => bankRowJoint(r, sharing) === (accounts === "joint"));
+      }
+      if (unfiled) rows = rows.filter((r) => !r.cost_item_id);
       const summary = summariseSpending(rows, from ?? new Date(start).toISOString().slice(0, 10), { recent: 0 });
       // A joint payment arrives once per partner who shares it; keep the
       // caller's own copy, the one they can change.
@@ -1188,6 +1195,17 @@ export function householdTools({ admin, userId, groupId, enabled }: HouseholdToo
       const listed = Array.from(byPayment.values())
         .sort((a, b) => b.occurred_at.localeCompare(a.occurred_at))
         .slice(0, limit ?? 30);
+      // Totals in the Costs categories: the cost line's when it is filed, else from Up's.
+      const lineCategory = new Map((await listCostItems(admin, groupId)).map((i) => [i.id, i.category]));
+      const byCost = new Map<string, number>();
+      let payments = 0;
+      for (const t of byPayment.values()) {
+        if (t.amount_cents >= 0) continue;
+        payments++;
+        const c = (t.cost_item_id && lineCategory.get(t.cost_item_id)) || costCategoryFromUp(t.category ?? t.parent_category);
+        const label = CATEGORY_META[c as keyof typeof CATEGORY_META]?.label ?? c;
+        byCost.set(label, (byCost.get(label) ?? 0) + -t.amount_cents);
+      }
       // Balances arrive with servers that have bank_accounts; older ones have none to show.
       const balances = summariseAccounts(await visibleBankAccounts(admin, userId, groupId).catch(() => []));
       return {
@@ -1205,7 +1223,10 @@ export function householdTools({ admin, userId, groupId, enabled }: HouseholdToo
               to: new Date(end - 1).toISOString().slice(0, 10),
               spent_cents: summary.spentCents,
               received_cents: summary.receivedCents,
+              payments_out: payments,
               by_category: summary.categories.map((c) => ({ category: c.id, label: c.label, cents: c.cents })),
+              by_cost_category: [...byCost].sort((a, b) => b[1] - a[1]).map(([label, cents]) => ({ label, cents })),
+              listed: `${listed.length} newest of ${byPayment.size}`,
               transactions: listed.map((t) => ({
                 id: t.id,
                 date: t.occurred_at.slice(0, 10),
