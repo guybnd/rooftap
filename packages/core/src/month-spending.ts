@@ -160,7 +160,7 @@ type BookPayment = Pick<SpendingTransaction, 'id' | 'amountCents' | 'category' |
 const DAY_MS = 86_400_000;
 
 /** A line's dates inside [start, end]: each occurrence, or one undated entry for a recurring line with no start date. */
-function occurrencesIn(item: CostItem, start: Date, end: Date): (Date | null)[] {
+export function occurrencesIn(item: CostItem, start: Date, end: Date): (Date | null)[] {
   if (isOneOff(item)) {
     if (!item.start_date) return [];
     const d = parseLocalDateOnly(item.start_date);

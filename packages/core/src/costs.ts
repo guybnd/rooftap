@@ -77,6 +77,7 @@ export const CATEGORY_META: Record<CostCategory, { label: string; color: string 
   pets: { label: "Pets", color: "bg-emerald-900/40 text-emerald-300" },
   family: { label: "Kids and family", color: "bg-rose-900/40 text-rose-300" },
   other: { label: "Other", color: "bg-slate-700 text-slate-300" },
+  income: { label: "Income", color: "bg-emerald-900/40 text-emerald-300" },
 };
 
 // Per-category palette for tints, bars, dots, and the projection chart, so the
@@ -111,6 +112,7 @@ export const CATEGORY_COLOR: Record<
   pets: { fill: "bg-emerald-200 cat-idx-11", border: "border-l-emerald-200/60 cat-idx-11", dot: "bg-emerald-200 cat-idx-11", text: "text-emerald-600 dark:text-emerald-100 cat-idx-11", tile: "bg-emerald-200/20 text-emerald-700 dark:bg-emerald-200/15 dark:text-emerald-100 cat-idx-11" },
   family: { fill: "bg-rose-200 cat-idx-12", border: "border-l-rose-200/60 cat-idx-12", dot: "bg-rose-200 cat-idx-12", text: "text-rose-600 dark:text-rose-100 cat-idx-12", tile: "bg-rose-200/20 text-rose-700 dark:bg-rose-200/15 dark:text-rose-100 cat-idx-12" },
   other: { fill: "bg-slate-400 cat-idx-13", border: "border-l-slate-400/60 cat-idx-13", dot: "bg-slate-400 cat-idx-13", text: "text-slate-600 dark:text-slate-300 cat-idx-13", tile: "bg-slate-400/20 text-slate-700 dark:bg-slate-400/15 dark:text-slate-300 cat-idx-13" },
+  income: { fill: "bg-green-400 cat-idx-14", border: "border-l-green-400/60 cat-idx-14", dot: "bg-green-400 cat-idx-14", text: "text-green-700 dark:text-green-300 cat-idx-14", tile: "bg-green-400/20 text-green-700 dark:bg-green-400/15 dark:text-green-300 cat-idx-14" },
 };
 
 /** Monthly-equivalent of a recurring cost (minor units). One-off → 0. */

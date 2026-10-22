@@ -15,6 +15,7 @@ export type UpViewScope = Exclude<BankScope, 'all'>;
 import { createContext, createElement, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { costTargets, type BankActuals } from './costs';
 import { bankActualsOf, monthTotals, type MonthTotals } from './money-insights';
+import { costMonths, type CostMonth } from './cost-month';
 import type { CostItem } from './types';
 import { monthStartOf, type BankScope, type CostBankLink, type UpBankApi, type UpBankStatus, type UpOverview, type UpSpending } from './up-bank';
 
@@ -187,12 +188,38 @@ export function useBankActuals(): BankActuals | undefined {
 export function useMonthTotals(items: readonly CostItem[]): MonthTotals | null {
   const { data, month, scope } = useUpOverview();
   const bank = useBankActuals();
+  const [current] = useCostMonths(items, useMemo(() => [monthKeyOf(new Date())], []));
   return useMemo(() => {
     const now = new Date();
-    if (!data || !bank || bank.linked.size === 0 || scope === 'mine' || month !== monthStartOf(now)) return null;
+    if (scope === 'mine' || month !== monthStartOf(now)) return null;
+    // Servers that send the ledger: the same month the Costs screen shows.
+    if (data?.ledger) {
+      const byCategory: Record<string, number> = {};
+      for (const c of current.categories) byCategory[c.category ?? 'other'] = (byCategory[c.category ?? 'other'] ?? 0) + c.paidCents + c.toComeCents;
+      return { totalCents: current.expectedCents, paidCents: current.paidCents, toComeCents: current.toComeCents, byCategory };
+    }
+    if (!data || !bank || bank.linked.size === 0) return null;
     const targets = costTargets(items);
     return monthTotals(items.filter((i) => !i.deleted && !targets.has(i.id)), bank, data.spentCents, now);
-  }, [data, bank, scope, month, items]);
+  }, [data, bank, scope, month, items, current]);
+}
+
+/**
+ * Months worked out by costMonth (YYYY-MM keys), from the cost lines and the
+ * payments the overview sent. Without a payment source (or before the server
+ * sends its ledger) only the lines added by hand count.
+ */
+export function useCostMonths(items: readonly CostItem[], keys: readonly string[]): CostMonth[] {
+  const { data } = useUpOverview();
+  return useMemo(() => {
+    const now = new Date();
+    const linked = new Set((data?.links ?? []).map((l) => l.costItemId));
+    return costMonths({ items, ledger: data?.ledger ?? [], now, linked, since: data?.actualsSince ?? null }, keys);
+  }, [data, items, keys]);
+}
+
+function monthKeyOf(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
 /** What a cost line was really paid in a YYYY-MM month, or null when the bank has nothing for it. */

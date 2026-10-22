@@ -16,6 +16,7 @@
 // stored row, and the spending summary both apps and the assistant read.
 
 import type { CostCadence, CostCategory, CostItem } from './types';
+import type { LedgerRow } from './cost-month';
 
 export const UP_API_BASE = 'https://api.up.com.au/api/v1';
 
@@ -164,6 +165,8 @@ export interface UpOverview extends UpSpending {
   actuals?: CostActual[];
   /** The first whole month the bank data covers, YYYY-MM: earlier months keep their plan. */
   actualsSince?: string | null;
+  /** Payments per shop and month over the last 13 months, for costMonth. Missing before the costs redesign. */
+  ledger?: LedgerRow[];
 }
 
 /** What one cost line was really paid in one month, from the bank. */
@@ -208,6 +211,34 @@ export function costActuals(rows: readonly BankTransaction[], tzOffset = 0): Cos
     sums.set(key, cur);
   }
   return Array.from(sums.values());
+}
+
+/**
+ * Payments per shop and month for costMonth (core cost-month.ts): money out
+ * and money in, one Up transaction counted once (a joint account read by two
+ * people arrives twice), transfers and hidden payments left out. Months are
+ * the viewer's (tzOffset as in monthKeyAt).
+ */
+export function ledgerRows(rows: readonly BankTransaction[], tzOffset = 0): LedgerRow[] {
+  const seen = new Set<string>();
+  const out = new Map<string, LedgerRow>();
+  for (const r of rows) {
+    if (r.is_transfer || r.hidden || seen.has(r.external_id)) continue;
+    seen.add(r.external_id);
+    const month = monthKeyAt(r.occurred_at, tzOffset);
+    // Up's raw text can end in a stray backslash ("LUNE FITZROY\\").
+    const vendor = r.description.replace(/[\\\s]+$/, '').trim() || r.description;
+    const costItemId = r.cost_item_id ?? null;
+    const key = `${month}|${costItemId ?? ''}|${squash(vendor)}|${costItemId ? '' : (r.category ?? '')}`;
+    const cur = out.get(key) ?? { month, vendor, costItemId, sourceCategory: costItemId ? null : r.category, outCents: 0, inCents: 0, count: 0, lastAt: r.occurred_at, source: r.source };
+    if (r.amount_cents < 0) {
+      cur.outCents += -r.amount_cents;
+      cur.count += 1;
+    } else cur.inCents += r.amount_cents;
+    if (r.occurred_at > cur.lastAt) cur.lastAt = r.occurred_at;
+    out.set(key, cur);
+  }
+  return Array.from(out.values());
 }
 
 /** The first whole month after the oldest row (device months, as in monthKeyAt): the months the bank data fully covers start there. */

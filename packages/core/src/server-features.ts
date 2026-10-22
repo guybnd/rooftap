@@ -85,6 +85,10 @@ export const SERVER_FEATURES = {
     minSchema: '20261022150000_bank_weekly_digest',
     label: 'the weekly money digest',
   },
+  'costs.redesign': {
+    minSchema: '20261022170000_cost_redesign',
+    label: 'archiving costs, future prices and an Income category',
+  },
 } as const satisfies Record<string, ServerFeatureDef>;
 
 export type ServerFeatureId = keyof typeof SERVER_FEATURES;

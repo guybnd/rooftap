@@ -10,8 +10,11 @@ import { createContext, createElement, useContext, useMemo, type ReactNode } fro
 import { CATEGORY_META } from './costs';
 import type { CostCategory, CostItem } from './types';
 
-/** Categories hidden until a line uses them. */
-export const OPTIONAL_COST_CATEGORIES: readonly CostCategory[] = ['pets', 'family'];
+/**
+ * Categories hidden until a line uses them. Income is offered from Costs'
+ * "Add income", which servers before 20261022170000_cost_redesign can't store.
+ */
+export const OPTIONAL_COST_CATEGORIES: readonly CostCategory[] = ['pets', 'family', 'income'];
 
 const ALL = Object.keys(CATEGORY_META) as CostCategory[];
 

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { actualsSinceOf, costActuals, costBankLinks, summariseAccounts, summariseSpending, type UpOverview } from "@homeup/core";
+import { actualsSinceOf, costActuals, costBankLinks, ledgerRows, summariseAccounts, summariseSpending, type UpOverview } from "@homeup/core";
 import { bankLinkRows, upErrorResponse, upRequest, visibleBankAccounts, visibleBankTransactions } from "@/lib/up-bank";
 
 // Up Bank connector: what the Costs screen shows. One month of spending (the
@@ -44,10 +44,12 @@ export async function GET(request: Request) {
       visibleBankTransactions(req.admin, {
         userId: req.userId,
         groupId: req.groupId,
-        // This year's months for the actuals, and at least the link lookback.
-        from: new Date(Math.min(now - LINK_LOOKBACK_MS, new Date(new Date(now).getFullYear(), 0, 1).getTime())).toISOString(),
+        // The last 13 months for the chart and the actuals, and at least the link lookback.
+        from: new Date(Math.min(now - LINK_LOOKBACK_MS, new Date(new Date(now).getFullYear(), new Date(now).getMonth() - 12, 1).getTime())).toISOString(),
         to: new Date(now + 86_400_000).toISOString(),
-        limit: 5000,
+        // The same accounts as the month, so a line's payments match its category.
+        scope: scope ?? "all",
+        limit: 8000,
       }),
       visibleBankAccounts(req.admin, req.userId, req.groupId, scope ?? "all"),
       bankLinkRows(req.admin, req.groupId),
@@ -58,6 +60,7 @@ export async function GET(request: Request) {
       links: costBankLinks(recentRows, rules),
       actuals: costActuals(recentRows, tz),
       actualsSince: actualsSinceOf(recentRows, tz),
+      ledger: ledgerRows(recentRows, tz),
       ...(scope ? { scope } : {}),
     };
     return NextResponse.json(body);

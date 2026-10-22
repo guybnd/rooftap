@@ -21,6 +21,8 @@ import {
 import {
   CADENCE_LABEL,
   CATEGORY_META,
+  formatMoney,
+  withPriceChange,
   useCostCategoryChoices,
   syncCostReminders,
   todayISO,
@@ -54,15 +56,19 @@ interface CostModalProps {
   defaultName?: string;
   /** Pre-fill a new item's date, YYYY-MM-DD (Home's "add to this day"). */
   defaultStartDate?: string;
+  /** Pre-fill a new item's category (a category's "Add a cost"). */
+  defaultCategory?: CostCategory;
+  /** Archive or bring back the cost; absent on servers without 'costs.redesign'. */
+  onArchive?: (item: CostItem, archived: boolean) => void;
   onClose: () => void;
   onSave: (item: CostItem) => void;
 }
 
-function buildInitialForm(item: CostItem | undefined, defaultName: string | undefined, defaultStartDate?: string) {
+function buildInitialForm(item: CostItem | undefined, defaultName: string | undefined, defaultStartDate?: string, defaultCategory?: CostCategory) {
   return {
     name: item?.name ?? defaultName ?? '',
     // FLUX-182 parity: new costs default to a one-off Purchase, matching web.
-    category: item?.category ?? 'purchase',
+    category: item?.category ?? defaultCategory ?? 'purchase',
     amount: item ? item.amount / 100 : null,
     cadence: item?.cadence ?? 'one_off',
     isEstimate: item?.is_estimate ?? false,
@@ -74,8 +80,11 @@ function buildInitialForm(item: CostItem | undefined, defaultName: string | unde
   };
 }
 
-export function CostModal({ open, item, groupId, currentUserId, defaultName, defaultStartDate, onClose, onSave }: CostModalProps) {
-  const [form, setForm] = React.useState(() => buildInitialForm(item, defaultName, defaultStartDate));
+export function CostModal({ open, item, groupId, currentUserId, defaultName, defaultStartDate, defaultCategory, onArchive, onClose, onSave }: CostModalProps) {
+  const [form, setForm] = React.useState(() => buildInitialForm(item, defaultName, defaultStartDate, defaultCategory));
+  // A new price from a date on, for a recurring cost (core costPriceOn).
+  const [priceFrom, setPriceFrom] = React.useState('');
+  const [newPrice, setNewPrice] = React.useState<number | null>(null);
   const categoryChoices = useCostCategoryChoices(form.category);
   const categoryPickerOptions = React.useMemo<PickerOption[]>(
     () => categoryChoices.map((c) => ({ value: c, primary: CATEGORY_META[c].label })),
@@ -110,6 +119,9 @@ export function CostModal({ open, item, groupId, currentUserId, defaultName, def
       discount_end_date: isRecurring ? form.discountEndDate || null : null,
       provider: form.provider.trim() || null,
       notes: form.notes.trim() || null,
+      ...(isRecurring && priceFrom && newPrice != null && Number.isFinite(newPrice)
+        ? { price_changes: withPriceChange(item?.price_changes ?? [], priceFrom, Math.round(newPrice * 100)) }
+        : {}),
     };
 
     const saved: CostItem = item?.id
@@ -241,6 +253,41 @@ export function CostModal({ open, item, groupId, currentUserId, defaultName, def
           line={item}
           onMerged={onClose}
         />
+      ) : null}
+
+      {isRecurring && item?.id && onArchive ? (
+        <FormSection title="Price from a date">
+          {(item.price_changes ?? []).map((c) => (
+            <Text key={c.from} className="text-caption text-muted-foreground" style={{ fontVariant: ['tabular-nums'] }}>
+              {formatMoney(c.amount)} from {c.from}
+            </Text>
+          ))}
+          <FieldRow label="New price starts" hint="Earlier months keep the old price.">
+            <DateScrollField value={priceFrom} onChange={setPriceFrom} />
+          </FieldRow>
+          {priceFrom ? (
+            <FieldRow label="New price">
+              <DragNumberField value={newPrice} onChange={setNewPrice} step={1} min={0} precision={2} prefix={currencySymbol()} placeholder="0.00" accessibilityLabel="New price" />
+            </FieldRow>
+          ) : null}
+        </FormSection>
+      ) : null}
+
+      {item?.id && onArchive ? (
+        <FormSection>
+          <Button
+            variant="outline"
+            onPress={() => {
+              onArchive(item, !item.archived);
+              onClose();
+            }}
+          >
+            {item.archived ? 'Bring back' : 'Archive'}
+          </Button>
+          {!item.archived ? (
+            <Text className="text-caption text-muted-foreground">Archived costs still catch their bank payments, but leave every total.</Text>
+          ) : null}
+        </FormSection>
       ) : null}
 
       {detailsCount > 0 && (

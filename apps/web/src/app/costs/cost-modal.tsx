@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import type { CostItem, CostCadence, CostCategory } from '@homeup/core';
 import { dialog } from '@homeup/core';
-import { CATEGORY_META, currencySymbol } from '@homeup/core';
+import { CATEGORY_META, currencySymbol, formatMoney, withPriceChange } from '@homeup/core';
 import { syncCostReminders, useCostCategoryChoices, useModules } from '@homeup/core';
 import { todayISO } from '@/app/tasks/moving-tasks';
 import { ItemFormSheet, FormSection, FieldRow, DetailsDisclosure } from '@/components/ui/item-form-sheet';
@@ -33,6 +33,8 @@ interface CostModalProps {
   onSave: (item: CostItem) => void;
   /** When provided, a Delete button is shown (edit mode only). */
   onDelete?: (itemId: string) => void;
+  /** Archive or bring back the cost; absent on servers without 'costs.redesign'. */
+  onArchive?: (item: CostItem, archived: boolean) => void;
 }
 
 const CADENCE_OPTIONS = [
@@ -44,7 +46,7 @@ const CADENCE_OPTIONS = [
   { value: 'yearly' as const, label: 'Yearly' },
 ];
 
-export function CostModal({ isOpen, item, groupId, defaultCategory, defaultName, defaultStartDate, onClose, onSave, onDelete }: CostModalProps) {
+export function CostModal({ isOpen, item, groupId, defaultCategory, defaultName, defaultStartDate, onClose, onSave, onDelete, onArchive }: CostModalProps) {
   const buildInitialForm = useCallback(
     () => ({
       name: item?.name ?? defaultName ?? '',
@@ -62,13 +64,20 @@ export function CostModal({ isOpen, item, groupId, defaultCategory, defaultName,
     [item, defaultCategory, defaultName, defaultStartDate],
   );
   const [form, setForm] = useState(buildInitialForm);
+  // A new price from a date on, for a recurring cost (core costPriceOn).
+  const [priceFrom, setPriceFrom] = useState('');
+  const [newPrice, setNewPrice] = useState<number | null>(null);
 
   // FLUX-186: instance is reused across opens (stable `key` for blank adds), so
   // re-seed the form on every closed→open transition — otherwise adding a second
   // cost pre-fills the one you just added.
   const wasOpen = useRef(isOpen);
   useEffect(() => {
-    if (isOpen && !wasOpen.current) setForm(buildInitialForm());
+    if (isOpen && !wasOpen.current) {
+      setForm(buildInitialForm());
+      setPriceFrom('');
+      setNewPrice(null);
+    }
     wasOpen.current = isOpen;
   }, [isOpen, buildInitialForm]);
 
@@ -113,6 +122,9 @@ export function CostModal({ isOpen, item, groupId, defaultCategory, defaultName,
       discount_end_date: isRecurring ? form.discount_end_date || null : null,
       notes: form.notes.trim() || null,
       group_id: groupId,
+      ...(isRecurring && priceFrom && newPrice != null && Number.isFinite(newPrice)
+        ? { price_changes: withPriceChange(item?.price_changes ?? [], priceFrom, Math.round(newPrice * 100)) }
+        : {}),
     };
 
     // Offline-safe: build the row and hand it to onSave (→ writeRow), which
@@ -266,6 +278,39 @@ export function CostModal({ isOpen, item, groupId, defaultCategory, defaultName,
           line={item}
           onMerged={onClose}
         />
+      )}
+
+      {isRecurring && item?.id && onArchive && (
+        <FormSection title="Price from a date">
+          {(item.price_changes ?? []).map((c) => (
+            <p key={c.from} className="text-xs tabular-nums text-muted-foreground">
+              {formatMoney(c.amount)} from {c.from}
+            </p>
+          ))}
+          <div className="grid grid-cols-2 gap-3">
+            <FieldRow label="New price starts" hint="Earlier months keep the old price.">
+              <Input type="date" value={priceFrom} onChange={(e) => setPriceFrom(e.target.value)} />
+            </FieldRow>
+            {priceFrom && (
+              <FieldRow label="New price">
+                <DragNumberField value={newPrice} onChange={setNewPrice} step={1} min={0} precision={2} prefix={currencySymbol()} placeholder="0.00" ariaLabel="New price" />
+              </FieldRow>
+            )}
+          </div>
+        </FormSection>
+      )}
+
+      {item?.id && onArchive && (
+        <FormSection>
+          <button
+            type="button"
+            onClick={() => onArchive(item, !item.archived)}
+            className="h-10 w-full rounded-xl border border-border bg-muted text-sm font-medium text-foreground transition-colors hover:bg-accent"
+          >
+            {item.archived ? 'Bring back' : 'Archive'}
+          </button>
+          {!item.archived && <p className="text-xs text-muted-foreground">Archived costs still catch their bank payments, but leave every total.</p>}
+        </FormSection>
       )}
 
       <DetailsDisclosure count={detailsCount}>

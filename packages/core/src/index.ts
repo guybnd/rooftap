@@ -72,6 +72,7 @@ export * from './up-overview';
 export * from './cost-categories';
 export * from './money-insights';
 export * from './month-spending';
+export * from './cost-month';
 export * from './document-folders';
 export * from './events';
 export * from './event-tickets';

@@ -317,6 +317,7 @@ describe('server schema', () => {
       'sharing only your joint Up accounts',
       'filing joint Up payments as costs',
       'the weekly money digest',
+      'archiving costs, future prices and an Income category',
     ]);
 
     act(() => setServerSchema('20261020050000_mcp_oauth'));
@@ -353,6 +354,7 @@ describe('server schema', () => {
       'sharing only your joint Up accounts',
       'filing joint Up payments as costs',
       'the weekly money digest',
+        'archiving costs, future prices and an Income category',
       ]);
     } finally {
       delete mcp.minSchema;

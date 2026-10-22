@@ -4,6 +4,7 @@
 // they key a series; on rows and menus they were decoration that borrowed the
 // status hues (amber, green, rose).
 import {
+  ArrowDownLeft,
   Banknote,
   Car,
   HeartPulse,
@@ -38,6 +39,7 @@ export const CATEGORY_ICON: Record<CostCategory, LucideIcon> = {
   pets: PawPrint,
   family: Users,
   other: Ellipsis,
+  income: ArrowDownLeft,
 };
 
 export function CategoryGlyph({ category, className }: { category: CostCategory; className?: string }) {

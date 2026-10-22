@@ -361,7 +361,9 @@ export type CostCategory =
   | "health"
   | "pets"
   | "family"
-  | "other";
+  | "other"
+  /** Money in: pay, transfers from outside. Never counted as a cost. */
+  | "income";
 
 export type CostCadence =
   | "weekly"
@@ -396,6 +398,10 @@ export interface CostItem {
   deleted: boolean;
   /** 'up' when the server made the line for a vendor's bank payments and keeps its amount in step. */
   bank_source?: 'up' | null;
+  /** Kept so the bank's payments still find it, but left out of every total. Missing before 20261022170000_cost_redesign. */
+  archived?: boolean;
+  /** Prices a recurring cost takes from a date on (YYYY-MM-DD), oldest first. Missing before 20261022170000_cost_redesign. */
+  price_changes?: { from: string; amount: number }[] | null;
 }
 
 export interface CostDocument {

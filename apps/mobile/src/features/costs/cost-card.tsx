@@ -30,6 +30,7 @@ import {
   Landmark,
   MessageSquare,
   MoreHorizontal,
+  ArrowDownLeft,
   Paperclip,
   PawPrint,
   Pencil,
@@ -149,6 +150,7 @@ const CATEGORY_TILE: Record<'light' | 'dark', Record<CostCategory, { tile: strin
     pets: { tile: 'bg-emerald-200/20', glyph: 'text-emerald-700', title: 'text-emerald-600' },
     family: { tile: 'bg-rose-200/20', glyph: 'text-rose-700', title: 'text-rose-600' },
     other: { tile: 'bg-slate-400/20', glyph: 'text-slate-700', title: 'text-slate-600' },
+    income: { tile: 'bg-green-400/20', glyph: 'text-green-700', title: 'text-green-700' },
   },
   dark: {
     rent: { tile: 'bg-blue-300/15', glyph: 'text-blue-200', title: 'text-blue-200' },
@@ -165,6 +167,7 @@ const CATEGORY_TILE: Record<'light' | 'dark', Record<CostCategory, { tile: strin
     pets: { tile: 'bg-emerald-200/15', glyph: 'text-emerald-100', title: 'text-emerald-100' },
     family: { tile: 'bg-rose-200/15', glyph: 'text-rose-100', title: 'text-rose-100' },
     other: { tile: 'bg-slate-400/15', glyph: 'text-slate-300', title: 'text-slate-300' },
+    income: { tile: 'bg-green-400/15', glyph: 'text-green-300', title: 'text-green-300' },
   },
 };
 
@@ -194,6 +197,7 @@ const CATEGORY_ICON: Record<CostCategory, LucideIcon> = {
   pets: PawPrint,
   family: Users,
   other: MoreHorizontal,
+  income: ArrowDownLeft,
 };
 
 export function CategoryChip({ category }: { category: CostCategory }) {
