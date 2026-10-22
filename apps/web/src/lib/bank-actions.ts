@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
+  addBankMatch,
   bankAmountsVary,
   bankLineAmount,
   costCategoryFromUp,
@@ -8,7 +9,7 @@ import {
   type BankTransaction,
   type MakeCostPreview,
 } from "@homeup/core";
-import { applyBankLinks, visibleBankTransactions } from "@/lib/up-bank";
+import { applyBankLinks, bankLinkRows, visibleBankTransactions } from "@/lib/up-bank";
 
 // The changes a person can make to bank data in Rooftap, shared by the app's
 // routes and the assistant's tools so both follow the same rules: only the
@@ -277,4 +278,72 @@ export async function removeBankLinkRule(
   if (error) return { error: error.message, status: 500 };
   await applyBankLinks(c.admin, c.groupId);
   return { ok: true };
+}
+
+/** The longest a rule's match may be (bank_links.match). */
+const MATCH_MAX = 1000;
+
+/**
+ * Folds one cost line into another: its payees join the other line's rule,
+ * its payments move there, and the line goes. For a line the bank made that
+ * belongs with one made by hand, such as a water bill.
+ */
+export async function mergeCostLine(
+  c: BankCaller,
+  costItemId: string,
+  intoId: string,
+): Promise<BankResult<{ into: string }>> {
+  if (costItemId === intoId)
+    return { error: "Pick another line to merge into.", status: 400 };
+  if (
+    !(await costItemInGroup(c, costItemId)) ||
+    !(await costItemInGroup(c, intoId))
+  )
+    return { error: "That cost line isn't in your household.", status: 404 };
+
+  const rules = await bankLinkRows(c.admin, c.groupId);
+  const from = rules.find((r) => r.cost_item_id === costItemId);
+  const into = rules.find((r) => r.cost_item_id === intoId);
+  if (from) {
+    const match = into ? addBankMatch(into.match, from.match) : from.match;
+    if (match && match.length > MATCH_MAX)
+      return { error: "That line already matches too many payees.", status: 400 };
+    if (match) {
+      const { error } = await c.admin.from("bank_links").upsert(
+        {
+          cost_item_id: intoId,
+          group_id: c.groupId,
+          match,
+          keep_amount: into?.keep_amount ?? false,
+          // Joint only while both sides were; a hand-made rule fits every account.
+          ...(from.joint_only !== undefined
+            ? { joint_only: into ? !!into.joint_only && !!from.joint_only : !!from.joint_only }
+            : {}),
+          created_by: into?.created_by ?? c.userId,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "cost_item_id" },
+      );
+      if (error) return { error: error.message, status: 500 };
+    }
+    await c.admin
+      .from("bank_links")
+      .delete()
+      .eq("cost_item_id", costItemId)
+      .eq("group_id", c.groupId);
+  }
+
+  await c.admin
+    .from("bank_transactions")
+    .update({ cost_item_id: intoId })
+    .eq("group_id", c.groupId)
+    .eq("cost_item_id", costItemId);
+  const { error } = await c.admin
+    .from("cost_items")
+    .update({ deleted: true })
+    .eq("id", costItemId)
+    .eq("group_id", c.groupId);
+  if (error) return { error: error.message, status: 500 };
+  await applyBankLinks(c.admin, c.groupId);
+  return { ok: { into: intoId } };
 }

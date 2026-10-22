@@ -23,11 +23,14 @@ import * as React from 'react';
 import { View } from 'react-native';
 import {
   Banknote,
+  Car,
   Check,
   FileText,
+  HeartPulse,
   MessageSquare,
   MoreHorizontal,
   Paperclip,
+  PawPrint,
   Pencil,
   Repeat,
   ShieldCheck,
@@ -36,6 +39,7 @@ import {
   ShoppingCart,
   Trash2,
   Truck,
+  Users,
   Wifi,
   Zap,
   type LucideIcon,
@@ -82,6 +86,9 @@ import {
   useEntityCommentCount,
   useModules,
   useCostBankLink,
+  useCostActual,
+  useCostCategoryChoices,
+  monthLabel,
   type CostCategory,
   type CostCadence,
   type CostItem,
@@ -106,6 +113,10 @@ interface CostRowProps {
   onUpdate: (item: CostItem) => void;
   onAssign: (id: string, userId: string) => void;
   estimateStepBack?: StepBackResult;
+  /** A hand-made estimate that became its category's target: out of the totals (core costTargets). */
+  target?: boolean;
+  /** The month the list shows, YYYY-MM: a line linked to the bank says what was paid in it. */
+  month?: string;
   selectMode?: boolean;
   selected?: boolean;
   onToggleSelect?: (id: string) => void;
@@ -115,9 +126,7 @@ interface CostRowProps {
 // the shared hold-fill overlay instead of an ad-hoc timer.
 const LONG_PRESS_MS = 500;
 const CADENCE_OPTIONS: CostCadence[] = ['weekly', 'fortnightly', 'monthly', 'quarterly', 'yearly', 'one_off'];
-const CATEGORY_OPTIONS = Object.keys(CATEGORY_META) as CostCategory[];
 const CADENCE_SEGMENTS = CADENCE_OPTIONS.map((c) => ({ value: c, label: CADENCE_LABEL[c] }));
-const CATEGORY_PICKER_OPTIONS: PickerOption[] = CATEGORY_OPTIONS.map((c) => ({ value: c, primary: CATEGORY_META[c].label }));
 
 // One lucide glyph per category, in a chip tinted with the category's pastel
 // (the same hues the chart keys its series with). The group title takes the
@@ -134,6 +143,10 @@ const CATEGORY_TILE: Record<'light' | 'dark', Record<CostCategory, { tile: strin
     moving: { tile: 'bg-orange-300/20', glyph: 'text-orange-700', title: 'text-orange-600' },
     purchase: { tile: 'bg-fuchsia-300/20', glyph: 'text-fuchsia-700', title: 'text-fuchsia-600' },
     outing: { tile: 'bg-sky-200/20', glyph: 'text-sky-700', title: 'text-sky-600' },
+    transport: { tile: 'bg-indigo-300/20', glyph: 'text-indigo-700', title: 'text-indigo-600' },
+    health: { tile: 'bg-teal-300/20', glyph: 'text-teal-700', title: 'text-teal-600' },
+    pets: { tile: 'bg-emerald-200/20', glyph: 'text-emerald-700', title: 'text-emerald-600' },
+    family: { tile: 'bg-rose-200/20', glyph: 'text-rose-700', title: 'text-rose-600' },
     other: { tile: 'bg-slate-400/20', glyph: 'text-slate-700', title: 'text-slate-600' },
   },
   dark: {
@@ -146,6 +159,10 @@ const CATEGORY_TILE: Record<'light' | 'dark', Record<CostCategory, { tile: strin
     moving: { tile: 'bg-orange-300/15', glyph: 'text-orange-200', title: 'text-orange-200' },
     purchase: { tile: 'bg-fuchsia-300/15', glyph: 'text-fuchsia-200', title: 'text-fuchsia-200' },
     outing: { tile: 'bg-sky-200/15', glyph: 'text-sky-100', title: 'text-sky-100' },
+    transport: { tile: 'bg-indigo-300/15', glyph: 'text-indigo-200', title: 'text-indigo-200' },
+    health: { tile: 'bg-teal-300/15', glyph: 'text-teal-200', title: 'text-teal-200' },
+    pets: { tile: 'bg-emerald-200/15', glyph: 'text-emerald-100', title: 'text-emerald-100' },
+    family: { tile: 'bg-rose-200/15', glyph: 'text-rose-100', title: 'text-rose-100' },
     other: { tile: 'bg-slate-400/15', glyph: 'text-slate-300', title: 'text-slate-300' },
   },
 };
@@ -171,6 +188,10 @@ const CATEGORY_ICON: Record<CostCategory, LucideIcon> = {
   moving: Truck,
   purchase: ShoppingBag,
   outing: Ticket,
+  transport: Car,
+  health: HeartPulse,
+  pets: PawPrint,
+  family: Users,
   other: MoreHorizontal,
 };
 
@@ -223,12 +244,20 @@ export function CostRow({
   onUpdate,
   onAssign,
   estimateStepBack,
+  target,
+  month,
   selectMode,
   selected,
   onToggleSelect,
 }: CostRowProps) {
   // Up Bank: a line linked to payments says when it was last paid instead of its date.
   const bankLink = useCostBankLink(item.id);
+  const paidInMonth = useCostActual(item.id, month);
+  const categoryChoices = useCostCategoryChoices(item.category);
+  const categoryPickerOptions = React.useMemo<PickerOption[]>(
+    () => categoryChoices.map((c) => ({ value: c, primary: CATEGORY_META[c].label })),
+    [categoryChoices]
+  );
 
   const [expanded, setExpanded] = React.useState<'docs' | 'comments' | null>(null);
   const [quickSheetOpen, setQuickSheetOpen] = React.useState(false);
@@ -364,9 +393,18 @@ export function CostRow({
         </ListItemTitle>
         {/* Meta (H6): at most two fragments. A contract or discount ending
             within 30 days is the status fragment and takes the date's place. */}
-        {(expiry || paidAgo || dateLabel || item.provider) && (
+        {(target || paidInMonth != null || expiry || paidAgo || dateLabel || item.provider) && (
           <ListItemMeta>
-            {expiry ? (
+            {target ? (
+              // Out of the totals: the vendor lines the bank files carry the spend.
+              <Text className="text-caption text-muted-foreground" numberOfLines={1}>
+                Target for the category
+              </Text>
+            ) : paidInMonth != null && month ? (
+              <Text className="text-caption text-success" style={{ fontVariant: ['tabular-nums'] }} numberOfLines={1}>
+                Paid {formatMoney(paidInMonth)} in {monthLabel(`${month}-01`)}
+              </Text>
+            ) : expiry ? (
               <Text
                 className={cn('text-caption', expiry.overdue ? 'text-destructive' : 'text-warning')}
                 style={{ fontVariant: ['tabular-nums'] }}
@@ -510,7 +548,7 @@ export function CostRow({
           <View className="gap-1.5">
             <Text className="text-caption font-medium text-muted-foreground">Category</Text>
             <SearchablePicker
-              options={CATEGORY_PICKER_OPTIONS}
+              options={categoryPickerOptions}
               value={item.category}
               onChange={(category) => patch({ category: category as CostCategory })}
               placeholder="Category..."

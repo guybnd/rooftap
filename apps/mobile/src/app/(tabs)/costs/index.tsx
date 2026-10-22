@@ -81,6 +81,11 @@ import {
   useStoreLoaded,
   useModules,
   UpOverviewProvider,
+  CostCategoriesProvider,
+  costCategoryChoices,
+  costTargets,
+  monthKey,
+  useBankActuals,
   type Apartment,
   type CostCadence,
   type CostCategory,
@@ -102,11 +107,6 @@ import { sectionIconFor } from '@/lib/section-icons';
 
 const PERIODS: Period[] = ['weekly', 'monthly', 'yearly'];
 const CADENCE_OPTIONS: CostCadence[] = ['weekly', 'fortnightly', 'monthly', 'quarterly', 'yearly', 'one_off'];
-const CATEGORY_OPTIONS = Object.keys(CATEGORY_META) as CostCategory[];
-const CATEGORY_PICKER_OPTIONS: PickerOption[] = CATEGORY_OPTIONS.map((c) => ({
-  value: c,
-  primary: CATEGORY_META[c].label,
-}));
 const CADENCE_SEGMENTS = CADENCE_OPTIONS.map((c) => ({ value: c, label: CADENCE_LABEL[c] }));
 
 type CostListRow =
@@ -139,7 +139,21 @@ function MemberAvatar({ userId, profiles, size = 20 }: { userId: string | null; 
   );
 }
 
+// The bank overview wraps the whole screen so the screen itself can read paid
+// amounts for the year chart and the "Paid in" lines.
 export default function CostsSectionScreen() {
+  const modules = useModules();
+  return (
+    <UpOverviewProvider api={upBankApi} enabled={modules.server('connectors.up-bank')} linking={modules.server('connectors.up-bank-links')}
+      sharing={modules.server('connectors.up-bank-sharing')}
+    >
+      <CostsScreenBody />
+    </UpOverviewProvider>
+  );
+}
+
+function CostsScreenBody() {
+  const bank = useBankActuals();
   const insets = useSafeAreaInsets();
   const scheme = useThemeMaterial().scheme;
   const { group, currentUserId, userSettings, groupMembers, memberProfiles, loading: cacheLoading } = useDataCache();
@@ -373,7 +387,17 @@ export default function CostsSectionScreen() {
     );
   }, [items, search]);
 
-  const recurring = searchedItems.filter((i) => !isOneOff(i));
+  // A hand-made estimate in a category the bank now files lines into is the
+  // category's target: it shows, but the bank lines carry the totals.
+  const targets = React.useMemo(() => costTargets(items), [items]);
+  const planItems = React.useMemo(() => searchedItems.filter((i) => !targets.has(i.id)), [searchedItems, targets]);
+  const selectedMonthKey = monthKey(selectedMonthStart);
+  const categoryPickerOptions = React.useMemo<PickerOption[]>(() => {
+    const used = new Set(items.map((i) => i.category));
+    return costCategoryChoices(used).map((c) => ({ value: c, primary: CATEGORY_META[c].label }));
+  }, [items]);
+
+  const recurring = planItems.filter((i) => !isOneOff(i));
 
   // HOUP-218 "Who pays" split — ported from apps/web/src/app/costs/page.tsx's
   // `byPayer`: sums the selected period's amount per `assigned_to` over the
@@ -399,7 +423,7 @@ export default function CostsSectionScreen() {
   // recurring costs pass through unchanged; is_estimate categories step back via
   // the shared stepBackByCategory rule (max(estimate, actual) this month) instead
   // of double-counting the full forecast alongside separately-summed one-offs.
-  const stepBack = stepBackByCategory(searchedItems, startOfMonth, startOfMonth);
+  const stepBack = stepBackByCategory(planItems, startOfMonth, startOfMonth);
   const stepBackMonthlyTotal = Object.values(stepBack).reduce((sum, r) => sum + r.effective, 0);
   const monthlyTotal =
     recurring.filter((i) => !i.is_estimate).reduce((sum, i) => sum + monthlyAmount(i), 0) + stepBackMonthlyTotal;
@@ -416,13 +440,13 @@ export default function CostsSectionScreen() {
   // unfiltered (the function already window-guards grocery actuals).
   const startOfPrevMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
   const endOfCurrentMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-  const momItems = searchedItems.filter((i) => {
+  const momItems = planItems.filter((i) => {
     if (i.cadence !== 'one_off' || i.category === 'grocery_estimate') return true;
     if (!i.start_date) return false;
     const d = parseLocalDateOnly(i.start_date);
     return d >= startOfPrevMonth && d <= endOfCurrentMonth;
   });
-  const [prevMonthBucket, currentMonthBucket] = monthlyProjection(momItems, startOfPrevMonth, 2, today);
+  const [prevMonthBucket, currentMonthBucket] = monthlyProjection(momItems, startOfPrevMonth, 2, today, bank);
   const hasPrevMonthData = prevMonthBucket.total > 0;
   const momDelta = currentMonthBucket.total - prevMonthBucket.total;
   // H2: a month-over-month change crosses no budget, so it is not a status;
@@ -430,7 +454,7 @@ export default function CostsSectionScreen() {
 
   // Rest-of-year / year-to-date KPI tiles (HOUP-174, ported from cost-chart.tsx's
   // `ytd`/`projectedRestOfYear`, minus the 12-month chart itself — HOUP-152).
-  const yearBuckets = monthlyProjection(searchedItems, new Date(today.getFullYear(), 0, 1), 12, today);
+  const yearBuckets = monthlyProjection(planItems, new Date(today.getFullYear(), 0, 1), 12, today, bank);
   const currentMonthIdx = today.getMonth();
   const yearToDate = yearBuckets.slice(0, currentMonthIdx + 1).reduce((sum, b) => sum + b.total, 0);
   const projectedRestOfYear = yearBuckets.slice(currentMonthIdx + 1).reduce((sum, b) => sum + b.total, 0);
@@ -468,21 +492,21 @@ export default function CostsSectionScreen() {
   const categoryAggregateLabel = React.useMemo(() => {
     const map = new Map<string, string>();
     for (const [cat, catItems] of Object.entries(grouped)) {
-      const catRecurring = catItems.filter((i) => !isOneOff(i));
+      const counted = catItems.filter((i) => !targets.has(i.id));
+      const catRecurring = counted.filter((i) => !isOneOff(i));
       const catPeriodTotal = totalForPeriod(catRecurring, period);
-      const catOnce = totalOneOff(catItems.filter(isOneOff));
+      const catOnce = totalOneOff(counted.filter(isOneOff));
+      const catTarget = totalForPeriod(catItems.filter((i) => targets.has(i.id)), period);
       // H6/copy ban: filter blank parts before joining so an empty half never
       // leaves a leading/trailing/doubled " · " (mirrors packages/core/src/
       // hooks/use-global-search-index.ts's `.filter(Boolean).join` pattern).
-      map.set(
-        cat,
-        [catPeriodTotal > 0 ? formatMoney(catPeriodTotal) : null, catOnce > 0 ? `${formatMoney(catOnce)} once` : null]
-          .filter(Boolean)
-          .join(' · ')
-      );
+      const label = [catPeriodTotal > 0 ? formatMoney(catPeriodTotal) : null, catOnce > 0 ? `${formatMoney(catOnce)} once` : null]
+        .filter(Boolean)
+        .join(' · ');
+      map.set(cat, catTarget > 0 ? (label ? `${label} of ${formatMoney(catTarget)}` : `Target ${formatMoney(catTarget)}`) : label);
     }
     return map;
-  }, [grouped, period]);
+  }, [grouped, period, targets]);
 
   const flatData = React.useMemo<CostListRow[]>(() => {
     const out: CostListRow[] = [];
@@ -919,7 +943,9 @@ export default function CostsSectionScreen() {
           onDelete={handleDelete}
           onUpdate={(updated) => patchRow(updated.id, updated)}
           onAssign={handleAssign}
-          estimateStepBack={row.item.is_estimate && !isOneOff(row.item) ? stepBack[row.item.category] : undefined}
+          estimateStepBack={row.item.is_estimate && !isOneOff(row.item) && !targets.has(row.item.id) ? stepBack[row.item.category] : undefined}
+          target={targets.has(row.item.id)}
+          month={selectedMonthKey}
           selectMode={selectMode}
           selected={selectedIds.has(row.item.id)}
           onToggleSelect={toggleSelect}
@@ -929,9 +955,7 @@ export default function CostsSectionScreen() {
   };
 
   return (
-    <UpOverviewProvider api={upBankApi} enabled={modules.server('connectors.up-bank')} linking={modules.server('connectors.up-bank-links')}
-      sharing={modules.server('connectors.up-bank-sharing')}
-    >
+    <CostCategoriesProvider items={items}>
     <ScreenBackground>
       {view === 'money' ? (
         <KeyboardAwareScrollView
@@ -1007,7 +1031,7 @@ export default function CostsSectionScreen() {
             <>
               <Text className="text-caption font-medium text-muted-foreground">Category</Text>
               <SearchablePicker
-                options={CATEGORY_PICKER_OPTIONS}
+                options={categoryPickerOptions}
                 value={bulkCategory}
                 onChange={(category) => setBulkCategory(category as CostCategory)}
                 placeholder="Category..."
@@ -1085,7 +1109,7 @@ export default function CostsSectionScreen() {
         }}
       />
     </ScreenBackground>
-    </UpOverviewProvider>
+    </CostCategoriesProvider>
   );
 }
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useDataCache } from '@/lib/data-cache';
 import { createClient } from '@/lib/supabase/client';
 import { use$ } from '@legendapp/state/react';
@@ -30,6 +30,10 @@ import {
   stepBackByCategory,
   parseLocalDateOnly,
   costSectionSuggestions,
+  costCategoryChoices,
+  costTargets,
+  monthKey,
+  CostCategoriesProvider,
   useModules,
 } from '@homeup/core';
 import { deleteCostReminders, costItems$, setupItems$, apartments$, useReconnectSync, useStoreHelpers, useStoreLoaded } from '@homeup/core';
@@ -59,7 +63,6 @@ const PERIOD_KEY = 'costs_period';
 const BUDGET_KEY = 'costs_budget_monthly';
 const PERIODS: Period[] = ['weekly', 'monthly', 'yearly'];
 const CADENCE_OPTIONS: CostCadence[] = ['weekly', 'fortnightly', 'monthly', 'quarterly', 'yearly', 'one_off'];
-const CATEGORY_OPTIONS = Object.keys(CATEGORY_META) as CostCategory[];
 
 export default function CostsPage() {
   const { group, groupMembers, memberProfiles, currentUserId, userSettings, refresh: refreshCache, loading: cacheLoading } = useDataCache();
@@ -326,11 +329,15 @@ export default function CostsPage() {
   // Fuzzy search narrows the list; totals, breakdown and the grouped cards below
   // all reflect the searched subset so empty categories drop out (FLUX-110).
   const searchedItems = useFuzzySearch(items, search, ['name', 'provider', 'notes']);
+  // Hand-made estimates in a category the bank now files vendor lines into
+  // are that category's target: listed, but out of every total.
+  const targets = useMemo(() => costTargets(items), [items]);
+  const planItems = useMemo(() => searchedItems.filter((i) => !targets.has(i.id)), [searchedItems, targets]);
 
   if (cacheLoading || (!storeLoaded && items.length === 0)) return <div className="p-6 text-muted-foreground">Loading…</div>;
   if (!group) return <div className="p-6 text-muted-foreground">No group selected</div>;
 
-  const recurring = searchedItems.filter((i) => !isOneOff(i));
+  const recurring = planItems.filter((i) => !isOneOff(i));
 
   const today = new Date();
   const currentMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -340,7 +347,7 @@ export default function CostsPage() {
   // settled past month shows actuals only. One shared helper drives this
   // headline, the by-category panel below, and monthlyProjection (chart + MoM
   // tile) so all surfaces agree — see stepBackByCategory in @/lib/costs.
-  const stepBack = stepBackByCategory(searchedItems, currentMonthStart, currentMonthStart);
+  const stepBack = stepBackByCategory(planItems, currentMonthStart, currentMonthStart);
   const stepBackMonthlyTotal = Object.values(stepBack).reduce((sum, r) => sum + r.effective, 0);
 
   // Always-monthly headline (the primary fix): non-estimate recurring costs
@@ -363,7 +370,7 @@ export default function CostsPage() {
   // pass through unfiltered; the function already window-guards grocery actuals.
   const startOfPrevMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
   const endOfCurrentMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-  const momItems = searchedItems.filter((i) => {
+  const momItems = planItems.filter((i) => {
     if (i.cadence !== 'one_off' || i.category === 'grocery_estimate') return true;
     if (!i.start_date) return false;
     const d = parseLocalDateOnly(i.start_date);
@@ -393,6 +400,7 @@ export default function CostsPage() {
       ? new Date(currentMonthStart.getFullYear(), selectedMonthIdx, 1)
       : currentMonthStart;
   const selectedMonthEnd = new Date(selectedMonthStart.getFullYear(), selectedMonthStart.getMonth() + 1, 0);
+  const selectedMonthKey = monthKey(selectedMonthStart);
   const visibleItems = searchedItems.filter((i) => {
     if (isOneOff(i)) {
       if (!i.start_date) return false;
@@ -411,6 +419,7 @@ export default function CostsPage() {
 
   return (
     <UpOverviewProvider api={upBankApi} enabled={upBank} linking={upLinks} sharing={modules.server('connectors.up-bank-sharing')}>
+    <CostCategoriesProvider items={items}>
     <div className={cn('space-y-5 p-4 md:p-6 mx-auto pb-24', wide ? 'max-w-[1400px] lg:px-8' : 'max-w-5xl')}>
       {/* Up Bank: Plan | Money, once this person has Up connected (money-view.tsx). */}
       <CostsViewSwitch value={view} onChange={setView} />
@@ -469,7 +478,7 @@ export default function CostsPage() {
       <div className={cn('space-y-5', wide && 'sticky top-4')}>
       {items.length > 0 && (
         <CostDashboard
-          items={searchedItems}
+          items={planItems}
           currentMonthStart={currentMonthStart}
           monthlyTotal={monthlyTotal}
           budget={budget}
@@ -648,9 +657,10 @@ export default function CostsPage() {
           <div className="space-y-4">
             {Object.entries(grouped).map(([cat, catItems]) => {
               const collapsed = collapsedCats.has(cat);
-              const recItems = catItems.filter((i) => !isOneOff(i));
+              const recItems = catItems.filter((i) => !isOneOff(i) && !targets.has(i.id));
               const catPeriod = totalForPeriod(recItems, period);
-              const catOnce = totalOneOff(catItems);
+              const catOnce = totalOneOff(catItems.filter((i) => !targets.has(i.id)));
+              const catTarget = totalForPeriod(catItems.filter((i) => targets.has(i.id)), period);
               return (
                 <div key={cat}>
                   <button
@@ -669,6 +679,7 @@ export default function CostsPage() {
                       {catPeriod > 0 && <span className="font-medium text-foreground">{formatMoney(catPeriod)}</span>}
                       {catPeriod > 0 && catOnce > 0 && <span className="text-muted-foreground"> · </span>}
                       {catOnce > 0 && <span className="text-muted-foreground">{formatMoney(catOnce)} once</span>}
+                      {catTarget > 0 && <span className="text-muted-foreground"> of {formatMoney(catTarget)}</span>}
                     </span>
                   </button>
 
@@ -683,7 +694,9 @@ export default function CostsPage() {
                             groupMembers={groupMembers}
                             memberProfiles={memberProfiles}
                             selected={selectedIds.has(item.id)}
-                            estimateStepBack={item.is_estimate && !isOneOff(item) ? stepBack[item.category] : undefined}
+                            estimateStepBack={item.is_estimate && !isOneOff(item) && !targets.has(item.id) ? stepBack[item.category] : undefined}
+                            target={targets.has(item.id)}
+                            month={selectedMonthKey}
                             leading={
                               selectMode ? (
                                 <input
@@ -736,7 +749,7 @@ export default function CostsPage() {
             {(close) => (
               <>
                 <MenuLabel>Set category</MenuLabel>
-                {CATEGORY_OPTIONS.map((c) => (
+                {costCategoryChoices(new Set(items.map((i) => i.category))).map((c) => (
                   <MenuItem
                     key={c}
                     icon={(() => {
@@ -855,6 +868,7 @@ export default function CostsPage() {
         }}
       />
     </div>
+    </CostCategoriesProvider>
     </UpOverviewProvider>
   );
 }

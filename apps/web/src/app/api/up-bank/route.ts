@@ -3,6 +3,7 @@ import { isBankShareMode, upTokenLast4, upTokenLooksValid, type BankShareMode, t
 import { canStoreHouseholdKeys, decryptHouseholdKey, encryptHouseholdKey } from "@/lib/ai/household-keys";
 import {
   UP_NOT_ALLOWED,
+  applyBankLinks,
   checkUpToken,
   createUpWebhook,
   deleteUpWebhook,
@@ -62,14 +63,22 @@ export async function PUT(request: Request) {
   const existing = await upConnectionRow(req.admin, req.userId);
   const pasted = typeof body.token === "string" ? body.token.trim() : "";
 
+  if (body.autoCosts !== undefined && typeof body.autoCosts !== "boolean") {
+    return NextResponse.json({ error: "Filing payments as costs is on or off." }, { status: 400 });
+  }
+
   if (!pasted) {
     if (!existing) return NextResponse.json({ error: "Paste your personal access token from api.up.com.au." }, { status: 400 });
-    if (shareMode !== undefined) {
+    // auto_costs only goes in once the server has it (the row read back carries it).
+    const autoCosts = body.autoCosts !== undefined && existing.auto_costs !== undefined ? { auto_costs: body.autoCosts } : {};
+    if (shareMode !== undefined || Object.keys(autoCosts).length) {
       const { error } = await req.admin
         .from("up_bank_connections")
-        .update({ ...sharingColumns(shareMode, existing), updated_at: new Date().toISOString() })
+        .update({ ...(shareMode !== undefined ? sharingColumns(shareMode, existing) : {}), ...autoCosts, updated_at: new Date().toISOString() })
         .eq("user_id", req.userId);
       if (error) return NextResponse.json({ error: "Could not save that." }, { status: 500 });
+      // Turning filing on files what's there now; sharing changes who can see what.
+      if (body.autoCosts === true) await applyBankLinks(req.admin, req.groupId);
     }
     return NextResponse.json(await upBankStatus(req.admin, req.userId, req.groupId));
   }

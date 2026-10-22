@@ -48,6 +48,7 @@ export const MCP_TOOLS: McpToolMeta[] = [
   { name: 'update_bank_payment', kind: 'write', module: 'costs' },
   { name: 'make_cost_from_payment', kind: 'write', module: 'costs' },
   { name: 'set_bank_link_rule', kind: 'write', module: 'costs' },
+  { name: 'merge_cost_lines', kind: 'write', module: 'costs' },
 ];
 
 export const MCP_TOOL_BY_NAME: Record<string, McpToolMeta> = Object.fromEntries(

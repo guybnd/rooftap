@@ -320,6 +320,7 @@ function bankProposal(tool: string, args: Record<string, unknown>): string | nul
       ? `File bank payments matching ${quoted(args.match)} under a cost line`
       : 'Stop filing bank payments under a cost line';
   }
+  if (tool === 'merge_cost_lines') return 'Merge two cost lines into one';
   if (tool !== 'update_bank_payment') return null;
   if (typeof args.cost_item_id === 'string') return 'File a bank payment under a cost line';
   if (args.cost_item_id === null) return 'Give a bank payment back to the link rules';

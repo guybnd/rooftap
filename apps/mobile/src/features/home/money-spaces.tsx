@@ -40,6 +40,10 @@ const CATEGORY_BAR_FILL: Record<CostCategory | 'rest', string> = {
   moving: 'bg-orange-300',
   purchase: 'bg-fuchsia-300',
   outing: 'bg-sky-200',
+  transport: 'bg-indigo-300',
+  health: 'bg-teal-300',
+  pets: 'bg-emerald-200',
+  family: 'bg-rose-200',
   other: 'bg-slate-400',
   rest: 'bg-foreground/45',
 };

@@ -18,6 +18,9 @@ const OLD_SERVER = 'Your Rooftap server needs an update before it can connect Up
 const NOT_ALLOWED =
   'Up allows its API for personal use only, so Up Bank works on self-hosted Rooftap servers, where your token stays on your own server.';
 
+const AUTO_COSTS_HELP =
+  'Each payee in your joint accounts gets a cost line, and new payments land on it. Move a line to another category and later payments follow it.';
+
 const SHARE_CHOICES: { mode: BankShareMode; title: string; description: string }[] = [
   { mode: 'joint', title: 'Share joint accounts', description: 'The household sees your 2Up accounts. Your own accounts stay under Mine.' },
   { mode: 'all', title: 'Share everything', description: 'The household sees all your Up accounts.' },
@@ -29,6 +32,7 @@ export function UpBankSettings() {
   const supported = modules.server('connectors.up-bank');
   // Older servers only know on or off.
   const modes = modules.server('connectors.up-bank-sharing');
+  const autoFiling = modules.server('connectors.up-bank-auto');
   const [status, setStatus] = useState<UpBankStatus | null>(null);
   const [editing, setEditing] = useState(false);
   const [token, setToken] = useState('');
@@ -77,6 +81,19 @@ export function UpBankSettings() {
     setStatus({ ...status, connection: { ...status.connection, shareMode, shared: shareMode !== 'none' } });
     try {
       setStatus(await upBankApi.save({ shareMode }));
+    } catch (err) {
+      setStatus(before);
+      toast.error(err instanceof Error ? err.message : 'Could not save that.');
+    }
+  };
+
+  const setAutoCosts = async (autoCosts: boolean) => {
+    if (!status?.connection) return;
+    const before = status;
+    setStatus({ ...status, connection: { ...status.connection, autoCosts } });
+    try {
+      setStatus(await upBankApi.save({ autoCosts }));
+      if (autoCosts) toast.success('Joint payments are being filed in Costs');
     } catch (err) {
       setStatus(before);
       toast.error(err instanceof Error ? err.message : 'Could not save that.');
@@ -154,6 +171,15 @@ export function UpBankSettings() {
                 checked={connection.shared}
                 disabled={!status.allowed}
                 onChange={(on) => void setShared(on)}
+              />
+            )}
+            {autoFiling && modes && connection.autoCosts !== undefined && (
+              <SettingsSwitchRow
+                title="File joint payments as costs"
+                description={AUTO_COSTS_HELP}
+                checked={connection.autoCosts}
+                disabled={!status.allowed || (connection.shareMode ?? 'none') === 'none'}
+                onChange={(on) => void setAutoCosts(on)}
               />
             )}
           </SettingsInset>

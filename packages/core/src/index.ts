@@ -69,6 +69,7 @@ export * from './assistant-stream';
 export * from './home-assistant';
 export * from './up-bank';
 export * from './up-overview';
+export * from './cost-categories';
 export * from './document-folders';
 export * from './events';
 export * from './event-tickets';

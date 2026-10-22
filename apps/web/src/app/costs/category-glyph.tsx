@@ -5,6 +5,10 @@
 // status hues (amber, green, rose).
 import {
   Banknote,
+  Car,
+  HeartPulse,
+  PawPrint,
+  Users,
   Ellipsis,
   Repeat,
   ShieldCheck,
@@ -29,6 +33,10 @@ export const CATEGORY_ICON: Record<CostCategory, LucideIcon> = {
   moving: Truck,
   purchase: ShoppingBag,
   outing: Ticket,
+  transport: Car,
+  health: HeartPulse,
+  pets: PawPrint,
+  family: Users,
   other: Ellipsis,
 };
 

@@ -21,6 +21,7 @@ import {
 import {
   CADENCE_LABEL,
   CATEGORY_META,
+  useCostCategoryChoices,
   syncCostReminders,
   todayISO,
   useModules,
@@ -39,13 +40,8 @@ import { sectionIconFor } from '@/lib/section-icons';
 // Hearth v2 (E1): the sheet header wears the section's identity tile.
 const COSTS_SECTION = { id: 'costs', Icon: sectionIconFor('costs') };
 
-const CATEGORY_OPTIONS = Object.keys(CATEGORY_META) as CostCategory[];
 const CADENCE_OPTIONS: CostCadence[] = ['weekly', 'fortnightly', 'monthly', 'quarterly', 'yearly', 'one_off'];
 
-const CATEGORY_PICKER_OPTIONS: PickerOption[] = CATEGORY_OPTIONS.map((c) => ({
-  value: c,
-  primary: CATEGORY_META[c].label,
-}));
 
 const CADENCE_SEGMENTS = CADENCE_OPTIONS.map((c) => ({ value: c, label: CADENCE_LABEL[c] }));
 
@@ -80,6 +76,11 @@ function buildInitialForm(item: CostItem | undefined, defaultName: string | unde
 
 export function CostModal({ open, item, groupId, currentUserId, defaultName, defaultStartDate, onClose, onSave }: CostModalProps) {
   const [form, setForm] = React.useState(() => buildInitialForm(item, defaultName, defaultStartDate));
+  const categoryChoices = useCostCategoryChoices(form.category);
+  const categoryPickerOptions = React.useMemo<PickerOption[]>(
+    () => categoryChoices.map((c) => ({ value: c, primary: CATEGORY_META[c].label })),
+    [categoryChoices]
+  );
 
   const isRecurring = form.cadence !== 'one_off';
   const modules = useModules();
@@ -199,7 +200,7 @@ export function CostModal({ open, item, groupId, currentUserId, defaultName, def
 
         <FieldRow label="Category">
           <SearchablePicker
-            options={CATEGORY_PICKER_OPTIONS}
+            options={categoryPickerOptions}
             value={form.category}
             onChange={(category) => setForm((f) => ({ ...f, category: category as CostCategory }))}
             placeholder="Category..."
@@ -237,6 +238,8 @@ export function CostModal({ open, item, groupId, currentUserId, defaultName, def
           amountCents={Math.round((form.amount ?? 0) * 100)}
           estimate={form.isEstimate}
           onAmount={(cents) => setForm((f) => ({ ...f, amount: cents / 100 }))}
+          line={item}
+          onMerged={onClose}
         />
       ) : null}
 

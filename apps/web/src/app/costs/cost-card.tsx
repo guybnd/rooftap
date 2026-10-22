@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
 import type { CostItem, CostCadence, CostCategory, GroupMember } from '@homeup/core';
 import { CATEGORY_META, CADENCE_LABEL, formatMoney, isOneOff, nextOccurrence, parseLocalDateOnly, daysUntilISO, useEntityCommentCount, type StepBackResult, currencySymbol } from '@homeup/core';
-import { timeAgo, useCostBankLink } from '@homeup/core';
+import { monthLabel, timeAgo, useCostActual, useCostBankLink, useCostCategoryChoices } from '@homeup/core';
 import { CATEGORY_ICON, CategoryGlyph } from './category-glyph';
 import { costDateLabel, expiryLabel } from './cost-dates';
 import { EditableText } from '@/components/ui/editable-text';
@@ -94,23 +94,22 @@ interface CostCardProps {
   selected?: boolean;
   /** FLUX-1563: this month's step-back for an is_estimate item's category — undefined for non-estimate items. */
   estimateStepBack?: StepBackResult;
+  /** A hand-made estimate that became its category's target: out of the totals (core costTargets). */
+  target?: boolean;
+  /** The month the list shows, YYYY-MM: a line linked to the bank says what was paid in it. */
+  month?: string;
   onUpdate: (item: CostItem) => void;
   onRequestDelete: (item: CostItem) => void;
   onEdit: (item: CostItem) => void;
 }
 
 const CADENCE_OPTIONS: CostCadence[] = ['weekly', 'fortnightly', 'monthly', 'quarterly', 'yearly', 'one_off'];
-const CATEGORY_OPTIONS = Object.keys(CATEGORY_META) as CostCategory[];
 
 // FLUX-239: the hold menu's Amount/Cadence/Category quick-editors reuse the
 // same option shapes as the full edit modal (cost-modal.tsx).
 const CADENCE_SEGMENTS: SegmentOption<CostCadence>[] = CADENCE_OPTIONS.map((c) => ({
   value: c,
   label: CADENCE_LABEL[c],
-}));
-const CATEGORY_PICKER_OPTIONS: PickerOption[] = CATEGORY_OPTIONS.map((c) => ({
-  value: c,
-  primary: CATEGORY_META[c].label,
 }));
 
 export function CostCard({
@@ -121,12 +120,16 @@ export function CostCard({
   leading,
   selected,
   estimateStepBack,
+  target,
+  month,
   onUpdate,
   onRequestDelete,
   onEdit,
 }: CostCardProps) {
   const [expanded, setExpanded] = useState<'docs' | 'comments' | null>(null);
   const bankLink = useCostBankLink(item.id);
+  const categoryChoices = useCostCategoryChoices(item.category);
+  const paidInMonth = useCostActual(item.id, month);
   const [holdMenuOpen, setHoldMenuOpen] = useState(false);
   const [docCount, setDocCount] = useState<number | null>(null);
   // FLUX-109: bumped whenever a docs panel mutates, to recompute the eager count.
@@ -241,7 +244,7 @@ export function CostCard({
         group: 'set',
         icon: 'move',
         value: CATEGORY_META[item.category].label,
-        options: CATEGORY_OPTIONS.map((c) => ({ id: c, label: CATEGORY_META[c].label, checked: item.category === c, run: () => patch({ category: c }) })),
+        options: categoryChoices.map((c) => ({ id: c, label: CATEGORY_META[c].label, checked: item.category === c, run: () => patch({ category: c }) })),
       },
       {
         id: 'assign',
@@ -306,7 +309,20 @@ export function CostCard({
   const expirySoon = !!expiry && expiry.days <= 30;
   const paidAgo = bankLink?.lastPaidAt ? timeAgo(bankLink.lastPaidAt) : null;
   const metaParts: ReactNode[] = [];
-  if (expirySoon) {
+  if (target) {
+    // Out of the totals: the vendor lines the bank files carry the spend.
+    metaParts.push(
+      <span key="target" className="shrink-0">
+        Target for the category
+      </span>
+    );
+  } else if (paidInMonth != null && month) {
+    metaParts.push(
+      <span key="paid" className="shrink-0 tabular-nums text-success">
+        Paid {formatMoney(paidInMonth)} in {monthLabel(`${month}-01`)}
+      </span>
+    );
+  } else if (expirySoon) {
     metaParts.push(
       <span key="expiry" className={cn('shrink-0 tabular-nums', expiry.days < 0 ? 'text-destructive' : 'text-warning')}>
         {expiryLabel(expiry.label, expiry.days)}
@@ -394,7 +410,7 @@ export function CostCard({
             {(close) => (
               <>
                 <MenuLabel>Category</MenuLabel>
-                {CATEGORY_OPTIONS.map((c) => {
+                {categoryChoices.map((c) => {
                   const Icon = CATEGORY_ICON[c];
                   return (
                   <MenuItem
@@ -576,7 +592,7 @@ export function CostCard({
                 <MenuLabel>Category</MenuLabel>
                 <div className="px-3.5 pb-2.5">
                   <SearchablePicker
-                    options={CATEGORY_PICKER_OPTIONS}
+                    options={categoryChoices.map((c) => ({ value: c, primary: CATEGORY_META[c].label }))}
                     value={item.category}
                     onChange={(category) => patch({ category: category as CostCategory })}
                     placeholder="Category…"

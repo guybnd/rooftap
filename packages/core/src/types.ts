@@ -357,6 +357,10 @@ export type CostCategory =
   | "moving"
   | "purchase"
   | "outing"
+  | "transport"
+  | "health"
+  | "pets"
+  | "family"
   | "other";
 
 export type CostCadence =
@@ -390,6 +394,8 @@ export interface CostItem {
   created_at: string;
   updated_at: string;
   deleted: boolean;
+  /** 'up' when the server made the line for a vendor's bank payments and keeps its amount in step. */
+  bank_source?: 'up' | null;
 }
 
 export interface CostDocument {

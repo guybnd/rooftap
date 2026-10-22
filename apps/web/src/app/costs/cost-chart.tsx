@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import type { CostItem, CostCategory } from '@homeup/core';
-import { CATEGORY_META, CATEGORY_COLOR, monthlyProjection, formatMoney, recurringByCategory } from '@homeup/core';
+import { CATEGORY_META, CATEGORY_COLOR, monthlyProjection, formatMoney, recurringByCategory, useBankActuals } from '@homeup/core';
 import { ProgressBar } from '@/components/ui/progress-bar';
 import { PulseTile } from '@/components/ui/pulse-tile';
 import { cn } from '@/lib/utils';
@@ -80,9 +80,11 @@ export function CostDashboard({
   const year = currentMonthStart.getFullYear();
   const currentIdx = currentMonthStart.getMonth();
 
+  // Lines linked to the bank show what was really paid in finished months.
+  const bank = useBankActuals();
   const buckets = useMemo(
-    () => monthlyProjection(items, new Date(year, 0, 1), 12, currentMonthStart),
-    [items, year, currentMonthStart]
+    () => monthlyProjection(items, new Date(year, 0, 1), 12, currentMonthStart, bank),
+    [items, year, currentMonthStart, bank]
   );
 
   const selectedIdx = selectedMonthIdx ?? currentIdx;

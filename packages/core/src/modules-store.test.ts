@@ -315,6 +315,7 @@ describe('server schema', () => {
       'connecting your Up Bank account',
       'Up balances and linking payments to costs',
       'sharing only your joint Up accounts',
+      'filing joint Up payments as costs',
     ]);
 
     act(() => setServerSchema('20261020050000_mcp_oauth'));
@@ -349,6 +350,7 @@ describe('server schema', () => {
       'connecting your Up Bank account',
       'Up balances and linking payments to costs',
       'sharing only your joint Up accounts',
+      'filing joint Up payments as costs',
       ]);
     } finally {
       delete mcp.minSchema;

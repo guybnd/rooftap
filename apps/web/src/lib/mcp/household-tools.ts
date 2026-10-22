@@ -7,7 +7,7 @@ import { hasOfferSources, scoutBrain, startScoutRun } from "@/lib/shopper/scout"
 import { readThread } from "@/lib/shopper/scout-thread";
 import { totalForPeriod, monthlyAmount, CATEGORY_META, summariseAccounts, summariseSpending } from "@homeup/core";
 import { visibleBankAccounts, visibleBankTransactions } from "@/lib/up-bank";
-import { changeBankTransaction, makeCostFromPayment, removeBankLinkRule, setBankLinkRule } from "@/lib/bank-actions";
+import { changeBankTransaction, makeCostFromPayment, mergeCostLine, removeBankLinkRule, setBankLinkRule } from "@/lib/bank-actions";
 import {
   buildChecklistItem,
   buildLoggedCost,
@@ -1285,6 +1285,23 @@ export function householdTools({ admin, userId, groupId, enabled }: HouseholdToo
       }
       const result = await setBankLinkRule(caller, cost_item_id, match, keep_amount === true);
       return bankResult(result, (ok: { match: string }) => ({ ok: true, cost_item_id, match: ok.match }));
+    }
+  );
+
+  tool(
+    "merge_cost_lines",
+    {
+      description:
+        "Up Bank: fold one cost line into another, for a line the bank made that duplicates one the household made by hand (say a water bill). The first line's payees join the second line's rule, its payments move over, and the first line is deleted. Ids from get_budget_summary.",
+      inputSchema: {
+        cost_item_id: z.string(),
+        into_cost_item_id: z.string(),
+      },
+    },
+    async ({ cost_item_id, into_cost_item_id }) => {
+      if (!groupId) return noGroupError();
+      const result = await mergeCostLine({ admin, userId, groupId }, cost_item_id, into_cost_item_id);
+      return bankResult(result, () => ({ ok: true, merged: cost_item_id, into: into_cost_item_id }));
     }
   );
 

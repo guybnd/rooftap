@@ -72,6 +72,10 @@ export const CATEGORY_META: Record<CostCategory, { label: string; color: string 
   moving: { label: "Moving", color: "bg-orange-900/40 text-orange-300" },
   purchase: { label: "Purchase", color: "bg-rose-900/40 text-rose-300" },
   outing: { label: "Going out", color: "bg-purple-900/40 text-purple-300" },
+  transport: { label: "Transport", color: "bg-indigo-900/40 text-indigo-300" },
+  health: { label: "Health", color: "bg-teal-900/40 text-teal-300" },
+  pets: { label: "Pets", color: "bg-emerald-900/40 text-emerald-300" },
+  family: { label: "Kids and family", color: "bg-rose-900/40 text-rose-300" },
   other: { label: "Other", color: "bg-slate-700 text-slate-300" },
 };
 
@@ -102,7 +106,11 @@ export const CATEGORY_COLOR: Record<
   moving: { fill: "bg-orange-300 cat-idx-6", border: "border-l-orange-300/60 cat-idx-6", dot: "bg-orange-300 cat-idx-6", text: "text-orange-600 dark:text-orange-200 cat-idx-6", tile: "bg-orange-300/20 text-orange-700 dark:bg-orange-300/15 dark:text-orange-200 cat-idx-6" },
   purchase: { fill: "bg-fuchsia-300 cat-idx-7", border: "border-l-fuchsia-300/60 cat-idx-7", dot: "bg-fuchsia-300 cat-idx-7", text: "text-fuchsia-600 dark:text-fuchsia-200 cat-idx-7", tile: "bg-fuchsia-300/20 text-fuchsia-700 dark:bg-fuchsia-300/15 dark:text-fuchsia-200 cat-idx-7" },
   outing: { fill: "bg-sky-200 cat-idx-8", border: "border-l-sky-200/60 cat-idx-8", dot: "bg-sky-200 cat-idx-8", text: "text-sky-600 dark:text-sky-100 cat-idx-8", tile: "bg-sky-200/20 text-sky-700 dark:bg-sky-200/15 dark:text-sky-100 cat-idx-8" },
-  other: { fill: "bg-slate-400 cat-idx-9", border: "border-l-slate-400/60 cat-idx-9", dot: "bg-slate-400 cat-idx-9", text: "text-slate-600 dark:text-slate-300 cat-idx-9", tile: "bg-slate-400/20 text-slate-700 dark:bg-slate-400/15 dark:text-slate-300 cat-idx-9" },
+  transport: { fill: "bg-indigo-300 cat-idx-9", border: "border-l-indigo-300/60 cat-idx-9", dot: "bg-indigo-300 cat-idx-9", text: "text-indigo-600 dark:text-indigo-200 cat-idx-9", tile: "bg-indigo-300/20 text-indigo-700 dark:bg-indigo-300/15 dark:text-indigo-200 cat-idx-9" },
+  health: { fill: "bg-teal-300 cat-idx-10", border: "border-l-teal-300/60 cat-idx-10", dot: "bg-teal-300 cat-idx-10", text: "text-teal-600 dark:text-teal-200 cat-idx-10", tile: "bg-teal-300/20 text-teal-700 dark:bg-teal-300/15 dark:text-teal-200 cat-idx-10" },
+  pets: { fill: "bg-emerald-200 cat-idx-11", border: "border-l-emerald-200/60 cat-idx-11", dot: "bg-emerald-200 cat-idx-11", text: "text-emerald-600 dark:text-emerald-100 cat-idx-11", tile: "bg-emerald-200/20 text-emerald-700 dark:bg-emerald-200/15 dark:text-emerald-100 cat-idx-11" },
+  family: { fill: "bg-rose-200 cat-idx-12", border: "border-l-rose-200/60 cat-idx-12", dot: "bg-rose-200 cat-idx-12", text: "text-rose-600 dark:text-rose-100 cat-idx-12", tile: "bg-rose-200/20 text-rose-700 dark:bg-rose-200/15 dark:text-rose-100 cat-idx-12" },
+  other: { fill: "bg-slate-400 cat-idx-13", border: "border-l-slate-400/60 cat-idx-13", dot: "bg-slate-400 cat-idx-13", text: "text-slate-600 dark:text-slate-300 cat-idx-13", tile: "bg-slate-400/20 text-slate-700 dark:bg-slate-400/15 dark:text-slate-300 cat-idx-13" },
 };
 
 /** Monthly-equivalent of a recurring cost (minor units). One-off → 0. */
@@ -211,7 +219,37 @@ export function recurringByCategory(bucket: MonthBucket): { category: CostCatego
  * Passing `now` explicitly keeps the past-vs-current classification keyed off
  * real calendar months, not the bucket index.
  */
-export function monthlyProjection(items: CostItem[], from: Date, months = 12, now: Date = new Date()): MonthBucket[] {
+export function monthlyProjection(
+  items: CostItem[],
+  from: Date,
+  months = 12,
+  now: Date = new Date(),
+  bank?: BankActuals
+): MonthBucket[] {
+  // Recurring lines linked to bank payments count what was really paid in a
+  // finished month the bank data covers, at least their plan in the current
+  // month, and their plan after that. Everything else follows the rules below.
+  const linked = bank ? items.filter((i) => !isOneOff(i) && bank.linked.has(i.id)) : [];
+  if (linked.length) {
+    const rest = items.filter((i) => !linked.includes(i));
+    const buckets = monthlyProjection(rest, from, months, now);
+    const currentKey = monthKeyOf(now);
+    for (let k = 0; k < months; k++) {
+      const key = monthKeyOf(new Date(from.getFullYear(), from.getMonth() + k, 1));
+      for (const item of linked) {
+        const plan = monthlyAmount(item);
+        const paid = bank!.byItem.get(item.id)?.get(key) ?? 0;
+        const covered = !bank!.since || key >= bank!.since;
+        const amount = key < currentKey ? (covered ? paid : plan) : key === currentKey ? Math.max(plan, paid) : plan;
+        if (amount <= 0) continue;
+        buckets[k].byCategory[item.category] = (buckets[k].byCategory[item.category] ?? 0) + amount;
+        buckets[k].total += amount;
+        buckets[k].recurring += amount;
+      }
+    }
+    return buckets;
+  }
+
   const buckets: MonthBucket[] = Array.from({ length: months }, (_, k) => {
     const d = new Date(from.getFullYear(), from.getMonth() + k, 1);
     return {
@@ -291,6 +329,33 @@ export function monthlyProjection(items: CostItem[], from: Date, months = 12, no
   }
 
   return buckets;
+}
+
+/** Real bank spend per cost line, for monthlyProjection (from core up-bank's costActuals). */
+export interface BankActuals {
+  /** Lines linked to bank payments: a rule, or payments filed by hand. */
+  linked: ReadonlySet<string>;
+  /** Spend per line, then per YYYY-MM month. */
+  byItem: ReadonlyMap<string, ReadonlyMap<string, number>>;
+  /** The first whole month the bank data covers; null when it covers them all. */
+  since: string | null;
+}
+
+function monthKeyOf(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+/**
+ * Hand-made estimates that became targets: a recurring estimate in a category
+ * where the bank now files real payments under vendor lines (bank_source).
+ * They stay on the list as the category's target but leave the totals, so
+ * nothing counts twice.
+ */
+export function costTargets(items: readonly CostItem[]): Set<string> {
+  const filed = new Set(items.filter((i) => !i.deleted && i.bank_source).map((i) => i.category));
+  return new Set(
+    items.filter((i) => !i.deleted && !i.bank_source && i.is_estimate && !isOneOff(i) && filed.has(i.category)).map((i) => i.id)
+  );
 }
 
 /** Parse a 'YYYY-MM-DD' date-only string as a local-midnight Date (avoids UTC shift). */

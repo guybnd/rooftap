@@ -13,6 +13,7 @@
 export type UpViewScope = Exclude<BankScope, 'all'>;
 
 import { createContext, createElement, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import type { BankActuals } from './costs';
 import { monthStartOf, type BankScope, type CostBankLink, type UpBankApi, type UpBankStatus, type UpOverview, type UpSpending } from './up-bank';
 
 export interface UpOverviewState {
@@ -161,4 +162,34 @@ export function useUpConnected(): boolean {
 export function useCostBankLink(costItemId: string): CostBankLink | undefined {
   const { data } = useUpOverview();
   return useMemo(() => data?.links?.find((l) => l.costItemId === costItemId), [data, costItemId]);
+}
+
+/**
+ * What cost lines were really paid, for monthlyProjection: undefined until
+ * the server sends actuals ('connectors.up-bank-auto'), so older servers keep
+ * the plan-only chart.
+ */
+export function useBankActuals(): BankActuals | undefined {
+  const { data } = useUpOverview();
+  return useMemo(() => {
+    if (!data?.actuals) return undefined;
+    const byItem = new Map<string, Map<string, number>>();
+    for (const a of data.actuals) {
+      const months = byItem.get(a.costItemId) ?? new Map<string, number>();
+      months.set(a.month, (months.get(a.month) ?? 0) + a.cents);
+      byItem.set(a.costItemId, months);
+    }
+    const linked = new Set<string>([...byItem.keys(), ...(data.links ?? []).map((l) => l.costItemId)]);
+    return { linked, byItem, since: data.actualsSince ?? null };
+  }, [data]);
+}
+
+/** What a cost line was really paid in a YYYY-MM month, or null when the bank has nothing for it. */
+export function useCostActual(costItemId: string, month: string | undefined): number | null {
+  const { data } = useUpOverview();
+  return useMemo(() => {
+    if (!month || !data?.actuals) return null;
+    const hit = data.actuals.filter((a) => a.costItemId === costItemId && a.month === month);
+    return hit.length ? hit.reduce((sum, a) => sum + a.cents, 0) : null;
+  }, [data, costItemId, month]);
 }

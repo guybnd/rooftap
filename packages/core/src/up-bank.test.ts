@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { CostItem } from './types';
 import {
+  addBankMatch,
+  actualsSinceOf,
+  bankMatchParts,
+  bankRowJoint,
+  costActuals,
+  moneyIn,
+  monthKeyAt,
+  vendorPlan,
   bankAmountsVary,
   bankLineAmount,
   bankRowVisible,
@@ -332,7 +340,7 @@ describe('making a cost from a payment', () => {
   it('maps Up categories onto cost categories', () => {
     expect(costCategoryFromUp('rent-and-mortgage')).toBe('rent');
     expect(costCategoryFromUp('utilities')).toBe('utilities');
-    expect(costCategoryFromUp('takeaway')).toBe('other');
+    expect(costCategoryFromUp('takeaway')).toBe('outing');
     expect(costCategoryFromUp(null)).toBe('other');
   });
 
@@ -372,5 +380,127 @@ describe('Money view filters', () => {
   it('steps months across a year', () => {
     expect(shiftMonth('2026-01-01', -1)).toBe('2025-12-01');
     expect(shiftMonth('2026-12-01', 1)).toBe('2027-01-01');
+  });
+});
+
+describe('merged and joint-only link rules', () => {
+  const pay = (over: Partial<BankTransaction>) => row({ amount_cents: -5000, ...over });
+  it('fits any payee a merged rule holds', () => {
+    expect(bankMatchParts('Sydney Water | #water')).toEqual(['Sydney Water', '#water']);
+    expect(bankMatchFits('Sydney Water | #water', pay({ description: 'SYDNEY WATER CORP' }))).toBe(true);
+    expect(bankMatchFits('Sydney Water | #water', pay({ description: 'Anyone', tags: ['Water'] }))).toBe(true);
+    expect(bankMatchFits('Sydney Water | #water', pay({ description: 'Coles' }))).toBe(false);
+  });
+  it('adds a payee once', () => {
+    expect(addBankMatch('Sydney Water', 'Hunter Water')).toBe('Sydney Water | Hunter Water');
+    expect(addBankMatch('Sydney Water | Hunter Water', 'hunter  water')).toBeNull();
+    expect(addBankMatch(null, 'Coles')).toBe('Coles');
+  });
+  it('keeps a joint-only rule to joint payments', () => {
+    const rules = [{ cost_item_id: 'coles', match: 'Coles', joint_only: true }];
+    expect(linkedCostItem(pay({ description: 'Coles' }), rules)).toBeNull();
+    expect(linkedCostItem(pay({ description: 'Coles' }), rules, true)).toBe('coles');
+    expect(linkedCostItem(pay({ description: 'Coles' }), [{ cost_item_id: 'mine', match: 'Coles' }])).toBe('mine');
+  });
+  it('knows a joint payment by account id, or by name on older rows', () => {
+    const sharing = { joint: { u1: { ids: ['acc-2up'], names: ['2Up Spending'] } } };
+    expect(bankRowJoint(row({ account_id: 'acc-2up' }), sharing)).toBe(true);
+    expect(bankRowJoint(row({ account_id: 'acc-me', account_name: '2Up Spending' }), sharing)).toBe(false);
+    expect(bankRowJoint(row({ account_id: null, account_name: '2Up Spending' }), sharing)).toBe(true);
+    expect(bankRowJoint(row({ user_id: 'u2', account_id: 'acc-2up' }), sharing)).toBe(false);
+  });
+});
+
+describe('vendorPlan', () => {
+  const now = new Date('2026-10-22T00:00:00Z');
+  const p = (cents: number, at: string) => ({ amount_cents: cents, occurred_at: at });
+  it('makes one payment a one-off in its month', () => {
+    expect(vendorPlan([p(-4500, '2026-09-14T03:00:00Z')], now)).toMatchObject({ cadence: 'one_off', amountCents: 4500, estimate: false });
+  });
+  it('keeps a regular bill at its latest amount', () => {
+    const plan = vendorPlan([p(-6999, '2026-08-01T00:00:00Z'), p(-6999, '2026-09-01T00:00:00Z'), p(-6999, '2026-10-01T00:00:00Z')], now);
+    expect(plan).toMatchObject({ cadence: 'monthly', amountCents: 6999, estimate: false });
+  });
+  it('averages the latest three of a bill that changes', () => {
+    const plan = vendorPlan([p(-30000, '2026-07-01T00:00:00Z'), p(-35600, '2026-08-01T00:00:00Z'), p(-32000, '2026-09-01T00:00:00Z'), p(-29000, '2026-10-01T00:00:00Z')], now);
+    expect(plan).toMatchObject({ cadence: 'monthly', estimate: true, amountCents: Math.round((35600 + 32000 + 29000) / 3) });
+  });
+  it('turns irregular shopping into a monthly estimate of the last three months', () => {
+    const plan = vendorPlan(
+      [p(-10000, '2026-07-01T00:00:00Z'), p(-5000, '2026-08-20T00:00:00Z'), p(-8000, '2026-08-24T00:00:00Z'), p(-12000, '2026-10-10T00:00:00Z')],
+      now,
+    );
+    expect(plan?.cadence).toBe('monthly');
+    expect(plan?.estimate).toBe(true);
+    // 91 days back reaches 23 Jul: 5000 + 8000 + 12000 over those 91 days.
+    expect(plan?.amountCents).toBe(Math.round(25000 / (91 / 30.4)));
+  });
+  it('ignores money in', () => {
+    expect(vendorPlan([p(2000, '2026-10-01T00:00:00Z')], now)).toBeNull();
+  });
+});
+
+describe('costActuals', () => {
+  it('sums each line per device month, once per joint payment, leaving out hidden rows and money in', () => {
+    const rows = [
+      row({ external_id: 'a', cost_item_id: 'power', amount_cents: -30000, occurred_at: '2026-09-30T15:00:00Z' }),
+      row({ external_id: 'a', user_id: 'u2', cost_item_id: 'power', amount_cents: -30000, occurred_at: '2026-09-30T15:00:00Z' }),
+      row({ external_id: 'b', cost_item_id: 'power', amount_cents: -5000, occurred_at: '2026-10-05T00:00:00Z', hidden: true }),
+      row({ external_id: 'c', cost_item_id: 'power', amount_cents: 1000, occurred_at: '2026-10-06T00:00:00Z' }),
+    ];
+    // 15:00 UTC on 30 Sep is 1 Oct in Sydney (offset -600).
+    expect(costActuals(rows, -600)).toEqual([{ costItemId: 'power', month: '2026-10', cents: 30000 }]);
+    expect(costActuals(rows, 0)).toEqual([{ costItemId: 'power', month: '2026-09', cents: 30000 }]);
+  });
+  it('reads months in the device time zone', () => {
+    expect(monthKeyAt('2026-09-30T15:00:00Z', -600)).toBe('2026-10');
+    expect(monthKeyAt('2026-09-30T15:00:00Z', 0)).toBe('2026-09');
+  });
+  it('starts coverage at the first whole month of data', () => {
+    expect(actualsSinceOf([{ occurred_at: '2026-07-24T00:00:00Z' }, { occurred_at: '2026-10-01T00:00:00Z' }])).toBe('2026-08');
+    expect(actualsSinceOf([{ occurred_at: '2026-07-01T05:00:00Z' }])).toBe('2026-07');
+    expect(actualsSinceOf([])).toBeNull();
+  });
+});
+
+describe('moneyIn', () => {
+  const t = (over: Partial<{ description: string; amountCents: number; accountName: string | null; hidden: boolean }>) => ({
+    description: 'Pay',
+    amountCents: 100000,
+    accountName: '2Up Spending',
+    hidden: false,
+    ...over,
+  });
+  it('totals money into joint accounts by sender, biggest first', () => {
+    const result = moneyIn(
+      [
+        t({ description: 'Transfer from Guy', amountCents: 150000 }),
+        t({ description: 'transfer from guy', amountCents: 150000 }),
+        t({ description: 'Refund', amountCents: 2000 }),
+        t({ description: 'Salary', amountCents: 400000, accountName: 'Spending' }),
+        t({ description: 'Coles', amountCents: -5000 }),
+        t({ description: 'Hidden', hidden: true }),
+      ],
+      ['2Up Spending'],
+    );
+    expect(result.totalCents).toBe(302000);
+    expect(result.sources).toEqual([
+      { label: 'Transfer from Guy', cents: 300000, count: 2 },
+      { label: 'Refund', cents: 2000, count: 1 },
+    ]);
+  });
+});
+
+describe('everyday Up categories', () => {
+  it('files everyday spending in the new cost categories', () => {
+    expect(costCategoryFromUp('fuel')).toBe('transport');
+    expect(costCategoryFromUp('public-transport')).toBe('transport');
+    expect(costCategoryFromUp('health-and-medical')).toBe('health');
+    expect(costCategoryFromUp('pets')).toBe('pets');
+    expect(costCategoryFromUp('family')).toBe('family');
+    expect(costCategoryFromUp('takeaway')).toBe('outing');
+    expect(costCategoryFromUp('utilities')).toBe('utilities');
+    expect(costCategoryFromUp(null)).toBe('other');
+    expect(costCategoryFromUp('something-new')).toBe('other');
   });
 });

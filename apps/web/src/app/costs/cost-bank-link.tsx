@@ -10,7 +10,7 @@
 // Native twin: apps/mobile/src/features/costs/cost-bank-link.tsx.
 
 import { useEffect, useState } from 'react';
-import { bankLineAmount, formatMoney, timeAgo, useUpConnected, useUpOverview, type BankPayee, type CostBankDetail, type CostCategory } from '@homeup/core';
+import { bankLineAmount, bankMatchParts, formatMoney, timeAgo, useCostMergeTargets, useUpConnected, useUpOverview, type BankPayee, type CostBankDetail, type CostCategory, type CostItem } from '@homeup/core';
 import { upBankApi } from '@/lib/up-bank-client';
 import { FieldRow, FormSection } from '@/components/ui/item-form-sheet';
 import { Input } from '@/components/ui/input';
@@ -19,6 +19,8 @@ import { cn } from '@/lib/utils';
 
 
 function matchLabel(match: string): string {
+  const parts = bankMatchParts(match);
+  if (parts.length > 1) return `Payments to ${parts.map((p) => (p.startsWith('#') ? p : `"${p}"`)).join(' or ')}`;
   return match.startsWith('#') ? `Tagged ${match}` : `Payments to "${match}"`;
 }
 
@@ -28,6 +30,8 @@ export function CostBankLink({
   amountCents,
   estimate,
   onAmount,
+  line,
+  onMerged,
 }: {
   costItemId: string;
   category: CostCategory;
@@ -36,8 +40,13 @@ export function CostBankLink({
   estimate: boolean;
   /** The server set the line's amount from its payments (kept in step), so the open editor takes it before Save. */
   onAmount: (cents: number) => void;
+  /** The saved line: one the bank made can merge into a line made by hand in its category. */
+  line?: CostItem;
+  /** The line merged away: the editor closes without saving it back. */
+  onMerged?: () => void;
 }) {
   const connected = useUpConnected();
+  const mergeTargets = useCostMergeTargets(line, category);
   const { linking, reload } = useUpOverview();
   const [detail, setDetail] = useState<CostBankDetail | null>(null);
   const [picking, setPicking] = useState(false);
@@ -91,8 +100,43 @@ export function CostBankLink({
 
   const rule = detail?.rule ?? null;
 
+  const merge = async (into: CostItem) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await upBankApi.mergeCostLine(costItemId, into.id);
+      reload();
+      onMerged?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't merge the lines.");
+      setBusy(false);
+    }
+  };
+
   return (
     <FormSection title="Paid from Up">
+      {mergeTargets.length > 0 && (
+        <div className="rounded-2xl bg-muted/40">
+          <p className="px-4 pt-3 text-xs text-muted-foreground">
+            You already have {mergeTargets.length === 1 ? 'a line' : 'lines'} for this. Merge to keep one, with these payments filed under it.
+          </p>
+          <div className="divide-y divide-border/60 px-4">
+            {mergeTargets.map((t) => (
+              <div key={t.id} className="flex min-h-12 items-center gap-3">
+                <span className="min-w-0 flex-1 truncate text-sm text-foreground">{t.name}</span>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => merge(t)}
+                  className="min-h-10 shrink-0 px-1 text-sm font-semibold text-primary hover:text-primary/80 disabled:opacity-50"
+                >
+                  Merge into it
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       {!detail ? (
         <p className="px-1 text-sm text-muted-foreground">{error ?? 'Reading your Up payments…'}</p>
       ) : picking ? (

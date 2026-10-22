@@ -77,6 +77,10 @@ export const SERVER_FEATURES = {
     minSchema: '20261022130000_bank_share_mode',
     label: 'sharing only your joint Up accounts',
   },
+  'connectors.up-bank-auto': {
+    minSchema: '20261022140000_bank_auto_costs',
+    label: 'filing joint Up payments as costs',
+  },
 } as const satisfies Record<string, ServerFeatureDef>;
 
 export type ServerFeatureId = keyof typeof SERVER_FEATURES;

@@ -28,6 +28,7 @@ import {
 } from '@homeup/ui';
 import {
   CATEGORY_META,
+  bankMatchParts,
   bankDayLabel,
   costItemsToOptions,
   filterBankTransactions,
@@ -35,6 +36,7 @@ import {
   groupByDay,
   monthLabel,
   monthStartOf,
+  moneyIn,
   shiftMonth,
   useUpConnected,
   useUpOverview,
@@ -139,6 +141,11 @@ export function MoneyView({
   const monthName = monthLabel(month);
   const open = rows?.find((r) => r.id === openId) ?? null;
   const shown = rows ? filterBankTransactions(rows, { query, category }) : null;
+  // Household only: what came into the joint accounts this month.
+  const income =
+    scope === 'household' && rows && !showHidden
+      ? moneyIn(rows, accounts.filter((a) => a.joint).map((a) => a.name))
+      : null;
 
   return (
     <View className="gap-4">
@@ -209,6 +216,30 @@ export function MoneyView({
               </Text>
             </Pressable>
           ))}
+        </View>
+      ) : null}
+
+      {income && income.sources.length > 0 ? (
+        <View className="gap-2">
+          <View className="flex-row items-center justify-between px-1">
+            <Text className="text-[10.5px] font-medium uppercase tracking-[1px] text-muted-foreground">Money in</Text>
+            <Text className="text-sm font-semibold text-success" style={TABULAR}>
+              +{formatMoney(income.totalCents, AUD)}
+            </Text>
+          </View>
+          <View className="rounded-3xl border border-border/60 bg-card px-4">
+            {income.sources.slice(0, 6).map((src, i) => (
+              <View key={src.label} className={cn('min-h-12 flex-row items-center gap-3 py-2', i > 0 && 'border-t border-border/60')}>
+                <Text numberOfLines={1} className="min-w-0 flex-1 text-sm text-foreground">
+                  {src.label}
+                  {src.count > 1 ? <Text className="text-muted-foreground"> · {src.count} times</Text> : null}
+                </Text>
+                <Text className="text-sm text-foreground" style={TABULAR}>
+                  {formatMoney(src.cents, AUD)}
+                </Text>
+              </View>
+            ))}
+          </View>
         </View>
       ) : null}
 
@@ -404,7 +435,7 @@ function TransactionSheet({
 
   const line = t?.costItemId ? items.find((i) => i.id === t.costItemId) ?? null : null;
   const rule = line ? data?.links?.find((l) => l.costItemId === line.id) ?? null : null;
-  const always = !!rule && !!t && rule.match.toUpperCase() === t.description.toUpperCase();
+  const always = !!rule && !!t && bankMatchParts(rule.match).some((m) => m.toUpperCase() === t.description.toUpperCase());
   const options = useMemo(() => costItemsToOptions(items.filter((i) => !i.deleted)), [items]);
   const paid = t ? -t.amountCents : 0;
 

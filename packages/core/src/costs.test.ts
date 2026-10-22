@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { costSectionSuggestions, monthlyProjection, nextOccurrence, recurringByCategory } from './costs';
+import { costSectionSuggestions, costTargets, monthlyProjection, nextOccurrence, recurringByCategory, type BankActuals } from './costs';
+import { costCategoryChoices, costMergeTargets } from './cost-categories';
 import { isFeatureEnabled } from './module-features';
 import { ALL_MODULE_IDS, type ModuleId } from './modules';
 import type { CostItem } from './types';
@@ -203,5 +204,60 @@ describe("recurringByCategory", () => {
       { category: "rent", amount: 600 },
       { category: "utilities", amount: 400 },
     ]);
+  });
+});
+
+describe("monthlyProjection with bank payments", () => {
+  // Jul..Dec 2026, today 20 Oct.
+  const from = new Date(2026, 6, 1);
+  const now = new Date(2026, 9, 20);
+  const power = oneOff({ id: "power", name: "Electricity", category: "utilities", cadence: "monthly", amount: 30_000, is_estimate: true });
+  const bank: BankActuals = {
+    linked: new Set(["power"]),
+    byItem: new Map([["power", new Map([["2026-08", 35_600], ["2026-10", 12_000]])]]),
+    since: "2026-08",
+  };
+
+  it("counts what was paid in covered past months, the plan before them, at least the plan now, and the plan ahead", () => {
+    const totals = monthlyProjection([power], from, 6, now, bank).map((b) => b.total);
+    // Jul: not covered, plan. Aug: paid. Sep: covered, nothing paid. Oct: max(plan, paid). Nov, Dec: plan.
+    expect(totals).toEqual([30_000, 35_600, 0, 30_000, 30_000, 30_000]);
+  });
+
+  it("leaves lines that aren't linked as before", () => {
+    const rent = oneOff({ id: "rent", category: "rent", cadence: "monthly", amount: 200_000 });
+    const withBank = monthlyProjection([rent], from, 3, now, bank).map((b) => b.total);
+    const without = monthlyProjection([rent], from, 3, now).map((b) => b.total);
+    expect(withBank).toEqual(without);
+  });
+});
+
+describe("costTargets", () => {
+  it("makes a hand-made estimate a target once the bank files lines in its category", () => {
+    const groceries = oneOff({ id: "est", category: "grocery_estimate", cadence: "monthly", is_estimate: true });
+    const coles = oneOff({ id: "coles", category: "grocery_estimate", cadence: "monthly", is_estimate: true, bank_source: "up" });
+    const rent = oneOff({ id: "rent", category: "rent", cadence: "monthly", is_estimate: true });
+    expect([...costTargets([groceries, coles, rent])]).toEqual(["est"]);
+    expect([...costTargets([groceries, rent])]).toEqual([]);
+    expect([...costTargets([groceries, { ...coles, deleted: true }])]).toEqual([]);
+  });
+});
+
+describe("cost category choices", () => {
+  it("hides Pets and Kids and family until a line uses them", () => {
+    const none = costCategoryChoices(new Set(["rent"]));
+    expect(none).not.toContain("pets");
+    expect(none).not.toContain("family");
+    expect(none).toContain("transport");
+    expect(costCategoryChoices(new Set(["pets"]))).toContain("pets");
+    expect(costCategoryChoices(new Set(), "family")).toContain("family");
+  });
+
+  it("offers a bank-made line the hand-made lines in its category to merge into", () => {
+    const water = oneOff({ id: "water", category: "utilities", cadence: "quarterly" });
+    const bankWater = oneOff({ id: "sw", category: "utilities", bank_source: "up" });
+    const other = oneOff({ id: "net", category: "internet" });
+    expect(costMergeTargets([water, bankWater, other], bankWater, "utilities").map((i) => i.id)).toEqual(["water"]);
+    expect(costMergeTargets([water, bankWater], water, "utilities")).toEqual([]);
   });
 });

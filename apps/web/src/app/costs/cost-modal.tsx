@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import type { CostItem, CostCadence, CostCategory } from '@homeup/core';
 import { dialog } from '@homeup/core';
 import { CATEGORY_META, currencySymbol } from '@homeup/core';
-import { syncCostReminders, useModules } from '@homeup/core';
+import { syncCostReminders, useCostCategoryChoices, useModules } from '@homeup/core';
 import { todayISO } from '@/app/tasks/moving-tasks';
 import { ItemFormSheet, FormSection, FieldRow, DetailsDisclosure } from '@/components/ui/item-form-sheet';
 import { DragNumberField } from '@/components/ui/drag-number-field';
@@ -35,7 +35,6 @@ interface CostModalProps {
   onDelete?: (itemId: string) => void;
 }
 
-const CATEGORY_ORDER = Object.keys(CATEGORY_META) as CostCategory[];
 const CADENCE_OPTIONS = [
   { value: 'one_off' as const, label: 'One-off' },
   { value: 'weekly' as const, label: 'Weekly' },
@@ -73,9 +72,10 @@ export function CostModal({ isOpen, item, groupId, defaultCategory, defaultName,
     wasOpen.current = isOpen;
   }, [isOpen, buildInitialForm]);
 
+  const categoryChoices = useCostCategoryChoices(form.category);
   const categoryOptions = useMemo<PickerOption[]>(
-    () => CATEGORY_ORDER.map((c) => ({ value: c, primary: CATEGORY_META[c].label })),
-    []
+    () => categoryChoices.map((c) => ({ value: c, primary: CATEGORY_META[c].label })),
+    [categoryChoices]
   );
 
   // FLUX-182: the Contract group (provider + renewal/discount dates + reminders)
@@ -263,6 +263,8 @@ export function CostModal({ isOpen, item, groupId, defaultCategory, defaultName,
           amountCents={Math.round((form.amount ?? 0) * 100)}
           estimate={form.is_estimate}
           onAmount={(cents) => setForm((f) => ({ ...f, amount: cents / 100 }))}
+          line={item}
+          onMerged={onClose}
         />
       )}
 

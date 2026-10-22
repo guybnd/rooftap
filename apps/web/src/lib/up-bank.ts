@@ -3,8 +3,13 @@ import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   UP_API_BASE,
+  addBankMatch,
   bankAccountVisible,
   bankLineAmount,
+  bankRowJoint,
+  costCategoryFromUp,
+  normaliseBankMatch,
+  vendorPlan,
   bankRowVisible,
   bankScopePeople,
   isBankShareMode,
@@ -41,6 +46,8 @@ export interface UpConnectionRow {
   shared: boolean;
   /** Missing on servers before 20261022130000_bank_share_mode. */
   share_mode?: BankShareMode;
+  /** Missing on servers before 20261022140000_bank_auto_costs. */
+  auto_costs?: boolean;
   hook_id: string;
   webhook_id: string | null;
   encrypted_webhook_secret: string | null;
@@ -84,6 +91,7 @@ export async function upBankStatus(admin: SupabaseClient, userId: string, groupI
           last4: row.last4,
           shared: shareModeOf(row) !== "none",
           shareMode: shareModeOf(row),
+          ...(row.auto_costs !== undefined ? { autoCosts: row.auto_costs } : {}),
           live: !!row.webhook_id,
           lastSyncedAt: row.last_synced_at,
         }
@@ -236,6 +244,8 @@ export interface BankLinkRow {
   group_id: string;
   match: string;
   keep_amount: boolean;
+  /** Fits joint-account payments only (rules the server made). Missing before 20261022140000_bank_auto_costs. */
+  joint_only?: boolean;
   created_by: string | null;
   created_at: string;
 }
@@ -251,20 +261,45 @@ const LINK_BATCH = 5000;
 /**
  * Applies the household's link rules to stored payments: every payment a rule
  * fits gets that cost line, and a payment no rule fits any more loses its
- * line. Payments linked by hand stay as they are. Then each line that keeps
- * its amount in step takes its latest settled payment's amount. Limit it to
- * one person's payments since an instant after a read from Up; leave both out
- * after a rule changes.
+ * line. Payments linked by hand stay as they are. Then joint payments still
+ * without a line are filed for people who turned that on, lines the bank made
+ * follow their payments, and each line that keeps its amount in step takes
+ * its latest settled payment's amount. Limit it to one person's payments
+ * since an instant after a read from Up; leave both out after a rule changes.
  */
 export async function applyBankLinks(
   admin: SupabaseClient,
   groupId: string,
   scope: { userId?: string; since?: string } = {},
 ): Promise<void> {
-  const rules = await bankLinkRows(admin, groupId);
+  let rules = await bankLinkRows(admin, groupId);
+  // Joint accounts per person don't depend on who's looking.
+  const sharing = await bankSharing(admin, "", groupId);
+  if (!(await linkPass(admin, groupId, rules, sharing, scope))) return;
+  if (await autoFileJointPayments(admin, groupId, rules, sharing)) {
+    rules = await bankLinkRows(admin, groupId);
+    await linkPass(admin, groupId, rules, sharing, { since: new Date(Date.now() - AUTO_FILE_DAYS * DAY_MS).toISOString() });
+  }
+  await refreshBankLines(admin, groupId);
+  await keepAmountsInStep(admin, groupId, rules);
+}
+
+type LinkRow = Pick<
+  BankTransaction,
+  "id" | "user_id" | "account_id" | "account_name" | "description" | "raw_text" | "tags" | "amount_cents" | "is_transfer" | "cost_item_id" | "link_kind"
+>;
+
+/** Moves payments to the line the rules pick. False when the payments couldn't be read. */
+async function linkPass(
+  admin: SupabaseClient,
+  groupId: string,
+  rules: BankLinkRow[],
+  sharing: BankSharing,
+  scope: { userId?: string; since?: string },
+): Promise<boolean> {
   let query = admin
     .from("bank_transactions")
-    .select("id, description, raw_text, tags, amount_cents, is_transfer, cost_item_id, link_kind")
+    .select("id, user_id, account_id, account_name, description, raw_text, tags, amount_cents, is_transfer, cost_item_id, link_kind")
     .eq("group_id", groupId)
     .or("link_kind.is.null,link_kind.eq.rule")
     .order("occurred_at", { ascending: false })
@@ -274,13 +309,13 @@ export async function applyBankLinks(
   const { data, error } = await query;
   if (error) {
     console.warn("[up-bank] links not applied", error.message);
-    return;
+    return false;
   }
 
   // Group the changes by target so each line costs one update.
   const moves = new Map<string, string[]>();
-  for (const t of (data ?? []) as Pick<BankTransaction, "id" | "description" | "raw_text" | "tags" | "amount_cents" | "is_transfer" | "cost_item_id" | "link_kind">[]) {
-    const target = linkedCostItem(t, rules);
+  for (const t of (data ?? []) as LinkRow[]) {
+    const target = linkedCostItem(t, rules, bankRowJoint(t, sharing));
     if ((t.cost_item_id ?? null) === target) continue;
     const key = target ?? "";
     moves.set(key, [...(moves.get(key) ?? []), t.id]);
@@ -293,8 +328,215 @@ export async function applyBankLinks(
         .in("id", ids.slice(i, i + 500));
     }
   }
+  return true;
+}
 
-  await keepAmountsInStep(admin, groupId, rules);
+// ── Filing joint payments as costs ───────────────────────────────────────
+
+const DAY_MS = 86_400_000;
+/** How far back filing looks for joint payments without a line. */
+const AUTO_FILE_DAYS = 90;
+/** Payees shorter than this are filed one payment at a time: as a rule they'd fit too much. */
+const AUTO_RULE_MIN = 3;
+/** The longest a rule's match may grow when payees join a line (bank_links.match). */
+const MATCH_MAX = 1000;
+
+function squashName(text: string | null | undefined): string {
+  return (text ?? "").trim().replace(/\s+/g, " ").toUpperCase();
+}
+
+type FileRow = LinkRow & Pick<BankTransaction, "external_id" | "category" | "occurred_at">;
+
+/**
+ * Files payments from joint accounts that no rule fits under a cost line for
+ * their payee, for each person who turned it on and shares their joint
+ * accounts. A payee with a line of the same name (or provider) joins it;
+ * any other gets a new line, marked as the bank's, in the category Up gave
+ * its payments. Each gets a rule for joint payments, so later ones follow
+ * and a move to another category is remembered. True when anything changed.
+ */
+async function autoFileJointPayments(
+  admin: SupabaseClient,
+  groupId: string,
+  rules: BankLinkRow[],
+  sharing: BankSharing,
+): Promise<boolean> {
+  const { data: conns } = await admin.from("up_bank_connections").select("*").eq("group_id", groupId);
+  const people = ((conns ?? []) as UpConnectionRow[])
+    .filter((c) => c.auto_costs === true && shareModeOf(c) !== "none")
+    .map((c) => c.user_id);
+  if (!people.length) return false;
+
+  const { data, error } = await admin
+    .from("bank_transactions")
+    .select("id, external_id, user_id, account_id, account_name, description, raw_text, tags, amount_cents, is_transfer, category, occurred_at, cost_item_id, link_kind")
+    .eq("group_id", groupId)
+    .in("user_id", people)
+    .is("cost_item_id", null)
+    .eq("hidden", false)
+    .eq("is_transfer", false)
+    .lt("amount_cents", 0)
+    .gte("occurred_at", new Date(Date.now() - AUTO_FILE_DAYS * DAY_MS).toISOString())
+    .order("occurred_at", { ascending: false })
+    .limit(LINK_BATCH);
+  if (error) {
+    console.warn("[up-bank] joint payments not filed", error.message);
+    return false;
+  }
+  const rows = ((data ?? []) as FileRow[]).filter((r) => bankRowJoint(r, sharing));
+  if (!rows.length) return false;
+
+  // One entry per payee; a joint payment read by two people counts once.
+  const payees = new Map<string, { name: string; rows: FileRow[]; seen: Set<string> }>();
+  for (const r of rows) {
+    const name = normaliseBankMatch(r.description);
+    if (!name || name.startsWith("#")) continue;
+    const entry = payees.get(squashName(name)) ?? { name, rows: [], seen: new Set<string>() };
+    payees.set(squashName(name), entry);
+    entry.rows.push(r);
+    entry.seen.add(r.external_id);
+  }
+  if (!payees.size) return false;
+
+  const { data: lines } = await admin.from("cost_items").select("id, name, provider").eq("group_id", groupId).eq("deleted", false);
+  const lineFor = new Map<string, string>();
+  for (const l of (lines ?? []) as { id: string; name: string; provider: string | null }[]) {
+    for (const key of [squashName(l.name), squashName(l.provider)]) if (key && !lineFor.has(key)) lineFor.set(key, l.id);
+  }
+
+  const newLines: Record<string, unknown>[] = [];
+  const newLineKeys: string[] = [];
+  const joined: { lineId: string; key: string }[] = [];
+  const now = new Date();
+  for (const [key, payee] of payees) {
+    const existing = lineFor.get(key);
+    if (existing) {
+      joined.push({ lineId: existing, key });
+      continue;
+    }
+    const unique = payee.rows.filter((r, i, all) => all.findIndex((o) => o.external_id === r.external_id) === i);
+    const plan = vendorPlan(unique, now);
+    if (!plan) continue;
+    const upCategory = mostCommon(unique.map((r) => r.category).filter((c): c is string => !!c));
+    newLines.push({
+      group_id: groupId,
+      name: payee.name.slice(0, 200),
+      category: costCategoryFromUp(upCategory),
+      amount: plan.amountCents,
+      cadence: plan.cadence,
+      is_estimate: plan.estimate,
+      start_date: plan.startDate,
+      provider: payee.name.slice(0, 200),
+      bank_source: "up",
+      created_by: unique[0].user_id,
+    });
+    newLineKeys.push(key);
+  }
+
+  if (newLines.length) {
+    const { data: made, error: madeError } = await admin.from("cost_items").insert(newLines).select("id, provider");
+    if (madeError) {
+      console.warn("[up-bank] cost lines not made", madeError.message);
+    } else {
+      for (const m of (made ?? []) as { id: string; provider: string }[]) joined.push({ lineId: m.id, key: squashName(m.provider) });
+    }
+  }
+  if (!joined.length) return false;
+
+  // A rule per payee where the name is long enough; otherwise the payments
+  // are filed by hand, one by one.
+  const ruleFor = new Map(rules.map((r) => [r.cost_item_id, r]));
+  const newRules = new Map<string, Record<string, unknown>>();
+  const byHand = new Map<string, string[]>();
+  for (const { lineId, key } of joined) {
+    const payee = payees.get(key);
+    if (!payee) continue;
+    if (payee.name.length < AUTO_RULE_MIN) {
+      byHand.set(lineId, [...(byHand.get(lineId) ?? []), ...payee.rows.map((r) => r.id)]);
+      continue;
+    }
+    const rule = ruleFor.get(lineId);
+    const pending = newRules.get(lineId);
+    if (rule) {
+      const match = addBankMatch(rule.match, payee.name);
+      if (match && match.length <= MATCH_MAX) {
+        await admin.from("bank_links").update({ match, updated_at: new Date().toISOString() }).eq("cost_item_id", lineId);
+        ruleFor.set(lineId, { ...rule, match });
+      }
+      // A rule that has the payee already picks these up on the next pass.
+    } else if (pending) {
+      const match = addBankMatch(pending.match as string, payee.name);
+      if (match && match.length <= MATCH_MAX) pending.match = match;
+    } else {
+      newRules.set(lineId, {
+        cost_item_id: lineId,
+        group_id: groupId,
+        match: payee.name,
+        keep_amount: false,
+        joint_only: true,
+        created_by: payee.rows[0].user_id,
+      });
+    }
+  }
+  if (newRules.size) {
+    const { error: ruleError } = await admin.from("bank_links").upsert([...newRules.values()], { onConflict: "cost_item_id" });
+    if (ruleError) console.warn("[up-bank] rules not saved", ruleError.message);
+  }
+  for (const [lineId, ids] of byHand) {
+    for (let i = 0; i < ids.length; i += 500) {
+      await admin.from("bank_transactions").update({ cost_item_id: lineId, link_kind: "manual" }).in("id", ids.slice(i, i + 500));
+    }
+  }
+  return true;
+}
+
+function mostCommon(values: readonly string[]): string | null {
+  const counts = new Map<string, number>();
+  for (const v of values) counts.set(v, (counts.get(v) ?? 0) + 1);
+  let best: string | null = null;
+  for (const [v, n] of counts) if (best == null || n > counts.get(best)!) best = v;
+  return best;
+}
+
+/**
+ * Keeps each line the bank made in step with its payments: how often and how
+ * much (core vendorPlan). Its name and category stay the household's.
+ */
+async function refreshBankLines(admin: SupabaseClient, groupId: string): Promise<void> {
+  const { data: lines, error } = await admin
+    .from("cost_items")
+    .select("id, amount, cadence, is_estimate")
+    .eq("group_id", groupId)
+    .eq("bank_source", "up")
+    .eq("deleted", false);
+  // Before 20261022140000_bank_auto_costs there's no bank_source column.
+  if (error || !lines?.length) return;
+  const { data: paid } = await admin
+    .from("bank_transactions")
+    .select("external_id, cost_item_id, amount_cents, occurred_at, is_transfer")
+    .eq("group_id", groupId)
+    .not("cost_item_id", "is", null)
+    .eq("hidden", false)
+    .gte("occurred_at", new Date(Date.now() - 400 * DAY_MS).toISOString())
+    .limit(LINK_BATCH);
+  const byLine = new Map<string, Map<string, { amount_cents: number; occurred_at: string }>>();
+  for (const p of (paid ?? []) as Pick<BankTransaction, "external_id" | "cost_item_id" | "amount_cents" | "occurred_at" | "is_transfer">[]) {
+    if (!p.cost_item_id || p.is_transfer) continue;
+    const m = byLine.get(p.cost_item_id) ?? new Map();
+    byLine.set(p.cost_item_id, m);
+    m.set(p.external_id, p);
+  }
+  const now = new Date();
+  for (const line of lines as { id: string; amount: number; cadence: string; is_estimate: boolean }[]) {
+    const plan = vendorPlan([...(byLine.get(line.id)?.values() ?? [])], now);
+    if (!plan) continue;
+    if (plan.amountCents === line.amount && plan.cadence === line.cadence && plan.estimate === line.is_estimate) continue;
+    await admin
+      .from("cost_items")
+      .update({ amount: plan.amountCents, cadence: plan.cadence, is_estimate: plan.estimate })
+      .eq("id", line.id)
+      .eq("group_id", groupId);
+  }
 }
 
 /**

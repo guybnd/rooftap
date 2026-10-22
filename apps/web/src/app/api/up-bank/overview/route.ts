@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
-import { costBankLinks, summariseAccounts, summariseSpending, type UpOverview } from "@homeup/core";
+import { actualsSinceOf, costActuals, costBankLinks, summariseAccounts, summariseSpending, type UpOverview } from "@homeup/core";
 import { bankLinkRows, upErrorResponse, upRequest, visibleBankAccounts, visibleBankTransactions } from "@/lib/up-bank";
 
 // Up Bank connector: what the Costs screen shows. One month of spending (the
 // month runs in the device's local time, so the app sends its edges as
 // instants), the balances of the accounts the caller may see, and each linked
-// cost line's latest payment. The caller sees their own data and that of
-// people who share theirs.
+// cost line's latest payment and what each line was really paid per month
+// this year. The caller sees their own data and that of people who share
+// theirs.
 
 const MAX_RANGE_MS = 32 * 86_400_000;
 /** How far back a cost line's latest linked payment is looked for. */
@@ -24,6 +25,9 @@ export async function GET(request: Request) {
   // Apps before 'connectors.up-bank-sharing' send no scope and get both.
   const raw = params.get("scope");
   const scope = raw === "mine" || raw === "household" ? raw : null;
+  // The device's offset from UTC in minutes, so actuals land in its months.
+  const tzRaw = Number(params.get("tz"));
+  const tz = Number.isFinite(tzRaw) && Math.abs(tzRaw) <= 14 * 60 ? tzRaw : 0;
   if (!/^\d{4}-\d{2}(-01)?$/.test(month) || !Number.isFinite(from) || !Number.isFinite(to) || to <= from || to - from > MAX_RANGE_MS) {
     return NextResponse.json({ error: "Send a month with its start and end." }, { status: 400 });
   }
@@ -40,7 +44,8 @@ export async function GET(request: Request) {
       visibleBankTransactions(req.admin, {
         userId: req.userId,
         groupId: req.groupId,
-        from: new Date(now - LINK_LOOKBACK_MS).toISOString(),
+        // This year's months for the actuals, and at least the link lookback.
+        from: new Date(Math.min(now - LINK_LOOKBACK_MS, new Date(new Date(now).getFullYear(), 0, 1).getTime())).toISOString(),
         to: new Date(now + 86_400_000).toISOString(),
         limit: 5000,
       }),
@@ -51,6 +56,8 @@ export async function GET(request: Request) {
       ...summariseSpending(monthRows, month),
       ...summariseAccounts(accounts),
       links: costBankLinks(recentRows, rules),
+      actuals: costActuals(recentRows, tz),
+      actualsSince: actualsSinceOf(recentRows, tz),
       ...(scope ? { scope } : {}),
     };
     return NextResponse.json(body);

@@ -19,6 +19,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, EyeOff } from 'lucide-react';
 import {
   CATEGORY_META,
+  bankMatchParts,
   costItemsToOptions,
   filterBankTransactions,
   formatMoney,
@@ -26,6 +27,7 @@ import {
   bankDayLabel,
   monthLabel,
   monthStartOf,
+  moneyIn,
   shiftMonth,
   useUpConnected,
   useUpOverview,
@@ -142,6 +144,11 @@ export function MoneyView({
   const monthName = monthLabel(month);
   const open = rows?.find((r) => r.id === openId) ?? null;
   const shown = rows ? filterBankTransactions(rows, { query, category }) : null;
+  // Household only: what came into the joint accounts this month.
+  const income =
+    scope === 'household' && rows && !showHidden
+      ? moneyIn(rows, accounts.filter((a) => a.joint).map((a) => a.name))
+      : null;
 
   return (
     <div className="space-y-5">
@@ -212,6 +219,26 @@ export function MoneyView({
             </button>
           ))}
         </div>
+      )}
+
+      {income && income.sources.length > 0 && (
+        <section className="space-y-2">
+          <div className="flex items-baseline justify-between px-1">
+            <h2 className="text-[10.5px] font-medium uppercase tracking-[0.1em] text-muted-foreground">Money in</h2>
+            <span className="text-sm font-semibold tabular-nums text-success">+{formatMoney(income.totalCents, AUD)}</span>
+          </div>
+          <div className="divide-y divide-border/60 rounded-3xl border border-border/60 bg-card px-4 shadow-[var(--card-shadow)]">
+            {income.sources.slice(0, 6).map((src) => (
+              <div key={src.label} className="flex min-h-12 items-center gap-3 py-2 text-sm">
+                <span className="min-w-0 flex-1 truncate text-foreground">
+                  {src.label}
+                  {src.count > 1 ? <span className="text-muted-foreground"> · {src.count} times</span> : null}
+                </span>
+                <span className="tabular-nums text-foreground">{formatMoney(src.cents, AUD)}</span>
+              </div>
+            ))}
+          </div>
+        </section>
       )}
 
       <div className="flex items-baseline justify-between px-1">
@@ -396,7 +423,7 @@ function TransactionSheet({
 
   const line = t?.costItemId ? items.find((i) => i.id === t.costItemId) ?? null : null;
   const rule = line ? data?.links?.find((l) => l.costItemId === line.id) ?? null : null;
-  const always = !!rule && !!t && rule.match.toUpperCase() === t.description.toUpperCase();
+  const always = !!rule && !!t && bankMatchParts(rule.match).some((m) => m.toUpperCase() === t.description.toUpperCase());
   const options = useMemo(() => costItemsToOptions(items.filter((i) => !i.deleted)), [items]);
   const paid = t ? -t.amountCents : 0;
 
