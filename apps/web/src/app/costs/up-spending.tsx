@@ -10,6 +10,8 @@
 // UpOverviewProvider (core up-overview.ts).
 // Native twin: apps/mobile/src/features/costs/up-spending.tsx.
 
+import { ProgressBar } from '@/components/ui/progress-bar';
+import { cn } from '@/lib/utils';
 import { bankNudges, formatMoney, timeAgo, useUpOverview, type CostItem } from '@homeup/core';
 
 const AUD = { currency: 'AUD' };
@@ -18,22 +20,29 @@ export function UpSpendingCard({
   nameOf,
   currentUserId,
   items,
+  budgetCents,
   onSetAmount,
 }: {
   nameOf: (userId: string) => string;
   currentUserId: string | null;
   items: CostItem[];
+  /** The household's monthly budget (0 when none is set): spending is measured against it. */
+  budgetCents: number;
   onSetAmount: (item: CostItem, cents: number) => void;
 }) {
-  const { status, data: spending, error } = useUpOverview();
+  const { status, data: spending, error, month, scope } = useUpOverview();
   if (!status?.allowed || !status.connection) return null;
-  const monthName = new Date().toLocaleString('default', { month: 'long' });
+  const monthName = new Date(`${month}T00:00:00`).toLocaleString('default', { month: 'long' });
+  const title = ['Up Bank', scope === 'mine' ? 'Mine' : scope === 'household' ? 'Household' : null, monthName].filter(Boolean).join(' · ');
+  // A personal view isn't measured against the household's budget.
+  const showBudget = budgetCents > 0 && scope !== 'mine' && !!spending;
+  const over = !!spending && spending.spentCents > budgetCents;
   const nudges = spending?.links ? bankNudges(items, spending.links) : [];
   const hasBalances = !!spending?.accounts && spending.accounts.length > 0;
 
   return (
     <div className="rounded-3xl border border-border/60 bg-card px-4 py-3 shadow-[var(--card-shadow)]">
-      <h2 className="text-[10.5px] font-medium uppercase tracking-[0.1em] text-muted-foreground">Up Bank · {monthName}</h2>
+      <h2 className="text-[10.5px] font-medium uppercase tracking-[0.1em] text-muted-foreground">{title}</h2>
 
       {!spending ? (
         <p className="py-2 text-sm text-muted-foreground">{error ?? 'Reading your transactions…'}</p>
@@ -51,8 +60,16 @@ export function UpSpendingCard({
               <span className="text-sm text-muted-foreground">spent</span>
             </div>
           )}
+          {showBudget && (
+            <div className="flex items-center gap-2 pt-2">
+              <ProgressBar value={spending.spentCents} total={budgetCents} fillClassName={over ? 'bg-destructive' : 'bg-success'} className="w-[52px]" />
+              <span className={cn('text-xs tabular-nums', over ? 'text-destructive' : 'text-muted-foreground')}>
+                Spent {formatMoney(spending.spentCents, AUD)} of {formatMoney(budgetCents, AUD)}
+              </span>
+            </div>
+          )}
           <p className="pt-1 text-xs tabular-nums text-muted-foreground">
-            {spending.receivedCents > 0 ? `${formatMoney(spending.receivedCents, AUD)} in this month · ` : ''}
+            {spending.receivedCents > 0 ? `${formatMoney(spending.receivedCents, AUD)} in · ` : ''}
             {status.connection.live ? 'updates live' : `read ${(timeAgo(status.connection.lastSyncedAt) ?? 'just now').toLowerCase()}`}
           </p>
           {error && <p className="pt-1 text-xs text-destructive">{error}</p>}

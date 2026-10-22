@@ -5,10 +5,15 @@
 // section on both apps. It shows what's stored straight away, then reads Up
 // (the server skips that when it read Up under a minute ago) and shows the
 // result. Servers without 'connectors.up-bank-links' answer the older
-// spending call. Each app passes its own client (createUpBankApi).
+// spending call. Each app passes its own client (createUpBankApi). The month
+// and the Household | Mine scope live here too, so the card and the Money
+// view step through the same month; the scope goes to servers with
+// 'connectors.up-bank-sharing' only.
+
+export type UpViewScope = Exclude<BankScope, 'all'>;
 
 import { createContext, createElement, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { monthStartOf, type CostBankLink, type UpBankApi, type UpBankStatus, type UpOverview, type UpSpending } from './up-bank';
+import { monthStartOf, type BankScope, type CostBankLink, type UpBankApi, type UpBankStatus, type UpOverview, type UpSpending } from './up-bank';
 
 export interface UpOverviewState {
   status: UpBankStatus | null;
@@ -19,6 +24,12 @@ export interface UpOverviewState {
   linking: boolean;
   /** Read the stored data again (after a link changes). */
   reload: () => void;
+  /** The month shown, YYYY-MM-01. */
+  month: string;
+  setMonth: (month: string) => void;
+  /** Household (what's shared) or Mine; null on servers that can't split them. */
+  scope: UpViewScope | null;
+  setScope: (scope: UpViewScope) => void;
 }
 
 const UpOverviewContext = createContext<UpOverviewState>({
@@ -27,36 +38,51 @@ const UpOverviewContext = createContext<UpOverviewState>({
   error: null,
   linking: false,
   reload: () => {},
+  month: monthStartOf(new Date()),
+  setMonth: () => {},
+  scope: null,
+  setScope: () => {},
 });
 
 export function UpOverviewProvider({
   api,
   enabled,
   linking,
+  sharing = false,
   children,
 }: {
   api: UpBankApi;
   enabled: boolean;
   linking: boolean;
+  /** The server can show Household and Mine apart ('connectors.up-bank-sharing'). */
+  sharing?: boolean;
   children: ReactNode;
 }) {
   const [status, setStatus] = useState<UpBankStatus | null>(null);
   const [data, setData] = useState<UpOverviewState['data']>(null);
   const [error, setError] = useState<string | null>(null);
   const [round, setRound] = useState(0);
-  const month = monthStartOf(new Date());
+  const [month, setMonth] = useState(() => monthStartOf(new Date()));
+  const [picked, setScope] = useState<UpViewScope | null>(null);
+  // Someone who shares nothing starts on Mine: Household would leave them out.
+  const scope: UpViewScope | null = !sharing || !status?.connection
+    ? null
+    : picked ?? (status.connection.shareMode === 'none' ? 'mine' : 'household');
+  const read = (m: string, s: UpViewScope | null) => (linking ? api.overview(m, s ?? undefined) : api.spending(m));
+  const opened = status?.connection != null;
 
   useEffect(() => {
     if (!enabled) return;
     let live = true;
-    const read = () => (linking ? api.overview(month) : api.spending(month));
+    const month = monthStartOf(new Date());
     void (async () => {
       try {
         const s = await api.status();
         if (!live) return;
         setStatus(s);
         if (!s.allowed || !s.connection) return;
-        const first = await read();
+        const opening: UpViewScope | null = sharing ? (s.connection.shareMode === 'none' ? 'mine' : 'household') : null;
+        const first = await read(month, opening);
         if (live) setData(first);
         const synced = await api.sync().catch((err: unknown) => {
           if (live) setError(err instanceof Error ? err.message : "Couldn't reach Up.");
@@ -65,7 +91,7 @@ export function UpOverviewProvider({
         if (synced && live) {
           setStatus(synced.status);
           if (synced.saved > 0) {
-            const next = await read();
+            const next = await read(month, opening);
             if (live) setData(next);
           }
         }
@@ -76,25 +102,47 @@ export function UpOverviewProvider({
     return () => {
       live = false;
     };
-  }, [api, enabled, linking, month]);
+    // The opening read shows this month; the next effect follows changes.
+  }, [api, enabled, linking, sharing]);
 
-  // A reload reads only what's stored: Up was just read on open.
+  // A reload, another month or another scope reads only what's stored: Up
+  // was just read on open.
+  const [shown, setShown] = useState<string | null>(null);
+  const key = `${month}|${scope ?? ''}|${round}`;
   useEffect(() => {
-    if (!round || !enabled) return;
+    if (!enabled || !opened) return;
+    if (shown === null) {
+      setShown(key);
+      return;
+    }
+    if (shown === key) return;
     let live = true;
-    (linking ? api.overview(month) : api.spending(month))
+    read(month, scope)
       .then((next) => {
-        if (live) setData(next);
+        if (live) {
+          setData(next);
+          setShown(key);
+        }
       })
       .catch(() => {});
     return () => {
       live = false;
     };
-  }, [api, round, enabled, linking, month]);
+  }, [key, enabled, opened]);
 
   const value = useMemo<UpOverviewState>(
-    () => ({ status, data, error, linking: enabled && linking, reload: () => setRound((r) => r + 1) }),
-    [status, data, error, enabled, linking],
+    () => ({
+      status,
+      data,
+      error,
+      linking: enabled && linking,
+      reload: () => setRound((r) => r + 1),
+      month,
+      setMonth,
+      scope,
+      setScope,
+    }),
+    [status, data, error, enabled, linking, month, scope],
   );
   return createElement(UpOverviewContext.Provider, { value }, children);
 }

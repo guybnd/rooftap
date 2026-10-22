@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
-import { upTokenLast4, upTokenLooksValid, type UpBankSaveInput, type UpBankSyncResult } from "@homeup/core";
+import { isBankShareMode, upTokenLast4, upTokenLooksValid, type BankShareMode, type UpBankSaveInput, type UpBankSyncResult } from "@homeup/core";
 import { canStoreHouseholdKeys, decryptHouseholdKey, encryptHouseholdKey } from "@/lib/ai/household-keys";
 import {
   UP_NOT_ALLOWED,
   checkUpToken,
   createUpWebhook,
   deleteUpWebhook,
+  shareModeOf,
   syncUp,
   upBankAllowed,
   upBankStatus,
@@ -13,11 +14,12 @@ import {
   upErrorResponse,
   upRequest,
   upWebhookUrl,
+  type UpConnectionRow,
 } from "@/lib/up-bank";
 
 // Up Bank connector: Settings > Connectors > Up Bank. Each person connects their
 // own Up account; nobody else in the home can see or change it. GET reads
-// the status, PUT connects (or changes the token or the sharing switch),
+// the status, PUT connects (or changes the token or the sharing choice),
 // POST reads new transactions from Up, DELETE disconnects and removes every
 // transaction read from Up. The token never leaves the server once saved.
 
@@ -26,6 +28,16 @@ function origin(request: Request): string {
   const proto = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
   if (host && proto) return `${proto}://${host}`;
   return new URL(request.url).origin;
+}
+
+/**
+ * The columns that store a sharing choice. share_mode only goes in once the
+ * server has it (the row read back carries it), so a token can still be saved
+ * in the minutes before the migration lands.
+ */
+function sharingColumns(mode: BankShareMode, existing: UpConnectionRow | null) {
+  const hasMode = !existing || existing.share_mode !== undefined;
+  return { shared: mode !== "none", ...(hasMode ? { share_mode: mode } : {}) };
 }
 
 export async function GET() {
@@ -42,15 +54,20 @@ export async function PUT(request: Request) {
   if (body.shared !== undefined && typeof body.shared !== "boolean") {
     return NextResponse.json({ error: "Sharing is on or off." }, { status: 400 });
   }
+  if (body.shareMode !== undefined && !isBankShareMode(body.shareMode)) {
+    return NextResponse.json({ error: "Share nothing, joint accounts or everything." }, { status: 400 });
+  }
+  // The older switch maps onto the new choices: on shares everything.
+  const shareMode = body.shareMode ?? (body.shared === undefined ? undefined : body.shared ? "all" : "none");
   const existing = await upConnectionRow(req.admin, req.userId);
   const pasted = typeof body.token === "string" ? body.token.trim() : "";
 
   if (!pasted) {
     if (!existing) return NextResponse.json({ error: "Paste your personal access token from api.up.com.au." }, { status: 400 });
-    if (body.shared !== undefined) {
+    if (shareMode !== undefined) {
       const { error } = await req.admin
         .from("up_bank_connections")
-        .update({ shared: body.shared, updated_at: new Date().toISOString() })
+        .update({ ...sharingColumns(shareMode, existing), updated_at: new Date().toISOString() })
         .eq("user_id", req.userId);
       if (error) return NextResponse.json({ error: "Could not save that." }, { status: 500 });
     }
@@ -81,7 +98,7 @@ export async function PUT(request: Request) {
       group_id: req.groupId,
       encrypted_token: encryptHouseholdKey(pasted),
       last4: upTokenLast4(pasted),
-      shared: body.shared ?? existing?.shared ?? false,
+      ...sharingColumns(shareMode ?? (existing ? shareModeOf(existing) : "none"), existing),
       webhook_id: null,
       encrypted_webhook_secret: null,
       // A different account may sit behind the new token, so read it afresh.

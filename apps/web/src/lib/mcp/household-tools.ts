@@ -7,6 +7,7 @@ import { hasOfferSources, scoutBrain, startScoutRun } from "@/lib/shopper/scout"
 import { readThread } from "@/lib/shopper/scout-thread";
 import { totalForPeriod, monthlyAmount, CATEGORY_META, summariseAccounts, summariseSpending } from "@homeup/core";
 import { visibleBankAccounts, visibleBankTransactions } from "@/lib/up-bank";
+import { changeBankTransaction, makeCostFromPayment, removeBankLinkRule, setBankLinkRule } from "@/lib/bank-actions";
 import {
   buildChecklistItem,
   buildLoggedCost,
@@ -1142,7 +1143,7 @@ export function householdTools({ admin, userId, groupId, enabled }: HouseholdToo
     "get_bank_spending",
     {
       description:
-        "Up Bank: account balances and spending from the bank data this person may see (their own, plus household members who share theirs). Current balances per account, totals by category and the matching transactions, newest first. Amounts in cents; money out is negative. Transfers between their own accounts and payments hidden from spending are left out. Defaults to the last 30 days.",
+        "Up Bank: account balances and spending from the bank data this person may see (their own, plus household members who share theirs). Current balances per account, totals by category and the matching transactions, newest first. Each transaction has an id for update_bank_payment and make_cost_from_payment, and cost_item_id when it is filed under a cost line. Amounts in cents; money out is negative. Transfers between their own accounts and payments hidden from spending are left out. Defaults to the last 30 days.",
       inputSchema: {
         from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe("First day, YYYY-MM-DD."),
         to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe("Last day, YYYY-MM-DD, included."),
@@ -1166,7 +1167,18 @@ export function householdTools({ admin, userId, groupId, enabled }: HouseholdToo
       const words = search?.trim().toLowerCase();
       if (words) rows = rows.filter((r) => `${r.description} ${r.message ?? ""} ${(r.tags ?? []).join(" ")}`.toLowerCase().includes(words));
       if (category) rows = rows.filter((r) => r.category === category || r.parent_category === category);
-      const summary = summariseSpending(rows, from ?? new Date(start).toISOString().slice(0, 10), { recent: limit ?? 30 });
+      const summary = summariseSpending(rows, from ?? new Date(start).toISOString().slice(0, 10), { recent: 0 });
+      // A joint payment arrives once per partner who shares it; keep the
+      // caller's own copy, the one they can change.
+      const byPayment = new Map<string, (typeof rows)[number]>();
+      for (const r of rows) {
+        if (r.is_transfer || r.hidden) continue;
+        const had = byPayment.get(r.external_id);
+        if (!had || (had.user_id !== userId && r.user_id === userId)) byPayment.set(r.external_id, r);
+      }
+      const listed = Array.from(byPayment.values())
+        .sort((a, b) => b.occurred_at.localeCompare(a.occurred_at))
+        .slice(0, limit ?? 30);
       // Balances arrive with servers that have bank_accounts; older ones have none to show.
       const balances = summariseAccounts(await visibleBankAccounts(admin, userId, groupId).catch(() => []));
       return {
@@ -1185,18 +1197,94 @@ export function householdTools({ admin, userId, groupId, enabled }: HouseholdToo
               spent_cents: summary.spentCents,
               received_cents: summary.receivedCents,
               by_category: summary.categories.map((c) => ({ category: c.id, label: c.label, cents: c.cents })),
-              transactions: summary.recent.map((t) => ({
-                date: t.occurredAt.slice(0, 10),
+              transactions: listed.map((t) => ({
+                id: t.id,
+                date: t.occurred_at.slice(0, 10),
                 description: t.description,
-                amount_cents: t.amountCents,
-                category: t.category,
-                pending: t.pending,
-                mine: t.userId === userId,
+                amount_cents: t.amount_cents,
+                category: t.category ?? t.parent_category,
+                tags: t.tags?.length ? t.tags : undefined,
+                note: t.note || undefined,
+                cost_item_id: t.cost_item_id ?? null,
+                pending: t.status === "HELD",
+                mine: t.user_id === userId,
               })),
             }),
           },
         ],
       };
+    }
+  );
+
+  // Bank actions: the same rules as the Money view. Only the person who
+  // connected an account changes its payments, and nothing goes to the bank.
+  const bankResult = (result: { ok: unknown } | { error: string }, body: (ok: never) => unknown) =>
+    "error" in result ? toolError(result.error) : { content: [{ type: "text" as const, text: JSON.stringify(body(result.ok as never)) }] };
+
+  tool(
+    "update_bank_payment",
+    {
+      description:
+        "Up Bank: change one of this person's own bank payments (ids from get_bank_spending). File it under a cost line by hand (cost_item_id, from get_budget_summary), give it back to the link rules (cost_item_id: null), hide it from spending or count it again (hidden), or set a note (note; null clears it). To file every payment from this payee under a line, also call set_bank_link_rule. Payments a household member shares can't be changed.",
+      inputSchema: {
+        payment_id: z.string(),
+        cost_item_id: z.string().nullable().optional(),
+        hidden: z.boolean().optional(),
+        note: z.string().max(500).nullable().optional(),
+      },
+    },
+    async ({ payment_id, cost_item_id, hidden, note }) => {
+      if (!groupId) return noGroupError();
+      const result = await changeBankTransaction({ admin, userId, groupId }, payment_id, { costItemId: cost_item_id, hidden, note });
+      return bankResult(result, (t: { id: string; description: string; cost_item_id: string | null; hidden: boolean; note: string | null }) => ({
+        ok: true,
+        id: t.id,
+        description: t.description,
+        cost_item_id: t.cost_item_id,
+        hidden: t.hidden,
+        note: t.note,
+      }));
+    }
+  );
+
+  tool(
+    "make_cost_from_payment",
+    {
+      description:
+        "Up Bank: create a household cost line from one of this person's own payments (id from get_bank_spending) and file the payment under it. Rooftap takes the amount, a category from the bank's, and how often from the payee's past payments. Pass name to call it something else (e.g. Rent). link_future_payments files the payee's other payments under the new line too. Use update_bank_payment instead when a matching cost line already exists.",
+      inputSchema: {
+        payment_id: z.string(),
+        name: z.string().min(1).max(200).optional(),
+        link_future_payments: z.boolean().optional(),
+      },
+    },
+    async ({ payment_id, name, link_future_payments }) => {
+      if (!groupId) return noGroupError();
+      const result = await makeCostFromPayment({ admin, userId, groupId }, payment_id, { name, linkPayee: link_future_payments === true });
+      return bankResult(result, (ok: { costItemId: string; name: string }) => ({ ok: true, cost_item_id: ok.costItemId, name: ok.name }));
+    }
+  );
+
+  tool(
+    "set_bank_link_rule",
+    {
+      description:
+        "Up Bank: file bank payments under a cost line automatically. match is words from the payee's description (e.g. the landlord's name) or an Up tag written as #tag. Past and future payments that match move to the line. keep_amount keeps the line's amount in step with the latest payment. match: null removes the cost line's rule. One rule per cost line; a new one replaces it.",
+      inputSchema: {
+        cost_item_id: z.string(),
+        match: z.string().max(200).nullable(),
+        keep_amount: z.boolean().optional(),
+      },
+    },
+    async ({ cost_item_id, match, keep_amount }) => {
+      if (!groupId) return noGroupError();
+      const caller = { admin, userId, groupId };
+      if (match === null) {
+        const removed = await removeBankLinkRule(caller, cost_item_id);
+        return bankResult(removed, () => ({ ok: true, cost_item_id, match: null }));
+      }
+      const result = await setBankLinkRule(caller, cost_item_id, match, keep_amount === true);
+      return bankResult(result, (ok: { match: string }) => ({ ok: true, cost_item_id, match: ok.match }));
     }
   );
 

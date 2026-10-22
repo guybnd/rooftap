@@ -3,11 +3,19 @@ import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   UP_API_BASE,
+  bankAccountVisible,
+  bankLineAmount,
+  bankRowVisible,
+  bankScopePeople,
+  isBankShareMode,
   isLinkablePayment,
   linkedCostItem,
   upAccountRow,
   upTransactionRow,
   type BankAccountRow,
+  type BankScope,
+  type BankShareMode,
+  type BankSharing,
   type BankTransaction,
   type UpAccountResource,
   type UpBankStatus,
@@ -31,6 +39,8 @@ export interface UpConnectionRow {
   encrypted_token: string;
   last4: string;
   shared: boolean;
+  /** Missing on servers before 20261022130000_bank_share_mode. */
+  share_mode?: BankShareMode;
   hook_id: string;
   webhook_id: string | null;
   encrypted_webhook_secret: string | null;
@@ -54,6 +64,11 @@ export async function upBankAllowed(admin: SupabaseClient, groupId: string): Pro
 export const UP_NOT_ALLOWED =
   "Up allows its API for personal use only, so Up Bank works on self-hosted Rooftap servers.";
 
+/** A connection's sharing, reading the older switch where share_mode isn't there yet. */
+export function shareModeOf(row: Pick<UpConnectionRow, "shared" | "share_mode">): BankShareMode {
+  return isBankShareMode(row.share_mode) ? row.share_mode : row.shared ? "all" : "none";
+}
+
 export async function upConnectionRow(admin: SupabaseClient, userId: string): Promise<UpConnectionRow | null> {
   const { data } = await admin.from("up_bank_connections").select("*").eq("user_id", userId).maybeSingle();
   return (data as UpConnectionRow | null) ?? null;
@@ -65,7 +80,13 @@ export async function upBankStatus(admin: SupabaseClient, userId: string, groupI
     allowed,
     canStore: canStoreHouseholdKeys(),
     connection: row
-      ? { last4: row.last4, shared: row.shared, live: !!row.webhook_id, lastSyncedAt: row.last_synced_at }
+      ? {
+          last4: row.last4,
+          shared: shareModeOf(row) !== "none",
+          shareMode: shareModeOf(row),
+          live: !!row.webhook_id,
+          lastSyncedAt: row.last_synced_at,
+        }
       : null,
   };
 }
@@ -135,14 +156,22 @@ async function saveAccounts(admin: SupabaseClient, row: UpConnectionRow, account
   return new Map(accounts.map((a) => [a.id, a.attributes.displayName]));
 }
 
-function upsertRows(admin: SupabaseClient, rows: Omit<BankTransaction, "id">[]) {
+async function upsertRows(admin: SupabaseClient, rows: Omit<BankTransaction, "id">[]) {
   const now = new Date().toISOString();
-  return admin
-    .from("bank_transactions")
-    .upsert(
-      rows.map((r) => ({ ...r, updated_at: now })),
-      { onConflict: "source,user_id,external_id" },
-    );
+  const write = (list: Omit<BankTransaction, "id">[]) =>
+    admin
+      .from("bank_transactions")
+      .upsert(
+        list.map((r) => ({ ...r, updated_at: now })),
+        { onConflict: "source,user_id,external_id" },
+      );
+  const res = await write(rows);
+  // Code can run a few minutes ahead of its migration on the hosted server;
+  // without the account_id column, save the rows without it.
+  if (res.error && /account_id/.test(res.error.message)) {
+    return write(rows.map(({ account_id: _accountId, ...rest }) => rest));
+  }
+  return res;
 }
 
 /**
@@ -269,25 +298,33 @@ export async function applyBankLinks(
 }
 
 /**
- * Sets each keep-in-step line's amount to its latest settled payment. Only
+ * Sets each keep-in-step line's amount from its settled payments: the latest
+ * for a fixed line, the rolling average of the latest three for an estimate
+ * (a bill that changes, like electricity). Only
  * payments the person who made the link can see count, so nobody's private
  * account sets a shared line.
  */
 async function keepAmountsInStep(admin: SupabaseClient, groupId: string, rules: BankLinkRow[]): Promise<void> {
   for (const rule of rules.filter((r) => r.keep_amount && r.created_by)) {
-    const people = await visibleUserIds(admin, rule.created_by!, groupId);
-    const { data: last } = await admin
+    const sharing = await bankSharing(admin, rule.created_by!, groupId);
+    const { data: recent } = await admin
       .from("bank_transactions")
-      .select("amount_cents, is_transfer")
+      .select("user_id, account_id, account_name, amount_cents, is_transfer")
       .eq("cost_item_id", rule.cost_item_id)
-      .in("user_id", people)
+      .in("user_id", bankScopePeople(sharing, "all"))
       .eq("status", "SETTLED")
       .eq("hidden", false)
       .order("occurred_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (!last || !isLinkablePayment(last as Pick<BankTransaction, "amount_cents" | "is_transfer">)) continue;
-    const amount = -Number(last.amount_cents);
+      .limit(20);
+    const paid = ((recent ?? []) as Pick<BankTransaction, "user_id" | "account_id" | "account_name" | "amount_cents" | "is_transfer">[]).filter(
+      (r) => bankRowVisible(r, sharing, "all") && isLinkablePayment(r),
+    );
+    const { data: line } = await admin.from("cost_items").select("is_estimate").eq("id", rule.cost_item_id).maybeSingle();
+    const amount = bankLineAmount(
+      paid.map((r) => Number(r.amount_cents)),
+      (line as { is_estimate?: boolean } | null)?.is_estimate === true,
+    );
+    if (amount == null) continue;
     await admin
       .from("cost_items")
       .update({ amount })
@@ -378,19 +415,36 @@ export async function applyUpEvent(
 
 // ── Reading ──────────────────────────────────────────────────────────────
 
-/** The person, plus household members who share their bank data. */
-export async function visibleUserIds(admin: SupabaseClient, userId: string, groupId: string): Promise<string[]> {
-  const { data: sharing } = await admin
-    .from("up_bank_connections")
-    .select("user_id")
-    .eq("group_id", groupId)
-    .eq("shared", true);
-  return Array.from(new Set([userId, ...(sharing ?? []).map((s) => s.user_id as string)]));
+/** Who shares what in the household, for one viewer. */
+export async function bankSharing(admin: SupabaseClient, viewerId: string, groupId: string): Promise<BankSharing> {
+  const [{ data: conns }, { data: joint }] = await Promise.all([
+    admin.from("up_bank_connections").select("*").eq("group_id", groupId),
+    admin.from("bank_accounts").select("user_id, external_id, name").eq("group_id", groupId).eq("ownership", "JOINT"),
+  ]);
+  const modes: Record<string, BankShareMode> = {};
+  for (const c of (conns ?? []) as UpConnectionRow[]) modes[c.user_id] = shareModeOf(c);
+  const jointBy: Record<string, { ids: string[]; names: string[] }> = {};
+  for (const a of (joint ?? []) as { user_id: string; external_id: string; name: string }[]) {
+    const entry = (jointBy[a.user_id] ??= { ids: [], names: [] });
+    entry.ids.push(a.external_id);
+    entry.names.push(a.name);
+  }
+  return { viewerId, modes, joint: jointBy };
 }
 
-/** Accounts this person may see: their own and those of people who share theirs. */
-export async function visibleBankAccounts(admin: SupabaseClient, userId: string, groupId: string): Promise<BankAccountRow[]> {
-  const people = await visibleUserIds(admin, userId, groupId);
+/**
+ * Accounts a person may see in a scope (core's BankScope): 'household' is
+ * what each person shares, 'mine' the viewer's personal (non-joint) accounts, 'all' both.
+ */
+export async function visibleBankAccounts(
+  admin: SupabaseClient,
+  userId: string,
+  groupId: string,
+  scope: BankScope = "all",
+): Promise<BankAccountRow[]> {
+  const sharing = await bankSharing(admin, userId, groupId);
+  const people = bankScopePeople(sharing, scope);
+  if (!people.length) return [];
   const { data, error } = await admin
     .from("bank_accounts")
     .select("*")
@@ -399,29 +453,50 @@ export async function visibleBankAccounts(admin: SupabaseClient, userId: string,
     .order("created_at");
   if (error) throw new Error(error.message);
   // The viewer's own copy of a joint account comes first, so it's the one kept.
-  return ((data ?? []) as BankAccountRow[]).sort((a, b) => Number(b.user_id === userId) - Number(a.user_id === userId));
+  return ((data ?? []) as BankAccountRow[])
+    .filter((a) => bankAccountVisible(a, sharing, scope))
+    .sort((a, b) => Number(b.user_id === userId) - Number(a.user_id === userId));
 }
 
 /**
- * Transactions this person may see between two instants: their own, plus
- * those of household members who share theirs. Newest first.
+ * Transactions a person may see in a scope between two instants, newest
+ * first. `before` and `hidden` narrow it for the Money view's list.
  */
 export async function visibleBankTransactions(
   admin: SupabaseClient,
-  input: { userId: string; groupId: string; from: string; to: string; limit?: number },
+  input: {
+    userId: string;
+    groupId: string;
+    from?: string;
+    to?: string;
+    limit?: number;
+    scope?: BankScope;
+    hidden?: boolean;
+    /** Filled with how many rows the read returned before the scope filter and the oldest one's time, for paging. */
+    read?: { count: number; oldest: string | null };
+  },
 ): Promise<BankTransaction[]> {
-  const people = await visibleUserIds(admin, input.userId, input.groupId);
-  const { data, error } = await admin
+  const scope = input.scope ?? "all";
+  const sharing = await bankSharing(admin, input.userId, input.groupId);
+  const people = bankScopePeople(sharing, scope);
+  if (!people.length) return [];
+  let query = admin
     .from("bank_transactions")
     .select("*")
     .eq("group_id", input.groupId)
     .in("user_id", people)
-    .gte("occurred_at", input.from)
-    .lt("occurred_at", input.to)
     .order("occurred_at", { ascending: false })
     .limit(input.limit ?? 2000);
+  if (input.from) query = query.gte("occurred_at", input.from);
+  if (input.to) query = query.lt("occurred_at", input.to);
+  if (input.hidden !== undefined) query = query.eq("hidden", input.hidden);
+  const { data, error } = await query;
   if (error) throw new Error(error.message);
-  return (data ?? []) as BankTransaction[];
+  if (input.read) {
+    input.read.count = data?.length ?? 0;
+    input.read.oldest = data?.length ? (data[data.length - 1].occurred_at as string) : null;
+  }
+  return ((data ?? []) as BankTransaction[]).filter((r) => bankRowVisible(r, sharing, scope));
 }
 
 // ── Route front half ─────────────────────────────────────────────────────

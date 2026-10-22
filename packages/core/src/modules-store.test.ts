@@ -314,6 +314,7 @@ describe('server schema', () => {
       'archiving and deleting Scout searches',
       'connecting your Up Bank account',
       'Up balances and linking payments to costs',
+      'sharing only your joint Up accounts',
     ]);
 
     act(() => setServerSchema('20261020050000_mcp_oauth'));
@@ -347,6 +348,7 @@ describe('server schema', () => {
       'archiving and deleting Scout searches',
       'connecting your Up Bank account',
       'Up balances and linking payments to costs',
+      'sharing only your joint Up accounts',
       ]);
     } finally {
       delete mcp.minSchema;

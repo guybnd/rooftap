@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { CostItem } from './types';
 import {
+  bankAmountsVary,
+  bankLineAmount,
+  bankRowVisible,
+  bankScopePeople,
+  costCategoryFromUp,
+  filterBankTransactions,
+  guessCadence,
+  shiftMonth,
+  type BankSharing,
   bankDayLabel,
   bankTransactionView,
   groupByDay,
@@ -272,5 +281,96 @@ describe('Money view helpers', () => {
     const r = row({ user_id: 'u1', note: 'bond', hidden: true, cost_item_id: 'rent', link_kind: 'manual', tags: ['rent'] });
     expect(bankTransactionView(r, 'u1')).toMatchObject({ mine: true, note: 'bond', hidden: true, costItemId: 'rent', linkKind: 'manual', tags: ['rent'] });
     expect(bankTransactionView(r, 'u2').mine).toBe(false);
+  });
+});
+
+describe('sharing scopes', () => {
+  const s: BankSharing = {
+    viewerId: 'guy',
+    modes: { guy: 'joint', tegan: 'joint', sam: 'none' },
+    joint: { guy: { ids: ['g-2up'], names: ['2Up'] }, tegan: { ids: ['t-2up'], names: ['2Up'] } },
+  };
+  const at = (user_id: string, account_id: string | null, account_name: string | null = null) => ({ user_id, account_id, account_name });
+
+  it('Household shows only joint accounts when people share joint ones', () => {
+    expect(bankRowVisible(at('guy', 'g-2up'), s, 'household')).toBe(true);
+    expect(bankRowVisible(at('tegan', 't-2up'), s, 'household')).toBe(true);
+    expect(bankRowVisible(at('guy', 'g-spending'), s, 'household')).toBe(false);
+    expect(bankRowVisible(at('sam', 's-2up'), s, 'household')).toBe(false);
+  });
+
+  it('Mine shows only the viewer\'s personal accounts', () => {
+    expect(bankRowVisible(at('guy', 'g-spending'), s, 'mine')).toBe(true);
+    expect(bankRowVisible(at('guy', 'g-2up'), s, 'mine')).toBe(false);
+    expect(bankRowVisible(at('tegan', 't-spending'), s, 'mine')).toBe(false);
+  });
+
+  it('older rows without an account id match joint accounts by name', () => {
+    expect(bankRowVisible(at('tegan', null, '2Up'), s, 'household')).toBe(true);
+    expect(bankRowVisible(at('tegan', null, 'Spending'), s, 'household')).toBe(false);
+  });
+
+  it('narrows the read to the people a scope can include', () => {
+    expect(bankScopePeople(s, 'mine')).toEqual(['guy']);
+    expect(bankScopePeople(s, 'household').sort()).toEqual(['guy', 'tegan']);
+  });
+});
+
+describe('making a cost from a payment', () => {
+  const day = (d: number) => new Date(Date.UTC(2026, 0, 1) + d * 86_400_000).toISOString();
+
+  it('guesses the cadence from the gaps between payments', () => {
+    expect(guessCadence([day(0)])).toBe('one_off');
+    expect(guessCadence([day(0), day(7), day(14)])).toBe('weekly');
+    expect(guessCadence([day(0), day(14), day(28)])).toBe('fortnightly');
+    expect(guessCadence([day(0), day(31), day(59), day(90)])).toBe('monthly');
+    expect(guessCadence([day(0), day(91), day(182)])).toBe('quarterly');
+    expect(guessCadence([day(0), day(365)])).toBe('yearly');
+    expect(guessCadence([day(0), day(3), day(50)])).toBe('one_off');
+  });
+
+  it('maps Up categories onto cost categories', () => {
+    expect(costCategoryFromUp('rent-and-mortgage')).toBe('rent');
+    expect(costCategoryFromUp('utilities')).toBe('utilities');
+    expect(costCategoryFromUp('takeaway')).toBe('other');
+    expect(costCategoryFromUp(null)).toBe('other');
+  });
+
+  it('keeps a fixed line at the latest payment and an estimate at the average of three', () => {
+    expect(bankLineAmount([-36800, -41500, -5900, -10000], false)).toBe(36800);
+    expect(bankLineAmount([-36800, -41500, -5900, -10000], true)).toBe(28067);
+    expect(bankLineAmount([-36800], true)).toBe(36800);
+    expect(bankLineAmount([], true)).toBeNull();
+  });
+
+  it('treats a payee as variable when amounts differ', () => {
+    expect(bankAmountsVary([-36800, -41500, -5900])).toBe(true);
+    expect(bankAmountsVary([-2299, -2299, -2299])).toBe(false);
+    expect(bankAmountsVary([-2299])).toBe(false);
+  });
+});
+
+describe('Money view filters', () => {
+  const view = (over: Partial<BankTransaction>) => bankTransactionView(row(over), 'guy');
+
+  it('searches payee, note and tags, with or without #', () => {
+    const rows = [
+      view({ id: 'a', external_id: 'a', description: 'Raveche Realty', tags: ['rent'] }),
+      view({ id: 'b', external_id: 'b', description: 'Woolworths', note: 'party food' }),
+    ];
+    expect(filterBankTransactions(rows, { query: '#rent' }).map((r) => r.id)).toEqual(['a']);
+    expect(filterBankTransactions(rows, { query: 'PARTY' }).map((r) => r.id)).toEqual(['b']);
+    expect(filterBankTransactions(rows, { query: '' })).toHaveLength(2);
+  });
+
+  it('filters by category, uncategorised included', () => {
+    const rows = [view({ id: 'a', external_id: 'a', category: 'groceries' }), view({ id: 'b', external_id: 'b', category: null })];
+    expect(filterBankTransactions(rows, { category: 'groceries' }).map((r) => r.id)).toEqual(['a']);
+    expect(filterBankTransactions(rows, { category: 'uncategorised' }).map((r) => r.id)).toEqual(['b']);
+  });
+
+  it('steps months across a year', () => {
+    expect(shiftMonth('2026-01-01', -1)).toBe('2025-12-01');
+    expect(shiftMonth('2026-12-01', 1)).toBe('2027-01-01');
   });
 });

@@ -257,7 +257,13 @@ export function CostModal({ isOpen, item, groupId, defaultCategory, defaultName,
       </FormSection>
 
       {item?.id && (
-        <CostBankLink costItemId={item.id} category={form.category} amountCents={Math.round((form.amount ?? 0) * 100)} />
+        <CostBankLink
+          costItemId={item.id}
+          category={form.category}
+          amountCents={Math.round((form.amount ?? 0) * 100)}
+          estimate={form.is_estimate}
+          onAmount={(cents) => setForm((f) => ({ ...f, amount: cents / 100 }))}
+        />
       )}
 
       <DetailsDisclosure count={detailsCount}>

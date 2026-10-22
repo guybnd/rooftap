@@ -15,17 +15,32 @@
 // Pure: the shapes the apps and /api/up-bank share, mapping Up's JSON to a
 // stored row, and the spending summary both apps and the assistant read.
 
-import type { CostCategory, CostItem } from './types';
+import type { CostCadence, CostCategory, CostItem } from './types';
 
 export const UP_API_BASE = 'https://api.up.com.au/api/v1';
 
 /** Up personal access tokens start with this. */
 const UP_TOKEN_PREFIX = 'up:yeah:';
 
+/**
+ * What a person shares with the household: nothing, only joint accounts
+ * (such as a 2Up account), or every account.
+ */
+export type BankShareMode = 'none' | 'joint' | 'all';
+
+/**
+ * Whose bank data a view shows. 'household': what each person shares.
+ * 'mine': the viewer's personal accounts (their joint ones count as household). 'all': both,
+ * for matching payments to cost lines and for the assistant.
+ */
+export type BankScope = 'household' | 'mine' | 'all';
+
 export interface UpBankConnection {
   last4: string;
-  /** The household can see this person's spending. */
+  /** The household can see some of this person's spending (shareMode isn't 'none'). */
   shared: boolean;
+  /** Missing from servers before 'connectors.up-bank-sharing'. */
+  shareMode?: BankShareMode;
   /** Up pushes new transactions to this server as they happen. */
   live: boolean;
   lastSyncedAt: string | null;
@@ -42,6 +57,7 @@ export interface UpBankStatus {
 export interface UpBankSaveInput {
   token?: string;
   shared?: boolean;
+  shareMode?: BankShareMode;
 }
 
 export interface UpBankSyncResult {
@@ -57,6 +73,8 @@ export interface BankTransaction {
   user_id: string;
   source: 'up';
   external_id: string;
+  /** The bank's id for the account. Missing on rows read before it was kept. */
+  account_id?: string | null;
   account_name: string | null;
   description: string;
   message: string | null;
@@ -132,6 +150,8 @@ export interface UpOverview extends UpSpending {
   /** Savers together, cents. */
   saversCents: number;
   links: CostBankLink[];
+  /** Whose spending and accounts this is. Missing before 'connectors.up-bank-sharing'. */
+  scope?: Exclude<BankScope, 'all'>;
 }
 
 /** One payee or tag to link a cost line to, from the viewer's recent payments. */
@@ -150,6 +170,10 @@ export interface BankPayee {
 export interface CostBankDetail {
   rule: BankLinkRule | null;
   payments: SpendingTransaction[];
+  /** The line's amount on the server after the rules ran, so an open editor can take a kept-in-step amount. */
+  amountCents?: number;
+  /** Whether the line is an estimate, which keeps in step with an average. */
+  estimate?: boolean;
 }
 
 export interface SpendingCategory {
@@ -266,6 +290,7 @@ export function upTransactionRow(
     user_id: owner.userId,
     source: 'up',
     external_id: t.id,
+    account_id: accountId,
     account_name: accountId ? accountNames.get(accountId) ?? null : null,
     description: a.description.trim() || 'Transaction',
     message: a.message?.trim() || null,
@@ -287,6 +312,21 @@ export function monthStartOf(date: Date): string {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
   return `${y}-${m}-01`;
+}
+
+/** The month `delta` months from a YYYY-MM-01 month. */
+export function shiftMonth(month: string, delta: number): string {
+  const range = monthRange(month);
+  if (!range) return month;
+  return monthStartOf(new Date(range.from.getFullYear(), range.from.getMonth() + delta, 1));
+}
+
+/** "October", or "October 2025" outside the current year. */
+export function monthLabel(month: string, now: Date = new Date()): string {
+  const range = monthRange(month);
+  if (!range) return month;
+  const name = range.from.toLocaleString('default', { month: 'long' });
+  return range.from.getFullYear() === now.getFullYear() ? name : `${name} ${range.from.getFullYear()}`;
 }
 
 /** The [start, end) instants of a YYYY-MM-01 month, in the caller's local time. */
@@ -359,6 +399,59 @@ export function summariseSpending(
   return { month, spentCents: spent, receivedCents: received, categories, recent, people: Array.from(people) };
 }
 
+
+
+// ── Sharing ──────────────────────────────────────────────────────────────
+
+export function isBankShareMode(v: unknown): v is BankShareMode {
+  return v === 'none' || v === 'joint' || v === 'all';
+}
+
+/** Who shares what in a household, as the server reads it for one viewer. */
+export interface BankSharing {
+  viewerId: string;
+  modes: Readonly<Record<string, BankShareMode>>;
+  /** Each person's joint accounts, by the bank's id and by name (older rows only have the name). */
+  joint: Readonly<Record<string, { ids: readonly string[]; names: readonly string[] }>>;
+}
+
+function shares(s: BankSharing, userId: string, isJoint: boolean): boolean {
+  const mode = s.modes[userId] ?? 'none';
+  return mode === 'all' || (mode === 'joint' && isJoint);
+}
+
+function inScope(s: BankSharing, userId: string, isJoint: boolean, scope: BankScope): boolean {
+  // Mine is the viewer's personal money: their own accounts, joint ones left
+  // to Household, so the two views never count a payment twice.
+  if (scope === 'mine') return userId === s.viewerId && !isJoint;
+  if (scope === 'household') return shares(s, userId, isJoint);
+  return userId === s.viewerId || shares(s, userId, isJoint);
+}
+
+export function bankAccountVisible(
+  a: Pick<BankAccountRow, 'user_id' | 'ownership'>,
+  s: BankSharing,
+  scope: BankScope,
+): boolean {
+  return inScope(s, a.user_id, a.ownership === 'JOINT', scope);
+}
+
+export function bankRowVisible(
+  r: Pick<BankTransaction, 'user_id' | 'account_id' | 'account_name'>,
+  s: BankSharing,
+  scope: BankScope,
+): boolean {
+  const joint = s.joint[r.user_id];
+  const isJoint = !!joint && (r.account_id ? joint.ids.includes(r.account_id) : !!r.account_name && joint.names.includes(r.account_name));
+  return inScope(s, r.user_id, isJoint, scope);
+}
+
+/** People whose rows a scope can include, to narrow the database read. */
+export function bankScopePeople(s: BankSharing, scope: BankScope): string[] {
+  if (scope === 'mine') return [s.viewerId];
+  const sharing = Object.entries(s.modes).filter(([, m]) => m !== 'none').map(([u]) => u);
+  return Array.from(new Set(scope === 'all' ? [s.viewerId, ...sharing] : sharing));
+}
 
 // ── Linking payments to cost lines ───────────────────────────────────────
 
@@ -634,6 +727,96 @@ export function groupByDay<T extends { occurredAt: string }>(rows: readonly T[],
   return groups;
 }
 
+
+/**
+ * The Money view's search and category filter. The query matches the payee,
+ * message, note, category or an Up tag ("#rent" or "rent"), ignoring case.
+ */
+export function filterBankTransactions<T extends BankTransactionView>(
+  rows: readonly T[],
+  opts: { query?: string; category?: string | null },
+): T[] {
+  const q = (opts.query ?? '').trim().toLowerCase().replace(/^#/, '');
+  return rows.filter((r) => {
+    // Category ids are the spending summary's: Up's, or 'uncategorised'.
+    if (opts.category && (r.category ?? 'uncategorised') !== opts.category) return false;
+    if (!q) return true;
+    const hay = [r.description, r.message, r.note, r.categoryLabel, ...r.tags].filter(Boolean).join(' ').toLowerCase();
+    return hay.includes(q);
+  });
+}
+
+// ── Making a cost line from a payment ────────────────────────────────────
+
+/**
+ * How often a payee is paid, from the times of its payments: weekly,
+ * fortnightly, monthly, quarterly or yearly when the gaps between them sit
+ * near one of those, else a one-off.
+ */
+export function guessCadence(times: readonly string[]): CostCadence {
+  const sorted = times.map((t) => Date.parse(t)).filter(Number.isFinite).sort((a, b) => a - b);
+  if (sorted.length < 2) return 'one_off';
+  const gaps = sorted.slice(1).map((t, i) => (t - sorted[i]) / 86_400_000);
+  const median = gaps.slice().sort((a, b) => a - b)[Math.floor(gaps.length / 2)];
+  const near = (days: number, slack: number) => Math.abs(median - days) <= slack;
+  if (near(7, 1.5)) return 'weekly';
+  if (near(14, 2)) return 'fortnightly';
+  if (near(30.4, 4)) return 'monthly';
+  if (near(91, 10)) return 'quarterly';
+  if (near(365, 20)) return 'yearly';
+  return 'one_off';
+}
+
+/** A cost line's category from Up's, Other when nothing fits. */
+export function costCategoryFromUp(upCategory: string | null | undefined): CostCategory {
+  return (upCategory && UP_COST_CATEGORY[upCategory]) || 'other';
+}
+
+export interface MakeCostInput {
+  /** The line's name; the payee's when left out. */
+  name?: string;
+  /** Also link the payee's future payments to the new line. */
+  linkPayee?: boolean;
+}
+
+/** What "Make it a cost" would create, for the sheet to show before saving. */
+export interface MakeCostPreview {
+  name: string;
+  amountCents: number;
+  category: CostCategory;
+  cadence: CostCadence;
+  /** Payments to the same payee the viewer can see in the last year. */
+  seen: number;
+  /** The amounts vary (a bill like electricity), so the line is an estimate: the average of the latest payments. */
+  estimate: boolean;
+}
+
+/** How many of the latest payments an estimate line averages. */
+export const BANK_AVERAGE_OF = 3;
+
+/**
+ * Whether a payee's amounts vary enough to make its line an estimate: one of
+ * the latest payments sits more than 5% from their average.
+ */
+export function bankAmountsVary(amountsCents: readonly number[]): boolean {
+  const recent = amountsCents.slice(0, BANK_AVERAGE_OF).map((a) => Math.abs(a));
+  if (recent.length < 2) return false;
+  const mean = recent.reduce((s, a) => s + a, 0) / recent.length;
+  return recent.some((a) => Math.abs(a - mean) > mean * 0.05);
+}
+
+/**
+ * The amount a linked cost line carries, from its payments newest first: the
+ * latest for a fixed line, and for an estimate (a bill that changes, like
+ * electricity) the rolling average of the latest three, or of the one or two
+ * there are.
+ */
+export function bankLineAmount(amountsCents: readonly number[], estimate: boolean): number | null {
+  const recent = amountsCents.slice(0, estimate ? BANK_AVERAGE_OF : 1).map((a) => Math.abs(a));
+  if (!recent.length) return null;
+  return Math.round(recent.reduce((s, a) => s + a, 0) / recent.length);
+}
+
 // ── Client ───────────────────────────────────────────────────────────────
 
 export type UpBankCall = <T>(path: string, init?: { method?: string; body?: unknown }) => Promise<T>;
@@ -653,10 +836,11 @@ export function createUpBankApi(call: UpBankCall) {
       return call<UpSpending>(`/api/up-bank/spending?${q.toString()}`);
     },
     /** Spending plus balances and cost-line links (servers with 'connectors.up-bank-links'). */
-    overview: (month: string) => {
+    overview: (month: string, scope?: Exclude<BankScope, 'all'>) => {
       const range = monthRange(month);
       if (!range) return Promise.reject(new Error('Not a month.'));
       const q = new URLSearchParams({ month, from: range.from.toISOString(), to: range.to.toISOString() });
+      if (scope) q.set('scope', scope);
       return call<UpOverview>(`/api/up-bank/overview?${q.toString()}`);
     },
     payees: (input: { category?: CostCategory | null; query?: string }) => {
@@ -668,12 +852,26 @@ export function createUpBankApi(call: UpBankCall) {
     costLink: (costItemId: string) => call<CostBankDetail>(`/api/up-bank/links/${encodeURIComponent(costItemId)}`),
     setCostLink: (costItemId: string, rule: BankLinkRule) =>
       call<CostBankDetail>(`/api/up-bank/links/${encodeURIComponent(costItemId)}`, { method: 'PUT', body: rule }),
-    transactions: (input: { before?: string | null; hidden?: boolean } = {}) => {
+    transactions: (
+      input: { before?: string | null; hidden?: boolean; scope?: Exclude<BankScope, 'all'>; month?: string } = {},
+    ) => {
       const q = new URLSearchParams();
+      if (input.scope) q.set('scope', input.scope);
+      const range = input.month ? monthRange(input.month) : null;
+      if (range) {
+        q.set('from', range.from.toISOString());
+        q.set('to', range.to.toISOString());
+      }
       if (input.before) q.set('before', input.before);
       if (input.hidden) q.set('hidden', '1');
       return call<BankTransactionPage>(`/api/up-bank/transactions?${q.toString()}`);
     },
+    costPreview: (id: string) => call<MakeCostPreview>(`/api/up-bank/transactions/${encodeURIComponent(id)}/cost`),
+    makeCost: (id: string, input: MakeCostInput) =>
+      call<{ costItemId: string; transaction: BankTransactionView }>(`/api/up-bank/transactions/${encodeURIComponent(id)}/cost`, {
+        method: 'POST',
+        body: input,
+      }),
     updateTransaction: (id: string, patch: BankTransactionPatch) =>
       call<BankTransactionView>(`/api/up-bank/transactions/${encodeURIComponent(id)}`, { method: 'PATCH', body: patch }),
     removeCostLink: (costItemId: string) =>

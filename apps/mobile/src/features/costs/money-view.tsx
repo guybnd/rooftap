@@ -6,11 +6,15 @@
 // transaction (B2): which cost line it counts as, "always link" for its
 // payee, a price-change nudge, hide from spending and a note. Swipe left
 // hides a payment. Only the person who connected an account can change its
-// transactions; shared ones read only.
+// transactions; shared ones read only. Household | Mine picks the joint
+// (shared) or personal accounts, a month stepper walks back through the
+// months (the whole month loads at once), and a search box and the category
+// chips narrow the list. A payment with no line can become one ("Make it a
+// cost").
 // Web twin: apps/web/src/app/costs/money-view.tsx.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
-import { EyeOff } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, EyeOff } from 'lucide-react-native';
 import {
   BottomSheet,
   HeroLede,
@@ -23,13 +27,19 @@ import {
   cn,
 } from '@homeup/ui';
 import {
+  CATEGORY_META,
   bankDayLabel,
   costItemsToOptions,
+  filterBankTransactions,
   formatMoney,
   groupByDay,
+  monthLabel,
+  monthStartOf,
+  shiftMonth,
   useUpConnected,
   useUpOverview,
   type BankTransactionPatch,
+  type MakeCostPreview,
   type BankTransactionView,
   type CostItem,
 } from '@homeup/core';
@@ -42,19 +52,34 @@ export type CostsView = 'plan' | 'money';
 
 export function CostsViewSwitch({ value, onChange }: { value: CostsView; onChange: (v: CostsView) => void }) {
   const connected = useUpConnected();
-  const { linking } = useUpOverview();
+  const { linking, scope, setScope } = useUpOverview();
   if (!connected || !linking) return null;
   return (
-    <SegmentedControl
-      accessibilityLabel="Costs view"
-      value={value}
-      onChange={onChange}
-      options={[
-        { value: 'plan', label: 'Plan' },
-        { value: 'money', label: 'Money' },
-      ]}
-      tone="accent"
-    />
+    <View className="gap-2">
+      <SegmentedControl
+        accessibilityLabel="Costs view"
+        value={value}
+        onChange={onChange}
+        options={[
+          { value: 'plan', label: 'Plan' },
+          { value: 'money', label: 'Money' },
+        ]}
+        tone="accent"
+      />
+      {/* Household (joint, shared) or Mine (personal accounts) for the Up card and Money. */}
+      {scope ? (
+        <SegmentedControl
+          accessibilityLabel="Whose money"
+          value={scope}
+          onChange={setScope}
+          options={[
+            { value: 'household', label: 'Household' },
+            { value: 'mine', label: 'Mine' },
+          ]}
+          size="sm"
+        />
+      ) : null}
+    </View>
   );
 }
 
@@ -71,32 +96,31 @@ export function MoneyView({
   onOpenItem: (item: CostItem) => void;
   onSetAmount: (item: CostItem, cents: number) => void;
 }) {
-  const { status, data, reload } = useUpOverview();
+  const { status, data, reload, month, setMonth, scope } = useUpOverview();
   const [showHidden, setShowHidden] = useState(false);
   const [rows, setRows] = useState<BankTransactionView[] | null>(null);
-  const [next, setNext] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [category, setCategory] = useState<string | null>(null);
   const itemById = useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
+  const thisMonth = monthStartOf(new Date());
 
-  const load = useCallback(
-    async (before: string | null) => {
-      try {
-        const page = await upBankApi.transactions({ before, hidden: showHidden });
-        setRows((cur) => (before && cur ? [...cur, ...page.transactions] : page.transactions));
-        setNext(page.next);
-        setError(null);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Couldn't read your transactions.");
-      }
-    },
-    [showHidden],
-  );
+  const load = useCallback(async () => {
+    try {
+      const page = await upBankApi.transactions({ month, scope: scope ?? undefined, hidden: showHidden });
+      setRows(page.transactions);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't read your transactions.");
+    }
+  }, [month, scope, showHidden]);
 
   useEffect(() => {
     setRows(null);
-    void load(null);
+    void load();
   }, [load, status?.connection?.lastSyncedAt]);
+  useEffect(() => setCategory(null), [month, scope]);
 
   const apply = async (id: string, patch: BankTransactionPatch) => {
     try {
@@ -112,8 +136,9 @@ export function MoneyView({
   if (!data) return <Text className="text-sm text-muted-foreground">Reading your Up accounts…</Text>;
   const accounts = data.accounts ?? [];
   const total = (data.everydayCents ?? 0) + (data.saversCents ?? 0);
-  const monthName = new Date().toLocaleString('default', { month: 'long' });
+  const monthName = monthLabel(month);
   const open = rows?.find((r) => r.id === openId) ?? null;
+  const shown = rows ? filterBankTransactions(rows, { query, category }) : null;
 
   return (
     <View className="gap-4">
@@ -140,6 +165,53 @@ export function MoneyView({
         </View>
       )}
 
+      <View className="flex-row items-center gap-1">
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Previous month"
+          onPress={() => setMonth(shiftMonth(month, -1))}
+          className="h-11 w-11 items-center justify-center"
+        >
+          <ChevronLeft size={20} className="text-muted-foreground" />
+        </Pressable>
+        <Text className="min-w-24 text-center text-sm font-semibold text-foreground">{monthName}</Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Next month"
+          disabled={month >= thisMonth}
+          onPress={() => setMonth(shiftMonth(month, 1))}
+          className={cn('h-11 w-11 items-center justify-center', month >= thisMonth && 'opacity-30')}
+        >
+          <ChevronRight size={20} className="text-muted-foreground" />
+        </Pressable>
+        <Input
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search or #tag"
+          accessibilityLabel="Search transactions"
+          returnKeyType="search"
+          className="ml-1 h-10 flex-1 rounded-xl"
+        />
+      </View>
+
+      {data.categories.length > 0 ? (
+        <View className="flex-row flex-wrap gap-2">
+          {data.categories.slice(0, 8).map((c) => (
+            <Pressable
+              key={c.id}
+              accessibilityRole="button"
+              accessibilityState={{ selected: category === c.id }}
+              onPress={() => setCategory((cur) => (cur === c.id ? null : c.id))}
+              className={cn('min-h-9 justify-center rounded-full px-3', category === c.id ? 'bg-foreground' : 'bg-muted/60')}
+            >
+              <Text className={cn('text-xs', category === c.id ? 'text-background' : 'text-muted-foreground')} style={TABULAR}>
+                {c.label} {formatMoney(c.cents, AUD)}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
+
       <View className="flex-row items-center justify-between px-1">
         <Text className="text-[10.5px] font-medium uppercase tracking-[1px] text-muted-foreground">
           {showHidden ? 'Hidden from spending' : 'Transactions'}
@@ -150,13 +222,15 @@ export function MoneyView({
       </View>
 
       {error ? <Text className="px-1 text-xs text-destructive">{error}</Text> : null}
-      {rows === null ? (
+      {shown === null ? (
         <Text className="px-1 text-sm text-muted-foreground">Reading your transactions…</Text>
-      ) : rows.length === 0 ? (
-        <Text className="px-1 text-sm text-muted-foreground">{showHidden ? 'Nothing hidden.' : 'No transactions yet.'}</Text>
+      ) : shown.length === 0 ? (
+        <Text className="px-1 text-sm text-muted-foreground">
+          {query || category ? 'Nothing matches.' : showHidden ? 'Nothing hidden.' : `No transactions in ${monthName}.`}
+        </Text>
       ) : (
         <View className="overflow-hidden rounded-3xl border border-border/60 bg-card">
-          {groupByDay(rows).map((g) => (
+          {groupByDay(shown).map((g) => (
             <View key={g.label}>
               <Text className="px-4 pb-1 pt-3 text-xs text-muted-foreground">{g.label}</Text>
               {g.rows.map((t, i) => (
@@ -172,11 +246,6 @@ export function MoneyView({
               ))}
             </View>
           ))}
-          {next ? (
-            <Pressable accessibilityRole="button" onPress={() => load(next)} className="min-h-12 items-center justify-center border-t border-border/60">
-              <Text className="text-sm font-medium text-primary">Show older</Text>
-            </Pressable>
-          ) : null}
         </View>
       )}
       {!showHidden && rows && rows.length > 0 ? (
@@ -191,6 +260,10 @@ export function MoneyView({
         onPatch={(patch) => {
           if (open) void apply(open.id, patch);
         }}
+        onMadeCost={(saved) => {
+          setRows((cur) => (cur ?? []).map((r) => (r.id === saved.id ? saved : r)));
+          reload();
+        }}
         onOpenItem={(item) => {
           setOpenId(null);
           onOpenItem(item);
@@ -200,6 +273,15 @@ export function MoneyView({
     </View>
   );
 }
+
+const CADENCE_WORD: Record<MakeCostPreview['cadence'], string> = {
+  weekly: 'a week',
+  fortnightly: 'a fortnight',
+  monthly: 'a month',
+  quarterly: 'a quarter',
+  yearly: 'a year',
+  one_off: 'once',
+};
 
 function rowMeta(t: BankTransactionView, line: CostItem | null, owner: string | null): string {
   return [
@@ -264,6 +346,7 @@ function TransactionSheet({
   owner,
   onClose,
   onPatch,
+  onMadeCost,
   onOpenItem,
   onSetAmount,
 }: {
@@ -272,13 +355,52 @@ function TransactionSheet({
   owner: string | null;
   onClose: () => void;
   onPatch: (patch: BankTransactionPatch) => void;
+  onMadeCost: (saved: BankTransactionView) => void;
   onOpenItem: (item: CostItem) => void;
   onSetAmount: (item: CostItem, cents: number) => void;
 }) {
   const { data, reload } = useUpOverview();
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  useEffect(() => setNote(null), [t?.id]);
+  const [making, setMaking] = useState<MakeCostPreview | null>(null);
+  const [costName, setCostName] = useState('');
+  const [linkPayee, setLinkPayee] = useState(true);
+  const [sheetError, setSheetError] = useState<string | null>(null);
+  useEffect(() => {
+    setNote(null);
+    setMaking(null);
+    setSheetError(null);
+  }, [t?.id]);
+
+  const startMaking = async () => {
+    if (!t) return;
+    setBusy(true);
+    setSheetError(null);
+    try {
+      const plan = await upBankApi.costPreview(t.id);
+      setMaking(plan);
+      setCostName(plan.name);
+      setLinkPayee(plan.seen > 1);
+    } catch (err) {
+      setSheetError(err instanceof Error ? err.message : "Couldn't read that payment.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const saveCost = async () => {
+    if (!t || !making) return;
+    setBusy(true);
+    setSheetError(null);
+    try {
+      const made = await upBankApi.makeCost(t.id, { name: costName.trim() || making.name, linkPayee });
+      setMaking(null);
+      onMadeCost(made.transaction);
+    } catch (err) {
+      setSheetError(err instanceof Error ? err.message : "Couldn't make the cost.");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const line = t?.costItemId ? items.find((i) => i.id === t.costItemId) ?? null : null;
   const rule = line ? data?.links?.find((l) => l.costItemId === line.id) ?? null : null;
@@ -365,6 +487,45 @@ function TransactionSheet({
               </Pressable>
             ) : null}
           </View>
+
+          {!line && t.mine && t.amountCents < 0 && !t.isTransfer ? (
+            making ? (
+              <View className="gap-2 rounded-2xl bg-muted/40 px-4 py-3">
+                <Input value={costName} maxLength={200} onChangeText={setCostName} accessibilityLabel="Cost name" className="h-10 rounded-xl" />
+                <Text className="text-xs text-muted-foreground" style={TABULAR}>
+                  {[
+                    `${making.estimate ? 'About ' : ''}${formatMoney(making.amountCents)} ${CADENCE_WORD[making.cadence]}`,
+                    CATEGORY_META[making.category]?.label ?? making.category,
+                    making.seen > 1 ? `${making.seen} payments in the last year` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </Text>
+                <View className="min-h-12 flex-row items-center gap-3">
+                  <Text className="flex-1 text-sm text-foreground">Also file future payments to {t.description}</Text>
+                  <Switch checked={linkPayee} label="Also file future payments" onChange={setLinkPayee} />
+                </View>
+                <View className="flex-row justify-end gap-2">
+                  <Pressable accessibilityRole="button" onPress={() => setMaking(null)} className="min-h-11 justify-center px-3">
+                    <Text className="text-sm text-muted-foreground">Cancel</Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={busy}
+                    onPress={() => void saveCost()}
+                    className={cn('min-h-11 justify-center rounded-xl bg-primary px-4', busy && 'opacity-50')}
+                  >
+                    <Text className="text-sm font-medium text-primary-foreground">Add the cost</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : (
+              <Pressable accessibilityRole="button" disabled={busy} onPress={() => void startMaking()} className="min-h-11 justify-center px-1">
+                <Text className={cn('text-sm font-medium text-primary', busy && 'opacity-50')}>Make it a cost</Text>
+              </Pressable>
+            )
+          ) : null}
+          {sheetError ? <Text className="px-1 text-xs text-destructive">{sheetError}</Text> : null}
 
           {line && line.cadence !== 'one_off' && t.amountCents < 0 && paid !== (line.amount ?? 0) ? (
             <View className="min-h-12 flex-row items-center gap-3 rounded-2xl bg-muted/40 px-4 py-2">

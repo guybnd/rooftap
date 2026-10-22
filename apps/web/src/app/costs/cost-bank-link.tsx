@@ -10,7 +10,7 @@
 // Native twin: apps/mobile/src/features/costs/cost-bank-link.tsx.
 
 import { useEffect, useState } from 'react';
-import { formatMoney, timeAgo, useUpConnected, useUpOverview, type BankPayee, type CostBankDetail, type CostCategory } from '@homeup/core';
+import { bankLineAmount, formatMoney, timeAgo, useUpConnected, useUpOverview, type BankPayee, type CostBankDetail, type CostCategory } from '@homeup/core';
 import { upBankApi } from '@/lib/up-bank-client';
 import { FieldRow, FormSection } from '@/components/ui/item-form-sheet';
 import { Input } from '@/components/ui/input';
@@ -22,7 +22,21 @@ function matchLabel(match: string): string {
   return match.startsWith('#') ? `Tagged ${match}` : `Payments to "${match}"`;
 }
 
-export function CostBankLink({ costItemId, category, amountCents }: { costItemId: string; category: CostCategory; amountCents: number }) {
+export function CostBankLink({
+  costItemId,
+  category,
+  amountCents,
+  estimate,
+  onAmount,
+}: {
+  costItemId: string;
+  category: CostCategory;
+  amountCents: number;
+  /** Whether the line is an estimate: it keeps in step with the average of its latest three payments. */
+  estimate: boolean;
+  /** The server set the line's amount from its payments (kept in step), so the open editor takes it before Save. */
+  onAmount: (cents: number) => void;
+}) {
   const connected = useUpConnected();
   const { linking, reload } = useUpOverview();
   const [detail, setDetail] = useState<CostBankDetail | null>(null);
@@ -47,13 +61,25 @@ export function CostBankLink({ costItemId, category, amountCents }: { costItemId
     };
   }, [show, costItemId]);
 
+  // Turning Estimate on or off in the editor changes what a kept-in-step
+  // line should carry (the latest payment, or the average of three).
+  useEffect(() => {
+    if (!detail?.rule?.keepAmount) return;
+    const settled = detail.payments.filter((p) => !p.pending).map((p) => p.amountCents);
+    const next = bankLineAmount(settled, estimate);
+    if (next != null && next !== amountCents) onAmount(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [estimate, detail]);
+
   if (!show) return null;
 
   const change = async (run: () => Promise<CostBankDetail>) => {
     setBusy(true);
     setError(null);
     try {
-      setDetail(await run());
+      const next = await run();
+      setDetail(next);
+      if (next.rule?.keepAmount && next.amountCents != null && next.amountCents !== amountCents) onAmount(next.amountCents);
       setPicking(false);
       reload();
     } catch (err) {
@@ -108,7 +134,9 @@ export function CostBankLink({ costItemId, category, amountCents }: { costItemId
           <div className="flex min-h-12 items-center gap-3 border-t border-border/60 px-4 py-2">
             <div className="min-w-0 flex-1">
               <p className="text-sm text-foreground">Keep the amount in step</p>
-              <p className="text-xs text-muted-foreground">When Up shows a new amount, this line takes it</p>
+              <p className="text-xs text-muted-foreground">
+                {estimate ? 'Takes the average of the latest 3 payments' : 'When Up shows a new amount, this line takes it'}
+              </p>
             </div>
             <Switch
               checked={rule.keepAmount}

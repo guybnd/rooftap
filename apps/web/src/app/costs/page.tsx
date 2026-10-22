@@ -410,7 +410,7 @@ export default function CostsPage() {
   }, {} as Record<string, CostItem[]>);
 
   return (
-    <UpOverviewProvider api={upBankApi} enabled={upBank} linking={upLinks}>
+    <UpOverviewProvider api={upBankApi} enabled={upBank} linking={upLinks} sharing={modules.server('connectors.up-bank-sharing')}>
     <div className={cn('space-y-5 p-4 md:p-6 mx-auto pb-24', wide ? 'max-w-[1400px] lg:px-8' : 'max-w-5xl')}>
       {/* Up Bank: Plan | Money, once this person has Up connected (money-view.tsx). */}
       <CostsViewSwitch value={view} onChange={setView} />
@@ -498,6 +498,7 @@ export default function CostsPage() {
           currentUserId={currentUserId}
           nameOf={(uid) => memberLabel(uid, memberProfiles)}
           items={items}
+          budgetCents={budgetCents}
           onSetAmount={(item, cents) => patchRow(item.id, { amount: cents })}
         />
       )}

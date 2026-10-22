@@ -19,6 +19,11 @@ export async function GET(request: Request) {
   const month = params.get("month") ?? "";
   const from = Date.parse(params.get("from") ?? "");
   const to = Date.parse(params.get("to") ?? "");
+  // Whose spending and accounts: what the household shares, or all of the
+  // caller's own. Cost-line links always read everything the caller may see.
+  // Apps before 'connectors.up-bank-sharing' send no scope and get both.
+  const raw = params.get("scope");
+  const scope = raw === "mine" || raw === "household" ? raw : null;
   if (!/^\d{4}-\d{2}(-01)?$/.test(month) || !Number.isFinite(from) || !Number.isFinite(to) || to <= from || to - from > MAX_RANGE_MS) {
     return NextResponse.json({ error: "Send a month with its start and end." }, { status: 400 });
   }
@@ -30,6 +35,7 @@ export async function GET(request: Request) {
         groupId: req.groupId,
         from: new Date(from).toISOString(),
         to: new Date(to).toISOString(),
+        scope: scope ?? "all",
       }),
       visibleBankTransactions(req.admin, {
         userId: req.userId,
@@ -38,13 +44,14 @@ export async function GET(request: Request) {
         to: new Date(now + 86_400_000).toISOString(),
         limit: 5000,
       }),
-      visibleBankAccounts(req.admin, req.userId, req.groupId),
+      visibleBankAccounts(req.admin, req.userId, req.groupId, scope ?? "all"),
       bankLinkRows(req.admin, req.groupId),
     ]);
     const body: UpOverview = {
       ...summariseSpending(monthRows, month),
       ...summariseAccounts(accounts),
       links: costBankLinks(recentRows, rules),
+      ...(scope ? { scope } : {}),
     };
     return NextResponse.json(body);
   } catch (err) {

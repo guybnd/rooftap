@@ -311,6 +311,23 @@ function quoted(value: unknown): string {
   return typeof value === 'string' && value.trim() ? `"${value.trim()}"` : 'an item';
 }
 
+function bankProposal(tool: string, args: Record<string, unknown>): string | null {
+  if (tool === 'make_cost_from_payment') {
+    return `Make a cost line${typeof args.name === 'string' && args.name.trim() ? ` ${quoted(args.name)}` : ''} from a bank payment`;
+  }
+  if (tool === 'set_bank_link_rule') {
+    return typeof args.match === 'string' && args.match.trim()
+      ? `File bank payments matching ${quoted(args.match)} under a cost line`
+      : 'Stop filing bank payments under a cost line';
+  }
+  if (tool !== 'update_bank_payment') return null;
+  if (typeof args.cost_item_id === 'string') return 'File a bank payment under a cost line';
+  if (args.cost_item_id === null) return 'Give a bank payment back to the link rules';
+  if (args.hidden === true) return 'Hide a bank payment from spending';
+  if (args.hidden === false) return 'Count a bank payment in spending again';
+  return 'Add a note to a bank payment';
+}
+
 /**
  * One plain line for a proposed change, from the tool and its arguments.
  * Ids aren't shown (the model's reply names the item); unknown tools fall
@@ -324,6 +341,8 @@ export function describeProposal(tool: string, module: AssistantScope, args: Rec
     return `${homeAssistantToolLabel(tool)}${typeof target === 'string' && target.trim() ? ` ${quoted(target)}` : ''} in Home Assistant`;
   }
   if (tool === 'start_scout') return `Ask Scout to find ${quoted(typeof args.text === 'string' ? scoutTitle({ text: args.text }) : null)}`;
+  const bank = bankProposal(tool, args);
+  if (bank) return bank;
   if (tool === 'add_recipe_to_groceries') return "Add a recipe's ingredients to Groceries";
   if (tool === 'add_checklist_item') return `Add ${quoted(args.label)} to a checklist`;
   if (tool === 'check_checklist_item') return args.done === false ? 'Untick a checklist item' : 'Tick a checklist item';

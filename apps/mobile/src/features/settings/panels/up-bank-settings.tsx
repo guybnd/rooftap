@@ -1,6 +1,6 @@
 // Up Bank connector: Settings > Connectors > Up Bank. Each person connects their own
 // Up account with a personal access token from api.up.com.au, and chooses
-// whether the household sees their spending. The token never comes back from
+// what the household sees: nothing, only their joint accounts, or everything. The token never comes back from
 // the server, only its last four characters. Disconnecting removes every
 // transaction read from Up. One primary action (PC).
 // Web twin: apps/web/src/components/up-bank-settings.tsx.
@@ -8,9 +8,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { Landmark } from 'lucide-react-native';
 import { Button, Input, Text, toast } from '@homeup/ui';
-import { timeAgo, useModules, type UpBankStatus } from '@homeup/core';
+import { timeAgo, useModules, type BankShareMode, type UpBankStatus } from '@homeup/core';
 import { upBankApi } from '@/features/costs/up-bank-api';
-import { SettingsInset, SettingsPanel, SettingsSwitchRow } from './settings-panel';
+import { SettingsChoiceRow, SettingsInset, SettingsPanel, SettingsSwitchRow } from './settings-panel';
 
 const SETUP_HELP =
   'Make a personal access token at api.up.com.au and paste it here. Rooftap reads your transactions and never moves money.';
@@ -18,8 +18,17 @@ const OLD_SERVER = 'Your Rooftap server needs an update before it can connect Up
 const NOT_ALLOWED =
   'Up allows its API for personal use only, so Up Bank works on self-hosted Rooftap servers, where your token stays on your own server.';
 
+const SHARE_CHOICES: { mode: BankShareMode; title: string; description: string }[] = [
+  { mode: 'joint', title: 'Share joint accounts', description: 'The household sees your 2Up accounts. Your own accounts stay under Mine.' },
+  { mode: 'all', title: 'Share everything', description: 'The household sees all your Up accounts.' },
+  { mode: 'none', title: 'Keep it to myself', description: 'Only you see your Up money.' },
+];
+
 export function UpBankSettings() {
-  const supported = useModules().server('connectors.up-bank');
+  const modules = useModules();
+  const supported = modules.server('connectors.up-bank');
+  // Older servers only know on or off.
+  const modes = modules.server('connectors.up-bank-sharing');
   const [status, setStatus] = useState<UpBankStatus | null>(null);
   const [editing, setEditing] = useState(false);
   const [token, setToken] = useState('');
@@ -56,6 +65,18 @@ export function UpBankSettings() {
     setStatus({ ...status, connection: { ...status.connection, shared } });
     try {
       setStatus(await upBankApi.save({ shared }));
+    } catch (err) {
+      setStatus(before);
+      toast.error(err instanceof Error ? err.message : 'Could not save that.');
+    }
+  };
+
+  const setShareMode = async (shareMode: BankShareMode) => {
+    if (!status?.connection) return;
+    const before = status;
+    setStatus({ ...status, connection: { ...status.connection, shareMode, shared: shareMode !== 'none' } });
+    try {
+      setStatus(await upBankApi.save({ shareMode }));
     } catch (err) {
       setStatus(before);
       toast.error(err instanceof Error ? err.message : 'Could not save that.');
@@ -115,13 +136,26 @@ export function UpBankSettings() {
                 <Text className="text-sm font-medium text-foreground">Disconnect</Text>
               </Button>
             </View>
-            <SettingsSwitchRow
-              title="Share with the household"
-              description="Others in your home see your spending, and the assistant can use it when they ask."
-              checked={connection.shared}
-              disabled={!status.allowed}
-              onChange={(on) => void setShared(on)}
-            />
+            {modes ? (
+              SHARE_CHOICES.map((c) => (
+                <SettingsChoiceRow
+                  key={c.mode}
+                  selected={(connection.shareMode ?? (connection.shared ? 'all' : 'none')) === c.mode}
+                  onSelect={() => void setShareMode(c.mode)}
+                  title={c.title}
+                  description={c.description}
+                  disabled={!status.allowed}
+                />
+              ))
+            ) : (
+              <SettingsSwitchRow
+                title="Share with the household"
+                description="Others in your home see your spending, and the assistant can use it when they ask."
+                checked={connection.shared}
+                disabled={!status.allowed}
+                onChange={(on) => void setShared(on)}
+              />
+            )}
           </SettingsInset>
         )}
 

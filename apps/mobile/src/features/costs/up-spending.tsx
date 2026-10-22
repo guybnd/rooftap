@@ -7,7 +7,7 @@
 // Connectors. Data comes from core's UpOverviewProvider (up-overview.ts).
 // Web twin: apps/web/src/app/costs/up-spending.tsx.
 import { Pressable, View } from 'react-native';
-import { Card, Text } from '@homeup/ui';
+import { Card, ProgressBar, Text, cn } from '@homeup/ui';
 import { bankNudges, formatMoney, timeAgo, useUpOverview, type CostItem } from '@homeup/core';
 
 const AUD = { currency: 'AUD' };
@@ -17,22 +17,29 @@ export function UpSpendingCard({
   nameOf,
   currentUserId,
   items,
+  budgetCents,
   onSetAmount,
 }: {
   nameOf: (userId: string) => string;
   currentUserId: string | null;
   items: CostItem[];
+  /** The household's monthly budget (0 when none is set): spending is measured against it. */
+  budgetCents: number;
   onSetAmount: (item: CostItem, cents: number) => void;
 }) {
-  const { status, data: spending, error } = useUpOverview();
+  const { status, data: spending, error, month, scope } = useUpOverview();
   if (!status?.allowed || !status.connection) return null;
-  const monthName = new Date().toLocaleString('default', { month: 'long' });
+  const monthName = new Date(`${month}T00:00:00`).toLocaleString('default', { month: 'long' });
+  const title = ['Up Bank', scope === 'mine' ? 'Mine' : scope === 'household' ? 'Household' : null, monthName].filter(Boolean).join(' · ');
+  // A personal view isn't measured against the household's budget.
+  const showBudget = budgetCents > 0 && scope !== 'mine' && !!spending;
+  const over = !!spending && spending.spentCents > budgetCents;
   const nudges = spending?.links ? bankNudges(items, spending.links) : [];
   const hasBalances = !!spending?.accounts && spending.accounts.length > 0;
 
   return (
     <Card size="sm" className="gap-0 rounded-3xl px-4">
-      <Text className="text-[10.5px] font-medium uppercase tracking-[1px] text-muted-foreground">Up Bank · {monthName}</Text>
+      <Text className="text-[10.5px] font-medium uppercase tracking-[1px] text-muted-foreground">{title}</Text>
 
       {!spending ? (
         <Text className="py-2 text-sm text-muted-foreground">{error ?? 'Reading your transactions…'}</Text>
@@ -52,8 +59,16 @@ export function UpSpendingCard({
               <Text className="text-sm text-muted-foreground">spent</Text>
             </View>
           )}
+          {showBudget && (
+            <View className="flex-row items-center gap-2 pt-2">
+              <ProgressBar value={spending.spentCents} total={budgetCents} fillClassName={over ? 'bg-destructive' : 'bg-success'} className="w-[52px]" />
+              <Text className={cn('flex-1 text-xs', over ? 'text-destructive' : 'text-muted-foreground')} style={TABULAR} numberOfLines={1}>
+                Spent {formatMoney(spending.spentCents, AUD)} of {formatMoney(budgetCents, AUD)}
+              </Text>
+            </View>
+          )}
           <Text className="pt-1 text-xs text-muted-foreground" style={TABULAR}>
-            {spending.receivedCents > 0 ? `${formatMoney(spending.receivedCents, AUD)} in this month · ` : ''}
+            {spending.receivedCents > 0 ? `${formatMoney(spending.receivedCents, AUD)} in · ` : ''}
             {status.connection.live ? 'updates live' : `read ${(timeAgo(status.connection.lastSyncedAt) ?? 'just now').toLowerCase()}`}
           </Text>
           {error && <Text className="pt-1 text-xs text-destructive">{error}</Text>}

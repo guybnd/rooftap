@@ -717,6 +717,7 @@ export default function CostsSectionScreen() {
           currentUserId={currentUserId ?? null}
           nameOf={(uid) => memberLabel(uid, memberProfiles)}
           items={items}
+          budgetCents={budgetCents}
           onSetAmount={(item, cents) => patchRow(item.id, { amount: cents })}
         />
       )}
@@ -928,7 +929,9 @@ export default function CostsSectionScreen() {
   };
 
   return (
-    <UpOverviewProvider api={upBankApi} enabled={modules.server('connectors.up-bank')} linking={modules.server('connectors.up-bank-links')}>
+    <UpOverviewProvider api={upBankApi} enabled={modules.server('connectors.up-bank')} linking={modules.server('connectors.up-bank-links')}
+      sharing={modules.server('connectors.up-bank-sharing')}
+    >
     <ScreenBackground>
       {view === 'money' ? (
         <KeyboardAwareScrollView
