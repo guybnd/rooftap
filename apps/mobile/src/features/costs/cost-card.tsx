@@ -27,6 +27,7 @@ import {
   Check,
   FileText,
   HeartPulse,
+  Landmark,
   MessageSquare,
   MoreHorizontal,
   Paperclip,
@@ -376,6 +377,11 @@ export function CostRow({
           <Text numberOfLines={1} className="min-w-0 flex-1 font-medium text-foreground">
             {item.name}
           </Text>
+          {item.bank_source && (
+            <View accessible accessibilityLabel="From Up" className="shrink-0">
+              <Landmark size={12} className="text-muted-foreground" />
+            </View>
+          )}
           {item.is_estimate && (
             <Text
               className={cn(

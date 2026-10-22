@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import type { CostItem, CostCategory } from '@homeup/core';
-import { CATEGORY_META, CATEGORY_COLOR, monthlyProjection, formatMoney, recurringByCategory, useBankActuals } from '@homeup/core';
+import { CATEGORY_META, CATEGORY_COLOR, monthForecast, monthlyProjection, monthStartOf, formatMoney, recurringByCategory, useBankActuals, useUpOverview } from '@homeup/core';
 import { ProgressBar } from '@/components/ui/progress-bar';
 import { PulseTile } from '@/components/ui/pulse-tile';
 import { cn } from '@/lib/utils';
@@ -91,7 +91,12 @@ export function CostDashboard({
   // still to come and the usual everyday spend. The regular plan alone would
   // leave out every shop the bank files as a one-off line.
   const live = !!bank && bank.linked.size > 0;
-  const monthlyTotal = live ? buckets[currentIdx].total : planTotal;
+  // With the bank's month in hand the total is where the month ends: every
+  // payment so far, filed under a line or not, plus what is still to come.
+  const { data: upData, month: upMonth, scope: upScope } = useUpOverview();
+  const forecast =
+    live && upData && upMonth === monthStartOf(now) && upScope !== 'mine' ? monthForecast(items, bank, upData.spentCents, now) : null;
+  const monthlyTotal = forecast ? forecast.forecastCents : live ? buckets[currentIdx].total : planTotal;
   const budgetDelta = live ? budgetCents - monthlyTotal : planDelta;
   const hasPrevMonthData = live ? currentIdx > 0 && buckets[currentIdx - 1].total > 0 : planHasPrev;
   const momDelta = live && currentIdx > 0 ? monthlyTotal - buckets[currentIdx - 1].total : planMom;
@@ -158,6 +163,11 @@ export function CostDashboard({
             <span className="font-heading text-base font-semibold text-muted-foreground">this month</span>
           )}
         </div>
+        {forecast && (
+          <p className="text-xs tabular-nums text-muted-foreground">
+            {formatMoney(forecast.spentCents)} paid · {formatMoney(forecast.toComeCents)} to come
+          </p>
+        )}
         {budget ? (
           <>
             {/* H3: the lede's own 3px meter, sized to the lede, not the page. */}

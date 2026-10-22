@@ -26,6 +26,7 @@ import {
   Pencil,
   Trash2,
   CalendarClock,
+  Landmark,
   MoreHorizontal,
 } from 'lucide-react';
 import { AssigneePicker } from '../setup/assignee-picker';
@@ -444,6 +445,11 @@ export function CostCard({
             >
               {item.name}
             </EditableText>
+            {item.bank_source && (
+              <span title="From Up" aria-label="From Up" className="flex-shrink-0 text-muted-foreground">
+                <Landmark className="h-3 w-3" />
+              </span>
+            )}
             {item.is_estimate && (
               <span
                 className={cn(

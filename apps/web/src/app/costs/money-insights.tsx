@@ -66,7 +66,8 @@ export function MoneyInsights({
 
   // The forecast is about this month; the Money view may have stepped back.
   const thisMonth = month === monthStartOf(now);
-  const forecast = thisMonth ? monthForecast(items, bank, data.spentCents, now) : null;
+  // The household's forecast is the Costs total up top; only a personal view needs its own.
+  const forecast = thisMonth && scope === 'mine' ? monthForecast(items, bank, data.spentCents, now) : null;
   const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
   const toCome = thisMonth ? billsDue(items, links, now, monthEnd.getDate() - now.getDate()) : [];
   // A personal view isn't measured against the household's budget.

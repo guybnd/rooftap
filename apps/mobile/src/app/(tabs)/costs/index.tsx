@@ -68,6 +68,8 @@ import {
   isOneOff,
   monthlyAmount,
   monthlyProjection,
+  monthForecast,
+  monthStartOf,
   parseLocalDateOnly,
   setupItems$,
   stepBackByCategory,
@@ -156,7 +158,7 @@ export default function CostsSectionScreen() {
 function CostsScreenBody() {
   const bank = useBankActuals();
   const upConnected = useUpConnected();
-  const { linking: upLinking } = useUpOverview();
+  const { linking: upLinking, data: upData, month: upMonth, scope: upScope } = useUpOverview();
   // With Up connected the month list is the screen; cost lines wait behind a button.
   const monthList = upConnected && upLinking;
   const [linesOpen, setLinesOpen] = React.useState(false);
@@ -450,7 +452,11 @@ function CostsScreenBody() {
   // leave out every shop the bank files as a one-off line.
   const live = !!bank && bank.linked.size > 0;
   const [prevMonthBucket, currentMonthBucket] = monthlyProjection(live ? planItems : momItems, startOfPrevMonth, 2, today, bank);
-  const monthlyTotal = live ? currentMonthBucket.total : planTotal;
+  // With the bank's month in hand the total is where the month ends: every
+  // payment so far, filed under a line or not, plus what is still to come.
+  const forecast =
+    live && upData && upMonth === monthStartOf(today) && upScope !== 'mine' ? monthForecast(planItems, bank, upData.spentCents, today) : null;
+  const monthlyTotal = forecast ? forecast.forecastCents : live ? currentMonthBucket.total : planTotal;
   const budgetCents = budget ? budget * 100 : 0;
   const budgetDelta = budgetCents - monthlyTotal;
   const hasPrevMonthData = prevMonthBucket.total > 0;
@@ -653,6 +659,7 @@ function CostsScreenBody() {
       <HeroLede
         value={formatMoney(monthlyTotal)}
         label={budget != null ? `of ${formatMoney(budgetCents)} planned` : 'this month'}
+        caption={forecast ? `${formatMoney(forecast.spentCents)} paid · ${formatMoney(forecast.toComeCents)} to come` : undefined}
         tone={budget != null && budgetDelta < 0 ? 'danger' : 'neutral'}
       />
 
