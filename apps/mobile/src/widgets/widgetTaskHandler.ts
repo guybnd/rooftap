@@ -55,7 +55,6 @@ function renderFromSnapshot(props: WidgetTaskHandlerProps, snapshot: WidgetToday
       bills: [],
       weather: null,
     },
-    height: props.widgetInfo.height,
   };
   // Hearth v2: an Ember Day and an Ember Night render; Android shows the one matching the phone's dark mode.
   props.renderWidget({

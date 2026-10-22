@@ -8,7 +8,14 @@ Each change people would notice gets a `whats-new/` entry (see `whats-new/README
 
 ## Unreleased
 
-- The Android APK is signed with Rooftap's own key. Uninstall the old app once before you install the next release: Android refuses the update because the key changed. Your household data stays on the server, so you only sign in again.
+## 1.1.1 (2026-10-22)
+
+This release ships a new APK. It is the first one signed with Rooftap's own key, and the first APK since 1.0.0. Everything listed under 1.1.0 is in it too, because 1.1.0 shipped without an APK.
+
+- Uninstall the old Rooftap app once before you install this APK. Android refuses the update because the signing key changed. Your household data is on the server. You sign in again, and settings kept only on the phone (theme, haptics, tab order, widget) go back to their defaults. Later releases install over it as usual.
+- The home screen widget scrolls. Swipe up and down on the Rooftap widget to see everything coming up.
+- Home opens on a fresh install. On a new install, Home no longer shows "This screen didn't load" while your groceries are still syncing.
+- Find a Home Setup item with Scout. Open the menu on a Home Setup item you still need and pick Find with Scout. Scout starts with the item name and your estimate as the budget.
 
 ## 1.1.0 (2026-10-21)
 

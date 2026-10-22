@@ -6,7 +6,7 @@
 // so the widget renders twice (Ember Day and Ember Night) and Android shows
 // the one matching the phone's dark mode, as the app's "Match device" does.
 import * as React from 'react';
-import { FlexWidget, SvgWidget, TextWidget } from 'react-native-android-widget';
+import { FlexWidget, ListWidget, SvgWidget, TextWidget } from 'react-native-android-widget';
 import {
   THEME_TOKENS,
   WIDGET_SNAPSHOT_VERSION,
@@ -362,40 +362,15 @@ function FeedRow(props: { item: WidgetTaskSnapshotItem; today: string; first: bo
   );
 }
 
-// Approximate heights (dp) of the pieces the feed is budgeted against. The
-// feed is plain rows, not a ListWidget: the library draws a ListWidget as a
-// native list positioned from the launcher's reported size, and on launchers
-// that report less than the real size it spilled past the card (fixed natively
-// only in 0.22, an APK change). Rows that don't fit become "N more in the app".
-const ROW_DP = 50;
-const DAY_HEADER_DP = 26;
-const MORE_DP = 24;
-/** No size from the launcher (older snapshot paths): a 4x3 widget's worth. */
-const FALLBACK_FEED_DP = 240;
-
-/** How many feed rows fit in `budgetDp`, counting day headers and the "N more" line. */
-export function widgetFeedFit(items: WidgetTaskSnapshotItem[], today: string, budgetDp: number): number {
-  let used = 0;
-  let fit = 0;
-  let n = 0;
-  for (const [g, group] of widgetFeedGroups(items, today).entries()) {
-    used += DAY_HEADER_DP - (g === 0 ? 8 : 0);
-    for (let i = 0; i < group.items.length; i++) {
-      used += ROW_DP;
-      n += 1;
-      if (used + (n < items.length ? MORE_DP : 0) <= budgetDp) fit = n;
-      else return fit;
-    }
-  }
-  return fit;
-}
-
-function Feed(props: { items: WidgetTaskSnapshotItem[]; today: string; budgetDp: number; palette: Palette }) {
-  const { items, today, budgetDp, palette } = props;
-  const shown = items.slice(0, widgetFeedFit(items, today, budgetDp));
-  const overflow = items.length - shown.length;
+// The feed is a ListWidget: a native list the launcher scrolls, one picture
+// per day header and row. The library places it from the widget's size in
+// dp (0.22 plus our patch in patches/), so it fits launchers that lay the
+// widget out at another density than the app. This needs an APK from
+// runtimeVersion 57.4; older APKs keep the earlier JS, which fitted rows.
+function Feed(props: { items: WidgetTaskSnapshotItem[]; today: string; palette: Palette }) {
+  const { items, today, palette } = props;
   const children: React.ReactElement[] = [];
-  widgetFeedGroups(shown, today).forEach((group, g) => {
+  widgetFeedGroups(items, today).forEach((group, g) => {
     children.push(
       <DayHeader key={`h-${group.key}`} label={group.label} earlier={group.key === 'earlier'} first={g === 0} palette={palette} />,
     );
@@ -412,19 +387,11 @@ function Feed(props: { items: WidgetTaskSnapshotItem[]; today: string; budgetDp:
       );
     });
   });
-  if (overflow > 0) {
-    children.push(
-      <FlexWidget
-        key="more"
-        style={{ width: 'match_parent', paddingTop: 8, paddingHorizontal: 4 }}
-        clickAction="OPEN_URI"
-        clickActionData={{ uri: OPEN_HOME_URI }}
-      >
-        <TextWidget text={`${overflow} more in the app`} style={{ fontSize: 12, color: palette.muted }} />
-      </FlexWidget>,
-    );
-  }
-  return <FlexWidget style={{ flex: 1, flexDirection: 'column', width: 'match_parent', marginTop: 6 }}>{children}</FlexWidget>;
+  return (
+    <FlexWidget style={{ flex: 1, width: 'match_parent', marginTop: 6 }}>
+      <ListWidget style={{ height: 'match_parent', width: 'match_parent' }}>{children}</ListWidget>
+    </FlexWidget>
+  );
 }
 
 function SpaceChip(props: {
@@ -471,8 +438,6 @@ export interface TasksWidgetProps {
   groceries: WidgetGrocerySnapshotItem[];
   summary: WidgetSummary;
   scheme?: ColorScheme;
-  /** The widget's height in dp as the launcher reports it (WidgetInfo.height); sizes the feed. */
-  height?: number;
 }
 
 export function TasksWidget(props: TasksWidgetProps) {
@@ -486,9 +451,6 @@ export function TasksWidget(props: TasksWidgetProps) {
   const showLede = sections.taskCounts || !!summary.weather;
   const showSpaces = sections.toBuyCount || !!budget;
   const undo = sections.tasks ? widgetUndoTarget(summary, items) : null;
-  // The feed gets what's left of the widget after the padding, lede, heading, Undo line and Spaces row.
-  const chromeDp = 26 + (showLede ? 62 : 0) + 42 + 6 + (undo ? 38 : 0) + (showSpaces ? 42 : 0);
-  const feedBudgetDp = props.height ? props.height - chromeDp : FALLBACK_FEED_DP;
 
   return (
     <FlexWidget
@@ -518,7 +480,7 @@ export function TasksWidget(props: TasksWidgetProps) {
             <TextWidget text="Nothing on the agenda." style={{ fontSize: 13, color: palette.muted }} />
           </FlexWidget>
         ) : (
-          <Feed items={items} today={today} budgetDp={feedBudgetDp} palette={palette} />
+          <Feed items={items} today={today} palette={palette} />
         ))}
 
       {sections.nothingToShow && (

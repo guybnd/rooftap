@@ -23,7 +23,7 @@ vi.mock('react-native-android-widget', async () => ({
 }));
 
 import { buildWidgetTree } from '../../../../node_modules/react-native-android-widget/src/api/build-widget-tree';
-import { tasksWidgetRepresentation, widgetFeedFit } from './TasksWidget';
+import { tasksWidgetRepresentation } from './TasksWidget';
 
 const today = new Date().toISOString().slice(0, 10);
 const row = (over: Partial<WidgetTaskSnapshotItem>): WidgetTaskSnapshotItem =>
@@ -60,7 +60,7 @@ const cases: [string, Parameters<typeof tasksWidgetRepresentation>[0]][] = [
   ['a full feed', { items: [row({}), row({ id: 'event-1', type: 'event', section: 'calendar', due_time: '19:00', toggleable: false, openPath: '/calendar' })], groceries: [], summary }],
   ['an empty feed with no weather or budget', { items: [], groceries: [], summary: { ...summary, weather: null, budget: null } }],
   ['everything done', { items: [row({ done: true })], groceries: [], summary }],
-  ['a short widget', { items: [row({}), row({ id: 'task-2' }), row({ id: 'task-3' })], groceries: [], summary, height: 220 }],
+  ['a long feed', { items: Array.from({ length: 12 }, (_, i) => row({ id: `task-${i}` })), groceries: [], summary }],
   ['an Undo line after a tick from the widget', { items: [row({ done: true })], groceries: [], summary: { ...summary, lastTick: { id: 'task-1', title: 'Take out the bins', done: true, at: new Date().toISOString() } } }],
   ['tasks and groceries off', { items: [], groceries: [], summary: { ...summary, tasksOn: false, groceriesOn: false, costsOn: false, weather: null } }],
 ];
@@ -95,20 +95,5 @@ describe('the Undo line', () => {
   });
   it('is gone once the undo window has passed', () => {
     expect(tree(ticked('2000-01-01T00:00:00.000Z'))).not.toContain('Finished Take out the bins');
-  });
-});
-
-describe('widgetFeedFit', () => {
-  const items = Array.from({ length: 6 }, (_, i) => row({ id: `task-${i}` }));
-  it('fits every row when there is room', () => {
-    expect(widgetFeedFit(items, today, 1000)).toBe(6);
-  });
-  it('leaves room for the "more" line when rows are cut', () => {
-    // 18 (first day header) + 3 rows of 50 + the 24dp "more" line = 192.
-    expect(widgetFeedFit(items, today, 192)).toBe(3);
-    expect(widgetFeedFit(items, today, 191)).toBe(2);
-  });
-  it('shows nothing when not even one row fits', () => {
-    expect(widgetFeedFit(items, today, 40)).toBe(0);
   });
 });

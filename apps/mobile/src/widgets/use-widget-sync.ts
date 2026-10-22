@@ -161,7 +161,7 @@ export function useWidgetSync(): void {
       writeWidgetSnapshot(items, groceryItems, summary);
       void requestWidgetUpdate({
         widgetName: 'TodaysTasks',
-        renderWidget: (info) => tasksWidgetRepresentation({ items, groceries: groceryItems, summary, height: info.height }),
+        renderWidget: () => tasksWidgetRepresentation({ items, groceries: groceryItems, summary }),
       });
     }, SYNC_DEBOUNCE_MS);
 

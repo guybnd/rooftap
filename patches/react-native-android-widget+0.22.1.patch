@@ -1,5 +1,5 @@
 diff --git a/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidget.java b/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidget.java
-index a7079f9..1c0c02d 100644
+index 5650d1e..db0fccd 100644
 --- a/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidget.java
 +++ b/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidget.java
 @@ -170,15 +170,28 @@ public class RNWidget {
@@ -39,8 +39,103 @@ index a7079f9..1c0c02d 100644
  
          // The clickable overlay draws its own ripple, so match it to the view's radius when supported
          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && clickableView.getBorderRadius() > 0f) {
+@@ -248,13 +261,27 @@ public class RNWidget {
+ 
+         RemoteViews collectionRemoteView = new RemoteViews(appContext.getPackageName(), R.layout.rn_widget_list);
+ 
+-        collectionRemoteView.setViewPadding(
+-            R.id.rn_widget_list_positioner,
+-            offsetViewBounds.left,
+-            offsetViewBounds.top,
+-            RNWidgetUtil.dpToPx(appContext, RNWidgetUtil.getWidgetWidth(appContext, widgetId)) - offsetViewBounds.right,
+-            RNWidgetUtil.dpToPx(appContext, RNWidgetUtil.getWidgetHeight(appContext, widgetId)) - offsetViewBounds.bottom
+-        );
++        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
++            // HomeUp patch: place the list in dp, resolved by the launcher, like the tap areas.
++            // Pixel padding put it too low and too short when the launcher lays the widget out
++            // at another density than this app (the phone's Display size setting).
++            float density = appContext.getResources().getDisplayMetrics().density;
++            int widthPx = RNWidgetUtil.dpToPx(appContext, RNWidgetUtil.getWidgetWidth(appContext, widgetId));
++            int heightPx = RNWidgetUtil.dpToPx(appContext, RNWidgetUtil.getWidgetHeight(appContext, widgetId));
++            int wrapper = listWrappers[collectionId];
++            collectionRemoteView.setViewLayoutMargin(wrapper, RemoteViews.MARGIN_LEFT, offsetViewBounds.left / density, TypedValue.COMPLEX_UNIT_DIP);
++            collectionRemoteView.setViewLayoutMargin(wrapper, RemoteViews.MARGIN_TOP, offsetViewBounds.top / density, TypedValue.COMPLEX_UNIT_DIP);
++            collectionRemoteView.setViewLayoutMargin(wrapper, RemoteViews.MARGIN_RIGHT, (widthPx - offsetViewBounds.right) / density, TypedValue.COMPLEX_UNIT_DIP);
++            collectionRemoteView.setViewLayoutMargin(wrapper, RemoteViews.MARGIN_BOTTOM, (heightPx - offsetViewBounds.bottom) / density, TypedValue.COMPLEX_UNIT_DIP);
++        } else {
++            collectionRemoteView.setViewPadding(
++                R.id.rn_widget_list_positioner,
++                offsetViewBounds.left,
++                offsetViewBounds.top,
++                RNWidgetUtil.dpToPx(appContext, RNWidgetUtil.getWidgetWidth(appContext, widgetId)) - offsetViewBounds.right,
++                RNWidgetUtil.dpToPx(appContext, RNWidgetUtil.getWidgetHeight(appContext, widgetId)) - offsetViewBounds.bottom
++            );
++        }
+ 
+         for (int i = 0; i < listWrappers.length; i++) {
+             if (i != collectionId) {
+@@ -289,6 +316,7 @@ public class RNWidget {
+             bundle.putString("clickAction", collectionViewItem.getClickAction());
+             bundle.putBundle("clickActionData", Arguments.toBundle(collectionViewItem.getClickActionData()));
+             bundle.putInt("imageWidth", collectionViewItem.getBitmap().getWidth());
++            bundle.putInt("imageHeight", collectionViewItem.getBitmap().getHeight());
+             bundle.putString("lightImageName", RNWidgetCollectionService.getImageName(widgetId, collectionId, i, "light"));
+             bundle.putString("darkImageName", RNWidgetCollectionService.getImageName(widgetId, collectionId, i, "dark"));
+             
+diff --git a/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidgetCollectionService.java b/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidgetCollectionService.java
+index f818d97..5b671b5 100644
+--- a/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidgetCollectionService.java
++++ b/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidgetCollectionService.java
+@@ -78,6 +78,14 @@ class ListRemoteViewsFactory implements RemoteViewsService.RemoteViewsFactory {
+         Uri darkImageUri = RNWidgetImageProvider.getImageUri(mContext, bundle.getString("darkImageName"));
+         listItemView.setImageViewUri(R.id.rn_widget_list_item_dark, darkImageUri);
+ 
++        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
++            // HomeUp patch: give the row its drawn height in dp, so a launcher at another
++            // density than this app neither crops it nor leaves a gap under it.
++            float rowDp = bundle.getInt("imageHeight") / mContext.getResources().getDisplayMetrics().density;
++            listItemView.setViewLayoutHeight(R.id.rn_widget_list_item_light, rowDp, TypedValue.COMPLEX_UNIT_DIP);
++            listItemView.setViewLayoutHeight(R.id.rn_widget_list_item_dark, rowDp, TypedValue.COMPLEX_UNIT_DIP);
++        }
++
+         // Set item accessibility label on ImageViews if available
+         if (bundle.getString("itemAccessibilityLabel", null) != null) {
+             String itemAccessibilityLabel = bundle.getString("itemAccessibilityLabel");
+@@ -107,15 +115,24 @@ class ListRemoteViewsFactory implements RemoteViewsService.RemoteViewsFactory {
+     private void addClickableArea(RemoteViews widgetView, Bundle clickableArea, int imageWidth) {
+         RemoteViews clickableRemoteView = new RemoteViews(mContext.getPackageName(), R.layout.rn_widget_clickable);
+ 
+-        clickableRemoteView.setViewPadding(
+-            R.id.rn_widget_clickable_positioner,
+-            clickableArea.getInt("left"),
+-            clickableArea.getInt("top"),
+-            imageWidth - clickableArea.getInt("right"),
+-            0
+-        );
++        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
++            // HomeUp patch: tap areas in dp, as in RNWidget (the tick circle on a list row).
++            float density = mContext.getResources().getDisplayMetrics().density;
++            clickableRemoteView.setViewLayoutMargin(R.id.rn_widget_clickable_area, RemoteViews.MARGIN_LEFT, clickableArea.getInt("left") / density, TypedValue.COMPLEX_UNIT_DIP);
++            clickableRemoteView.setViewLayoutMargin(R.id.rn_widget_clickable_area, RemoteViews.MARGIN_TOP, clickableArea.getInt("top") / density, TypedValue.COMPLEX_UNIT_DIP);
++            clickableRemoteView.setViewLayoutMargin(R.id.rn_widget_clickable_area, RemoteViews.MARGIN_RIGHT, (imageWidth - clickableArea.getInt("right")) / density, TypedValue.COMPLEX_UNIT_DIP);
++            clickableRemoteView.setViewLayoutHeight(R.id.rn_widget_clickable_area, clickableArea.getInt("height") / density, TypedValue.COMPLEX_UNIT_DIP);
++        } else {
++            clickableRemoteView.setViewPadding(
++                R.id.rn_widget_clickable_positioner,
++                clickableArea.getInt("left"),
++                clickableArea.getInt("top"),
++                imageWidth - clickableArea.getInt("right"),
++                0
++            );
+ 
+-        clickableRemoteView.setInt(R.id.rn_widget_clickable_area, "setMinimumHeight", clickableArea.getInt("height"));
++            clickableRemoteView.setInt(R.id.rn_widget_clickable_area, "setMinimumHeight", clickableArea.getInt("height"));
++        }
+ 
+         // The clickable overlay draws its own ripple, so match it to the view's radius when supported
+         float borderRadius = clickableArea.getFloat("borderRadius", 0f);
 diff --git a/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidgetUtil.java b/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidgetUtil.java
-index a057c09..8e88ef9 100644
+index a057c09..667ffca 100644
 --- a/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidgetUtil.java
 +++ b/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidgetUtil.java
 @@ -6,7 +6,11 @@ import android.appwidget.AppWidgetManager;
