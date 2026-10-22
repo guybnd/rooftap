@@ -11,7 +11,7 @@
 // push/navigate to a section from one of those would stack a second copy of
 // the whole tabs group, so `openRoute` pops back to the existing one instead.
 import * as React from 'react';
-import { usePathname, useRouter, type Href } from 'expo-router';
+import { useNavigationContainerRef, useRouter, type Href } from 'expo-router';
 import type { Section } from '@homeup/core';
 
 // Mirrors the route files under src/app/(tabs). Guarded by
@@ -70,16 +70,32 @@ export function routeMethod(pathname: string, href: string): 'navigate' | 'dismi
 }
 
 /**
+ * The path of a focused route's screen name: 'home/index' -> '/home',
+ * 'checklists/[id]' -> '/checklists/[id]'. Enough for routeMethod, which
+ * only asks whether it is a section root.
+ */
+export function routeNamePath(name: string | undefined): string {
+  return name == null ? '' : `/${name.replace(/(^|\/)index$/, '')}`;
+}
+
+/**
  * Opens a route the way the tab bar does: section roots reuse their live
  * screen, everything else is pushed.
+ *
+ * Reads where it is at the call, from the navigation container, not from
+ * usePathname(): that hook re-rendered every caller (Home, each Setup row,
+ * the tab bar, the chat pop-up) on every tab switch, mid-slide, and a
+ * frozen screen replayed it when it came back.
  */
 export function useOpenRoute(): (href: string) => void {
   const router = useRouter();
-  const pathname = usePathname();
+  const navigation = useNavigationContainerRef();
   return React.useCallback(
     (href: string) => {
-      router[routeMethod(pathname, href)](href as Href);
+      const focused = navigation.isReady() ? (navigation.getCurrentRoute() as { name: string } | undefined) : undefined;
+      const here = routeNamePath(focused?.name);
+      router[routeMethod(here, href)](href as Href);
     },
-    [router, pathname]
+    [router, navigation]
   );
 }

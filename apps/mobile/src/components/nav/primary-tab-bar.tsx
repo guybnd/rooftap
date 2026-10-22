@@ -52,7 +52,7 @@ import { useOverdueTaskCount } from '@homeup/core/src/hooks/use-overdue-task-cou
 import { useCapture } from '@/components/capture/capture-context';
 import { useDataCache } from '@/lib/data-cache';
 import { nativeStoreEnvironment } from '@/lib/legend/environment';
-import { perfMark } from '@/lib/perf-log';
+import { perfMark, perfWatchJs } from '@/lib/perf-log';
 import { sectionIcons } from '@/lib/section-icons';
 import { useOpenRoute } from '@/lib/tab-routes';
 import { CaptureFab } from './capture-fab';
@@ -186,6 +186,7 @@ export function PrimaryTabBar() {
     // navigation (remount + transition) — no-op, matching native tab bars.
     if (section.basePath === pathname) return;
     perfMark('nav:press', section.basePath);
+    perfWatchJs(section.basePath);
     // HOUP-240 stacked a new screen instance per tab tap; `navigate` didn't
     // fix that (it only reuses the route already on top). Section roots are
     // now a Tabs group that keeps each one mounted; openRoute switches tabs

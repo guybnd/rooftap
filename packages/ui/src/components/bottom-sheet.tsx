@@ -150,7 +150,27 @@ const DISMISS_VELOCITY = 800;
 // height alone is always a safe "fully off-screen" position.
 const OFFSCREEN_FALLBACK = 600;
 
-export function BottomSheet({
+/**
+ * A closed sheet renders nothing: its body (gestures, animated styles,
+ * keyboard tracking) mounts when it opens and leaves once its close
+ * animation ends. Screens keep many closed sheets mounted, and each one
+ * ran all of that on every render of its owner, including on every tab
+ * switch for the tab bar's own two.
+ */
+export function BottomSheet(props: BottomSheetProps) {
+  const [present, setPresent] = React.useState(props.open);
+  // A sheet that starts open is simply there; one opened later slides in.
+  const startedOpen = React.useRef(props.open);
+  if (props.open && !present) setPresent(true);
+  const onHidden = React.useCallback(() => {
+    startedOpen.current = false;
+    setPresent(false);
+  }, []);
+  if (!present) return null;
+  return <SheetBody {...props} animateIn={!startedOpen.current} onHidden={onHidden} />;
+}
+
+function SheetBody({
   open,
   onOpenChange,
   children,
@@ -161,8 +181,10 @@ export function BottomSheet({
   handleIndicatorClassName,
   overlayClassName,
   keyboardAware = true,
+  animateIn,
+  onHidden,
   ...props
-}: BottomSheetProps) {
+}: BottomSheetProps & { animateIn: boolean; onHidden: () => void }) {
   const insets = useSafeAreaInsets();
   const frame = useSafeAreaFrame();
   const material = useThemeMaterial();
@@ -178,8 +200,8 @@ export function BottomSheet({
   // hardcoded 88% fraction that ignores callers with a smaller resting cap
   // (e.g. searchable-picker's `max-h-[75%]`).
   const restingHeight = useSharedValue(0);
-  const translateY = useSharedValue(open ? 0 : offscreenFallback);
-  const scrimOpacity = useSharedValue(open ? 1 : 0);
+  const translateY = useSharedValue(open && !animateIn ? 0 : offscreenFallback);
+  const scrimOpacity = useSharedValue(open && !animateIn ? 1 : 0);
   const crossedDismiss = useSharedValue(false);
   const scrollOffset = useSharedValue(0);
   const nativeGesture = React.useMemo(() => Gesture.Native(), []);
@@ -193,7 +215,10 @@ export function BottomSheet({
     [scrollOffset, nativeGesture]
   );
   const close = React.useCallback(() => onOpenChange(false), [onOpenChange]);
-  const hide = React.useCallback(() => setVisible(false), []);
+  const hide = React.useCallback(() => {
+    setVisible(false);
+    onHidden();
+  }, [onHidden]);
   const fireTick = React.useCallback(() => tick(), []);
 
   React.useEffect(() => {

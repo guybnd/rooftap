@@ -2,10 +2,10 @@ import { readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('expo-router', () => ({ usePathname: vi.fn(), useRouter: vi.fn() }));
+vi.mock('expo-router', () => ({ useNavigationContainerRef: vi.fn(), useRouter: vi.fn() }));
 
 import { getEnabledSections, orderSections } from '@homeup/core';
-import { TAB_ROUTES, isTabRoute, routeMethod, tabScreenOrder } from './tab-routes';
+import { TAB_ROUTES, isTabRoute, routeMethod, routeNamePath, tabScreenOrder } from './tab-routes';
 
 const tabsDir = fileURLToPath(new URL('../app/(tabs)', import.meta.url));
 
@@ -44,6 +44,22 @@ describe('routeMethod', () => {
     expect(routeMethod('/homesearch', '/apartment/new')).toBe('push');
     expect(routeMethod('/groceries', '/groceries/shelf-life')).toBe('push');
     expect(routeMethod('/home', '/settings')).toBe('push');
+  });
+});
+
+describe('routeNamePath', () => {
+  it('turns a focused screen name into the path routeMethod reads', () => {
+    expect(routeNamePath('home/index')).toBe('/home');
+    expect(routeNamePath('checklist')).toBe('/checklist');
+    expect(routeNamePath('checklists/[id]')).toBe('/checklists/[id]');
+    expect(routeNamePath('settings/index')).toBe('/settings');
+    expect(routeNamePath('index')).toBe('/');
+    expect(routeNamePath(undefined)).toBe('');
+  });
+
+  it('agrees with the pathname on where a tab switch happens', () => {
+    expect(routeMethod(routeNamePath('home/index'), '/tasks')).toBe('navigate');
+    expect(routeMethod(routeNamePath('checklists/[id]'), '/checklists')).toBe('dismissTo');
   });
 });
 
