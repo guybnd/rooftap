@@ -8,13 +8,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Plus } from 'lucide-react';
+import { Archive, ChevronRight, Plus } from 'lucide-react';
 import {
   AssistantApiError,
   conversationTitle,
   formatCents,
   groupConversations,
   minutesLeft,
+  onConversationsChanged,
   openAssistantPopup,
   sectionHue,
   setAssistantPending,
@@ -45,6 +46,7 @@ export default function AssistantPage() {
   const { group, isOnline } = useDataCache();
   const [status, setStatus] = useState<AssistantStatus | null>(null);
   const [conversations, setConversations] = useState<AssistantConversation[] | null>(null);
+  const [archived, setArchived] = useState(0);
   const [blocked, setBlocked] = useState<AssistantErrorCode | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,8 +56,9 @@ export default function AssistantPage() {
       setStatus(s);
       if (s.access === 'none') return setBlocked('assistant_requires_plus');
       if (!s.ready) setBlocked('assistant_not_configured');
-      const list = await assistantApi.conversations();
+      const { conversations: list, archived: archivedCount } = await assistantApi.conversationList();
       setConversations(list);
+      setArchived(archivedCount);
       setAssistantUnread(list.filter((c) => c.unread).length);
       setAssistantPending(s.pending);
       setError(null);
@@ -68,6 +71,9 @@ export default function AssistantPage() {
   useEffect(() => {
     if (group?.id && isOnline) void load();
   }, [group?.id, isOnline, load]);
+
+  // An archive, delete or Undo anywhere (a row, the pop-up, a thread) reloads the list.
+  useEffect(() => onConversationsChanged(() => void load()), [load]);
 
   const groups = useMemo(() => groupConversations(conversations ?? []), [conversations]);
 
@@ -162,6 +168,27 @@ export default function AssistantPage() {
             </div>
           )}
           </div>
+
+          {archived > 0 && (
+            <ListGroup className={cn(wide && 'max-w-3xl')}>
+              <ListItem asChild>
+                <Link href="/assistant/archived">
+                  <ListItemLeading>
+                    <span className="flex size-9 items-center justify-center rounded-[11px] bg-muted">
+                      <Archive className="size-[18px]" />
+                    </span>
+                  </ListItemLeading>
+                  <ListItemContent>
+                    <ListItemTitle>Archived</ListItemTitle>
+                    <ListItemMeta>{archived === 1 ? '1 chat' : `${archived} chats`}</ListItemMeta>
+                  </ListItemContent>
+                  <ListItemTrailing>
+                    <ChevronRight className="size-4 text-muted-foreground" />
+                  </ListItemTrailing>
+                </Link>
+              </ListItem>
+            </ListGroup>
+          )}
         </>
       )}
     </div>

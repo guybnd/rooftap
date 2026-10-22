@@ -21,6 +21,8 @@ import { ChevronDown, Maximize2, MessagesSquare, SquarePen, Trash2 } from 'lucid
 import {
   MOTION_DURATIONS_MS,
   cachedConversations,
+  deleteConversation,
+  onConversationsChanged,
   conversationTitle,
   groupConversations,
   onAssistantPopup,
@@ -34,6 +36,7 @@ import { Button, ListGroup, Text, toast, useKeyboardOffset, useThemeMaterial, us
 import { useDataCache } from '@/lib/data-cache';
 import { useOpenRoute } from '@/lib/tab-routes';
 import { assistantApi } from './assistant-api';
+import { archiveToast } from '@/lib/archive-toast';
 import { ConversationRow } from './conversation-row';
 import { ThreadFooter, ThreadMessages } from './thread-body';
 
@@ -135,6 +138,8 @@ function PopupThread({
     toast: popupToast,
   });
   const { conversation, loadError, send, reload } = thread;
+  // A delete can be taken back on servers that have archiving.
+  const canUndo = useModules().server('assistant.archive');
 
   React.useEffect(() => onConversation(conversation), [conversation, onConversation]);
 
@@ -195,7 +200,7 @@ function PopupThread({
           </Pressable>
           {!showChats && conversation && conversation.kind !== 'household' && (
             <Pressable
-              onPress={() => void thread.remove().then((gone) => gone && onFresh())}
+              onPress={() => void (canUndo ? deleteConversation(assistantApi, conversation, archiveToast) : thread.remove()).then((gone) => gone && onFresh())}
               accessibilityRole="button"
               accessibilityLabel="Delete this conversation"
               className="h-11 w-10 items-center justify-center rounded-lg"
@@ -237,7 +242,7 @@ const EARLIER_SHOWN = 6;
 function PopupChats({ currentId, onPick, onAll }: { currentId: string | null; onPick: (id: string) => void; onAll: () => void }) {
   const [list, setList] = React.useState(() => cachedConversations());
   const [error, setError] = React.useState<string | null>(null);
-  React.useEffect(() => {
+  const reload = React.useCallback(() => {
     assistantApi
       .conversations()
       .then((rows) => {
@@ -246,6 +251,9 @@ function PopupChats({ currentId, onPick, onAll }: { currentId: string | null; on
       })
       .catch((err) => setError(err instanceof Error ? err.message : 'Could not load your chats.'));
   }, []);
+  React.useEffect(reload, [reload]);
+  // A swipe in the list (archive, delete, Undo) reloads it.
+  React.useEffect(() => onConversationsChanged(reload), [reload]);
   const groups = groupConversations(list);
   const sections = [
     { label: 'Chats', rows: [...(groups.household ? [groups.household] : []), ...groups.chats] },

@@ -122,7 +122,7 @@ export function clearThreadCache(): void {
 export function cachedConversations(): AssistantConversation[] {
   hydrate();
   const seen = new Map<string, AssistantConversation>();
-  for (const entry of threadCache.values()) seen.set(entry.conversation.id, entry.conversation);
+  for (const entry of threadCache.values()) if (!entry.conversation.archived) seen.set(entry.conversation.id, entry.conversation);
   return [...seen.values()].sort((a, b) => b.last_active_at.localeCompare(a.last_active_at));
 }
 

@@ -46,6 +46,8 @@ export interface ShopperSearch {
   finished_at: string | null;
   /** The first run of the thread, for a run started by refining another (null or absent on a first run). */
   thread_id?: string | null;
+  /** When the household archived it (null or absent when not, or on servers before archiving). */
+  archived_at?: string | null;
   deleted: boolean;
 }
 

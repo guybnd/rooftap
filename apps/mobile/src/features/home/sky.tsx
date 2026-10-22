@@ -14,7 +14,7 @@ import * as SecureStore from 'expo-secure-store';
 import { ChevronDown, CloudOff, MapPin } from 'lucide-react-native';
 import Svg, { Defs, Line, LinearGradient, Path, Stop } from 'react-native-svg';
 import { Text, haptics, useThemeMaterial, cn } from '@homeup/ui';
-import { hueSwatch, SKY_RIBBON_OPEN_STORAGE_KEY, describeDayRibbon, type RibbonHour, type WeatherData } from '@homeup/core';
+import { hueSchemeTone, hueSwatch, SKY_RIBBON_OPEN_STORAGE_KEY, describeDayRibbon, type RibbonHour, type WeatherData } from '@homeup/core';
 import { iconAndLabelForCode } from './weather-icons';
 
 /** Whether the day ribbon is open on this device. Starts collapsed. */
@@ -136,6 +136,7 @@ function smoothPath(points: [number, number][]): string {
 export function DayRibbon({ hours }: { hours: RibbonHour[] }) {
   const material = useThemeMaterial();
   const hue = hueSwatch('sky', material.scheme);
+  const dark = hueSchemeTone(material.scheme) === 'dark';
   const [width, setWidth] = React.useState(0);
   const [picked, setPicked] = React.useState<number | null>(null);
   const col = hours.length > 0 ? width / hours.length : 0;
@@ -183,7 +184,7 @@ export function DayRibbon({ hours }: { hours: RibbonHour[] }) {
                     <Stop offset="1" stopColor={hue.glow} stopOpacity={0.08} />
                   </LinearGradient>
                 </Defs>
-                <Line x1={0} x2={width} y1={CHART_H - 0.5} y2={CHART_H - 0.5} stroke={material.scheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'} strokeWidth={1} />
+                <Line x1={0} x2={width} y1={CHART_H - 0.5} y2={CHART_H - 0.5} stroke={dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'} strokeWidth={1} />
                 {anyRain && (
                   <>
                     <Path d={rainArea} fill="url(#ribbon-rain)" />
@@ -194,7 +195,7 @@ export function DayRibbon({ hours }: { hours: RibbonHour[] }) {
                   <Path
                     d={smoothPath(tempPoints)}
                     fill="none"
-                    stroke={material.scheme === 'dark' ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.55)'}
+                    stroke={dark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.55)'}
                     strokeWidth={1.5}
                     strokeLinecap="round"
                   />

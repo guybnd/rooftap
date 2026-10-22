@@ -36,6 +36,8 @@ describe('theme preference', () => {
     expect(isLightTheme('ember-night')).toBe(false);
     expect(isLightTheme('axis-mundi-night')).toBe(false);
     expect(isLightTheme('e-ink')).toBe(true);
+    expect(isLightTheme('sorbet-day')).toBe(true);
+    expect(isLightTheme('sorbet-night')).toBe(false);
   });
 
   it('keeps motion still only under the e-paper theme', () => {

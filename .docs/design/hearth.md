@@ -153,6 +153,7 @@ Tokens (CSS variables on web, `MOTION_DURATIONS_MS`/`MOTION_EASE` in `packages/c
 **Choreography:**
 - **Complete (swipe right):** follow 1:1; at the 72px trigger the check pops + `tick()`; release snaps back at base; row settles to done state (55% + strikethrough) + `success()`; after the beat the row slot collapses at settle and the list breathes up.
 - **Snooze (swipe left):** amber reveal; after duration pick the row slides out left and fades at 240ms ease-in; siblings close the gap. `tick()` at threshold only (postponement is not a celebration).
+- **Archive and delete (chats and Scout searches, Guy 2026-10-22):** on an Assistant chat row or a Scout search row, swipe right archives (neutral reveal, an archived row moves back) and swipe left deletes (destructive reveal, `remove()`). Both leave a toast with Undo instead of a confirm. On web the same verbs sit in the row menu (§13.7) and both apps put them in the thread's header. Archived items wait under an "Archived" row at the end of their list. The Household thread never archives or deletes.
 - **Slide to finish (v2, Now card):** the thumb follows the finger 1:1 and the track fills behind it; the label fades as the thumb travels. The thumb zips as it travels and crossing 82% of the travel (`SLIDE_FINISH_AT`) arms it with the zipper's firmest click (§9 Zipper). Releasing armed finishes: the thumb lands at the end, shows a check, `pop()`. Releasing short returns the thumb at base. As it lands the check pops (to ~1.16 and back, fast then base) and a small coral burst leaves the thumb (a thin ring that swells and fades, eight sparks that travel ~26px out and fade, over slow). After ~600ms the card leaves (exit, ease-in, fade and 16px drift left), the item is marked done, and the next queue item arrives in its place (slow, swift-out, fade up from a 16px drift). Reduced motion: no pop, burst, leave or arrive; the check shows for the same beat and the next card swaps in.
 - **Page turn (Now card):** the drag follows 1:1 with resistance past the ends; a release past ~22% or a flick turns it, the rest animates at base; chevrons glide at base; no haptic (paging is travel).
 - **Lede meter fill:** a newly filled segment sweeps in from its left edge at slow (scaleX, swift-out); an emptied one retreats at fast; mounting never animates.
@@ -216,13 +217,15 @@ A Moment lands with `celebrate()` as it appears, after the `success()` the finis
 
 Hearth is composition; it must survive every theme untouched. Themes own hue, radius, texture, shadow. Hearth owns hierarchy, meter scale, spacing rhythm, accent discipline.
 
-**v2 roster: four themes in two pairs, plus E-Ink.**
+**v2 roster: eight themes in four pairs, plus E-Ink.**
 
 | Pair | Ids | Character |
 |---|---|---|
 | **Ember** (default) | `ember-day`, `ember-night` | Coral `--primary`, warm paper (day) and warm ink (night) grounds, a rounder radius (1.125rem), the section glow on. |
 | **Axis Mundi** | `axis-mundi-day`, `axis-mundi-night` | Gilt accent split, masonry surfaces, Cinzel capitals, the meridian (§10.1). No section glow. |
 | **E-Ink** | `e-ink` | For e-paper screens (§10.2). Neutral greys, `--primary` is ink, a 0.75rem radius. Flat and still. |
+| **Sorbet** | `sorbet-day`, `sorbet-night` | The playful pastel pair (§10.3). Mango `--primary` with dark text, gummy section hues, a rainbow aura, a 1.75rem radius, Fredoka on the Hero. |
+| **Lavender** | `lavender-day`, `lavender-night` | The dreamy pastel pair (§10.3). Violet `--primary`, lilac and plum grounds, an opal aura, a 1.5rem radius, Fraunces on the Hero. |
 
 **The setting is a preference, not a theme** (`packages/core/src/theme-preference.ts`). The default preference `system` ("Match device") follows the phone or browser's light/dark setting and resolves to Ember Day or Ember Night; picking any of the four themes pins it. Both platforms resolve through `resolveThemePreference`, so web and native never disagree. The preference is stored under `homeup-theme-pref`, a new key, so everyone starts on Match device and Axis stays one tap away in Appearance settings.
 
@@ -243,6 +246,15 @@ One light theme for e-paper phones, tablets and readers. E-paper redraws slowly 
 - **Still.** Every motion token is 0ms. Tab glide, the page shift, the Now card burst and the moment's zoom are off, as under the device's reduced-motion setting. Native: `ThemeProvider` mounts Reanimated's `ReducedMotionConfig` and components branch on `useStillMotion()`. Web: the `--motion-*` tokens collapse, animations and transitions are cut, and `runNavTransition` skips the View Transition.
 - **Grey identity.** Every section tile wears one grey (`INK_HUE_SWATCH`, hue scheme `ink`). Grocery art draws in greys. Cost categories take a grey ramp, and the stacked chart adds a pattern per category.
 - **Status by words.** The status hues are greys, so a status still needs its word ("2 overdue"), as H2 already asks.
+
+### 10.3 Sorbet and Lavender
+
+Two pastel pairs, picked by Guy on 2026-10-22 from the pastel theme proposals. They change colour, radius, the glow and one face. Layout and every H rule stay.
+
+- **Own hue sets.** Each pair wears its own swatches for the thirteen section hues (`HUE_SETS` in core `section-hues.ts`, hue scheme = the theme id). Sorbet pushes them to gummy chroma; Lavender softens them and moves Home from coral to orchid. `hueSchemeTone()` gives the ground (light or dark) wherever code needs it.
+- **Aura.** A fixed three-layer wash (`GLOW_AURA`) sits under the section glow and is the same on every section: pink, aqua and lemon for Sorbet, lilac, ice blue and pink for Lavender. It is still the surface's one decorative element. The glow runs louder here (`SECTION_GLOW_OPACITY`).
+- **Hero face (T1 deviation, signed off with the pick).** Only the Hero steps change face: Fredoka 700 for Sorbet, Fraunces 700 for Lavender. Web: `[data-theme^=...] .text-hero`. Native: the per-theme `--font-hero` var (`theme-vars.ts`), read by the `.text-hero*` utilities in the Tailwind preset. Display, Title and Body stay Bricolage and Geist.
+- **Sorbet's accent.** Mango is light, so `--primary-foreground` is dark ink. As text (link verbs) it is softer than coral; keep link verbs short and next to what they act on.
 
 ## 11. Layout and component conventions
 

@@ -10,8 +10,9 @@ import { useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
-import { ArrowLeft, Pin, PinOff, Trash2 } from 'lucide-react';
-import { conversationTitle, useAssistantThread } from '@homeup/core';
+import { Archive, ArchiveRestore, ArrowLeft, Pin, PinOff, Trash2 } from 'lucide-react';
+import { archiveConversation, conversationTitle, deleteConversation, unarchiveConversation, useAssistantThread, useModules } from '@homeup/core';
+import { archiveToast } from '@/lib/archive-toast';
 import { useDataCache } from '@/lib/data-cache';
 import { assistantApi } from '@/lib/assistant-client';
 import { navLinkClickHandler } from '@/lib/view-transitions';
@@ -72,6 +73,8 @@ export default function AssistantThreadPage() {
 
   const title = conversation ? conversationTitle(conversation) : kind === 'household' ? 'Household' : kind === 'chat' ? 'New chat' : isNew ? 'Quick ask' : '';
   const own = conversation && conversation.kind !== 'household';
+  const canArchive = useModules().server('assistant.archive');
+  const leave = (gone: boolean) => gone && router.replace(conversation?.archived ? '/assistant/archived' : '/assistant');
 
   return (
     <div className="mx-auto flex min-h-[calc(100dvh-4rem)] max-w-3xl flex-col p-4 pb-24 md:p-6">
@@ -95,9 +98,23 @@ export default function AssistantThreadPage() {
             >
               {conversation.pinned ? <PinOff className="h-4.5 w-4.5" /> : <Pin className="h-4.5 w-4.5" />}
             </button>
+            {canArchive && (
+              <button
+                type="button"
+                onClick={() =>
+                  void (conversation.archived
+                    ? unarchiveConversation(assistantApi, conversation, archiveToast).then(() => thread.reload({ quiet: true }))
+                    : archiveConversation(assistantApi, conversation, archiveToast).then(leave))
+                }
+                aria-label={conversation.archived ? 'Move back to chats' : 'Archive'}
+                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                {conversation.archived ? <ArchiveRestore className="h-4.5 w-4.5" /> : <Archive className="h-4.5 w-4.5" />}
+              </button>
+            )}
             <button
               type="button"
-              onClick={() => void thread.remove().then((gone) => gone && router.replace('/assistant'))}
+              onClick={() => void (canArchive ? deleteConversation(assistantApi, conversation, archiveToast) : thread.remove()).then(leave)}
               aria-label="Delete conversation"
               className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-destructive"
             >

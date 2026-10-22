@@ -15,7 +15,9 @@ import { ChevronDown, Maximize2, MessagesSquare, SquarePen, Trash2 } from "lucid
 import {
   cachedConversations,
   conversationTitle,
+  deleteConversation,
   groupConversations,
+  onConversationsChanged,
   openAssistantPopup,
   onAssistantPopup,
   useAssistantPending,
@@ -29,6 +31,7 @@ import { useDataCache } from "@/lib/data-cache";
 import { useKeyboardInset } from "@/hooks/use-keyboard-inset";
 import { useMediaQuery } from "@/lib/desktop-layout";
 import { assistantApi } from "@/lib/assistant-client";
+import { archiveToast } from "@/lib/archive-toast";
 import { ThreadFooter, ThreadMessages } from "@/app/assistant/thread-body";
 import { ConversationRow } from "@/app/assistant/conversation-row";
 import { ListGroup } from "@/components/ui/list-item";
@@ -124,6 +127,8 @@ function PopupThread({
     toast: popupToast,
   });
   const { conversation, loadError, send, reload } = thread;
+  // A delete can be taken back on servers that have archiving.
+  const canUndo = useModules().server("assistant.archive");
 
   useEffect(() => onConversation(conversation), [conversation, onConversation]);
 
@@ -186,7 +191,7 @@ function PopupThread({
         {!showChats && conversation && conversation.kind !== "household" && (
           <button
             type="button"
-            onClick={() => void thread.remove().then((gone) => gone && onFresh())}
+            onClick={() => void (canUndo ? deleteConversation(assistantApi, conversation, archiveToast) : thread.remove()).then((gone) => gone && onFresh())}
             aria-label="Delete this conversation"
             className={iconButton}
           >
@@ -235,6 +240,7 @@ function PopupChats({ currentId, onPick, onAll }: { currentId: string | null; on
       .catch((err) => setError(err instanceof Error ? err.message : "Could not load your chats."));
   }, []);
   useEffect(reload, [reload]);
+  useEffect(() => onConversationsChanged(reload), [reload]);
   const groups = groupConversations(list);
   const sections = [
     { label: "Chats", rows: [...(groups.household ? [groups.household] : []), ...groups.chats] },

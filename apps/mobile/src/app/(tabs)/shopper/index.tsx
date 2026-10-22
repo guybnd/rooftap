@@ -9,13 +9,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FlashList, type ListRenderItem } from '@shopify/flash-list';
 import { use$ } from '@legendapp/state/react';
 import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
-import { Plus, ShoppingBag, Sparkles, WifiOff } from 'lucide-react-native';
+import { Archive, Plus, ShoppingBag, Sparkles, WifiOff } from 'lucide-react-native';
 import {
   Text,
   Button,
   EmptyState,
   HeroLede,
-  LeadingTile,
   ListGroup,
   ListItem,
   ListItemContent,
@@ -34,9 +33,9 @@ import {
   shopperSearches$,
   useModules,
   readScoutPrefill,
-  scoutRunStatus,
-  scoutTitle,
-  timeAgo,
+  scoutRunLists,
+  syncStoreNow,
+  useScoutOverrides,
   useReconnectSync,
   useStoreHelpers,
   useStoreLoaded,
@@ -52,13 +51,13 @@ import {
   type ShopperWantStatus,
   type ShopperPriceSnapshot,
   type ScoutPrefill,
-  type ShopperSearch,
 } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
 import { NoGroupScreen } from '@/components/no-group-screen';
 import { WantRow } from '@/features/shopper/want-row';
 import { WantFormSheet } from '@/features/shopper/want-form-sheet';
 import { ScoutBriefSheet } from '@/features/shopper/scout-brief-sheet';
+import { ScoutRunRow } from '@/features/shopper/scout-run-row';
 import { lookupWhenSynced, shopperSources } from '@/features/shopper/shopper-api';
 
 const TABS: { value: ShopperWantStatus; label: string }[] = [
@@ -81,14 +80,13 @@ export default function ShopperScreen() {
   const scoutOn = useModules().server('shopper.scout');
   const searches$ = shopperSearches$(scoutOn ? group?.id : undefined);
   useReconnectSync(searches$);
-  const recentRuns = use$(() =>
-    Object.values(searches$.get() ?? {})
-      .filter((s): s is ShopperSearch => !!s && !s.deleted)
-      // A refined search lives inside its thread, under the first run.
-      .filter((s) => !s.thread_id)
-      .sort((a, b) => b.created_at.localeCompare(a.created_at))
-      .slice(0, 3),
-  );
+  // Archived and deleted searches leave the list; the latest three show.
+  useScoutOverrides();
+  const runs = use$(() => Object.values(searches$.get() ?? {}));
+  const runLists = scoutRunLists(runs);
+  const recentRuns = runLists.recent.slice(0, 3);
+  const archivedRuns = runLists.archived.length;
+  const runsChanged = () => syncStoreNow(searches$);
   const [scouting, setScouting] = React.useState(false);
   const [scoutOpen, setScoutOpen] = React.useState(false);
   const storeLoaded = useStoreLoaded(wants$, snaps$);
@@ -219,13 +217,26 @@ export default function ShopperScreen() {
       </View>
       <HeroLede value={goodNow} label="at a good price now" caption={caption} />
 
-      {recentRuns.length > 0 && (
+      {(recentRuns.length > 0 || archivedRuns > 0) && (
         <View className="gap-1.5">
           <Text className="px-1 text-micro-label uppercase text-muted-foreground">Scout</Text>
           <ListGroup>
             {recentRuns.map((run) => (
-              <ScoutRunRow key={run.id} run={run} onPress={() => router.push(`/shopper/scout/${run.id}` as Href)} />
+              <ScoutRunRow key={run.id} run={run} onPress={() => router.push(`/shopper/scout/${run.id}` as Href)} onChanged={runsChanged} />
             ))}
+            {archivedRuns > 0 && (
+              <ListItem onPress={() => router.push('/shopper/scout/archived' as Href)} accessibilityRole="button">
+                <View className="size-9 items-center justify-center rounded-[11px] bg-muted">
+                  <Archive size={18} className="text-muted-foreground" />
+                </View>
+                <ListItemContent>
+                  <ListItemTitle numberOfLines={1}>Archived</ListItemTitle>
+                  <ListItemMeta>
+                    <Text className="text-caption text-muted-foreground">{archivedRuns === 1 ? '1 search' : `${archivedRuns} searches`}</Text>
+                  </ListItemMeta>
+                </ListItemContent>
+              </ListItem>
+            )}
           </ListGroup>
         </View>
       )}
@@ -291,23 +302,5 @@ export default function ShopperScreen() {
         />
       )}
     </ScreenBackground>
-  );
-}
-
-function ScoutRunRow({ run, onPress }: { run: ShopperSearch; onPress: () => void }) {
-  const status = scoutRunStatus(run);
-  const meta = status === 'running' ? 'Researching…' : status === 'failed' ? "Didn't finish" : timeAgo(run.finished_at ?? run.created_at) ?? '';
-  return (
-    <ListItem onPress={onPress} accessibilityRole="button">
-      <LeadingTile sectionId="shopper" Icon={Sparkles} size="md" />
-      <ListItemContent>
-        <ListItemTitle numberOfLines={1}>{scoutTitle(run.brief)}</ListItemTitle>
-        <ListItemMeta>
-          <Text numberOfLines={1} className="text-caption text-muted-foreground">
-            {meta}
-          </Text>
-        </ListItemMeta>
-      </ListItemContent>
-    </ListItem>
   );
 }

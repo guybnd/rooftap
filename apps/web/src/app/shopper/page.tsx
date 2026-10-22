@@ -10,7 +10,7 @@ import { use$ } from '@legendapp/state/react';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Plus, ShoppingBag, Sparkles } from 'lucide-react';
+import { Archive, Plus, ShoppingBag, Sparkles } from 'lucide-react';
 import {
   dialog,
   shopperWants$,
@@ -18,9 +18,9 @@ import {
   shopperSearches$,
   useModules,
   readScoutPrefill,
-  scoutRunStatus,
-  scoutTitle,
-  timeAgo,
+  scoutRunLists,
+  syncStoreNow,
+  useScoutOverrides,
   useReconnectSync,
   useStoreHelpers,
   useStoreLoaded,
@@ -34,13 +34,11 @@ import {
   type ShopperWantStatus,
   type ShopperPriceSnapshot,
   type ScoutPrefill,
-  type ShopperSearch,
 } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
 import { lookupWhenSynced, shopperSources } from '@/lib/shopper-api';
 import { HeroLede } from '@/components/ui/hero-lede';
 import { ListGroup, ListItem, ListItemContent, ListItemMeta, ListItemTitle } from '@/components/ui/list-item';
-import { LeadingTile } from '@/components/ui/leading-tile';
 import { navLinkClickHandler } from '@/lib/view-transitions';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -48,6 +46,7 @@ import { OfflineHint } from '@/components/offline-hint';
 import { WantRow } from './want-row';
 import { WantFormSheet } from './want-form-sheet';
 import { ScoutBriefSheet } from './scout-brief-sheet';
+import { ScoutRunRow } from './scout-run-row';
 import { useWideLayout } from '@/lib/desktop-layout';
 import { WideList } from '@/components/wide-list';
 import { cn } from '@/lib/utils';
@@ -76,14 +75,13 @@ export default function ShopperPage() {
   const scoutOn = useModules().server('shopper.scout');
   const searches$ = shopperSearches$(scoutOn ? group?.id : undefined);
   useReconnectSync(searches$);
-  const recentRuns = use$(() =>
-    Object.values(searches$.get() ?? {})
-      .filter((s): s is ShopperSearch => !!s && !s.deleted)
-      // A refined search lives inside its thread, under the first run.
-      .filter((s) => !s.thread_id)
-      .sort((a, b) => b.created_at.localeCompare(a.created_at))
-      .slice(0, 3),
-  );
+  // Archived and deleted searches leave the list; the latest three show.
+  useScoutOverrides();
+  const runs = use$(() => Object.values(searches$.get() ?? {}));
+  const runLists = scoutRunLists(runs);
+  const recentRuns = runLists.recent.slice(0, 3);
+  const archivedRuns = runLists.archived.length;
+  const runsChanged = () => syncStoreNow(searches$);
   const [scouting, setScouting] = useState(false);
   const router = useRouter();
   // A Home Setup item's "Find with Scout" lands here as ?scout=…&upto=…: open
@@ -186,13 +184,28 @@ export default function ShopperPage() {
         }
       />
 
-      {recentRuns.length > 0 && (
+      {(recentRuns.length > 0 || archivedRuns > 0) && (
         <div className="space-y-1.5">
           <p className="px-1 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">Scout</p>
           <WideList>
             {recentRuns.map((run) => (
-              <ScoutRunRow key={run.id} run={run} />
+              <ScoutRunRow key={run.id} run={run} onChanged={runsChanged} />
             ))}
+            {archivedRuns > 0 && (
+              <ListItem asChild>
+                <Link href="/shopper/scout/archived" onClick={navLinkClickHandler('descend', router, '/shopper/scout/archived')}>
+                  <span className="flex size-9 items-center justify-center rounded-[11px] bg-muted">
+                    <Archive className="size-[18px]" />
+                  </span>
+                  <ListItemContent>
+                    <ListItemTitle>Archived</ListItemTitle>
+                    <ListItemMeta>
+                      <span>{archivedRuns === 1 ? '1 search' : `${archivedRuns} searches`}</span>
+                    </ListItemMeta>
+                  </ListItemContent>
+                </Link>
+              </ListItem>
+            )}
           </WideList>
         </div>
       )}
@@ -251,28 +264,5 @@ export default function ShopperPage() {
         />
       )}
     </div>
-  );
-}
-
-function ScoutRunRow({ run }: { run: ShopperSearch }) {
-  const router = useRouter();
-  const href = `/shopper/scout/${run.id}`;
-  const status = scoutRunStatus(run);
-  const meta =
-    status === 'running' ? 'Researching…' : status === 'failed' ? "Didn't finish" : [timeAgo(run.finished_at ?? run.created_at)].filter(Boolean).join(' · ');
-  return (
-    <ListItem asChild>
-      <Link href={href} onClick={navLinkClickHandler('descend', router, href)}>
-        <LeadingTile sectionId="shopper" Icon={Sparkles} size="md" />
-        <ListItemContent>
-          <ListItemTitle>
-            <span className="truncate">{scoutTitle(run.brief)}</span>
-          </ListItemTitle>
-          <ListItemMeta>
-            <span>{meta}</span>
-          </ListItemMeta>
-        </ListItemContent>
-      </Link>
-    </ListItem>
   );
 }

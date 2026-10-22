@@ -1,11 +1,26 @@
 // Rooftap Assistant: one conversation as a three-slot line item (H6), shared
 // by the Assistant space and the pop-up chat's list of chats.
-// Web twin: apps/web/src/app/assistant/conversation-row.tsx.
+// Swipe right archives a chat (or moves an archived one back), swipe left
+// deletes it with Undo. The Household thread is everyone's, so it doesn't
+// swipe. Web twin: apps/web/src/app/assistant/conversation-row.tsx.
 import * as React from 'react';
 import { View } from 'react-native';
-import { MessageCircle, Users, Zap } from 'lucide-react-native';
-import { LeadingTile, ListItem, ListItemContent, ListItemMeta, ListItemTitle, ListItemTrailing, Pill, Text, useThemeMaterial } from '@homeup/ui';
-import { conversationTitle, minutesLeft, sectionHueSwatch, timeAgo, type AssistantConversation } from '@homeup/core';
+import { Archive, ArchiveRestore, MessageCircle, Trash2, Users, Zap } from 'lucide-react-native';
+import { LeadingTile, ListItem, ListItemContent, ListItemMeta, ListItemTitle, ListItemTrailing, Pill, SwipeActions, Text, haptics, useThemeMaterial } from '@homeup/ui';
+import {
+  archiveConversation,
+  canArchiveConversation,
+  conversationTitle,
+  deleteConversation,
+  minutesLeft,
+  sectionHueSwatch,
+  timeAgo,
+  unarchiveConversation,
+  useModules,
+  type AssistantConversation,
+} from '@homeup/core';
+import { assistantApi } from '@/features/assistant/assistant-api';
+import { archiveToast } from '@/lib/archive-toast';
 
 export function ConversationRow({
   conversation,
@@ -18,6 +33,8 @@ export function ConversationRow({
   current?: boolean;
 }) {
   const { scheme } = useThemeMaterial();
+  // Archiving, and taking a delete back, need a server that has them.
+  const canArchive = useModules().server('assistant.archive') && canArchiveConversation(conversation);
   const kind = conversation?.kind ?? 'household';
   const Icon = kind === 'household' ? Users : kind === 'quick' ? Zap : MessageCircle;
   const left = conversation ? minutesLeft(conversation) : null;
@@ -30,7 +47,7 @@ export function ConversationRow({
         : conversation
           ? timeAgo(conversation.last_active_at)
           : null;
-  return (
+  const row = (
     <ListItem onPress={onPress}>
       {kind === 'household' ? (
         <LeadingTile sectionId="assistant" Icon={Icon} size="md" />
@@ -63,5 +80,30 @@ export function ConversationRow({
         </ListItemTrailing>
       )}
     </ListItem>
+  );
+  if (!conversation || !canArchive) return row;
+  const archived = !!conversation.archived;
+  return (
+    <SwipeActions
+      onSwipeRight={() => void (archived ? unarchiveConversation : archiveConversation)(assistantApi, conversation, archiveToast)}
+      onSwipeLeft={() => {
+        haptics.remove();
+        void deleteConversation(assistantApi, conversation, archiveToast);
+      }}
+      right={{
+        bg: 'bg-muted',
+        activeBg: 'bg-foreground/15',
+        icon: archived ? <ArchiveRestore size={18} className="text-foreground" /> : <Archive size={18} className="text-foreground" />,
+        label: archived ? 'Move back' : 'Archive',
+      }}
+      left={{
+        bg: 'bg-destructive/15',
+        activeBg: 'bg-destructive',
+        icon: <Trash2 size={18} className="text-destructive" />,
+        label: 'Delete',
+      }}
+    >
+      {row}
+    </SwipeActions>
   );
 }

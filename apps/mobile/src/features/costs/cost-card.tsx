@@ -85,6 +85,7 @@ import {
   type CostCadence,
   type CostItem,
   type HueScheme,
+  hueSchemeTone,
   type GroupMember,
   currencySymbol,
 } from '@homeup/core';
@@ -154,8 +155,9 @@ const INK_TINT = { tile: 'bg-foreground/10', glyph: 'text-foreground', title: 't
 
 /** A category's tint (chip, glyph and group title classes) in a theme, or null for an unknown category. */
 export function categoryTint(scheme: HueScheme, category: string) {
-  if (scheme === 'ink') return category in CATEGORY_TILE.light ? INK_TINT : null;
-  return CATEGORY_TILE[scheme][category as CostCategory] ?? null;
+  const tone = hueSchemeTone(scheme);
+  if (tone === 'ink') return category in CATEGORY_TILE.light ? INK_TINT : null;
+  return CATEGORY_TILE[tone][category as CostCategory] ?? null;
 }
 
 const CATEGORY_ICON: Record<CostCategory, LucideIcon> = {

@@ -17,8 +17,10 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { ArrowLeft, ExternalLink, MessageCircle, Sparkles, X } from 'lucide-react';
+import { Archive, ArchiveRestore, ArrowLeft, ExternalLink, MessageCircle, Sparkles, Trash2, X } from 'lucide-react';
 import {
+  archiveScoutRun,
+  deleteScoutRun,
   formatMoney,
   scoutBudgetLabel,
   scoutFailure,
@@ -35,9 +37,11 @@ import {
   type ScoutMessage,
   type ShopperPick,
   type ShopperSearch,
+  unarchiveScoutRun,
 } from '@homeup/core';
+import { archiveToast } from '@/lib/archive-toast';
 import { navLinkClickHandler } from '@/lib/view-transitions';
-import { scoutRun, sendScoutFollowUp, watchScoutPick } from '@/lib/shopper-api';
+import { scoutRun, sendScoutFollowUp, updateScoutRun, watchScoutPick } from '@/lib/shopper-api';
 import { Composer, ReplyText, Thinking } from '@/app/assistant/assistant-parts';
 import { BottomSheet } from '@/components/ui/bottom-sheet';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -50,7 +54,9 @@ export default function ScoutRunPage() {
   const router = useRouter();
   const { id } = useParams<{ id: string }>();
   const currency = useHouseholdCurrency();
-  const canTalk = useModules().server('shopper.scout-thread');
+  const modules = useModules();
+  const canTalk = modules.server('shopper.scout-thread');
+  const canArchive = modules.server('shopper.scout-archive');
   const { thread, root, latest, latestPicks, items, suggestions, pending, send, refresh } = useScoutThread(id, API);
   const [open, setOpen] = useState<ShopperPick | null>(null);
   const [about, setAbout] = useState<ShopperPick | null>(null);
@@ -105,6 +111,30 @@ export default function ScoutRunPage() {
         <p className="min-w-0 flex-1 truncate text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
           Scout · {scoutTitle(root.brief)}
         </p>
+        {canArchive && firstStatus !== 'running' && (
+          <>
+            <button
+              type="button"
+              onClick={() =>
+                void (root.archived_at
+                  ? unarchiveScoutRun(updateScoutRun, root.id, archiveToast, () => void refresh())
+                  : archiveScoutRun(updateScoutRun, root.id, archiveToast).then((done) => done && router.replace('/shopper')))
+              }
+              aria-label={root.archived_at ? 'Move back to Shopper' : 'Archive search'}
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              {root.archived_at ? <ArchiveRestore className="h-4.5 w-4.5" /> : <Archive className="h-4.5 w-4.5" />}
+            </button>
+            <button
+              type="button"
+              onClick={() => void deleteScoutRun(updateScoutRun, root.id, archiveToast).then((done) => done && router.replace('/shopper'))}
+              aria-label="Delete search"
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-destructive"
+            >
+              <Trash2 className="h-4.5 w-4.5" />
+            </button>
+          </>
+        )}
       </div>
 
       {status === 'running' && latest.id === root.id ? (

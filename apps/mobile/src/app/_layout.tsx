@@ -22,6 +22,8 @@ import {
   BricolageGrotesque_800ExtraBold,
 } from '@expo-google-fonts/bricolage-grotesque';
 import { Cinzel_600SemiBold } from '@expo-google-fonts/cinzel';
+import { Fraunces_700Bold } from '@expo-google-fonts/fraunces';
+import { Fredoka_700Bold } from '@expo-google-fonts/fredoka';
 import { Geist_500Medium, Geist_600SemiBold, Geist_700Bold } from '@expo-google-fonts/geist';
 import { GeistMono_600SemiBold } from '@expo-google-fonts/geist-mono';
 import { Stack, usePathname } from 'expo-router';
@@ -79,15 +81,36 @@ function ModuleRouteGuard() {
   return null;
 }
 
+// HOUP-69: the picker/login screens are pre-auth — no section content
+// exists yet to navigate to, so the persistent tab bar hides on them
+// (mirrors the web app's own (auth) route group rendering full-bleed, no
+// SectionTabBar).
+function useShowTabBar(): boolean {
+  return !PRE_AUTH_ROUTES.includes(usePathname());
+}
+
+function RouteTabBar() {
+  return useShowTabBar() ? <PrimaryTabBar /> : null;
+}
+
+function RouteToastHost() {
+  return <ToastHost bottomOffset={useShowTabBar() ? TAB_BAR_CONTENT_HEIGHT : 0} />;
+}
+
+// Hooks that follow the route live in their own leaf, not in RootLayout:
+// a pathname read up there re-rendered the whole shell (sheets, chat pop-up,
+// picker, banners) in the same commit as every tab tap, ahead of the slide.
+function RootEffects() {
+  useAuthAutoRefresh();
+  useAuthGuard();
+  usePushNotificationRouting();
+  return null;
+}
+
 export default function RootLayout() {
-  const pathname = usePathname();
-  // HOUP-69: the picker/login screens are pre-auth — no section content
-  // exists yet to navigate to, so the persistent tab bar hides on them
-  // (mirrors the web app's own (auth) route group rendering full-bleed, no
-  // SectionTabBar).
-  const showTabBar = !PRE_AUTH_ROUTES.includes(pathname);
   // HOUP-170: Hearth's native type foundation — Bricolage Grotesque (heading),
-  // Geist (sans), Geist Mono (mono), Cinzel (cap-inscription, Axis Mundi only).
+  // Geist (sans), Geist Mono (mono), Cinzel (cap-inscription, Axis Mundi only),
+  // Fredoka and Fraunces (the Hero number, Sorbet and Lavender only).
   // Blocks the splash (already held by preventAutoHideAsync() above) until
   // these are registered, so no surface flashes stock Roboto for a frame.
   //
@@ -104,16 +127,22 @@ export default function RootLayout() {
     Geist_700Bold,
     GeistMono_600SemiBold,
     Cinzel_600SemiBold,
+    Fraunces_700Bold,
+    Fredoka_700Bold,
   });
 
-  useAuthAutoRefresh();
-  useAuthGuard();
-  usePushNotificationRouting();
+  return (
+    <>
+      {/* First and always mounted, so the guards run while fonts load too. */}
+      <RootEffects />
+      {fontsLoaded || fontError ? <AppShell /> : null}
+    </>
+  );
+}
 
-  if (!fontsLoaded && !fontError) {
-    return null;
-  }
-
+// Renders once per launch (no props, no route hooks); route-driven pieces
+// are leaves (RouteTabBar, RouteToastHost) so a navigation re-renders only them.
+function AppShell() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       {/* HOUP-274: a single root-level KeyboardProvider observes the keyboard
@@ -139,7 +168,7 @@ export default function RootLayout() {
                 {/* Section roots live one level down in the (tabs) group
                     (src/app/(tabs)/_layout.tsx); detail screens push here. */}
                 <Stack screenOptions={{ headerShown: false }} />
-                {showTabBar && <PrimaryTabBar />}
+                <RouteTabBar />
                 <CaptureSheet />
                 {/* The pop-up chat that grows out of the + (features/assistant/chat-popup.tsx). */}
                 <AssistantChatPopup />
@@ -149,7 +178,7 @@ export default function RootLayout() {
                 {/* What's new since this device last looked (whats-new/README.md):
                     on Home, after the picker, under the toasts. */}
                 <WhatsNewSheet />
-                <ToastHost bottomOffset={showTabBar ? TAB_BAR_CONTENT_HEIGHT : 0} />
+                <RouteToastHost />
                 <DialogHost />
               </CaptureProvider>
             </DataCacheProvider>

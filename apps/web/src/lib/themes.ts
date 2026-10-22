@@ -1,6 +1,6 @@
 // Hearth v2: the Ember pair is new and is what the default "Match device"
-// preference resolves to; the Axis Mundi pair (HOUP-295) and E-Ink stay
-// selectable.
+// preference resolves to; the Axis Mundi pair (HOUP-295), E-Ink and the
+// Sorbet and Lavender pairs stay selectable.
 // Preference parsing/resolution lives in @homeup/core (theme-preference.ts)
 // so web and native agree on it; this file is only display metadata.
 import type { ThemeId, ThemePreference } from "@homeup/core";
@@ -51,5 +51,29 @@ export const themes: ThemeMeta[] = [
     name: "E-Ink",
     description: "Flat greys and no motion, for e-paper screens",
     accent: "#1A1A1A",
+  },
+  {
+    id: "sorbet-day",
+    name: "Sorbet Day",
+    description: "Gummy pastels and a mango accent",
+    accent: "#F28A2E",
+  },
+  {
+    id: "sorbet-night",
+    name: "Sorbet Night",
+    description: "Jelly brights on grape-black",
+    accent: "#FFA33E",
+  },
+  {
+    id: "lavender-day",
+    name: "Lavender Day",
+    description: "Lilac mist with a violet accent",
+    accent: "#7B57C8",
+  },
+  {
+    id: "lavender-night",
+    name: "Lavender Night",
+    description: "Plum dusk with an opal glow",
+    accent: "#CAACFF",
   },
 ];

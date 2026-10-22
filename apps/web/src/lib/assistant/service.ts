@@ -135,6 +135,8 @@ interface ConversationRow {
   summary_through?: string | null;
   last_active_at: string;
   closes_at: string | null;
+  /** When its owner archived it (20261022093000); null or undefined when not. */
+  archived_at?: string | null;
 }
 
 interface MessageRow {
@@ -162,6 +164,7 @@ export function toConversation(row: ConversationRow, pending = 0, unread = false
     closes_at: row.closes_at,
     pending,
     unread,
+    archived: !!row.archived_at,
   };
 }
 
@@ -399,19 +402,36 @@ export async function pendingCounts(ctx: AssistantContext, conversationIds: stri
   return counts;
 }
 
-export async function listConversations(ctx: AssistantContext): Promise<AssistantConversation[]> {
-  const { data } = await ctx.admin
+/**
+ * This person's conversations and the household thread, newest first. Archived
+ * chats are left out, or with `archived` they are the only ones listed.
+ */
+export async function listConversations(ctx: AssistantContext, opts: { archived?: boolean } = {}): Promise<AssistantConversation[]> {
+  let query = ctx.admin
     .from("assistant_conversations")
     .select("*")
     .eq("group_id", ctx.groupId)
-    .eq("deleted", false)
-    .or(`kind.eq.household,owner_id.eq.${ctx.userId}`)
-    .order("last_active_at", { ascending: false })
-    .limit(100);
+    .eq("deleted", false);
+  query = opts.archived
+    ? query.eq("owner_id", ctx.userId).not("archived_at", "is", null)
+    : query.or(`kind.eq.household,owner_id.eq.${ctx.userId}`).is("archived_at", null);
+  const { data } = await query.order("last_active_at", { ascending: false }).limit(100);
   const rows = (data ?? []) as ConversationRow[];
   const ids = rows.map((r) => r.id);
   const [pending, reads] = await Promise.all([pendingCounts(ctx, ids), readStates(ctx, ids)]);
   return rows.map((r) => toConversation(r, pending.get(r.id) ?? 0, isUnread(r.last_active_at, reads.get(r.id))));
+}
+
+/** How many chats this person has archived, for the "Archived" link. */
+export async function archivedCount(ctx: AssistantContext): Promise<number> {
+  const { count } = await ctx.admin
+    .from("assistant_conversations")
+    .select("id", { count: "exact", head: true })
+    .eq("group_id", ctx.groupId)
+    .eq("owner_id", ctx.userId)
+    .eq("deleted", false)
+    .not("archived_at", "is", null);
+  return count ?? 0;
 }
 
 /** A conversation's messages. Callers check the person may see it (findConversation), which can run alongside. */
@@ -695,6 +715,8 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
   const touched = {
     // When the reply landed, so it reads as news to anyone who hasn't seen it.
     last_active_at: new Date(Math.max(Date.now(), now.getTime())).toISOString(),
+    // Talking in an archived chat brings it back to the list.
+    ...(conversation.archived_at ? { archived_at: null } : {}),
     ...(conversation.kind === "quick" ? { closes_at: quickAskClosesAt(now, settings.quickAskIdleMinutes).toISOString() } : {}),
   };
   // The bookkeeping after the reply doesn't depend on itself, so it goes in one round.
@@ -781,7 +803,10 @@ async function postToHousehold(
     memberNames(ctx.admin, ctx.groupId),
   ]);
   if (error || !row) return { ok: false, status: 500, error: error?.message ?? "Could not save the message" };
-  const touched = { last_active_at: (row as MessageRow).created_at ?? now.toISOString() };
+  const touched = {
+    last_active_at: (row as MessageRow).created_at ?? now.toISOString(),
+    ...(conversation.archived_at ? { archived_at: null } : {}),
+  };
   const [pending] = await Promise.all([
     pendingCounts(ctx, [conversation.id]),
     ctx.admin.from("assistant_conversations").update(touched).eq("id", conversation.id),

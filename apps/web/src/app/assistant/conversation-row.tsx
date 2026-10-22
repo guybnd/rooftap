@@ -7,7 +7,20 @@ import Link from 'next/link';
 import { MessageCircle, Users, Zap } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { conversationTitle, dialog, minutesLeft, sectionHue, timeAgo, type AssistantConversation } from '@homeup/core';
+import {
+  archiveConversation,
+  canArchiveConversation,
+  conversationTitle,
+  deleteConversation,
+  dialog,
+  minutesLeft,
+  sectionHue,
+  timeAgo,
+  unarchiveConversation,
+  useModules,
+  type AssistantConversation,
+} from '@homeup/core';
+import { archiveToast } from '@/lib/archive-toast';
 import { assistantApi } from '@/lib/assistant-client';
 import { useRowContextMenu } from '@/components/ui/row-context-menu';
 import { LeadingTile } from '@/components/ui/leading-tile';
@@ -27,10 +40,12 @@ export function ConversationRow({
   onSelect?: () => void;
   /** The conversation already on show (the pop-up's list). */
   current?: boolean;
-  /** Reloads the list after a menu action (pin, mark read, delete). */
+  /** Reloads the list after a menu action (pin, mark read, archive, delete). */
   onChanged?: () => void;
 }) {
   const router = useRouter();
+  // Archiving, and taking a delete back, need a server that has them.
+  const canArchive = useModules().server('assistant.archive');
   const kind = conversation?.kind ?? 'household';
   const Icon = kind === 'household' ? Users : kind === 'quick' ? Zap : MessageCircle;
   const left = conversation ? minutesLeft(conversation) : null;
@@ -78,7 +93,7 @@ export function ConversationRow({
   );
   // Hearth §13.7 "Row menu": right-click with a mouse. The Household thread
   // is everyone's, so it only opens and marks read.
-  const update = async (patch: { pinned?: boolean; deleted?: boolean }) => {
+  const update = async (patch: { pinned?: boolean }) => {
     if (!conversation) return;
     try {
       await assistantApi.updateConversation(conversation.id, patch);
@@ -87,6 +102,14 @@ export function ConversationRow({
       toast.error(err instanceof Error ? err.message : 'Could not change that chat.');
     }
   };
+  const remove = async (c: AssistantConversation) => {
+    if (canArchive) return void deleteConversation(assistantApi, c, archiveToast);
+    // An older server can't take a delete back, so ask first.
+    if (await dialog.confirm({ title: `Delete "${conversationTitle(c)}"?`, destructive: true })) {
+      await assistantApi.updateConversation(c.id, { deleted: true }).then(onChanged, () => toast.error('Could not delete that chat.'));
+    }
+  };
+  const own = canArchiveConversation(conversation);
   const rowMenu = useRowContextMenu(() =>
     conversation
       ? {
@@ -101,22 +124,28 @@ export function ConversationRow({
               icon: 'done',
               run: () => void assistantApi.markRead(conversation.id, { seen: true }).then(() => onChanged?.()),
             },
-            kind !== 'household' && {
+            own && !conversation.archived && {
               id: 'pin',
               label: kind === 'quick' ? 'Keep as a chat' : conversation.pinned ? 'Unpin' : 'Pin',
               group: 'set',
               icon: 'star',
               run: () => void update({ pinned: !conversation.pinned }),
             },
-            kind !== 'household' && {
+            own && canArchive && {
+              id: 'archive',
+              label: conversation.archived ? 'Move back to chats' : 'Archive',
+              group: 'set',
+              icon: 'archive',
+              run: () =>
+                void (conversation.archived ? unarchiveConversation : archiveConversation)(assistantApi, conversation, archiveToast),
+            },
+            own && {
               id: 'delete',
               label: 'Delete',
               group: 'danger',
               icon: 'delete',
               danger: true,
-              run: async () => {
-                if (await dialog.confirm({ title: `Delete "${conversationTitle(conversation)}"?`, destructive: true })) void update({ deleted: true });
-              },
+              run: () => void remove(conversation),
             },
           ],
         }

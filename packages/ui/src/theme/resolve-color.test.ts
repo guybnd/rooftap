@@ -119,6 +119,18 @@ describe('themeMaterial (HOUP-132)', () => {
     expect(themeMaterial('ember-day').still).toBe(false);
   });
 
+  it('Sorbet and Lavender: wear their own hue set, keeps the glow, Fredoka on the Hero', () => {
+    expect(themeMaterial('sorbet-day').scheme).toBe('sorbet-day');
+    expect(themeMaterial('sorbet-night').scheme).toBe('sorbet-night');
+    expect(themeMaterial('sorbet-day').sectionGlow).toBe(true);
+    expect(themeMaterial('sorbet-day').statusBarStyle).toBe('dark');
+    expect(themeMaterial('sorbet-night').statusBarStyle).toBe('light');
+    expect(themeVars('sorbet-day')['--font-hero']).toBe('Fredoka_700Bold');
+    expect(themeVars('lavender-night')['--font-hero']).toBe('Fraunces_700Bold');
+    expect(themeMaterial('lavender-day').scheme).toBe('lavender-day');
+    expect(themeVars('ember-day')['--font-hero']).toBe('BricolageGrotesque_800ExtraBold');
+  });
+
   it('formats background as a comma rgb(...) string matching --color-background', () => {
     for (const themeId of Object.keys(THEME_TOKENS) as Array<keyof typeof THEME_TOKENS>) {
       const [r, g, b] = themeVars(themeId)['--color-background'].split(' ');

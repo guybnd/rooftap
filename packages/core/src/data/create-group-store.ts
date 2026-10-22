@@ -459,6 +459,14 @@ export function useReconnectSync(store$: Observable<GroupRecord<SyncedRow>>) {
 }
 
 /**
+ * Pulls a store's latest rows now, for a table the server writes (a Scout
+ * run archived through the API) when the screen shouldn't wait on realtime.
+ */
+export function syncStoreNow(store$: Observable<GroupRecord<SyncedRow>>): void {
+  void syncState(store$ as Observable).sync();
+}
+
+/**
  * Safe write helpers for a group Legend store.
  *
  * Bakes in the two write-path gotchas from FLUX-149:

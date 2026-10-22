@@ -9,9 +9,10 @@ import { AppState, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ArrowLeft, Pin, PinOff, Trash2 } from 'lucide-react-native';
+import { Archive, ArchiveRestore, ArrowLeft, Pin, PinOff, Trash2 } from 'lucide-react-native';
 import { Text, ScreenBackground, toast } from '@homeup/ui';
-import { conversationTitle, useAssistantThread } from '@homeup/core';
+import { archiveConversation, conversationTitle, deleteConversation, unarchiveConversation, useAssistantThread, useModules } from '@homeup/core';
+import { archiveToast } from '@/lib/archive-toast';
 import { useDataCache } from '@/lib/data-cache';
 import { assistantApi } from '@/features/assistant/assistant-api';
 import { ThreadFooter, ThreadMessages } from '@/features/assistant/thread-body';
@@ -63,6 +64,8 @@ export default function AssistantThreadScreen() {
 
   const title = conversation ? conversationTitle(conversation) : kind === 'household' ? 'Household' : kind === 'chat' ? 'New chat' : isNew ? 'Quick ask' : '';
   const own = !!conversation && conversation.kind !== 'household';
+  const canArchive = useModules().server('assistant.archive');
+  const leave = (gone: boolean) => gone && router.back();
 
   return (
     <ScreenBackground>
@@ -85,8 +88,22 @@ export default function AssistantThreadScreen() {
               >
                 {conversation.pinned ? <PinOff size={18} className="text-muted-foreground" /> : <Pin size={18} className="text-muted-foreground" />}
               </Pressable>
+              {canArchive && (
+                <Pressable
+                  onPress={() =>
+                    void (conversation.archived
+                      ? unarchiveConversation(assistantApi, conversation, archiveToast).then(() => thread.reload({ quiet: true }))
+                      : archiveConversation(assistantApi, conversation, archiveToast).then(leave))
+                  }
+                  accessibilityRole="button"
+                  accessibilityLabel={conversation.archived ? 'Move back to chats' : 'Archive'}
+                  className="h-11 w-11 items-center justify-center rounded-lg"
+                >
+                  {conversation.archived ? <ArchiveRestore size={18} className="text-muted-foreground" /> : <Archive size={18} className="text-muted-foreground" />}
+                </Pressable>
+              )}
               <Pressable
-                onPress={() => void thread.remove().then((gone) => gone && router.back())}
+                onPress={() => void (canArchive ? deleteConversation(assistantApi, conversation, archiveToast) : thread.remove()).then(leave)}
                 accessibilityRole="button"
                 accessibilityLabel="Delete conversation"
                 className="h-11 w-11 items-center justify-center rounded-lg"

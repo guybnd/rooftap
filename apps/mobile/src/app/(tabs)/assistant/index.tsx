@@ -6,12 +6,13 @@ import * as React from 'react';
 import { RefreshControl, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter, type Href } from 'expo-router';
-import { Plus, WifiOff } from 'lucide-react-native';
-import { Text, Button, HeroLede, ListGroup, ScreenBackground } from '@homeup/ui';
+import { Archive, ChevronRight, Plus, WifiOff } from 'lucide-react-native';
+import { Text, Button, HeroLede, ListGroup, ListItem, ListItemContent, ListItemMeta, ListItemTitle, ListItemTrailing, ScreenBackground } from '@homeup/ui';
 import {
   AssistantApiError,
   formatCents,
   groupConversations,
+  onConversationsChanged,
   setAssistantUnread,
   type AssistantConversation,
   type AssistantErrorCode,
@@ -44,6 +45,7 @@ export default function AssistantScreen() {
   const { group, isOnline } = useDataCache();
   const [status, setStatus] = React.useState<AssistantStatus | null>(null);
   const [conversations, setConversations] = React.useState<AssistantConversation[]>([]);
+  const [archived, setArchived] = React.useState(0);
   const [blocked, setBlocked] = React.useState<AssistantErrorCode | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [refreshing, setRefreshing] = React.useState(false);
@@ -54,8 +56,9 @@ export default function AssistantScreen() {
       setStatus(s);
       if (s.access === 'none') return setBlocked('assistant_requires_plus');
       setBlocked(s.ready ? null : 'assistant_not_configured');
-      const list = await assistantApi.conversations();
+      const { conversations: list, archived: archivedCount } = await assistantApi.conversationList();
       setConversations(list);
+      setArchived(archivedCount);
       setAssistantUnread(list.filter((c) => c.unread).length);
       setError(null);
     } catch (err) {
@@ -70,6 +73,9 @@ export default function AssistantScreen() {
       if (group?.id && isOnline) void load();
     }, [group?.id, isOnline, load])
   );
+
+  // An archive, delete or Undo anywhere (a swipe, the pop-up, a thread) reloads the list.
+  React.useEffect(() => onConversationsChanged(() => void load()), [load]);
 
   const groups = React.useMemo(() => groupConversations(conversations), [conversations]);
 
@@ -139,6 +145,24 @@ export default function AssistantScreen() {
             <Group label="Chats" rows={groups.chats} open={open} />
             <Group label="Quick asks" rows={groups.open} open={open} />
             <Group label="Earlier" rows={groups.earlier.slice(0, 20)} open={open} />
+            {archived > 0 && (
+              <ListGroup>
+                <ListItem onPress={() => router.push('/assistant/archived' as Href)}>
+                  <View className="size-9 items-center justify-center rounded-[11px] bg-muted">
+                    <Archive size={18} className="text-muted-foreground" />
+                  </View>
+                  <ListItemContent>
+                    <ListItemTitle numberOfLines={1}>Archived</ListItemTitle>
+                    <ListItemMeta>
+                      <Text className="text-caption text-muted-foreground">{archived === 1 ? '1 chat' : `${archived} chats`}</Text>
+                    </ListItemMeta>
+                  </ListItemContent>
+                  <ListItemTrailing>
+                    <ChevronRight size={16} className="text-muted-foreground" />
+                  </ListItemTrailing>
+                </ListItem>
+              </ListGroup>
+            )}
           </>
         )}
       </ScrollView>

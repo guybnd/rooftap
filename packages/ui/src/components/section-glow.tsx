@@ -15,7 +15,7 @@ import * as React from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
-import { MOTION_DURATIONS_MS, SECTION_GLOW_OPACITY, sectionHueSwatch } from '@homeup/core';
+import { GLOW_AURA, MOTION_DURATIONS_MS, SECTION_GLOW_OPACITY, sectionHueSwatch } from '@homeup/core';
 import { useThemeMaterial, useStillMotion } from '../theme/theme-provider';
 import { BackgroundTexture } from './background-texture';
 
@@ -61,10 +61,27 @@ function GlowGradient({ section }: { section: string }) {
   const material = useThemeMaterial();
   const { glow } = sectionHueSwatch(section, material.scheme);
   const opacity = SECTION_GLOW_OPACITY[material.scheme];
+  const aura = GLOW_AURA[material.scheme] ?? [];
   const gradientId = `section-glow-${section}`;
   return (
     <Svg width="100%" height="100%">
       <Defs>
+        {/* A theme's fixed aura (Sorbet) sits under the section's own wash. */}
+        {aura.map((layer, i) => (
+          <RadialGradient
+            key={i}
+            id={`${gradientId}-aura-${i}`}
+            cx={`${layer.cx * 100}%`}
+            cy={`${layer.cy * 100}%`}
+            rx={`${layer.rx * 100}%`}
+            ry={`${layer.ry * 100}%`}
+            fx={`${layer.cx * 100}%`}
+            fy={`${layer.cy * 100}%`}
+          >
+            <Stop offset="0" stopColor={layer.color} stopOpacity={opacity} />
+            <Stop offset={layer.fade} stopColor={layer.color} stopOpacity={0} />
+          </RadialGradient>
+        ))}
         {/* Centred past the top-right corner so the wash fades in from the
             edge instead of drawing a visible disc. */}
         <RadialGradient id={gradientId} cx="88%" cy="-8%" rx="85%" ry="78%" fx="88%" fy="-8%">
@@ -73,6 +90,9 @@ function GlowGradient({ section }: { section: string }) {
           <Stop offset="1" stopColor={glow} stopOpacity={0} />
         </RadialGradient>
       </Defs>
+      {aura.map((_, i) => (
+        <Rect key={i} width="100%" height="100%" fill={`url(#${gradientId}-aura-${i})`} />
+      ))}
       <Rect width="100%" height="100%" fill={`url(#${gradientId})`} />
     </Svg>
   );

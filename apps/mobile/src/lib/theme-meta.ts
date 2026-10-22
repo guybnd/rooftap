@@ -15,7 +15,7 @@ export interface ThemeMeta {
 }
 
 // Hearth v2: "Match device" (Ember Day/Night) is the default; the Axis Mundi
-// pair (HOUP-295) and E-Ink stay selectable.
+// pair (HOUP-295), E-Ink and the Sorbet and Lavender pairs stay selectable.
 export const themeMeta: ThemeMeta[] = [
   { id: 'system', name: 'Match device', description: 'Ember Day or Night, set by your device', accent: ['#F6F3EF', '#121016'] },
   { id: 'ember-day', name: 'Ember Day', description: 'Warm paper, one coral accent', accent: '#C8462A' },
@@ -23,6 +23,10 @@ export const themeMeta: ThemeMeta[] = [
   { id: 'axis-mundi-day', name: 'Axis Day', description: 'Sunlit limestone and deep gilt', accent: '#a87a1f' },
   { id: 'axis-mundi-night', name: 'Axis Night', description: 'Cut basalt, gilt and working blue', accent: '#d9a441' },
   { id: 'e-ink', name: 'E-Ink', description: 'Flat greys and no motion, for e-paper screens', accent: '#1A1A1A' },
+  { id: 'sorbet-day', name: 'Sorbet Day', description: 'Gummy pastels and a mango accent', accent: '#F28A2E' },
+  { id: 'sorbet-night', name: 'Sorbet Night', description: 'Jelly brights on grape-black', accent: '#FFA33E' },
+  { id: 'lavender-day', name: 'Lavender Day', description: 'Lilac mist with a violet accent', accent: '#7B57C8' },
+  { id: 'lavender-night', name: 'Lavender Night', description: 'Plum dusk with an opal glow', accent: '#CAACFF' },
 ];
 
 export function themeMetaFor(id: ThemePreference): ThemeMeta | undefined {

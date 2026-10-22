@@ -6,7 +6,7 @@ import "./globals.css";
 // run on every route, including ~offline and share-target — import for its
 // side effect only, here, not per-route.
 import "@/lib/legend/environment";
-import { Geist, Geist_Mono, Bricolage_Grotesque, Cinzel } from "next/font/google";
+import { Geist, Geist_Mono, Bricolage_Grotesque, Cinzel, Fraunces, Fredoka } from "next/font/google";
 import { cn } from "@/lib/utils";
 import { LIGHT_THEME_IDS, SYSTEM_THEME_IDS, THEME_IDS, THEME_PREFERENCE_STORAGE_KEY } from "@homeup/core";
 import { AppSidebar } from "@/components/app-sidebar";
@@ -35,6 +35,23 @@ const cinzel = Cinzel({
   subsets: ["latin"],
   weight: "600",
   variable: "--font-inscription",
+  display: "swap",
+  preload: false,
+});
+// Sorbet's Hero number face (globals.css `[data-theme^="sorbet"] .text-hero`).
+// Not preloaded, so only a Sorbet theme ever fetches it.
+const fredoka = Fredoka({
+  subsets: ["latin"],
+  weight: "700",
+  variable: "--font-hero-sorbet",
+  display: "swap",
+  preload: false,
+});
+// Lavender's Hero number face, fetched only under a Lavender theme.
+const fraunces = Fraunces({
+  subsets: ["latin"],
+  weight: "700",
+  variable: "--font-hero-lavender",
   display: "swap",
   preload: false,
 });
@@ -79,7 +96,9 @@ export default function RootLayout({
         geist.variable,
         geistMono.variable,
         bricolage.variable,
-        cinzel.variable
+        cinzel.variable,
+        fredoka.variable,
+        fraunces.variable
       )}
       suppressHydrationWarning
     >

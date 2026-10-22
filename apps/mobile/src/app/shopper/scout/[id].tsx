@@ -16,7 +16,7 @@ import { ActivityIndicator, Linking, Pressable, ScrollView, View } from 'react-n
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
-import { ArrowLeft, ExternalLink, MessageCircle, X } from 'lucide-react-native';
+import { Archive, ArchiveRestore, ArrowLeft, ExternalLink, MessageCircle, Trash2, X } from 'lucide-react-native';
 import {
   BottomSheet,
   Button,
@@ -33,6 +33,8 @@ import {
   toast,
 } from '@homeup/ui';
 import {
+  archiveScoutRun,
+  deleteScoutRun,
   formatMoney,
   scoutBudgetLabel,
   scoutFailure,
@@ -49,8 +51,10 @@ import {
   type ScoutMessage,
   type ShopperPick,
   type ShopperSearch,
+  unarchiveScoutRun,
 } from '@homeup/core';
-import { scoutRun, sendScoutFollowUp, watchScoutPick } from '@/features/shopper/shopper-api';
+import { scoutRun, sendScoutFollowUp, updateScoutRun, watchScoutPick } from '@/features/shopper/shopper-api';
+import { archiveToast } from '@/lib/archive-toast';
 import { Composer, ReplyText, Thinking } from '@/features/assistant/assistant-parts';
 
 const API = { load: scoutRun, send: sendScoutFollowUp };
@@ -59,7 +63,9 @@ export default function ScoutRunScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const canTalk = useModules().server('shopper.scout-thread');
+  const modules = useModules();
+  const canTalk = modules.server('shopper.scout-thread');
+  const canArchive = modules.server('shopper.scout-archive');
   const { thread, root, latest, latestPicks, items, suggestions, pending, send, refresh } = useScoutThread(id, API);
   const [openId, setOpenId] = React.useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = React.useState(false);
@@ -136,6 +142,30 @@ export default function ScoutRunScreen() {
             <Text numberOfLines={1} className="min-w-0 flex-1 text-micro-label uppercase text-muted-foreground">
               Scout · {scoutTitle(root.brief)}
             </Text>
+            {canArchive && scoutRunStatus(root) !== 'running' && (
+              <>
+                <Pressable
+                  onPress={() =>
+                    void (root.archived_at
+                      ? unarchiveScoutRun(updateScoutRun, root.id, archiveToast, refresh)
+                      : archiveScoutRun(updateScoutRun, root.id, archiveToast).then((done) => done && router.back()))
+                  }
+                  accessibilityRole="button"
+                  accessibilityLabel={root.archived_at ? 'Move back to Shopper' : 'Archive search'}
+                  className="h-11 w-11 items-center justify-center rounded-lg"
+                >
+                  {root.archived_at ? <ArchiveRestore size={18} className="text-muted-foreground" /> : <Archive size={18} className="text-muted-foreground" />}
+                </Pressable>
+                <Pressable
+                  onPress={() => void deleteScoutRun(updateScoutRun, root.id, archiveToast).then((done) => done && router.back())}
+                  accessibilityRole="button"
+                  accessibilityLabel="Delete search"
+                  className="h-11 w-11 items-center justify-center rounded-lg"
+                >
+                  <Trash2 size={18} className="text-muted-foreground" />
+                </Pressable>
+              </>
+            )}
           </View>
 
           {status === 'running' && latest.id === root.id ? (

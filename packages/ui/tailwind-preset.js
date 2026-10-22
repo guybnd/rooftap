@@ -69,6 +69,8 @@ const THEME_COLOR_KEYS = [
 // weight rides with the step's face below since native can't vary a single
 // registered font's weight (see FONT_FAMILY's comment).
 const TYPE_SCALE = {
+  // The hero steps' face comes from the `.text-hero*` utilities below
+  // (per-theme `--font-hero`), not from this fontFamily.
   hero: { sizePx: 88, weight: "800", trackingEm: -0.045, lineHeightPx: 84, fontFamily: "BricolageGrotesque_800ExtraBold" },
   "hero-section": { sizePx: 64, weight: "800", trackingEm: -0.04, lineHeightPx: 62, fontFamily: "BricolageGrotesque_800ExtraBold" },
   display: { sizePx: 24, weight: "700", trackingEm: -0.02, fontFamily: "BricolageGrotesque_700Bold" },
@@ -157,6 +159,15 @@ module.exports = {
       addUtilities({
         ".cap-inscription": {
           fontFamily: "var(--font-inscription)",
+        },
+        // Tailwind's fontSize entries drop a `fontFamily` key, so the hero
+        // steps set their face here, from the per-theme `--font-hero` var
+        // (Bricolage 800, or Sorbet's Fredoka).
+        ".text-hero": {
+          fontFamily: "var(--font-hero)",
+        },
+        ".text-hero-section": {
+          fontFamily: "var(--font-hero)",
         },
       });
     }),

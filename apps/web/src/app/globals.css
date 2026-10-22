@@ -328,6 +328,198 @@
     --motion-ease-in: linear;
   }
 
+  /* ========================================================================
+     THEME: Sorbet Day / Night
+     The playful pastel pair (picked from the 2026 pastel proposals): a clean
+     near-white or grape-black ground, a mango accent with dark text, very
+     round corners. Its section hues are its own gummy set and its glow gets
+     a pink, aqua and lemon aura (core section-hues.ts HUE_SETS and
+     GLOW_AURA, emitted by lib/section-hue-css.ts). Mirrors core's
+     THEME_TOKENS["sorbet-day"] / ["sorbet-night"].
+     ======================================================================== */
+  [data-theme="sorbet-day"] {
+    --background: oklch(0.985 0.01 60);
+    --foreground: oklch(0.27 0.03 300);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.27 0.03 300);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.27 0.03 300);
+    --primary: oklch(0.71 0.18 54);
+    --primary-foreground: oklch(0.25 0.05 40);
+    --secondary: oklch(0.945 0.014 60);
+    --secondary-foreground: oklch(0.33 0.03 300);
+    --muted: oklch(0.95 0.013 60);
+    --muted-foreground: oklch(0.52 0.035 300);
+    --accent: oklch(0.945 0.014 60);
+    --accent-foreground: oklch(0.27 0.03 300);
+    --destructive: oklch(0.572 0.197 15.9);
+    --success: oklch(0.553 0.118 160.1);
+    --success-foreground: oklch(1 0 0);
+    --warning: oklch(0.551 0.125 63.9);
+    --warning-foreground: oklch(1 0 0);
+    --border: oklch(0.925 0.016 60);
+    --input: oklch(0.955 0.012 60);
+    --ring: oklch(0.71 0.18 54);
+    --axis: oklch(0.71 0.18 54);
+    --sidebar: oklch(0.995 0.008 60);
+    --sidebar-foreground: oklch(0.33 0.03 300);
+    --sidebar-primary: oklch(0.71 0.18 54);
+    --sidebar-primary-foreground: oklch(0.25 0.05 40);
+    --sidebar-accent: oklch(0.95 0.013 60);
+    --sidebar-accent-foreground: oklch(0.27 0.03 300);
+    --sidebar-border: oklch(0.925 0.016 60);
+    --sidebar-ring: oklch(0.71 0.18 54);
+    --radius: 1.75rem;
+    --noise-opacity: 0;
+    --noise-blend: multiply;
+    --texture-opacity: 0;
+    --body-texture: none;
+    --glass-bg: oklch(1 0 0 / 1);
+    --glass-border: oklch(0.925 0.016 60 / 1);
+    --glass-highlight: oklch(1 0 0 / 0);
+    --glass-shadow: oklch(0 0 0 / 0);
+    --card-shadow: 0 1px 2px oklch(0.4 0.06 30 / 0.06), 0 12px 30px oklch(0.4 0.08 30 / 0.08);
+  }
+
+  [data-theme="sorbet-night"] {
+    --background: oklch(0.2 0.03 290);
+    --foreground: oklch(0.95 0.015 290);
+    --card: oklch(0.245 0.034 290);
+    --card-foreground: oklch(0.95 0.015 290);
+    --popover: oklch(0.245 0.034 290);
+    --popover-foreground: oklch(0.95 0.015 290);
+    --primary: oklch(0.8 0.16 62);
+    --primary-foreground: oklch(0.22 0.05 40);
+    --secondary: oklch(0.285 0.036 290);
+    --secondary-foreground: oklch(0.9 0.02 290);
+    --muted: oklch(0.285 0.036 290);
+    --muted-foreground: oklch(0.74 0.04 290);
+    --accent: oklch(0.285 0.036 290);
+    --accent-foreground: oklch(0.95 0.015 290);
+    --destructive: oklch(0.716 0.181 13.8);
+    --success: oklch(0.771 0.153 156.2);
+    --success-foreground: oklch(0.257 0.046 156.7);
+    --warning: oklch(0.824 0.149 73.3);
+    --warning-foreground: oklch(0.233 0.049 77.5);
+    --border: oklch(0.31 0.033 290);
+    --input: oklch(0.255 0.03 290);
+    --ring: oklch(0.8 0.16 62);
+    --axis: oklch(0.8 0.16 62);
+    --sidebar: oklch(0.215 0.03 290);
+    --sidebar-foreground: oklch(0.9 0.02 290);
+    --sidebar-primary: oklch(0.8 0.16 62);
+    --sidebar-primary-foreground: oklch(0.22 0.05 40);
+    --sidebar-accent: oklch(0.275 0.033 290);
+    --sidebar-accent-foreground: oklch(0.95 0.015 290);
+    --sidebar-border: oklch(0.31 0.033 290);
+    --sidebar-ring: oklch(0.8 0.16 62);
+    --radius: 1.75rem;
+    --noise-opacity: 0;
+    --noise-blend: overlay;
+    --texture-opacity: 0;
+    --body-texture: none;
+    --glass-bg: oklch(0.245 0.034 290 / 1);
+    --glass-border: oklch(0.31 0.033 290 / 1);
+    --glass-highlight: oklch(1 0 0 / 0);
+    --glass-shadow: oklch(0 0 0 / 0);
+    --card-shadow: none;
+  }
+
+  /* ========================================================================
+     THEME: Lavender Day / Night
+     The dreamy pastel pair: lilac mist by day, plum dusk by night, a violet
+     accent and an opal aura (lilac, ice blue, pink) behind the section glow.
+     Its own section hue set and aura come from core section-hues.ts.
+     Mirrors core's THEME_TOKENS["lavender-day"] / ["lavender-night"].
+     ======================================================================== */
+  [data-theme="lavender-day"] {
+    --background: oklch(0.97 0.025 300);
+    --foreground: oklch(0.3 0.05 300);
+    --card: oklch(0.995 0.009 300);
+    --card-foreground: oklch(0.3 0.05 300);
+    --popover: oklch(0.995 0.009 300);
+    --popover-foreground: oklch(0.3 0.05 300);
+    --primary: oklch(0.55 0.17 295);
+    --primary-foreground: oklch(1 0 0);
+    --secondary: oklch(0.93 0.035 300);
+    --secondary-foreground: oklch(0.33 0.04 300);
+    --muted: oklch(0.935 0.033 300);
+    --muted-foreground: oklch(0.52 0.04 300);
+    --accent: oklch(0.93 0.035 300);
+    --accent-foreground: oklch(0.3 0.05 300);
+    --destructive: oklch(0.572 0.197 15.9);
+    --success: oklch(0.553 0.118 160.1);
+    --success-foreground: oklch(1 0 0);
+    --warning: oklch(0.551 0.125 63.9);
+    --warning-foreground: oklch(1 0 0);
+    --border: oklch(0.91 0.04 300);
+    --input: oklch(0.94 0.03 300);
+    --ring: oklch(0.55 0.17 295);
+    --axis: oklch(0.55 0.17 295);
+    --sidebar: oklch(0.98 0.02 300);
+    --sidebar-foreground: oklch(0.33 0.04 300);
+    --sidebar-primary: oklch(0.55 0.17 295);
+    --sidebar-primary-foreground: oklch(1 0 0);
+    --sidebar-accent: oklch(0.935 0.033 300);
+    --sidebar-accent-foreground: oklch(0.3 0.05 300);
+    --sidebar-border: oklch(0.91 0.04 300);
+    --sidebar-ring: oklch(0.55 0.17 295);
+    --radius: 1.5rem;
+    --noise-opacity: 0;
+    --noise-blend: multiply;
+    --texture-opacity: 0;
+    --body-texture: none;
+    --glass-bg: oklch(0.995 0.009 300 / 1);
+    --glass-border: oklch(0.91 0.04 300 / 1);
+    --glass-highlight: oklch(1 0 0 / 0);
+    --glass-shadow: oklch(0 0 0 / 0);
+    --card-shadow: 0 1px 2px oklch(0.4 0.06 300 / 0.06), 0 12px 30px oklch(0.4 0.08 300 / 0.08);
+  }
+
+  [data-theme="lavender-night"] {
+    --background: oklch(0.215 0.045 305);
+    --foreground: oklch(0.95 0.015 305);
+    --card: oklch(0.26 0.052 305);
+    --card-foreground: oklch(0.95 0.015 305);
+    --popover: oklch(0.26 0.052 305);
+    --popover-foreground: oklch(0.95 0.015 305);
+    --primary: oklch(0.8 0.12 300);
+    --primary-foreground: oklch(0.24 0.06 300);
+    --secondary: oklch(0.3 0.054 305);
+    --secondary-foreground: oklch(0.9 0.02 305);
+    --muted: oklch(0.3 0.054 305);
+    --muted-foreground: oklch(0.74 0.04 305);
+    --accent: oklch(0.3 0.054 305);
+    --accent-foreground: oklch(0.95 0.015 305);
+    --destructive: oklch(0.716 0.181 13.8);
+    --success: oklch(0.771 0.153 156.2);
+    --success-foreground: oklch(0.257 0.046 156.7);
+    --warning: oklch(0.824 0.149 73.3);
+    --warning-foreground: oklch(0.233 0.049 77.5);
+    --border: oklch(0.325 0.05 305);
+    --input: oklch(0.27 0.045 305);
+    --ring: oklch(0.8 0.12 300);
+    --axis: oklch(0.8 0.12 300);
+    --sidebar: oklch(0.23 0.045 305);
+    --sidebar-foreground: oklch(0.9 0.02 305);
+    --sidebar-primary: oklch(0.8 0.12 300);
+    --sidebar-primary-foreground: oklch(0.24 0.06 300);
+    --sidebar-accent: oklch(0.29 0.05 305);
+    --sidebar-accent-foreground: oklch(0.95 0.015 305);
+    --sidebar-border: oklch(0.325 0.05 305);
+    --sidebar-ring: oklch(0.8 0.12 300);
+    --radius: 1.5rem;
+    --noise-opacity: 0;
+    --noise-blend: overlay;
+    --texture-opacity: 0;
+    --body-texture: none;
+    --glass-bg: oklch(0.26 0.052 305 / 1);
+    --glass-border: oklch(0.325 0.05 305 / 1);
+    --glass-highlight: oklch(1 0 0 / 0);
+    --glass-shadow: oklch(0 0 0 / 0);
+    --card-shadow: none;
+  }
+
   * {
     @apply border-border outline-ring/50;
   }
@@ -542,6 +734,22 @@
 [data-theme="e-ink"] .foil-text {
   background: none;
   -webkit-text-fill-color: currentColor;
+}
+
+/* Sorbet and Lavender give the Hero number its own face (Hearth T1
+   deviation, like Axis Mundi's inscription capitals): Sorbet's round
+   Fredoka, Lavender's soft Fraunces serif. Both stop at 700. */
+[data-theme^="sorbet"] .text-hero,
+[data-theme^="sorbet"] .text-hero-section {
+  font-family: var(--font-hero-sorbet), var(--font-heading);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+[data-theme^="lavender"] .text-hero,
+[data-theme^="lavender"] .text-hero-section {
+  font-family: var(--font-hero-lavender), var(--font-heading);
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 [data-theme="e-ink"] .cat-idx-0, [data-theme="e-ink"] .cat-idx-1, [data-theme="e-ink"] .cat-idx-2,
 [data-theme="e-ink"] .cat-idx-3, [data-theme="e-ink"] .cat-idx-4, [data-theme="e-ink"] .cat-idx-5,

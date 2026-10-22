@@ -3,6 +3,8 @@ import { Tabs } from 'expo-router';
 import { Easing, useWindowDimensions } from 'react-native';
 import { MOTION_DURATIONS_MS, TAB_SHIFT_FRACTION, getSectionByPath } from '@homeup/core';
 import { SectionProvider, TabGround, useStillMotion } from '@homeup/ui';
+import { TabFreeze } from '@/components/nav/tab-freeze';
+import { TabWarmup } from '@/components/nav/tab-warmup';
 import { useTabBarSections } from '@/components/nav/use-tab-bar-sections';
 import { tabScreenOrder } from '@/lib/tab-routes';
 
@@ -10,13 +12,23 @@ const SWIFT_OUT = Easing.bezier(0.16, 1, 0.3, 1);
 // The bar is PrimaryTabBar, rendered by the root layout.
 const noTabBar = () => null;
 // Each section root names its own section (its tiles, and the glow it
-// borrows), whichever tab is on screen.
-const sceneLayout = ({ route, children }: { route: { name: string }; children: React.ReactElement }) => (
-  <SectionProvider sectionId={getSectionByPath(`/${route.name}`).id}>{children}</SectionProvider>
+// borrows), whichever tab is on screen, and freezes once it has slid away.
+const sceneLayout = ({
+  route,
+  navigation,
+  children,
+}: {
+  route: { name: string };
+  navigation: React.ComponentProps<typeof TabFreeze>['navigation'];
+  children: React.ReactElement;
+}) => (
+  <SectionProvider sectionId={getSectionByPath(`/${route.name}`).id}>
+    <TabFreeze navigation={navigation}>{children}</TabFreeze>
+  </SectionProvider>
 );
 
 export default function TabsLayout() {
-  const { currentSection, orderedSections } = useTabBarSections();
+  const { pathname, currentSection, orderedSections, visibleSections } = useTabBarSections();
 
   // Hearth §8.1 Shift: screens are ranked in the tab bar's order (hidden
   // sections keep their place, so the rank doesn't move as you visit one),
@@ -32,6 +44,7 @@ export default function TabsLayout() {
   return (
     <TabGround sectionId={currentSection.id}>
       <TabsNavigator screens={screens} />
+      <TabWarmup pathname={pathname} visibleSections={visibleSections} />
     </TabGround>
   );
 }
@@ -51,7 +64,9 @@ const TabsNavigator = React.memo(function TabsNavigator({ screens }: { screens: 
     () => ({
       headerShown: false,
       lazy: true,
-      freezeOnBlur: true,
+      // TabFreeze (sceneLayout) does this: the navigator's own freeze never
+      // fires while the shift animation is on.
+      freezeOnBlur: false,
       animation: reduceMotion ? 'none' : 'shift',
       // The bar's pebble (TabGlide) glides on this same spec.
       transitionSpec: {

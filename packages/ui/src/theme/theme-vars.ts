@@ -2,7 +2,7 @@
 // property record the Tailwind preset's `var(--color-x)` / `var(--radius-x)`
 // references resolve against (see ../../tailwind-preset.js). This is the
 // runtime half of the token bridge — the preset only ever declares names.
-import { deriveRadiusScale, isStillTheme, THEME_TOKENS, type BodyTextureKind, type HueScheme, type ThemeId } from '@homeup/core';
+import { deriveRadiusScale, isHueSetId, isStillTheme, THEME_TOKENS, type BodyTextureKind, type HueScheme, type ThemeId } from '@homeup/core';
 import { isLightOklch, resolveBoxShadowOklch, resolveOklchToRgba, resolveOklchToRgbTriplet } from './resolve-color';
 
 export type ThemeVars = Record<
@@ -14,7 +14,8 @@ export type ThemeVars = Record<
   | '--glass-highlight'
   | '--glass-shadow'
   | '--texture-opacity'
-  | '--font-inscription',
+  | '--font-inscription'
+  | '--font-hero',
   string
 >;
 
@@ -54,6 +55,13 @@ export function themeVars(themeId: ThemeId): ThemeVars {
   vars['--glass-shadow'] = resolveOklchToRgba(tokens.material.glass.shadow);
   vars['--texture-opacity'] = String(tokens.material.texture.opacity);
   vars['--font-inscription'] = AXIS_MUNDI_THEME_IDS.has(themeId) ? 'Cinzel_600SemiBold' : 'Geist_500Medium';
+  // The Hero type step's face: Sorbet's round Fredoka, Lavender's Fraunces,
+  // Bricolage elsewhere (mirrors web's `[data-theme^=...] .text-hero` rules).
+  vars['--font-hero'] = themeId.startsWith('sorbet')
+    ? 'Fredoka_700Bold'
+    : themeId.startsWith('lavender')
+      ? 'Fraunces_700Bold'
+      : 'BricolageGrotesque_800ExtraBold';
 
   const result = vars as ThemeVars;
   cache.set(themeId, result);
@@ -97,7 +105,8 @@ export interface ResolvedThemeMaterial {
   background: string;
   /**
    * Which swatch of a section hue (section-hues.ts) this theme wears: light
-   * ground = 'light', dark = 'dark', the e-paper theme = 'ink' (one grey).
+   * ground = 'light', dark = 'dark', the e-paper theme = 'ink' (one grey),
+   * or the theme's own hue set (Sorbet). hueSchemeTone() gives its ground.
    */
   scheme: HueScheme;
   /**
@@ -130,7 +139,7 @@ export function themeMaterial(themeId: ThemeId): ResolvedThemeMaterial {
     axisColor: AXIS_MUNDI_THEME_IDS.has(themeId) ? resolveOklchToRgba(THEME_TOKENS[themeId].colors.axis) : null,
     statusBarStyle: isLightOklch(THEME_TOKENS[themeId].colors.background) ? 'dark' : 'light',
     background: `rgb(${vars['--color-background'].split(' ').join(', ')})`,
-    scheme: isStillTheme(themeId) ? 'ink' : isLightOklch(THEME_TOKENS[themeId].colors.background) ? 'light' : 'dark',
+    scheme: isStillTheme(themeId) ? 'ink' : isHueSetId(themeId) ? themeId : isLightOklch(THEME_TOKENS[themeId].colors.background) ? 'light' : 'dark',
     sectionGlow: !AXIS_MUNDI_THEME_IDS.has(themeId) && !isStillTheme(themeId),
     still: isStillTheme(themeId),
   };

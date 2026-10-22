@@ -36,6 +36,8 @@ export interface AssistantConversation {
   pending: number;
   /** Something happened here since this person last read it. Missing from servers before assistant_reads. */
   unread?: boolean;
+  /** Archived by its owner: out of the lists, under "Archived". Missing from servers before archiving. */
+  archived?: boolean;
 }
 
 export interface ProposalItem {
@@ -208,6 +210,14 @@ export function createAssistantApi(call: AssistantCall, stream?: AssistantStream
   return {
     status: () => call<AssistantStatus>('/api/assistant/status'),
     conversations: async () => (await call<{ conversations: AssistantConversation[] }>('/api/assistant/conversations')).conversations,
+    /** The list, with how many chats are archived (0 from servers before archiving). */
+    conversationList: async () => {
+      const body = await call<{ conversations: AssistantConversation[]; archived?: number }>('/api/assistant/conversations');
+      return { conversations: body.conversations, archived: body.archived ?? 0 };
+    },
+    /** Only the chats this person archived. */
+    archivedConversations: async () =>
+      (await call<{ conversations: AssistantConversation[] }>('/api/assistant/conversations?archived=1')).conversations,
     messages: (conversationId: string) =>
       call<{ conversation: AssistantConversation; messages: AssistantMessage[] }>(
         `/api/assistant/conversations/${encodeURIComponent(conversationId)}`
@@ -221,7 +231,7 @@ export function createAssistantApi(call: AssistantCall, stream?: AssistantStream
     notifyPrefs: () => call<{ prefs: AssistantNotifyPrefs }>('/api/assistant/notify-prefs'),
     saveNotifyPrefs: (patch: Partial<AssistantNotifyPrefs>) =>
       call<{ prefs: AssistantNotifyPrefs }>('/api/assistant/notify-prefs', { method: 'PUT', body: patch }),
-    updateConversation: (conversationId: string, patch: { title?: string; pinned?: boolean; deleted?: boolean }) =>
+    updateConversation: (conversationId: string, patch: { title?: string; pinned?: boolean; deleted?: boolean; archived?: boolean }) =>
       call<{ ok: true }>(`/api/assistant/conversations/${encodeURIComponent(conversationId)}`, { method: 'PATCH', body: patch }),
     /**
      * Each send carries how long the previous reply took to arrive, so the

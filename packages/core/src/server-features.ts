@@ -57,6 +57,14 @@ export const SERVER_FEATURES = {
     minSchema: '20261022070000_shopper_scout_thread',
     label: 'asking Scout about its picks and changing a search',
   },
+  'assistant.archive': {
+    minSchema: '20261022093000_archive_chats_and_scout',
+    label: 'archiving assistant chats and taking back a delete',
+  },
+  'shopper.scout-archive': {
+    minSchema: '20261022093000_archive_chats_and_scout',
+    label: 'archiving and deleting Scout searches',
+  },
 } as const satisfies Record<string, ServerFeatureDef>;
 
 export type ServerFeatureId = keyof typeof SERVER_FEATURES;

@@ -4,6 +4,7 @@
 // absolute-origin fetch with the Supabase session as `Authorization: Bearer`.
 // Web twin: apps/web/src/lib/shopper-api.ts.
 import type { ScoutBrief, ScoutMessage, ScoutThread, ShopperPick, ShopperSearch, ShopperWant, SourceDeal } from '@homeup/core';
+import { overrideScoutRun } from '@homeup/core';
 import { getCurrentSupabaseClient } from '@/lib/supabase-client';
 import { getStoredServer } from '@/lib/server-config';
 
@@ -120,4 +121,13 @@ export async function watchScoutPick(pickId: string): Promise<ShopperWant> {
  */
 export function sendScoutFollowUp(threadId: string, text: string, pickId: string | null): Promise<{ messages: ScoutMessage[]; search?: ShopperSearch }> {
   return call(`/api/shopper/scout/${encodeURIComponent(threadId)}/messages`, { method: 'POST', body: JSON.stringify({ text, pick_id: pickId }) });
+}
+
+/**
+ * Archives, deletes or restores a Scout search and the refined runs in its
+ * thread. Shopper's lists show the change at once, before sync brings it.
+ */
+export async function updateScoutRun(id: string, patch: { archived?: boolean; deleted?: boolean }): Promise<void> {
+  await call(`/api/shopper/scout/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(patch) });
+  overrideScoutRun(id, patch);
 }

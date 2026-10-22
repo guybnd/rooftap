@@ -26,7 +26,7 @@ export const SYSTEM_THEME_IDS: Record<ColorScheme, ThemeId> = {
 export const THEME_PREFERENCE_STORAGE_KEY = 'homeup-theme-pref';
 
 /** Themes whose ground is light (dark status-bar icons, no `.dark` class on web). */
-export const LIGHT_THEME_IDS: readonly ThemeId[] = ['ember-day', 'axis-mundi-day', 'e-ink'];
+export const LIGHT_THEME_IDS: readonly ThemeId[] = ['ember-day', 'axis-mundi-day', 'e-ink', 'sorbet-day', 'lavender-day'];
 
 /**
  * Themes for e-paper screens: flat (no glow, shadow or blur), greyscale
