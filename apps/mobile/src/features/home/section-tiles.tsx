@@ -16,6 +16,7 @@ import { use$ } from '@legendapp/state/react';
 import { Hammer, LayoutDashboard, CalendarClock, Star, ChevronRight, ShoppingBag, Sparkles } from 'lucide-react-native';
 import { Text, Card, LeadingTile, ListGroup } from '@homeup/ui';
 import { assistantApi } from '@/features/assistant/assistant-api';
+import { Sparkline } from '@/features/shopper/price-chart';
 import { WantRow } from '@/features/shopper/want-row';
 import {
   summarize,
@@ -241,18 +242,22 @@ export function ShopperTile({ group, expanded = false }: { group: Group; expande
               <View className="gap-2">
                 {counts}
                 {top && top.want.best_cents != null && (
-                  <View className="min-w-0">
-                    <Text numberOfLines={1} className="text-caption text-foreground">
-                      {top.want.title}
-                    </Text>
-                    <Text numberOfLines={1} className="text-[11px] text-muted-foreground" style={{ fontVariant: ['tabular-nums'] }}>
-                      <Text className="text-[11px] text-success">
-                        {hitTarget(top.want) ? 'Hit target' : top.verdict.rating ? DEAL_META[top.verdict.rating].label : ''}
+                  <View className="flex-row items-center gap-3">
+                    <View className="min-w-0 flex-1">
+                      <Text numberOfLines={1} className="text-caption text-foreground">
+                        {top.want.title}
                       </Text>
-                      {' · '}
-                      {formatMoney(top.want.best_cents, { currency })}
-                      {top.want.best_store ? ` at ${top.want.best_store}` : ''}
-                    </Text>
+                      <Text numberOfLines={1} className="text-[11px] text-muted-foreground" style={{ fontVariant: ['tabular-nums'] }}>
+                        <Text className="text-[11px] text-success">
+                          {hitTarget(top.want) ? 'Hit target' : top.verdict.rating ? DEAL_META[top.verdict.rating].label : ''}
+                        </Text>
+                        {' · '}
+                        {formatMoney(top.want.best_cents, { currency })}
+                        {top.want.best_store ? ` at ${top.want.best_store}` : ''}
+                      </Text>
+                    </View>
+                    {/* The same price trend the Shopper row carries. */}
+                    <Sparkline series={top.trend} rating={top.verdict.rating} />
                   </View>
                 )}
               </View>

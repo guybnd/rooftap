@@ -193,6 +193,30 @@ export function heroItemOpenTarget(item: HeroItem): HeroItemOpenTarget {
 }
 
 /**
+ * What an event's Now card can say beyond its start time: where it is (for a
+ * Directions button, by the event's travel mode) and when it ends ("HH:MM" local, same day only). A
+ * viewing's place is its listing's address, which is also its title. Tasks
+ * and reminders have neither.
+ */
+export function heroItemEventDetails(item: HeroItem): { location: string | null; endsAt: string | null; travelMode: string | null } {
+  const event = item.groupEvent ?? item.googleEvent ?? null;
+  if (event) {
+    const location = event.location?.trim() || null;
+    let endsAt: string | null = null;
+    if (event.ends_at && !event.is_all_day) {
+      const start = new Date(event.starts_at);
+      const end = new Date(event.ends_at);
+      if (!Number.isNaN(end.getTime()) && end.toDateString() === start.toDateString() && end > start) {
+        endsAt = `${String(end.getHours()).padStart(2, '0')}:${String(end.getMinutes()).padStart(2, '0')}`;
+      }
+    }
+    return { location, endsAt, travelMode: item.groupEvent?.travel_mode ?? null };
+  }
+  if (item.appointment) return { location: item.title.trim() || null, endsAt: null, travelMode: null };
+  return { location: null, endsAt: null, travelMode: null };
+}
+
+/**
  * The lede's segmented meter (H3: the lede's own meter): one segment per item
  * up to `max`, scaled past it so a big day still fits one row. A scaled meter
  * never rounds real progress away: one finished item always fills a segment,

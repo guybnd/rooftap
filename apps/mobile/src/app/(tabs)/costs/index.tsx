@@ -54,6 +54,7 @@ import {
   type PickerOption,
   type SectionRow,
   haptics,
+  useThemeMaterial,
 } from '@homeup/ui';
 import {
   CATEGORY_META,
@@ -91,7 +92,7 @@ import { NoGroupScreen } from '@/components/no-group-screen';
 import { getCurrentSupabaseClient } from '@/lib/supabase-client';
 import { randomUUID } from '@/lib/uuid';
 import { CostDashboard } from '@/features/costs/cost-dashboard';
-import { CostRow } from '@/features/costs/cost-card';
+import { CostRow, categoryTint } from '@/features/costs/cost-card';
 import { CostModal } from '@/features/costs/cost-modal';
 import { sectionIconFor } from '@/lib/section-icons';
 
@@ -136,6 +137,7 @@ function MemberAvatar({ userId, profiles, size = 20 }: { userId: string | null; 
 
 export default function CostsSectionScreen() {
   const insets = useSafeAreaInsets();
+  const scheme = useThemeMaterial().scheme;
   const { group, currentUserId, userSettings, groupMembers, memberProfiles, loading: cacheLoading } = useDataCache();
 
   const items$ = costItems$(group?.id);
@@ -863,7 +865,9 @@ export default function CostsSectionScreen() {
           ) : (
             <ChevronDown size={14} className="text-muted-foreground" />
           )}
-          <Text className="text-[10.5px] font-medium uppercase tracking-[0.1em] text-muted-foreground">{row.label}</Text>
+          <Text className={cn('text-[10.5px] font-medium uppercase tracking-[0.1em]', categoryTint(scheme, cat)?.title ?? 'text-muted-foreground')}>
+            {row.label}
+          </Text>
           <Text className="text-xs text-muted-foreground">{row.count}</Text>
           <View className="flex-1" />
           {aggregateLabel && (

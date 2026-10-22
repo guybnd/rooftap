@@ -52,6 +52,11 @@ export interface NowCardProps {
   onOpen?: () => void;
   onComplete?: () => void;
   /**
+   * What sits at the card's foot when it can't be finished (an event's place,
+   * end time and actions), where a to-do has its slide track.
+   */
+  footer?: ReactNode;
+  /**
    * How a finishable card is finished: the slide track (touch), or a round
    * check beside the title where a slide feels out of place (a desktop
    * pointer, Hearth §13 "Desktop shell").
@@ -76,6 +81,7 @@ function NowCardFrame({
   body,
   onOpen,
   onComplete,
+  footer,
   finishAs = "slide",
   className,
   headProps,
@@ -165,6 +171,7 @@ function NowCardFrame({
       {/* mt-auto: in the pager every card is as tall as the tallest, and the
           track stays at the bottom edge where the thumb expects it. */}
       {onComplete && finishAs !== "button" && <SlideToComplete onComplete={onComplete} className="mt-auto md:max-w-md" />}
+      {!onComplete && footer != null && <div className="mt-auto">{footer}</div>}
     </section>
   );
 }
@@ -396,6 +403,7 @@ export function NowCardPager({
                   }
                   onOpen={celebratingId !== null ? undefined : item.onOpen}
                   onComplete={item.onComplete ? () => celebrate(item, at) : undefined}
+                  footer={item.footer}
                   finishAs={finishAs}
                   headProps={at === index ? headProps : undefined}
                   hidden={at !== index}

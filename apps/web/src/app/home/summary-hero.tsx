@@ -23,13 +23,15 @@
 // A dated checklist's card opens its list in place, with its own meter.
 
 import { Fragment, useEffect, useState, type ReactNode } from 'react';
-import { Bell, CalendarClock, Settings } from 'lucide-react';
+import { ArrowUpRight, Bell, CalendarClock, MapPin, Navigation, Settings } from 'lucide-react';
 import type { Checklist, ChecklistTaskItem, CostItem, HomeLensKey, HouseholdTask } from '@homeup/core';
 import {
   buildDayRibbon,
   completion,
+  heroItemEventDetails,
   heroItemOpenTarget,
   heroItemSectionId,
+  mapsDirectionsUrl,
   pickNowQueue,
   skyHeadline,
   todayProgress,
@@ -275,6 +277,9 @@ export function SummaryHero({
       body: checklist ? <TaskChecklistPanel checklist={checklist} items={checklistItems} currentUserId={currentUserId} /> : undefined,
       onOpen: heroItemOpenTarget(item) ? () => onOpenItem(item) : undefined,
       onComplete: item.task && !item.task.done ? () => onCompleteItem(item) : undefined,
+      footer: item.task ? undefined : (
+        <EventCardFooter item={item} onOpen={heroItemOpenTarget(item) ? () => onOpenItem(item) : undefined} />
+      ),
     };
   });
 
@@ -364,5 +369,47 @@ export function SummaryHero({
         onCountdownFlush={flushCountdown}
       />
     </>
+  );
+}
+
+/**
+ * The foot of a Now card that can't be finished (an event or a viewing),
+ * where a to-do has its slide track: where it is and when it ends, then Open
+ * and Directions. Native twin: EventCardFooter in apps/mobile's Home screen.
+ */
+function EventCardFooter({ item, onOpen }: { item: HeroItem; onOpen?: () => void }) {
+  const { location, endsAt, travelMode } = heroItemEventDetails(item);
+  // A viewing's place is already its title.
+  const place = item.appointment ? null : location;
+  if (!onOpen && !location) return null;
+  const pill =
+    'inline-flex h-10 items-center gap-2 rounded-full bg-muted px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+  return (
+    <div className="flex flex-col gap-3">
+      {(place || endsAt) && (
+        <p className="flex min-w-0 items-center gap-1.5 text-sm text-muted-foreground">
+          {place && <MapPin aria-hidden className="size-4 shrink-0" />}
+          <span className="truncate">
+            {place}
+            {place && endsAt ? ' · ' : ''}
+            {endsAt && <span className="tabular-nums">Until {formatTime12h(endsAt)}</span>}
+          </span>
+        </p>
+      )}
+      <div className="flex flex-wrap gap-2">
+        {onOpen && (
+          <button type="button" onClick={onOpen} className={pill}>
+            <ArrowUpRight aria-hidden className="size-4" />
+            Open
+          </button>
+        )}
+        {location && (
+          <a href={mapsDirectionsUrl(location, travelMode)} target="_blank" rel="noopener noreferrer" className={pill}>
+            <Navigation aria-hidden className="size-4" />
+            Directions
+          </a>
+        )}
+      </div>
+    </div>
   );
 }

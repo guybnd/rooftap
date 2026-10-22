@@ -300,7 +300,8 @@ function RibbonKey({ rain }: { rain: boolean }) {
           <span className="font-sans">Chance of rain</span>
         </>
       )}
-      <span className="ml-auto font-sans">Point at an hour for details</span>
+      <span className="ml-auto font-sans pointer-coarse:hidden">Point at an hour for details</span>
+      <span className="ml-auto hidden font-sans pointer-coarse:inline">Tap an hour for details</span>
     </>
   );
 }

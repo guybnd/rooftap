@@ -5,6 +5,7 @@ import {
   feedDayLabel,
   feedRowWhen,
   groupFeedItems,
+  heroItemEventDetails,
   heroItemOpenTarget,
   heroItemSectionId,
   meterSegments,
@@ -288,5 +289,20 @@ describe("weekBoardColumns", () => {
   it("stops at the range's end", () => {
     const cols = weekBoardColumns([item({ id: "d" })], TODAY, TODAY);
     expect(cols.map((c) => c.key)).toEqual([TODAY]);
+  });
+});
+
+describe("heroItemEventDetails", () => {
+  it("gives an event's place and same-day end time", () => {
+    const start = new Date(2026, 9, 18, 17, 30).toISOString();
+    const end = new Date(2026, 9, 18, 18, 15).toISOString();
+    const groupEvent = { location: " Bar Idda ", starts_at: start, ends_at: end, is_all_day: false } as never;
+    expect(heroItemEventDetails(item({ groupEvent }))).toEqual({ location: "Bar Idda", endsAt: "18:15", travelMode: null });
+  });
+
+  it("skips the end of an all-day event and has nothing for a to-do", () => {
+    const groupEvent = { location: null, starts_at: "2026-10-18", ends_at: "2026-10-19", is_all_day: true } as never;
+    expect(heroItemEventDetails(item({ groupEvent }))).toEqual({ location: null, endsAt: null, travelMode: null });
+    expect(heroItemEventDetails(item())).toEqual({ location: null, endsAt: null, travelMode: null });
   });
 });

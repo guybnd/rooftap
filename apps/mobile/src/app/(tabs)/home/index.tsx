@@ -162,6 +162,7 @@ import { createUndoToastPresenter } from '@/lib/undo-toast';
 import { useTaskSnoozeUndo } from '@/features/tasks/use-task-snooze-undo';
 import { useWeather } from '@/features/home/use-weather';
 import { DayRibbon, SkyBlock, SkyNote, useSkyRibbonOpen } from '@/features/home/sky';
+import { EventCardFooter } from '@/features/home/event-card-footer';
 import { isModuleShown, upcomingBills, BILLS_DUE_MAX_ROWS } from '@/features/home/hero-modules';
 import { deriveBudgetPulseTone } from '@/features/home/budget-tile';
 import { useHeroModuleConfig } from '@/features/home/use-hero-module-config';
@@ -1166,6 +1167,9 @@ export default function HomeSectionScreen() {
       ) : undefined,
       onOpen: heroItemOpenTarget(item) ? () => openNowItem(item) : undefined,
       onComplete: item.task && !item.task.done ? () => finishFromNowCard(item.task!) : undefined,
+      footer: item.task ? undefined : (
+        <EventCardFooter item={item} onOpen={heroItemOpenTarget(item) ? () => openNowItem(item) : undefined} />
+      ),
     };
   });
   const feedGroups = groupFeedItems(visibleHeroItems, todayISOStr);

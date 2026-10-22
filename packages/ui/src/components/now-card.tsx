@@ -52,6 +52,11 @@ export interface NowCardProps {
   onOpen?: () => void;
   /** Omit for an item that can't be finished (a viewing, a calendar event). */
   onComplete?: () => void;
+  /**
+   * What sits at the card's foot when it can't be finished (an event's place,
+   * end time and actions), where a to-do has its slide track.
+   */
+  footer?: React.ReactNode;
   className?: string;
 }
 
@@ -85,6 +90,7 @@ function NowCardFrame({
   body,
   onOpen,
   onComplete,
+  footer,
   className,
   headGesture,
   expanded = false,
@@ -138,6 +144,7 @@ function NowCardFrame({
       {/* mt-auto: in the pager every card is as tall as the tallest, and the
           track stays at the bottom edge where the thumb expects it. */}
       {onComplete && <SlideToComplete onComplete={onComplete} className="mt-auto" />}
+      {!onComplete && footer != null && <View className="mt-auto">{footer}</View>}
     </View>
   );
 }
@@ -330,6 +337,7 @@ export function NowCardPager({ items, className }: NowCardPagerProps) {
         }
         onOpen={celebratingId !== null ? undefined : item.onOpen}
         onComplete={item.onComplete ? () => celebrate(item, at) : undefined}
+        footer={item.footer}
         headGesture={width > 0 ? pagePan(at) : undefined}
         // grow, not flex-1: flex-1's zero basis let a content-sized column
         // squeeze the card below its content when the screen relaid out

@@ -59,6 +59,7 @@ import {
   SegmentedControl,
   SwipeActions,
   cn,
+  useThemeMaterial,
   haptics,
   useHoldFill,
   type PortalChipDef,
@@ -115,11 +116,42 @@ const CATEGORY_OPTIONS = Object.keys(CATEGORY_META) as CostCategory[];
 const CADENCE_SEGMENTS = CADENCE_OPTIONS.map((c) => ({ value: c, label: CADENCE_LABEL[c] }));
 const CATEGORY_PICKER_OPTIONS: PickerOption[] = CATEGORY_OPTIONS.map((c) => ({ value: c, primary: CATEGORY_META[c].label }));
 
-// One lucide glyph per category, shown in a neutral chip (Hearth v2 H2): the
-// glyph names the category, so the chip needs no hue of its own. The old
-// per-category tints borrowed the status hues (amber, emerald, rose) as
-// decoration; category hues now live only in the chart, where they key a
-// series. Web mirrors this in apps/web/src/app/costs/category-glyph.tsx.
+// One lucide glyph per category, in a chip tinted with the category's pastel
+// (the same hues the chart keys its series with). The group title takes the
+// darker text shade. Literal classes so NativeWind sees them; web reads the
+// same palette from core's CATEGORY_COLOR (apps/web/src/app/costs/category-glyph.tsx).
+const CATEGORY_TILE: Record<'light' | 'dark', Record<CostCategory, { tile: string; glyph: string; title: string }>> = {
+  light: {
+    rent: { tile: 'bg-blue-300/20', glyph: 'text-blue-700', title: 'text-blue-600' },
+    utilities: { tile: 'bg-amber-200/20', glyph: 'text-amber-700', title: 'text-amber-600' },
+    internet: { tile: 'bg-cyan-300/20', glyph: 'text-cyan-700', title: 'text-cyan-600' },
+    insurance: { tile: 'bg-violet-300/20', glyph: 'text-violet-700', title: 'text-violet-600' },
+    subscription: { tile: 'bg-pink-300/20', glyph: 'text-pink-700', title: 'text-pink-600' },
+    grocery_estimate: { tile: 'bg-lime-200/20', glyph: 'text-lime-700', title: 'text-lime-600' },
+    moving: { tile: 'bg-orange-300/20', glyph: 'text-orange-700', title: 'text-orange-600' },
+    purchase: { tile: 'bg-fuchsia-300/20', glyph: 'text-fuchsia-700', title: 'text-fuchsia-600' },
+    outing: { tile: 'bg-sky-200/20', glyph: 'text-sky-700', title: 'text-sky-600' },
+    other: { tile: 'bg-slate-400/20', glyph: 'text-slate-700', title: 'text-slate-600' },
+  },
+  dark: {
+    rent: { tile: 'bg-blue-300/15', glyph: 'text-blue-200', title: 'text-blue-200' },
+    utilities: { tile: 'bg-amber-200/15', glyph: 'text-amber-100', title: 'text-amber-100' },
+    internet: { tile: 'bg-cyan-300/15', glyph: 'text-cyan-200', title: 'text-cyan-200' },
+    insurance: { tile: 'bg-violet-300/15', glyph: 'text-violet-200', title: 'text-violet-200' },
+    subscription: { tile: 'bg-pink-300/15', glyph: 'text-pink-200', title: 'text-pink-200' },
+    grocery_estimate: { tile: 'bg-lime-200/15', glyph: 'text-lime-100', title: 'text-lime-100' },
+    moving: { tile: 'bg-orange-300/15', glyph: 'text-orange-200', title: 'text-orange-200' },
+    purchase: { tile: 'bg-fuchsia-300/15', glyph: 'text-fuchsia-200', title: 'text-fuchsia-200' },
+    outing: { tile: 'bg-sky-200/15', glyph: 'text-sky-100', title: 'text-sky-100' },
+    other: { tile: 'bg-slate-400/15', glyph: 'text-slate-300', title: 'text-slate-300' },
+  },
+};
+
+/** A category's tint (chip, glyph and group title classes) in a theme, or null for an unknown category. */
+export function categoryTint(scheme: 'light' | 'dark', category: string) {
+  return CATEGORY_TILE[scheme][category as CostCategory] ?? null;
+}
+
 const CATEGORY_ICON: Record<CostCategory, LucideIcon> = {
   rent: Banknote,
   utilities: Zap,
@@ -135,9 +167,10 @@ const CATEGORY_ICON: Record<CostCategory, LucideIcon> = {
 
 export function CategoryChip({ category }: { category: CostCategory }) {
   const Icon = CATEGORY_ICON[category] ?? MoreHorizontal;
+  const tint = categoryTint(useThemeMaterial().scheme, category);
   return (
-    <View className="h-7 w-7 items-center justify-center rounded-[9px] bg-muted">
-      <Icon size={15} className="text-muted-foreground" />
+    <View className={cn('h-7 w-7 items-center justify-center rounded-[9px]', tint?.tile ?? 'bg-muted')}>
+      <Icon size={15} className={tint?.glyph ?? 'text-muted-foreground'} />
     </View>
   );
 }
