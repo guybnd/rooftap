@@ -59,7 +59,6 @@ import {
 import {
   CATEGORY_META,
   CADENCE_LABEL,
-  PERIOD_LABEL,
   amountForPeriod,
   apartments$,
   costItems$,
@@ -86,6 +85,8 @@ import {
   costTargets,
   monthKey,
   useBankActuals,
+  useUpConnected,
+  useUpOverview,
   type Apartment,
   type CostCadence,
   type CostCategory,
@@ -101,11 +102,11 @@ import { CostDashboard } from '@/features/costs/cost-dashboard';
 import { CostRow, categoryTint } from '@/features/costs/cost-card';
 import { CostModal } from '@/features/costs/cost-modal';
 import { MoneyInsights } from '@/features/costs/money-insights';
+import { MonthDetail } from '@/features/costs/month-detail';
 import { upBankApi } from '@/features/costs/up-bank-api';
 import { CostsViewSwitch, MoneyView, type CostsView } from '@/features/costs/money-view';
 import { sectionIconFor } from '@/lib/section-icons';
 
-const PERIODS: Period[] = ['weekly', 'monthly', 'yearly'];
 const CADENCE_OPTIONS: CostCadence[] = ['weekly', 'fortnightly', 'monthly', 'quarterly', 'yearly', 'one_off'];
 const CADENCE_SEGMENTS = CADENCE_OPTIONS.map((c) => ({ value: c, label: CADENCE_LABEL[c] }));
 
@@ -154,6 +155,12 @@ export default function CostsSectionScreen() {
 
 function CostsScreenBody() {
   const bank = useBankActuals();
+  const upConnected = useUpConnected();
+  const { linking: upLinking } = useUpOverview();
+  // With Up connected the month list is the screen; cost lines wait behind a button.
+  const monthList = upConnected && upLinking;
+  const [linesOpen, setLinesOpen] = React.useState(false);
+  const showLines = !monthList || linesOpen;
   const insets = useSafeAreaInsets();
   const scheme = useThemeMaterial().scheme;
   const { group, currentUserId, userSettings, groupMembers, memberProfiles, loading: cacheLoading } = useDataCache();
@@ -189,7 +196,8 @@ function CostsScreenBody() {
       .reduce((sum, i) => sum + (i.est_price ?? 0), 0) * 100
   );
 
-  const [period, setPeriod] = React.useState<Period>('monthly');
+  // Every total is per month: the month picker drives the screen (Guy's pick A).
+  const period: Period = 'monthly';
   // HOUP-277: the chart's month picker (below) drives the list filter
   // directly, no separate toggle — null means "current month" (its default).
   const [selectedMonthIdx, setSelectedMonthIdx] = React.useState<number | null>(null);
@@ -226,15 +234,13 @@ function CostsScreenBody() {
   // on each open so CostModal's useState initializers re-seed a blank form.
   const [addNonce, setAddNonce] = React.useState(0);
 
-  // FLUX-65 parity: period + monthly budget target sync via user_settings —
+  // FLUX-65 parity: the monthly budget target syncs via user_settings —
   // native has no localStorage mirror, so the DB is the only source. Hydrate
   // once cacheLoading resolves.
   const hydrated = React.useRef(false);
   React.useEffect(() => {
     if (cacheLoading || hydrated.current) return;
     hydrated.current = true;
-    const dbPeriod = userSettings?.costs_period;
-    if (dbPeriod === 'weekly' || dbPeriod === 'monthly' || dbPeriod === 'yearly') setPeriod(dbPeriod);
     if (userSettings?.costs_budget_monthly != null) setBudget(userSettings.costs_budget_monthly / 100);
     if (userSettings?.costs_hide_section_suggestions != null) {
       setHideSectionSuggestions(userSettings.costs_hide_section_suggestions);
@@ -256,11 +262,6 @@ function CostsScreenBody() {
       // reflects the change; the next successful edit will persist it.
     }
   }, []);
-
-  const changePeriod = (p: Period) => {
-    setPeriod(p);
-    void persistSettings({ costs_period: p });
-  };
 
   // Same toggle-off-on-repeat-tap behavior the chart's bars had locally
   // before HOUP-277 lifted the selection up to the screen.
@@ -510,6 +511,7 @@ function CostsScreenBody() {
 
   const flatData = React.useMemo<CostListRow[]>(() => {
     const out: CostListRow[] = [];
+    if (!showLines) return out;
     for (const [cat, catItems] of Object.entries(grouped)) {
       const category = cat as CostCategory;
       out.push({
@@ -535,7 +537,7 @@ function CostsScreenBody() {
       if (!selectMode) out.push({ kind: 'quick-add', id: `quick-add:${cat}`, category });
     }
     return out;
-  }, [grouped, collapsedCats, selectMode]);
+  }, [grouped, collapsedCats, selectMode, showLines]);
 
   // "From your other sections" suggestion data (HOUP-174, ported from
   // apps/web/src/app/costs/page.tsx:216-268/492-530).
@@ -601,7 +603,7 @@ function CostsScreenBody() {
   };
 
   const isEmptyList = items.length === 0;
-  const isNoMatch = !isEmptyList && Object.keys(grouped).length === 0;
+  const isNoMatch = showLines && !isEmptyList && Object.keys(grouped).length === 0;
 
   // HOUP-208 fix: these two useMemo calls (and the derived consts above) MUST
   // stay before the cacheLoading/!group early returns below — Rules of Hooks
@@ -752,20 +754,42 @@ function CostsScreenBody() {
         />
       )}
 
-      {/* The list's controls sit above what they act on (H5): search, then the
-          period the totals below are shown in (Who pays + category totals).
-          Mirrors web's costs page. */}
-      <SectionSearchBar value={search} onChange={setSearch} placeholder="Search costs…" />
-      <SegmentedControl
-        options={PERIODS.map((p) => ({ value: p, label: PERIOD_LABEL[p] }))}
-        value={period}
-        onChange={changePeriod}
-        accessibilityLabel="Show totals"
-      />
+      {/* Up Bank: the picked month's payments by category or by day, or a
+          month ahead's forecast (month-detail.tsx). */}
+      {modules.server('connectors.up-bank') && (
+        <MonthDetail
+          month={selectedMonthStart}
+          items={items}
+          planItems={planItems}
+          nameOf={(uid) => memberLabel(uid, memberProfiles)}
+          onOpenItem={(it) => {
+            setEditingItem(it);
+            setModalOpen(true);
+          }}
+          onSetAmount={(item, cents) => patchRow(item.id, { amount: cents })}
+        />
+      )}
+
+      {/* With Up connected the month list above is the screen, and the cost
+          lines wait behind "All cost lines" (Guy's pick A). Totals are per
+          month: no Weekly, Monthly or Yearly switch. */}
+      {monthList && items.length > 0 && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ expanded: linesOpen }}
+          onPress={() => setLinesOpen((v) => !v)}
+          className="min-h-12 items-center justify-center rounded-2xl border border-border"
+        >
+          <Text className="text-sm font-semibold text-foreground">{linesOpen ? 'Hide cost lines' : `All cost lines (${items.length})`}</Text>
+        </Pressable>
+      )}
+
+      {/* The list's control sits above what it acts on (H5). Mirrors web's costs page. */}
+      {showLines && <SectionSearchBar value={search} onChange={setSearch} placeholder="Search costs…" />}
 
       {/* "Who pays" split (HOUP-218) — collapsed by default, demoted like
           web's page.tsx panel: a compact disclosure, not another KPI tile. */}
-      {byPayer.length > 0 && (
+      {showLines && byPayer.length > 0 && (
         <Card size="sm" className="rounded-3xl">
           <Pressable
             onPress={() => setWhoPaysCollapsed((c) => !c)}
@@ -826,7 +850,7 @@ function CostsScreenBody() {
       momDelta, prevMonthBucket, projectedRestOfYear, yearToDate, editingBudget, budgetDraft,
       budget, budgetDelta, budgetCents, daysLeft, period, selectedMonthIdx, selectedMonthStart, isEmptyList, isNoMatch,
       yearBuckets, currentMonthIdx, selectedCategory, byPayer, whoPaysCollapsed, memberProfiles,
-      items, patchRow, view,
+      items, planItems, patchRow, view, monthList, linesOpen, showLines,
     ]
   );
 

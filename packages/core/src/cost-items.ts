@@ -81,6 +81,7 @@ export async function listCostItems(
     .from('cost_items')
     .select('*')
     .eq('group_id', groupId)
+    .eq('deleted', false)
     .order('created_at', { ascending: false });
   return (data ?? []) as CostItem[];
 }

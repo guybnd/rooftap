@@ -17,7 +17,6 @@ import {
 } from 'lucide-react';
 import {
   type Period,
-  PERIOD_LABEL,
   CATEGORY_META,
   CADENCE_LABEL,
   amountForPeriod,
@@ -41,7 +40,6 @@ import { todayISO } from '@/app/tasks/moving-tasks';
 import { CostCard } from './cost-card';
 import { ListGroup } from '@/components/ui/list-item';
 import { LeadingTile } from '@/components/ui/leading-tile';
-import { SegmentedControl } from '@/components/ui/segmented-control';
 import { sectionIconFor } from '@/lib/section-icons';
 import { CostModal } from './cost-modal';
 import { CATEGORY_ICON } from './category-glyph';
@@ -51,6 +49,7 @@ import { CostDashboard } from './cost-chart';
 import { PopMenu, MenuItem, MenuLabel } from '../setup/pop-menu';
 import { memberLabel, memberAvatar } from '../setup/member-label';
 import { MoneyInsights } from './money-insights';
+import { CostLinesGate, MonthDetail } from './month-detail';
 import { UpOverviewProvider } from '@homeup/core';
 import { CostsViewSwitch, MoneyView, type CostsView } from './money-view';
 import { upBankApi } from '@/lib/up-bank-client';
@@ -59,9 +58,7 @@ import { cn } from '@/lib/utils';
 
 // FLUX-150 slice 2: Legend-State local-first migration
 
-const PERIOD_KEY = 'costs_period';
 const BUDGET_KEY = 'costs_budget_monthly';
-const PERIODS: Period[] = ['weekly', 'monthly', 'yearly'];
 const CADENCE_OPTIONS: CostCadence[] = ['weekly', 'fortnightly', 'monthly', 'quarterly', 'yearly', 'one_off'];
 
 export default function CostsPage() {
@@ -101,7 +98,8 @@ export default function CostsPage() {
       .reduce((sum, i) => sum + (i.est_price ?? 0), 0) * 100
   );
 
-  const [period, setPeriod] = useState<Period>('monthly');
+  // Every total is per month: the month picker drives the page (Guy's pick A).
+  const period: Period = 'monthly';
   const [view, setView] = useState<CostsView>('plan');
   const [search, setSearch] = useState('');
   const wide = useWideLayout();
@@ -127,20 +125,12 @@ export default function CostsPage() {
   const [editingBudget, setEditingBudget] = useState(false);
   const [budgetDraft, setBudgetDraft] = useState('');
 
-  // FLUX-65: period + monthly budget now sync via user_settings. Hydrate once on
+  // FLUX-65: the monthly budget syncs via user_settings. Hydrate once on
   // load — DB wins when present, else fall back to the legacy localStorage mirror.
   const hydratedRef = useRef(false);
   useEffect(() => {
     if (cacheLoading || hydratedRef.current) return;
     hydratedRef.current = true;
-
-    const dbPeriod = userSettings?.costs_period;
-    if (dbPeriod === 'weekly' || dbPeriod === 'monthly' || dbPeriod === 'yearly') {
-      setPeriod(dbPeriod);
-    } else {
-      const saved = localStorage.getItem(PERIOD_KEY);
-      if (saved === 'weekly' || saved === 'monthly' || saved === 'yearly') setPeriod(saved);
-    }
 
     const dbBudgetCents = userSettings?.costs_budget_monthly;
     if (dbBudgetCents != null) {
@@ -166,12 +156,6 @@ export default function CostsPage() {
       /* offline / not signed in — localStorage mirror still holds the value */
     }
   }, [refreshCache]);
-
-  const changePeriod = (p: Period) => {
-    setPeriod(p);
-    localStorage.setItem(PERIOD_KEY, p);
-    persistSettings({ costs_period: p });
-  };
 
   // Same toggle-off-on-repeat-click behavior the chart's bars had locally
   // before HOUP-277 lifted the selection up to the page.
@@ -520,6 +504,21 @@ export default function CostsPage() {
       </div>
 
       <div className="space-y-5">
+      {/* Up Bank: the picked month's payments by category or by day, or a
+          month ahead's forecast (month-detail.tsx). */}
+      {upBank && (
+        <MonthDetail
+          month={selectedMonthStart}
+          items={items}
+          planItems={planItems}
+          nameOf={(uid) => memberLabel(uid, memberProfiles)}
+          onOpenItem={(it) => {
+            setEditingItem(it);
+            setIsModalOpen(true);
+          }}
+          onSetAmount={(item, cents) => patchRow(item.id, { amount: cents })}
+        />
+      )}
       {/* From your other sections — pull in rent & setup total */}
       {(() => {
         if (hideSectionSuggestions) return null;
@@ -578,24 +577,18 @@ export default function CostsPage() {
         );
       })()}
 
-      {/* The list's controls sit above what they act on (H5): search, then the
-          period the totals below are shown in (Who pays + category totals). */}
+      {/* With Up connected the month list above is the page, and the cost
+          lines wait behind "All cost lines" (Guy's pick A). Totals are per
+          month: no Weekly, Monthly or Yearly switch. */}
+      <CostLinesGate count={items.length}>
+      {/* The list's control sits above what it acts on (H5). */}
       {items.length > 0 && (
-        <div className="space-y-3">
-          <SectionSearchBar
-            value={search}
-            onChange={setSearch}
-            placeholder="Search costs…"
-            className="max-w-none"
-          />
-          <SegmentedControl
-            ariaLabel="Show totals"
-            value={period}
-            onChange={changePeriod}
-            options={PERIODS.map((p) => ({ value: p, label: PERIOD_LABEL[p] }))}
-            className="sm:max-w-xs"
-          />
-        </div>
+        <SectionSearchBar
+          value={search}
+          onChange={setSearch}
+          placeholder="Search costs…"
+          className="max-w-none"
+        />
       )}
 
       {items.length === 0 ? (
@@ -735,6 +728,7 @@ export default function CostsPage() {
           )}
         </>
       )}
+      </CostLinesGate>
       </div>
       </div>
       </>

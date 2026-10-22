@@ -226,25 +226,42 @@ export function monthlyProjection(
   now: Date = new Date(),
   bank?: BankActuals
 ): MonthBucket[] {
-  // Recurring lines linked to bank payments count what was really paid in a
-  // finished month the bank data covers, at least their plan in the current
-  // month, and their plan after that. Everything else follows the rules below.
-  const linked = bank ? items.filter((i) => !isOneOff(i) && bank.linked.has(i.id)) : [];
+  // Lines linked to bank payments count what was really paid in a finished
+  // month the bank data covers. A recurring one counts at least its plan in
+  // the current month and its plan after that. A one-off line the bank made
+  // for a shop holds only what was paid: months ahead get each category's
+  // usual everyday spend instead (everydayAverage), and the current month
+  // gets whatever of that hasn't been spent yet.
+  const linked = bank ? items.filter((i) => bank.linked.has(i.id)) : [];
   if (linked.length) {
     const rest = items.filter((i) => !linked.includes(i));
     const buckets = monthlyProjection(rest, from, months, now);
     const currentKey = monthKeyOf(now);
+    const usual = everydayAverage(items, bank!, now);
     for (let k = 0; k < months; k++) {
       const key = monthKeyOf(new Date(from.getFullYear(), from.getMonth() + k, 1));
-      for (const item of linked) {
-        const plan = monthlyAmount(item);
-        const paid = bank!.byItem.get(item.id)?.get(key) ?? 0;
-        const covered = !bank!.since || key >= bank!.since;
-        const amount = key < currentKey ? (covered ? paid : plan) : key === currentKey ? Math.max(plan, paid) : plan;
-        if (amount <= 0) continue;
-        buckets[k].byCategory[item.category] = (buckets[k].byCategory[item.category] ?? 0) + amount;
+      const covered = !bank!.since || key >= bank!.since;
+      const add = (category: string, amount: number) => {
+        if (amount <= 0) return;
+        buckets[k].byCategory[category] = (buckets[k].byCategory[category] ?? 0) + amount;
         buckets[k].total += amount;
         buckets[k].recurring += amount;
+      };
+      const everydayPaid: Record<string, number> = {};
+      for (const item of linked) {
+        const paid = bank!.byItem.get(item.id)?.get(key) ?? 0;
+        if (isOneOff(item)) {
+          const own = item.start_date && monthKeyOf(parseLocalDateOnly(item.start_date)) === key ? item.amount : 0;
+          const amount = key > currentKey ? 0 : covered ? paid : own;
+          everydayPaid[item.category] = (everydayPaid[item.category] ?? 0) + amount;
+          add(item.category, amount);
+          continue;
+        }
+        const plan = monthlyAmount(item);
+        add(item.category, key < currentKey ? (covered ? paid : plan) : key === currentKey ? Math.max(plan, paid) : plan);
+      }
+      if (key >= currentKey) {
+        for (const [category, cents] of Object.entries(usual)) add(category, cents - (everydayPaid[category] ?? 0));
       }
     }
     return buckets;
@@ -339,6 +356,34 @@ export interface BankActuals {
   byItem: ReadonlyMap<string, ReadonlyMap<string, number>>;
   /** The first whole month the bank data covers; null when it covers them all. */
   since: string | null;
+}
+
+/** How many finished months everydayAverage looks back over, latest first, and how much each counts. */
+export const EVERYDAY_WEIGHTS = [3, 2, 1] as const;
+
+/**
+ * A category's usual monthly everyday spend: what its bank-made one-off lines
+ * (shops, cafes, one-time buys) took in each of the last three finished
+ * months the bank data covers, the latest counting most. Bills and other
+ * recurring lines plan for themselves, so they stay out.
+ */
+export function everydayAverage(items: readonly CostItem[], bank: BankActuals, now: Date = new Date()): Record<string, number> {
+  const lines = items.filter((i) => !i.deleted && isOneOff(i) && bank.linked.has(i.id));
+  const sums: Record<string, number> = {};
+  let weights = 0;
+  EVERYDAY_WEIGHTS.forEach((weight, n) => {
+    const key = monthKeyOf(new Date(now.getFullYear(), now.getMonth() - 1 - n, 1));
+    if (bank.since && key < bank.since) return;
+    weights += weight;
+    for (const item of lines) {
+      const paid = bank.byItem.get(item.id)?.get(key) ?? 0;
+      if (paid > 0) sums[item.category] = (sums[item.category] ?? 0) + weight * paid;
+    }
+  });
+  const out: Record<string, number> = {};
+  if (!weights) return out;
+  for (const [category, sum] of Object.entries(sums)) out[category] = Math.round(sum / weights);
+  return out;
 }
 
 function monthKeyOf(d: Date): string {

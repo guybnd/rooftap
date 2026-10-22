@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { costSectionSuggestions, costTargets, monthlyProjection, nextOccurrence, recurringByCategory, type BankActuals } from './costs';
+import { costSectionSuggestions, costTargets, everydayAverage, monthlyProjection, nextOccurrence, recurringByCategory, type BankActuals } from './costs';
 import { costCategoryChoices, costMergeTargets } from './cost-categories';
 import { isFeatureEnabled } from './module-features';
 import { ALL_MODULE_IDS, type ModuleId } from './modules';
@@ -229,6 +229,38 @@ describe("monthlyProjection with bank payments", () => {
     const withBank = monthlyProjection([rent], from, 3, now, bank).map((b) => b.total);
     const without = monthlyProjection([rent], from, 3, now).map((b) => b.total);
     expect(withBank).toEqual(without);
+  });
+});
+
+describe("everyday spend from bank-made one-off lines", () => {
+  // Today 20 Oct 2026: the finished months are Sep (counts 3), Aug (2), Jul (1).
+  const now = new Date(2026, 9, 20);
+  const coles = oneOff({ id: "coles", category: "grocery_estimate", start_date: "2026-10-18", amount: 9_000, bank_source: "up" });
+  const cafe = oneOff({ id: "cafe", category: "outing", start_date: "2026-10-02", amount: 1_500, bank_source: "up" });
+  const bank: BankActuals = {
+    linked: new Set(["coles", "cafe"]),
+    byItem: new Map([
+      ["coles", new Map([["2026-07", 60_000], ["2026-08", 90_000], ["2026-09", 120_000], ["2026-10", 40_000]])],
+      ["cafe", new Map([["2026-09", 6_000], ["2026-10", 9_000]])],
+    ]),
+    since: null,
+  };
+
+  it("weights the latest finished months most", () => {
+    // Groceries (3*1200 + 2*900 + 1*600) / 6 = 1000. Going out 3*60 / 6 = 30.
+    expect(everydayAverage([coles, cafe], bank, now)).toEqual({ grocery_estimate: 100_000, outing: 3_000 });
+  });
+
+  it("leaves out months the bank data doesn't cover", () => {
+    // Only Sep and Aug: (3*1200 + 2*900) / 5 = 1080.
+    expect(everydayAverage([coles], { ...bank, since: "2026-08" }, now)).toEqual({ grocery_estimate: 108_000 });
+  });
+
+  it("shows what was paid behind, the rest of the usual this month, and the usual ahead", () => {
+    const buckets = monthlyProjection([coles, cafe], new Date(2026, 8, 1), 3, now, bank);
+    // Sep: paid. Oct: paid 400 of a usual 1000 groceries, 90 of a usual 30 going out. Nov: the usual.
+    expect(buckets.map((b) => b.total)).toEqual([126_000, 40_000 + 60_000 + 9_000, 103_000]);
+    expect(buckets[2].byCategory).toEqual({ grocery_estimate: 100_000, outing: 3_000 });
   });
 });
 

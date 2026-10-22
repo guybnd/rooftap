@@ -532,7 +532,7 @@ function mostCommon(values: readonly string[]): string | null {
 async function refreshBankLines(admin: SupabaseClient, groupId: string): Promise<void> {
   const { data: lines, error } = await admin
     .from("cost_items")
-    .select("id, amount, cadence, is_estimate, category")
+    .select("id, amount, cadence, is_estimate, category, start_date")
     .eq("group_id", groupId)
     .eq("bank_source", "up")
     .eq("deleted", false);
@@ -554,14 +554,16 @@ async function refreshBankLines(admin: SupabaseClient, groupId: string): Promise
     m.set(p.external_id, p);
   }
   const now = new Date();
-  for (const line of lines as { id: string; amount: number; cadence: string; is_estimate: boolean; category: string }[]) {
+  for (const line of lines as { id: string; amount: number; cadence: string; is_estimate: boolean; category: string; start_date: string | null }[]) {
     const plan = vendorPlan([...(byLine.get(line.id)?.values() ?? [])], now);
     if (!plan) continue;
     const estimate = bankLineEstimate(plan.estimate, line.category);
-    if (plan.amountCents === line.amount && plan.cadence === line.cadence && estimate === line.is_estimate) continue;
+    // A one-off sits on its latest payment's day; a regular line keeps its start.
+    const startDate = plan.cadence === "one_off" ? plan.startDate : line.start_date;
+    if (plan.amountCents === line.amount && plan.cadence === line.cadence && estimate === line.is_estimate && startDate === line.start_date) continue;
     await admin
       .from("cost_items")
-      .update({ amount: plan.amountCents, cadence: plan.cadence, is_estimate: estimate })
+      .update({ amount: plan.amountCents, cadence: plan.cadence, is_estimate: estimate, start_date: startDate })
       .eq("id", line.id)
       .eq("group_id", groupId);
   }

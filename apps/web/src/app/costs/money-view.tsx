@@ -12,7 +12,9 @@
 // (shared) or personal accounts, a month stepper walks back through the
 // months (the whole month loads at once), and a search box and the category
 // chips narrow the list. A payment with no line can become one ("Make it a
-// cost").
+// cost"). All, Out and In pick which way the money went; every payment
+// shows its category (its cost line's, else the closest fit to Up's), and
+// the sheet opens the line to edit it.
 // Native twin: apps/mobile/src/features/costs/money-view.tsx.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -28,6 +30,9 @@ import {
   monthLabel,
   monthStartOf,
   moneyIn,
+  paymentCategory,
+  paymentCategoryLabel,
+  paymentGoes,
   shiftMonth,
   useUpConnected,
   useUpOverview,
@@ -35,6 +40,7 @@ import {
   type MakeCostPreview,
   type BankTransactionView,
   type CostItem,
+  type PaymentDirection,
 } from '@homeup/core';
 import { upBankApi } from '@/lib/up-bank-client';
 import { HeroLede } from '@/components/ui/hero-lede';
@@ -104,6 +110,7 @@ export function MoneyView({
   const [openId, setOpenId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<string | null>(null);
+  const [direction, setDirection] = useState<PaymentDirection>('all');
   const itemById = useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
   const thisMonth = monthStartOf(new Date());
 
@@ -143,7 +150,7 @@ export function MoneyView({
   const total = (data.everydayCents ?? 0) + (data.saversCents ?? 0);
   const monthName = monthLabel(month);
   const open = rows?.find((r) => r.id === openId) ?? null;
-  const shown = rows ? filterBankTransactions(rows, { query, category }) : null;
+  const shown = rows ? filterBankTransactions(rows, { query, category }).filter((r) => paymentGoes(r, direction)) : null;
   // Household only: what came into the joint accounts this month.
   const income =
     scope === 'household' && rows && !showHidden
@@ -202,7 +209,20 @@ export function MoneyView({
         />
       </div>
 
-      {data.categories.length > 0 && (
+      <SegmentedControl
+        ariaLabel="Which way the money went"
+        value={direction}
+        onChange={setDirection}
+        options={[
+          { value: 'all', label: 'All' },
+          { value: 'out', label: 'Out' },
+          { value: 'in', label: 'In' },
+        ]}
+        size="sm"
+        className="w-full sm:max-w-xs"
+      />
+
+      {data.categories.length > 0 && direction !== 'in' && (
         <div className="flex flex-wrap gap-2">
           {data.categories.slice(0, 8).map((c) => (
             <button
@@ -259,7 +279,7 @@ export function MoneyView({
         <p className="px-1 text-sm text-muted-foreground">Reading your transactions…</p>
       ) : shown.length === 0 ? (
         <p className="px-1 text-sm text-muted-foreground">
-          {query || category ? 'Nothing matches.' : showHidden ? 'Nothing hidden.' : `No transactions in ${monthName}.`}
+          {query || category || direction !== 'all' ? 'Nothing matches.' : showHidden ? 'Nothing hidden.' : `No transactions in ${monthName}.`}
         </p>
       ) : (
         <div className="rounded-3xl border border-border/60 bg-card shadow-[var(--card-shadow)]">
@@ -272,6 +292,7 @@ export function MoneyView({
                     key={t.id}
                     t={t}
                     line={t.costItemId ? itemById.get(t.costItemId) ?? null : null}
+                    categoryLabel={paymentCategoryLabel(t, itemById)}
                     owner={t.mine ? null : nameOf(t.userId)}
                     onOpen={() => setOpenId(t.id)}
                     onToggleHidden={t.mine ? () => apply(t.id, { hidden: !t.hidden }) : undefined}
@@ -312,10 +333,11 @@ const CADENCE_WORD: Record<MakeCostPreview['cadence'], string> = {
   one_off: 'once',
 };
 
-function rowMeta(t: BankTransactionView, line: CostItem | null, owner: string | null): string {
+function rowMeta(t: BankTransactionView, line: CostItem | null, categoryLabel: string | null, owner: string | null): string {
   return [
     t.pending ? 'Pending' : null,
-    line ? `counts toward ${line.name}` : t.isTransfer ? 'Transfer' : t.amountCents > 0 ? 'Money in' : t.categoryLabel,
+    t.isTransfer ? 'Transfer' : t.amountCents > 0 ? 'Money in' : categoryLabel ?? 'No category yet',
+    line ? `line ${line.name}` : null,
     t.note,
     owner,
   ]
@@ -326,12 +348,14 @@ function rowMeta(t: BankTransactionView, line: CostItem | null, owner: string | 
 function MoneyRow({
   t,
   line,
+  categoryLabel,
   owner,
   onOpen,
   onToggleHidden,
 }: {
   t: BankTransactionView;
   line: CostItem | null;
+  categoryLabel: string | null;
   owner: string | null;
   onOpen: () => void;
   onToggleHidden?: () => void;
@@ -340,7 +364,7 @@ function MoneyRow({
     <button type="button" onClick={onOpen} className="flex min-h-[52px] w-full items-center gap-3 bg-card px-4 py-2 text-left hover:bg-muted/40">
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium text-foreground">{t.description}</p>
-        <p className="truncate text-xs text-muted-foreground">{rowMeta(t, line, owner)}</p>
+        <p className="truncate text-xs text-muted-foreground">{rowMeta(t, line, categoryLabel, owner)}</p>
       </div>
       <span className={cn('text-sm tabular-nums', t.amountCents > 0 ? 'text-success' : 'text-foreground')}>
         {t.amountCents > 0 ? '+' : ''}
@@ -359,7 +383,7 @@ function MoneyRow({
   );
 }
 
-function TransactionSheet({
+export function TransactionSheet({
   t,
   items,
   owner,
@@ -422,6 +446,7 @@ function TransactionSheet({
   };
 
   const line = t?.costItemId ? items.find((i) => i.id === t.costItemId) ?? null : null;
+  const category = t ? paymentCategory(t, new Map(line ? [[line.id, line]] : [])) : null;
   const rule = line ? data?.links?.find((l) => l.costItemId === line.id) ?? null : null;
   const always = !!rule && !!t && bankMatchParts(rule.match).some((m) => m.toUpperCase() === t.description.toUpperCase());
   const options = useMemo(() => costItemsToOptions(items.filter((i) => !i.deleted)), [items]);
@@ -482,10 +507,14 @@ function TransactionSheet({
                 <span className="text-sm font-semibold text-foreground">{line?.name ?? 'Nothing'}</span>
               )}
             </div>
-            {t.categoryLabel && (
+            {t.amountCents < 0 && !t.isTransfer && (
               <div className="flex min-h-12 items-center gap-3 border-t border-border/60 px-4 py-2">
                 <span className="flex-1 text-sm text-foreground">Category</span>
-                <span className="text-sm text-muted-foreground">{t.categoryLabel}</span>
+                <span className="text-right text-sm text-muted-foreground">
+                  {category ? CATEGORY_META[category].label : 'None yet'}
+                  {!line && t.categoryLabel ? <span className="block text-xs">from Up: {t.categoryLabel}</span> : null}
+                  {line ? <span className="block text-xs">from the {line.name} line</span> : null}
+                </span>
               </div>
             )}
             {t.tags.length > 0 && (
@@ -573,8 +602,8 @@ function TransactionSheet({
           )}
 
           {line && (
-            <button type="button" onClick={() => onOpenItem(line)} className="px-1 text-sm font-medium text-primary hover:text-primary/80">
-              Open {line.name}
+            <button type="button" onClick={() => onOpenItem(line)} className="min-h-10 px-1 text-sm font-medium text-primary hover:text-primary/80">
+              Edit the {line.name} line
             </button>
           )}
 
