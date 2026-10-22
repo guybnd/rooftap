@@ -85,12 +85,13 @@ The web app installs like an app on Android, iPhone, iPad and desktop. Open your
 
 `docker-compose.yml` runs Postgres and the Supabase services (auth, REST, realtime, storage and edge functions) behind a Kong gateway, plus the Rooftap web app (Next.js). The server needs outbound internet access for public services such as Open-Meteo weather and the OpenStreetMap Overpass API.
 
-## Known rough edges
+## Work in progress!
 
 - No iOS app yet. iPhone and iPad use the web app (PWA).
 - The Android app is not on Google Play yet. Install the APK from [Releases](https://github.com/guybnd/rooftap/releases).
-- No in-app account deletion yet.
-- One maintainer reads every issue, but answers can take a few days.
+- Happy to receive external contributions for additional modules or improvements.
+
+
 
 ## Development
 
