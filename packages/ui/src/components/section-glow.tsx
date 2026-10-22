@@ -13,9 +13,21 @@
 // it move and fade (animated SVG props broke on Android, §8).
 import * as React from 'react';
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated';
 import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
-import { GLOW_AURA, GLOW_DRIFT_REST, SECTION_GLOW_OPACITY, sectionHueSwatch, useNavShiftMs } from '@homeup/core';
+import {
+  GLOW_AURA,
+  GLOW_DRIFT_REST,
+  NAV_EASE_POINTS,
+  SECTION_GLOW_OPACITY,
+  glowBlendAt,
+  glowBlendSettle,
+  glowBlendTo,
+  glowLayerAlpha,
+  sectionHueSwatch,
+  useNavShiftMs,
+  type GlowBlendState,
+} from '@homeup/core';
 import { useThemeMaterial, useStillMotion } from '../theme/theme-provider';
 import { BackgroundTexture } from './background-texture';
 
@@ -119,10 +131,8 @@ function GlowGradient({ section, parts = 'all' }: { section: string; parts?: Glo
 }
 
 // The glow moves on the page shift's clock (the device's navigation speed,
-// swift-out), in step with the page and the tab bar's pebble. The new hue
-// comes up over the first half while the old one holds, then the old one
-// lets go, so the wash never dims halfway through.
-const SWIFT_OUT = Easing.bezier(0.16, 1, 0.3, 1);
+// on Hearth's Glide curve), in step with the page and the tab bar's pebble.
+const NAV_EASE = Easing.bezier(...NAV_EASE_POINTS);
 
 interface Ground {
   /** A section root's own glow choice: a section to borrow, null for none, undefined to hand it back. */
@@ -183,31 +193,58 @@ export function TabGround({ sectionId, driftX = GLOW_DRIFT_REST, children }: Tab
 
 /**
  * One glow per section seen, in a band that drifts to `driftX`, over the
- * theme's still aura. The newest comes up over the ones before while they
- * hold, so the colour turns from one hue to the next with no washed-out
- * middle; a quick second switch picks up from wherever the glow is, and the
- * layers below leave once the newest is fully up.
+ * theme's still aura. A switch blends the section layers on the page
+ * shift's clock with weights that always add up to one glow (core
+ * glow-blend.ts), so the colour turns from one hue to the next at the same
+ * strength, never brighter or washed out midway; a quick second switch
+ * picks up from wherever the glow is, and layers that faded to nothing
+ * leave once the blend lands.
  */
 function GlowBlend({ section, driftX }: { section: string | null; driftX: number }) {
   const duration = useNavShiftMs();
-  const [layers, setLayers] = React.useState<(string | null)[]>([section]);
-  if (layers[layers.length - 1] !== section) setLayers([...layers.filter((l) => l !== section), section]);
-  React.useEffect(() => {
-    if (layers.length < 2) return;
-    const timer = setTimeout(() => setLayers((now) => now.slice(-1)), duration + 50);
-    return () => clearTimeout(timer);
-  }, [layers, duration]);
-  // The glow on first paint is simply there; later ones blend in.
-  const mounted = React.useRef(false);
-  React.useEffect(() => {
-    mounted.current = true;
-  }, []);
+  const reduceMotion = useStillMotion();
+  const material = useThemeMaterial();
+  const strength = SECTION_GLOW_OPACITY[material.scheme];
+  const [blend, setBlend] = React.useState<GlowBlendState>(() => glowBlendAt(section));
+  const blendRef = React.useRef(blend);
+  const shared = useSharedValue<GlowBlendState>(blend);
+  // Eased progress of the current blend, 0 to 1.
+  const progress = useSharedValue(1);
+
+  const settle = React.useCallback(() => {
+    const next = glowBlendSettle(blendRef.current);
+    blendRef.current = next;
+    shared.value = next;
+    setBlend(next);
+  }, [shared]);
+
+  React.useLayoutEffect(() => {
+    const now = blendRef.current;
+    if (now.layers[now.layers.length - 1] === section) return;
+    if (reduceMotion) {
+      const still = glowBlendAt(section);
+      blendRef.current = still;
+      shared.value = still;
+      progress.value = 1;
+      setBlend(still);
+      return;
+    }
+    const next = glowBlendTo(now, section, progress.value);
+    blendRef.current = next;
+    shared.value = next;
+    progress.value = 0;
+    progress.value = withTiming(1, { duration, easing: NAV_EASE }, (finished) => {
+      if (finished) runOnJS(settle)();
+    });
+    setBlend(next);
+    // Only a new section starts a blend; a speed change waits for the next one.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [section]);
 
   const { width } = useWindowDimensions();
-  const reduceMotion = useStillMotion();
   const x = useSharedValue(driftX);
   React.useEffect(() => {
-    x.value = reduceMotion ? driftX : withTiming(driftX, { duration, easing: SWIFT_OUT });
+    x.value = reduceMotion ? driftX : withTiming(driftX, { duration, easing: NAV_EASE });
     // Only a new place starts a drift; a speed change waits for the next one.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [driftX, reduceMotion, x]);
@@ -225,14 +262,14 @@ function GlowBlend({ section, driftX }: { section: string | null; driftX: number
     >
       {section && <GlowGradient section={section} parts="aura" />}
       <Animated.View style={[{ position: 'absolute', top: 0, bottom: 0, left: -width / 2, width: width * 2 }, band]}>
-        {layers.map((layer, i) => (
+        {blend.layers.map((layer, i) => (
           <GlowLayer
             key={layer ?? 'none'}
             section={layer}
-            shown={i === layers.length - 1}
-            hold={layers[layers.length - 1] !== null}
-            instant={!mounted.current}
-            duration={duration}
+            index={i}
+            blend={shared}
+            progress={progress}
+            strength={strength}
           />
         ))}
       </Animated.View>
@@ -242,29 +279,19 @@ function GlowBlend({ section, driftX }: { section: string | null; driftX: number
 
 interface GlowLayerProps {
   section: string | null;
-  shown: boolean;
-  /** A layer below the newest keeps its strength while the newest comes up over it. */
-  hold: boolean;
-  instant: boolean;
-  /** The page shift's duration, ms. */
-  duration: number;
+  /** This layer's place in the blend, bottom to top. */
+  index: number;
+  blend: SharedValue<GlowBlendState>;
+  progress: SharedValue<number>;
+  /** The glow's peak opacity for the theme (SECTION_GLOW_OPACITY). */
+  strength: number;
 }
 
-function GlowLayer({ section, shown, hold, instant, duration }: GlowLayerProps) {
-  const reduceMotion = useStillMotion();
-  const opacity = useSharedValue(shown && instant ? 1 : 0);
-  React.useEffect(() => {
-    // Two half-faded layers let the ground show through, which washes the
-    // blend out towards the background. So only the newest fades; the ones
-    // below stay as they are until GlowBlend drops them. A switch to a
-    // section without a glow has nothing to cover them, so they fade out.
-    if (reduceMotion) opacity.value = shown ? 1 : 0;
-    else if (shown) opacity.value = withTiming(1, { duration, easing: SWIFT_OUT });
-    else if (!hold) opacity.value = withTiming(0, { duration, easing: SWIFT_OUT });
-    // Only a show or hide starts a fade; a speed change waits for the next one.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shown, hold, reduceMotion, opacity]);
-  const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
+function GlowLayer({ section, index, blend, progress, strength }: GlowLayerProps) {
+  const style = useAnimatedStyle(
+    () => ({ opacity: glowLayerAlpha(blend.value, index, progress.value, strength) }),
+    [index, strength]
+  );
   if (!section) return null;
   return (
     <Animated.View style={[StyleSheet.absoluteFill, style]}>

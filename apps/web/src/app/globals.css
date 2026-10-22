@@ -774,10 +774,12 @@
      capped so a desktop jump stays a nudge. The fade is late, as on native
      (TAB_SHIFT_FADE_AT): the old page is gone 85% of the way along its
      travel, which swift-out reaches about 40% into the time, and the new
-     one starts to show 15% of the way along its own (about 3% in). Clipped to the content region
+     one starts to show 15% of the way along its own (about 3% in). Web
+     keeps swift-out and a short travel: on a wide screen the shift is a
+     nudge, and Glide's slower start felt sluggish there (Guy 2026-10-22). Clipped to the content region
      so a shifting page never paints over the sidebar. */
   :root {
-    --nav-shift: clamp(48px, 60vw, 280px);
+    --nav-shift: clamp(48px, 60vw, 140px);
   }
   html[data-nav-transition^="shift-"]::view-transition-group(route-content),
   html[data-nav-transition^="shift-"]::view-transition-image-pair(route-content) {

@@ -11,7 +11,7 @@ import {
   tabPebbleMetrics,
   tabTravelDirection,
 } from './tab-glide';
-import { motionEaseOut } from './tokens';
+import { motionEaseOut, navEase } from './tokens';
 
 const W = TAB_GLIDE_SIZE.width;
 const H = TAB_GLIDE_SIZE.height;
@@ -114,6 +114,22 @@ describe('motionEaseOut', () => {
       expect(y).toBeGreaterThanOrEqual(prev);
       prev = y;
     }
+  });
+});
+
+describe('navEase', () => {
+  it('is the ease-out cubic the tab switch moves on', () => {
+    // cubic-bezier(0.33, 1, 0.68, 1) is 1 - (1 - t)^3 to within a hair.
+    for (const t of [0.05, 0.1, 0.25, 0.5, 0.75, 0.95]) {
+      expect(navEase(t)).toBeCloseTo(1 - (1 - t) ** 3, 2);
+    }
+  });
+
+  it('moves a 60%-wide shift by at most ~10% of the width a frame at 120Hz', () => {
+    const frames = 300 / (1000 / 120);
+    let worst = 0;
+    for (let i = 0; i < frames; i++) worst = Math.max(worst, navEase((i + 1) / frames) - navEase(i / frames));
+    expect(worst * 0.6).toBeLessThan(0.06);
   });
 });
 

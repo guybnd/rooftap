@@ -99,6 +99,8 @@ export const MOTION_DURATIONS_MS: Record<MotionToken, number> = {
 
 export const MOTION_EASE = {
   out: 'cubic-bezier(0.16, 1, 0.3, 1)',
+  /** Tab switches (page shift, pebble, glow): see `navEase`. */
+  nav: 'cubic-bezier(0.33, 1, 0.68, 1)',
   in: 'ease-in',
 } as const;
 
@@ -117,27 +119,27 @@ export const POP_IN_PEAK = 1.015;
 export const POP_IN_HOLD_MS = 1000;
 
 /**
- * `MOTION_EASE.out` as a function of linear time (0 to 1), for motion
- * stepped frame by frame in JS that has to land in step with a CSS or
- * native animation on the same curve (the tab glide follows the page shift
- * this way). Solves the bezier's x for `t`, then reads its y.
+ * A cubic-bezier easing (x1, y1, x2, y2) as a function of linear time (0 to
+ * 1), for motion stepped frame by frame in JS or on the UI thread that has to
+ * land in step with a CSS or native animation on the same curve. Solves the
+ * bezier's x for `t`, then reads its y. Declared before the easings below:
+ * worklet helpers must come before the worklets that call them.
  */
-export function motionEaseOut(t: number): number {
+export function cubicBezierEase(x1: number, y1: number, x2: number, y2: number, t: number): number {
   'worklet';
   if (t <= 0) return 0;
   if (t >= 1) return 1;
-  // cubic-bezier(0.16, 1, 0.3, 1) in polynomial form: x(s) = ((ax s + bx) s + cx) s.
-  const cx = 3 * 0.16;
-  const bx = 3 * (0.3 - 0.16) - cx;
+  // Polynomial form: x(s) = ((ax s + bx) s + cx) s, the same for y.
+  const cx = 3 * x1;
+  const bx = 3 * (x2 - x1) - cx;
   const ax = 1 - cx - bx;
-  const cy = 3 * 1;
-  const by = 3 * (1 - 1) - cy;
+  const cy = 3 * y1;
+  const by = 3 * (y2 - y1) - cy;
   const ay = 1 - cy - by;
-  const x = (s: number) => ((ax * s + bx) * s + cx) * s;
   // Newton from s = t, falling back to bisection if the slope flattens.
   let s = t;
   for (let i = 0; i < 8; i++) {
-    const err = x(s) - t;
+    const err = ((ax * s + bx) * s + cx) * s - t;
     if (Math.abs(err) < 1e-6) return ((ay * s + by) * s + cy) * s;
     const slope = (3 * ax * s + 2 * bx) * s + cx;
     if (Math.abs(slope) < 1e-6) break;
@@ -147,13 +149,34 @@ export function motionEaseOut(t: number): number {
   let hi = 1;
   s = t;
   for (let i = 0; i < 30; i++) {
-    const err = x(s) - t;
+    const err = ((ax * s + bx) * s + cx) * s - t;
     if (Math.abs(err) < 1e-6) break;
     if (err > 0) hi = s;
     else lo = s;
     s = (lo + hi) / 2;
   }
   return ((ay * s + by) * s + cy) * s;
+}
+
+/** `MOTION_EASE.out` (swift-out) as a function of linear time. */
+export function motionEaseOut(t: number): number {
+  'worklet';
+  return cubicBezierEase(0.16, 1, 0.3, 1, t);
+}
+
+/**
+ * Hearth §8.1 "Glide": the curve a tab switch moves on (the page shift, the
+ * tab bar's pebble and the section glow, all on one clock). An ease-out
+ * cubic: swift-out covered 69% of a 60%-wide shift in its first 50ms, up to
+ * 125px a frame at 120Hz then a crawl, which read as a few big steps. This
+ * one peaks near 60px a frame and still answers the tap at once.
+ */
+export const NAV_EASE_POINTS = [0.33, 1, 0.68, 1] as const;
+
+/** `MOTION_EASE.nav` as a function of linear time. */
+export function navEase(t: number): number {
+  'worklet';
+  return cubicBezierEase(0.33, 1, 0.68, 1, t);
 }
 
 // ── Haptic vocabulary (Hearth §9, HA) ────────────────────────────────────────

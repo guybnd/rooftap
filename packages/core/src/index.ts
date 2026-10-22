@@ -144,3 +144,4 @@ export * from './brand-mark';
 export * from './row-actions';
 export * from './assistant-thread';
 export * from './archive-undo';
+export * from './glow-blend';

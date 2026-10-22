@@ -1,14 +1,15 @@
 import * as React from 'react';
 import { Tabs } from 'expo-router';
 import { Easing, useWindowDimensions } from 'react-native';
-import { TAB_SHIFT_FADE_AT, TAB_SHIFT_FRACTION, getSectionByPath, glowDriftX, useNavShiftMs } from '@homeup/core';
+import { NAV_EASE_POINTS, TAB_SHIFT_FADE_AT, TAB_SHIFT_FRACTION, getSectionByPath, glowDriftX, useNavShiftMs } from '@homeup/core';
 import { SectionProvider, TabGround, useStillMotion } from '@homeup/ui';
 import { DeferredScene } from '@/components/nav/deferred-scene';
 import { useTabBarSections } from '@/components/nav/use-tab-bar-sections';
 import { perfMark } from '@/lib/perf-log';
 import { tabScreenOrder } from '@/lib/tab-routes';
 
-const SWIFT_OUT = Easing.bezier(0.16, 1, 0.3, 1);
+// Hearth §8.1 Glide (core navEase): the pebble and the glow move on it too.
+const NAV_EASE = Easing.bezier(...NAV_EASE_POINTS);
 // The bar is PrimaryTabBar, rendered by the root layout.
 const noTabBar = () => null;
 type SceneProps = {
@@ -121,7 +122,7 @@ const TabsNavigator = React.memo(function TabsNavigator({ screens }: { screens: 
       // The bar's pebble (TabGlide) glides on this same spec.
       transitionSpec: {
         animation: 'timing',
-        config: { duration: shiftMs, easing: SWIFT_OUT },
+        config: { duration: shiftMs, easing: NAV_EASE },
       },
       sceneStyleInterpolator: ({ current }) => ({
         sceneStyle: {

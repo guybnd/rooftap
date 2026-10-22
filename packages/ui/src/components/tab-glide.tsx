@@ -2,7 +2,7 @@
 // The bar measures its tabs and hands this the active face's centre; this
 // draws the pebble behind the tabs and glides it to the new tab whenever
 // that centre moves. The glide runs on the page shift's own timing (Hearth
-// `slow`, swift-out, the same spec the (tabs) navigator slides the page
+// `slow`, the Glide curve, the same spec the (tabs) navigator slides the page
 // with) and sets off in the same JS turn the navigator starts the page, so
 // the two move as one; the stretch rides that same progress (core
 // tabGlideEdges). Its fill blends from the old section's tile hue to the
@@ -25,12 +25,12 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
-import { TAB_GLIDE_SIZE, motionEaseOut, tabGlideEdges, tabPebbleMetrics, useNavShiftMs } from '@homeup/core';
+import { NAV_EASE_POINTS, TAB_GLIDE_SIZE, navEase, tabGlideEdges, tabPebbleMetrics, useNavShiftMs } from '@homeup/core';
 import { useStillMotion } from '../theme/theme-provider';
 
-// The page shift's curve ((tabs) navigator transitionSpec), swift-out; its
+// The page shift's curve ((tabs) navigator transitionSpec), Glide (core navEase); its
 // duration is the device's navigation speed (core nav-speed.ts).
-const SWIFT_OUT = Easing.bezier(0.16, 1, 0.3, 1);
+const NAV_EASE = Easing.bezier(...NAV_EASE_POINTS);
 const HALF = TAB_GLIDE_SIZE.width / 2;
 const REST_W = TAB_GLIDE_SIZE.width;
 const REST_H = TAB_GLIDE_SIZE.height;
@@ -53,7 +53,7 @@ export interface TabGlideProps {
 export function TabGlide({ target, color }: TabGlideProps) {
   const reduceMotion = useStillMotion();
   const shiftMs = useNavShiftMs();
-  const glide = React.useMemo(() => ({ duration: shiftMs, easing: SWIFT_OUT }), [shiftMs]);
+  const glide = React.useMemo(() => ({ duration: shiftMs, easing: NAV_EASE }), [shiftMs]);
   // One glide: from one tab centre to the next, `progress` 0 to 1 eased.
   const fromCx = useSharedValue(0);
   const toCx = useSharedValue(0);
@@ -105,7 +105,7 @@ export function TabGlide({ target, color }: TabGlideProps) {
     }
     if (last.to === cx) return;
     const t = (now - last.at) / glide.duration;
-    const from = t < 1 ? last.from + (last.to - last.from) * motionEaseOut(t) : last.to;
+    const from = t < 1 ? last.from + (last.to - last.from) * navEase(t) : last.to;
     trip.current = { from, to: cx, at: now };
     dir.value = cx > from ? 1 : -1;
     fromCx.value = from;

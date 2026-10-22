@@ -5,7 +5,7 @@
 // the pebble (core tab-glide.ts) behind the tabs and glides it to the new
 // tab whenever that centre moves. During a tab switch the glide reads the
 // page's own Shift animation clock (navShiftElapsedMs) on the page's curve
-// (`--motion-slow`, swift-out), so the pebble and the page move as one; any
+// (`--motion-nav`, swift-out), so the pebble and the page move as one; any
 // other move runs the same timing on its own clock. It's stepped here in
 // requestAnimationFrame and written straight to the path, so a glide never
 // re-renders the bar. The fill is the active section's tile hue
