@@ -153,25 +153,25 @@ export function LandingPage({
             </div>
           </section>
 
-          <div id="modules">
-            <StoryPlayer stories={HERO_STORIES} eager />
-            <StoryPlayer stories={ROOM_STORIES} />
-          </div>
-
           <section id="fits" className={styles.section} aria-labelledby="fits-title">
             <div className={styles.wrap}>
               <div className={styles.sectionHead}>
                 <p className={styles.eyebrow}>Connected modules</p>
                 <h2 id="fits-title" className={cn(styles.display, styles.sectionTitle)}>
-                  One module fills the next
+                  Dynamic and interconnected
                 </h2>
                 <p className={styles.sectionLede}>
-                  You enter a thing once. The modules linked to it pick it up. Each line below is one link. When a module is off, its links do not show.
+                  Most actions do more than one thing. Plan to buy a TV and you get a to-do and a line in the budget. Finish a shopping trip and its total goes to Costs. You do not have to update each module by hand. Hover or tap a line to see what it does.
                 </p>
               </div>
               <ModuleMap />
             </div>
           </section>
+
+          <div id="modules">
+            <StoryPlayer stories={HERO_STORIES} eager />
+            <StoryPlayer stories={ROOM_STORIES} />
+          </div>
 
           <section id="layouts" className={styles.section} aria-labelledby="layouts-title">
             <div className={styles.wrap}>
