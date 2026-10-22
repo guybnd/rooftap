@@ -102,7 +102,9 @@ export function GroceriesWidget({
 
   const suggestions = React.useMemo(() => {
     const seen = new Map<string, string>(); // lowercased → first-seen display form
-    const add = (raw: string) => {
+    // Rows still syncing in on a fresh install can lack a name.
+    const add = (raw: string | null | undefined) => {
+      if (!raw) return;
       const k = raw.toLowerCase().trim();
       if (k && !seen.has(k)) seen.set(k, raw.trim());
     };
@@ -113,7 +115,7 @@ export function GroceriesWidget({
 
   const annotateQuickAdd = React.useCallback(
     (name: string) => {
-      const match = allItems.find((i) => i.name.toLowerCase() === name.toLowerCase());
+      const match = allItems.find((i) => i.name?.toLowerCase() === name.toLowerCase());
       if (match && (match.status === 'have' || match.status === 'bought')) {
         return { label: match.status, className: 'text-muted-foreground' };
       }
@@ -127,7 +129,7 @@ export function GroceriesWidget({
     if (!name) return;
     haptics.commit();
     setQuickAddDraft('');
-    const existing = allItems.find((i) => i.name.toLowerCase() === name.toLowerCase());
+    const existing = allItems.find((i) => i.name?.toLowerCase() === name.toLowerCase());
     if (existing) {
       if (existing.status !== 'needed') {
         patchRow(existing.id, { status: 'needed', last_purchased_at: null, status_changed_at: new Date().toISOString() });
