@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   aiAccess,
@@ -73,9 +74,10 @@ export async function monthServerRuns(admin: SupabaseClient, groupId: string, no
 /**
  * Whose model a Scout run uses: the household's own key first (no cap), else
  * the server's when the plan allows it, up to PLUS_SCOUT_RUNS_PER_MONTH on
- * hosted Plus. Same order and codes as HOUP-436's single-shot reads.
+ * hosted Plus. Same order and codes as HOUP-436's single-shot reads. A
+ * follow-up question (newRun false) uses the same key without the run cap.
  */
-export async function scoutBrain(admin: SupabaseClient, groupId: string): Promise<ScoutBrainResult> {
+export async function scoutBrain(admin: SupabaseClient, groupId: string, { newRun = true }: { newRun?: boolean } = {}): Promise<ScoutBrainResult> {
   const [keys, lookup] = await Promise.all([householdKeys(admin, groupId), resolveServerKeys(SERVER_BRAIN_KEYS)]);
   const brain = await resolveAssistantBrain({ lookup, householdKeys: keys });
   if (brain?.keySource === "household") return { brain };
@@ -83,7 +85,8 @@ export async function scoutBrain(admin: SupabaseClient, groupId: string): Promis
   if (access === "none") return { blocked: "ai_requires_plus" };
   const server = brain;
   if (!server) return { blocked: "ai_not_configured" };
-  if (access === "allowance" && (await monthServerRuns(admin, groupId)) >= PLUS_SCOUT_RUNS_PER_MONTH) return { blocked: "ai_allowance_used" };
+  // Questions in a Scout thread aren't runs, so only a new run spends the allowance.
+  if (newRun && access === "allowance" && (await monthServerRuns(admin, groupId)) >= PLUS_SCOUT_RUNS_PER_MONTH) return { blocked: "ai_allowance_used" };
   return { brain: server };
 }
 
@@ -115,7 +118,7 @@ export async function hasOfferSources(group: Group): Promise<boolean> {
   return (await applicableSources(sourceContext(group), "offers", householdDisabledSources(group))).length > 0;
 }
 
-function money(cents: number, currency: string): string {
+export function money(cents: number, currency: string): string {
   return new Intl.NumberFormat("en", { style: "currency", currency, maximumFractionDigits: cents % 100 ? 2 : 0 }).format(cents / 100);
 }
 
@@ -323,14 +326,15 @@ export async function runScoutAgent(
 }
 
 /** The notification for a finished run (HOUP-464): who asked hears back, on every device. */
-export function scoutPushPayload(search: Pick<ShopperSearch, "id" | "brief">, outcome: { picks: number; failed: boolean }, currency: string): PushPayload {
+export function scoutPushPayload(search: Pick<ShopperSearch, "id" | "brief" | "thread_id">, outcome: { picks: number; failed: boolean }, currency: string): PushPayload {
   const title = scoutTitle(search.brief);
   const max = search.brief.budget_max_cents;
   const noun = outcome.picks === 1 ? "pick" : "picks";
   return {
     title: outcome.failed ? "Scout didn't finish" : `Scout found ${outcome.picks} ${noun}`,
     body: outcome.failed ? `${title}. Open it to try again.` : max != null ? `${title}, under ${money(max, currency)}` : title,
-    url: `/shopper/scout/${search.id}`,
+    // A refined run opens its thread, which starts at the first run.
+    url: `/shopper/scout/${search.thread_id ?? search.id}`,
     tag: `scout-${search.id}`,
   };
 }
@@ -410,4 +414,41 @@ export async function watchPick(admin: SupabaseClient, pick: ShopperPick, search
   if (error || !data) throw new Error(`Could not add it to the watchlist: ${error?.message ?? "no row"}`);
   await admin.from("shopper_picks").update({ want_id: (data as ShopperWant).id }).eq("id", pick.id);
   return data as ShopperWant;
+}
+
+/**
+ * Saves a new run as running and carries the research on after the response
+ * (Next's after(); outside a request, such as the Telegram poller, it just
+ * runs in the background). A refined run names its thread's first run.
+ */
+export async function startScoutRun(
+  admin: SupabaseClient,
+  group: Group,
+  userId: string,
+  brief: ScoutBrief,
+  brain: AssistantBrain,
+  { id, threadId = null, deps }: { id?: string; threadId?: string | null; deps?: ScoutDeps } = {},
+): Promise<ShopperSearch | null> {
+  const { data, error } = await admin
+    .from("shopper_searches")
+    .insert({
+      ...(id ? { id } : {}),
+      group_id: group.id,
+      brief,
+      status: "running",
+      key_source: brain.keySource,
+      created_by: userId,
+      ...(threadId ? { thread_id: threadId } : {}),
+    })
+    .select("*")
+    .single();
+  if (error || !data) return null;
+  const search = data as ShopperSearch;
+  const work = () => completeScout(admin, search, group, brain, deps);
+  try {
+    after(work);
+  } catch {
+    void work();
+  }
+  return search;
 }

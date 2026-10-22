@@ -84,6 +84,8 @@ export default function ShopperScreen() {
   const recentRuns = use$(() =>
     Object.values(searches$.get() ?? {})
       .filter((s): s is ShopperSearch => !!s && !s.deleted)
+      // A refined search lives inside its thread, under the first run.
+      .filter((s) => !s.thread_id)
       .sort((a, b) => b.created_at.localeCompare(a.created_at))
       .slice(0, 3),
   );

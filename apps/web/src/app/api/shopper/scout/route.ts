@@ -1,8 +1,8 @@
-import { after, NextResponse } from "next/server";
-import { parseScoutBrief, type ShopperSearch } from "@homeup/core";
+import { NextResponse } from "next/server";
+import { parseScoutBrief } from "@homeup/core";
 import { AiBlockedError, aiBlockedResponse } from "@/lib/ai/access";
 import { shopperRequest } from "@/lib/shopper/route-helpers";
-import { completeScout, hasOfferSources, scoutBrain } from "@/lib/shopper/scout";
+import { hasOfferSources, scoutBrain, startScoutRun } from "@/lib/shopper/scout";
 
 // HOUP-435: start a Scout run. Checks the household may use AI (its own key,
 // else the server's within the plan) and has a price source to search, saves
@@ -27,21 +27,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "No price sources are set up on this server yet, so Scout has nothing to search." }, { status: 503 });
   }
 
-  const { data, error } = await req.admin
-    .from("shopper_searches")
-    .insert({
-      ...(typeof body?.id === "string" && UUID.test(body.id) ? { id: body.id } : {}),
-      group_id: req.group.id,
-      brief: parsed.brief,
-      status: "running",
-      key_source: decided.brain.keySource,
-      created_by: req.userId,
-    })
-    .select("*")
-    .single();
-  if (error || !data) return NextResponse.json({ error: "Could not start Scout. Try again." }, { status: 500 });
-  const search = data as ShopperSearch;
-
-  after(() => completeScout(req.admin, search, req.group, decided.brain));
+  const id = typeof body?.id === "string" && UUID.test(body.id) ? body.id : undefined;
+  const search = await startScoutRun(req.admin, req.group, req.userId, parsed.brief, decided.brain, { id });
+  if (!search) return NextResponse.json({ error: "Could not start Scout. Try again." }, { status: 500 });
   return NextResponse.json({ search }, { status: 202 });
 }

@@ -22,10 +22,19 @@ vi.mock("@/lib/shopper/route-helpers", () => ({
 let decided: unknown = { brain: { keySource: "household" } };
 let sources = true;
 const completeScout = vi.fn();
+// startScoutRun's own insert and after() hand-off, with completeScout spied.
 vi.mock("@/lib/shopper/scout", () => ({
   scoutBrain: async () => decided,
   hasOfferSources: async () => sources,
-  completeScout: (...args: unknown[]) => completeScout(...args),
+  startScoutRun: async (a: typeof admin, group: { id: string }, userId: string, brief: unknown, brain: { keySource: string }, opts: { id?: string } = {}) => {
+    const { data } = await a
+      .from()
+      .insert({ ...(opts.id ? { id: opts.id } : {}), group_id: group.id, brief, status: "running", key_source: brain.keySource, created_by: userId })
+      .select()
+      .single();
+    afterMock(() => completeScout(data));
+    return data;
+  },
 }));
 
 import { POST } from "./route";

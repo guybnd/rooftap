@@ -53,6 +53,10 @@ export const SERVER_FEATURES = {
     minSchema: '20261021120000_assistant_home_assistant',
     label: 'connecting the assistant to Home Assistant',
   },
+  'shopper.scout-thread': {
+    minSchema: '20261022070000_shopper_scout_thread',
+    label: 'asking Scout about its picks and changing a search',
+  },
 } as const satisfies Record<string, ServerFeatureDef>;
 
 export type ServerFeatureId = keyof typeof SERVER_FEATURES;

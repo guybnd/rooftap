@@ -23,6 +23,7 @@ import {
   type HomeAssistantToolInfo,
 } from './home-assistant';
 import { createAssistantStreamReader, type AssistantStreamEvent } from './assistant-stream';
+import { scoutTitle } from './shopper-scout';
 
 export interface AssistantConversation {
   id: string;
@@ -293,6 +294,7 @@ const MODULE_NOUN: Partial<Record<ModuleId, string>> = {
   costs: 'Budget',
   checklists: 'Checklists',
   recipes: 'Recipes',
+  shopper: 'Shopper',
 };
 
 function quoted(value: unknown): string {
@@ -311,6 +313,7 @@ export function describeProposal(tool: string, module: AssistantScope, args: Rec
     const target = args.name ?? args.area ?? args.floor;
     return `${homeAssistantToolLabel(tool)}${typeof target === 'string' && target.trim() ? ` ${quoted(target)}` : ''} in Home Assistant`;
   }
+  if (tool === 'start_scout') return `Ask Scout to find ${quoted(typeof args.text === 'string' ? scoutTitle({ text: args.text }) : null)}`;
   if (tool === 'add_recipe_to_groceries') return "Add a recipe's ingredients to Groceries";
   if (tool === 'add_checklist_item') return `Add ${quoted(args.label)} to a checklist`;
   if (tool === 'check_checklist_item') return args.done === false ? 'Untick a checklist item' : 'Tick a checklist item';

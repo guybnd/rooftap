@@ -36,6 +36,8 @@ export * from './rewards';
 export * from './shopper-sources';
 export * from './shopper-relevance';
 export * from './shopper-scout';
+export * from './shopper-scout-thread';
+export * from './use-scout-thread';
 export * from './setup';
 export * from './setup-templates';
 export * from './sections';

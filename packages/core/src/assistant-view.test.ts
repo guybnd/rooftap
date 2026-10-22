@@ -75,6 +75,8 @@ describe('parseReply', () => {
 
   it('leaves non-http links as text', () => {
     expect(parseReply('[x](javascript:alert(1))')).toEqual([{ type: 'paragraph', spans: [{ text: '[x](javascript:alert(1))' }] }]);
+    expect(parseReply('[Open Scout](/shopper/scout/abc-1)')).toEqual([{ type: 'paragraph', spans: [{ text: 'Open Scout', href: '/shopper/scout/abc-1' }] }]);
+    expect(parseReply('[x](//evil.example)')).toEqual([{ type: 'paragraph', spans: [{ text: '[x](//evil.example)' }] }]);
   });
 });
 

@@ -71,7 +71,7 @@ export interface ReplySpan {
   text: string;
   bold?: boolean;
   italic?: boolean;
-  /** http(s) links only; anything else stays plain text. */
+  /** http(s) links, or an in-app route such as /shopper/scout/<id>; anything else stays plain text. */
   href?: string;
 }
 
@@ -82,7 +82,8 @@ export interface ReplyBlock {
   n?: number;
 }
 
-const INLINE = /\*\*([^*]+)\*\*|__([^_]+)__|\*([^*\s][^*]*)\*|_([^_\s][^_]*)_|\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
+// Links: http(s), or an app route (a single leading slash, then a path).
+const INLINE = /\*\*([^*]+)\*\*|__([^_]+)__|\*([^*\s][^*]*)\*|_([^_\s][^_]*)_|\[([^\]]+)\]\((https?:\/\/[^\s)]+|\/[a-z][\w\-/]*)\)/g;
 
 function inline(text: string): ReplySpan[] {
   const spans: ReplySpan[] = [];

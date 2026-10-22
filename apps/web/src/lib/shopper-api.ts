@@ -1,7 +1,7 @@
 // HOUP-434: the web app's calls to /api/shopper. Prices land in the synced
 // offer and snapshot stores; these calls only start the work and report how
 // it went. Native twin: apps/mobile/src/features/shopper/shopper-api.ts.
-import type { ScoutBrief, ShopperPick, ShopperSearch, ShopperWant, SourceDeal } from "@homeup/core";
+import type { ScoutBrief, ScoutMessage, ScoutThread, ShopperPick, ShopperSearch, ShopperWant, SourceDeal } from "@homeup/core";
 
 export interface ShopperLookupResult {
   offers: number;
@@ -82,11 +82,20 @@ export async function startScout(id: string, brief: ScoutBrief): Promise<Shopper
   return (await call<{ search: ShopperSearch }>("/api/shopper/scout", { method: "POST", body: JSON.stringify({ id, ...brief }) })).search;
 }
 
-export function scoutRun(id: string): Promise<{ search: ShopperSearch | null; picks: ShopperPick[] }> {
+export function scoutRun(id: string): Promise<{ search: ShopperSearch | null; picks: ShopperPick[]; thread?: ScoutThread | null }> {
   return call(`/api/shopper/scout/${encodeURIComponent(id)}`);
 }
 
 /** Puts a pick on the watchlist and checks its prices; answers with the new item. */
 export async function watchScoutPick(pickId: string): Promise<ShopperWant> {
   return (await call<{ want: ShopperWant }>(`/api/shopper/scout/picks/${encodeURIComponent(pickId)}`, { method: "POST", body: JSON.stringify({ action: "watch" }) })).want;
+}
+
+/**
+ * A follow-up in a Scout thread: a question about the picks, or a change to
+ * the search. Answers with the saved messages, and the new run when Scout
+ * searched again.
+ */
+export function sendScoutFollowUp(threadId: string, text: string, pickId: string | null): Promise<{ messages: ScoutMessage[]; search?: ShopperSearch }> {
+  return call(`/api/shopper/scout/${encodeURIComponent(threadId)}/messages`, { method: "POST", body: JSON.stringify({ text, pick_id: pickId }) });
 }

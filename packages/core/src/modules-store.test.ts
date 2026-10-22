@@ -309,6 +309,7 @@ describe('server schema', () => {
       'Scout, AI research for things you want to buy',
       'notifications when the assistant answers',
       'connecting the assistant to Home Assistant',
+      'asking Scout about its picks and changing a search',
     ]);
 
     act(() => setServerSchema('20261020050000_mcp_oauth'));
@@ -337,6 +338,7 @@ describe('server schema', () => {
         'Scout, AI research for things you want to buy',
         'notifications when the assistant answers',
         'connecting the assistant to Home Assistant',
+      'asking Scout about its picks and changing a search',
       ]);
     } finally {
       delete mcp.minSchema;

@@ -15,6 +15,7 @@ import Animated, {
   withRepeat,
   withTiming,
 } from 'react-native-reanimated';
+import { useRouter, type Href } from 'expo-router';
 import { ArrowUp, Check, X } from 'lucide-react-native';
 import { Text, LeadingTile, cn } from '@homeup/ui';
 import {
@@ -32,13 +33,16 @@ import {
 import { sectionIconFor } from '@/lib/section-icons';
 
 function Spans({ spans }: { spans: ReplySpan[] }) {
+  const router = useRouter();
   return (
     <>
       {spans.map((s, i) => {
         if (s.href) {
           const href = s.href;
+          // An app route (a Scout run the assistant started) opens in the app.
+          const open = () => (href.startsWith('/') ? router.push(href as Href) : void Linking.openURL(href));
           return (
-            <Text key={i} className="text-primary underline" onPress={() => void Linking.openURL(href)}>
+            <Text key={i} className="text-primary underline" onPress={open}>
               {s.text}
             </Text>
           );
@@ -230,12 +234,14 @@ export function Composer({
   disabled,
   busy,
   autoFocus,
+  maxLength = 4000,
   onSend,
 }: {
   placeholder: string;
   disabled?: boolean;
   busy?: boolean;
   autoFocus?: boolean;
+  maxLength?: number;
   onSend: (text: string) => Promise<boolean> | boolean;
 }) {
   const [text, setText] = React.useState('');
@@ -256,7 +262,7 @@ export function Composer({
         multiline
         autoFocus={autoFocus}
         editable={!disabled}
-        maxLength={4000}
+        maxLength={maxLength}
         placeholder={placeholder}
         accessibilityLabel={placeholder}
         className="max-h-40 min-h-10 flex-1 py-2 text-body text-foreground placeholder:text-muted-foreground"

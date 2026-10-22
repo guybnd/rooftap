@@ -2,6 +2,9 @@ import { z } from "zod";
 import type { createAdminClient } from "@/lib/supabase/admin";
 import { visibleTasks, visibleEvents, visibleGroceryItems } from "@/lib/pat";
 import { listCostItems, isTaskOwnerEnabled, type ModuleId } from "@homeup/core";
+import { aiBlockedMessage, parseScoutBrief, scoutLatestRun, scoutRunStatus, scoutTitle, SCOUT_BRIEF_MAX, type Group } from "@homeup/core";
+import { hasOfferSources, scoutBrain, startScoutRun } from "@/lib/shopper/scout";
+import { readThread } from "@/lib/shopper/scout-thread";
 import { totalForPeriod, monthlyAmount, CATEGORY_META } from "@homeup/core";
 import {
   buildChecklistItem,
@@ -1038,6 +1041,97 @@ export function householdTools({ admin, userId, groupId, enabled }: HouseholdToo
           basic(w, ["id", "title", "status", "target_cents", "budget_cents", "best_cents", "best_store", "need_by", "last_checked_at", "notes"] as const)
         );
       return { content: [{ type: "text", text: JSON.stringify(rows) }] };
+    }
+  );
+
+  // Scout from a chat: the assistant (or any MCP client) can start a Scout
+  // search and read its picks. The run is the same as one started in Shopper,
+  // with the same key, plan and allowance checks, and its page is where the
+  // person asks follow-ups or changes the search.
+  tool(
+    "start_scout",
+    {
+      description:
+        "Shopper: start a Scout search, an AI researcher that checks the household's price sources and comes back with up to three picks in about a minute. Use it when someone asks you to find, research or shop for something to buy. Budget in whole currency units. Tell them it's researching and link the run (link field) so they can open it; they get a notification when it's done. Read the picks later with get_scout_run.",
+      inputSchema: {
+        text: z.string().min(3).max(SCOUT_BRIEF_MAX).describe("What they want, in their own words, with any must-haves."),
+        budget_max: z.number().positive().optional(),
+        budget_min: z.number().positive().optional(),
+        need_by: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        where: z.array(z.enum(["nearby", "online", "secondhand"])).optional(),
+      },
+    },
+    async ({ text, budget_max, budget_min, need_by, where }) => {
+      if (!groupId) return toolError("No household.");
+      const parsed = parseScoutBrief({
+        text,
+        budget_max_cents: budget_max ? Math.round(budget_max * 100) : null,
+        budget_min_cents: budget_min ? Math.round(budget_min * 100) : null,
+        need_by,
+        where,
+      });
+      if ("error" in parsed) return toolError(parsed.error);
+      const { data: group } = await admin.from("groups").select("*").eq("id", groupId).single();
+      if (!group) return toolError("No household.");
+      const decided = await scoutBrain(admin, groupId);
+      if ("blocked" in decided) return toolError(aiBlockedMessage(decided.blocked));
+      if (!(await hasOfferSources(group as Group))) return toolError("No price sources are set up on this server, so Scout has nothing to search.");
+      const run = await startScoutRun(admin, group as Group, userId, parsed.brief, decided.brain);
+      if (!run) return toolError("Could not start Scout.");
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({ id: run.id, status: "running", title: scoutTitle(run.brief), link: `/shopper/scout/${run.id}` }),
+          },
+        ],
+      };
+    }
+  );
+
+  tool(
+    "get_scout_run",
+    {
+      description:
+        "Shopper: a Scout search and its newest picks (prices in cents), with why each fits. Without an id, the household's latest search. status running means it is still researching.",
+      inputSchema: { id: z.string().uuid().optional() },
+    },
+    async ({ id }) => {
+      if (!groupId) return toolError("No household.");
+      let runId = id ?? null;
+      if (!runId) {
+        const { data } = await admin
+          .from("shopper_searches")
+          .select("id")
+          .eq("group_id", groupId)
+          .eq("deleted", false)
+          .order("created_at", { ascending: false })
+          .limit(1);
+        runId = (data?.[0] as { id: string } | undefined)?.id ?? null;
+      }
+      if (!runId) return toolError("No Scout searches yet.");
+      const thread = await readThread(admin, runId);
+      const latest = thread ? scoutLatestRun(thread) : null;
+      if (!thread || !latest || latest.group_id !== groupId) return toolError("Scout search not found.");
+      const root = thread.runs.find((r) => !r.thread_id) ?? latest;
+      const picks = thread.picks
+        .filter((p) => p.search_id === latest.id)
+        .map((p) => basic(p, ["rank", "title", "price_cents", "currency", "store", "url", "in_stock", "stretch", "label", "why"] as const));
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              id: latest.id,
+              status: scoutRunStatus(latest),
+              brief: latest.brief,
+              error: latest.error,
+              picks,
+              link: `/shopper/scout/${root.id}`,
+            }),
+          },
+        ],
+      };
     }
   );
 

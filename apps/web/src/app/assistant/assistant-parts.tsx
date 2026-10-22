@@ -6,6 +6,7 @@
 // follow the three-slot line item (H6). Native twin:
 // apps/mobile/src/features/assistant/assistant-parts.tsx.
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import Link from 'next/link';
 import { ArrowUp, Check, X } from 'lucide-react';
 import {
   GHOST_REPLY_GROW_MS,
@@ -27,6 +28,14 @@ function Spans({ spans }: { spans: ReplySpan[] }) {
   return (
     <>
       {spans.map((s, i) => {
+        if (s.href?.startsWith('/')) {
+          // An app route (a Scout run the assistant started) opens in place.
+          return (
+            <Link key={i} href={s.href} className="text-primary underline underline-offset-2">
+              {s.text}
+            </Link>
+          );
+        }
         if (s.href) {
           return (
             <a key={i} href={s.href} target="_blank" rel="noreferrer" className="text-primary underline underline-offset-2">
@@ -201,12 +210,14 @@ export function Composer({
   disabled,
   busy,
   autoFocus,
+  maxLength = 4000,
   onSend,
 }: {
   placeholder: string;
   disabled?: boolean;
   busy?: boolean;
   autoFocus?: boolean;
+  maxLength?: number;
   onSend: (text: string) => Promise<boolean> | boolean;
 }) {
   const [text, setText] = useState('');
@@ -240,7 +251,7 @@ export function Composer({
         value={text}
         autoFocus={autoFocus}
         disabled={disabled}
-        maxLength={4000}
+        maxLength={maxLength}
         placeholder={placeholder}
         aria-label={placeholder}
         onChange={(e) => setText(e.target.value)}

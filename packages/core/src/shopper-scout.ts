@@ -44,6 +44,8 @@ export interface ShopperSearch {
   created_at: string;
   updated_at: string;
   finished_at: string | null;
+  /** The first run of the thread, for a run started by refining another (null or absent on a first run). */
+  thread_id?: string | null;
   deleted: boolean;
 }
 

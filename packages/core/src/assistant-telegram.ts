@@ -32,7 +32,8 @@ function escapeHtml(text: string): string {
 
 function spanHtml(s: ReplySpan): string {
   const text = escapeHtml(s.text);
-  if (s.href) return `<a href="${escapeHtml(s.href).replace(/"/g, '&quot;')}">${text}</a>`;
+  // An app route means nothing in Telegram, so it stays plain text.
+  if (s.href && !s.href.startsWith('/')) return `<a href="${escapeHtml(s.href).replace(/"/g, '&quot;')}">${text}</a>`;
   if (s.bold) return `<b>${text}</b>`;
   if (s.italic) return `<i>${text}</i>`;
   return text;

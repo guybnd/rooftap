@@ -3,7 +3,7 @@
 // Same authedFetch pattern as features/recipes/parse-recipe-api.ts: an
 // absolute-origin fetch with the Supabase session as `Authorization: Bearer`.
 // Web twin: apps/web/src/lib/shopper-api.ts.
-import type { ScoutBrief, ShopperPick, ShopperSearch, ShopperWant, SourceDeal } from '@homeup/core';
+import type { ScoutBrief, ScoutMessage, ScoutThread, ShopperPick, ShopperSearch, ShopperWant, SourceDeal } from '@homeup/core';
 import { getCurrentSupabaseClient } from '@/lib/supabase-client';
 import { getStoredServer } from '@/lib/server-config';
 
@@ -104,11 +104,20 @@ export async function startScout(id: string, brief: ScoutBrief): Promise<Shopper
   return (await call<{ search: ShopperSearch }>('/api/shopper/scout', { method: 'POST', body: JSON.stringify({ id, ...brief }) })).search;
 }
 
-export function scoutRun(id: string): Promise<{ search: ShopperSearch | null; picks: ShopperPick[] }> {
+export function scoutRun(id: string): Promise<{ search: ShopperSearch | null; picks: ShopperPick[]; thread?: ScoutThread | null }> {
   return call(`/api/shopper/scout/${encodeURIComponent(id)}`);
 }
 
 /** Puts a pick on the watchlist and checks its prices; answers with the new item. */
 export async function watchScoutPick(pickId: string): Promise<ShopperWant> {
   return (await call<{ want: ShopperWant }>(`/api/shopper/scout/picks/${encodeURIComponent(pickId)}`, { method: 'POST', body: JSON.stringify({ action: 'watch' }) })).want;
+}
+
+/**
+ * A follow-up in a Scout thread: a question about the picks, or a change to
+ * the search. Answers with the saved messages, and the new run when Scout
+ * searched again.
+ */
+export function sendScoutFollowUp(threadId: string, text: string, pickId: string | null): Promise<{ messages: ScoutMessage[]; search?: ShopperSearch }> {
+  return call(`/api/shopper/scout/${encodeURIComponent(threadId)}/messages`, { method: 'POST', body: JSON.stringify({ text, pick_id: pickId }) });
 }
