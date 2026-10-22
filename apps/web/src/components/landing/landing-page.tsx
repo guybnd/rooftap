@@ -4,10 +4,10 @@ import { Fragment, useEffect, useRef, type MouseEvent } from "react";
 import { cn } from "@/lib/utils";
 import { AskPanel } from "./ask";
 import { SectionTile } from "./cards";
-import { APK_URL, ASSISTANT_ENV, ASSISTANT_FACTS, COMPARE, FAQ, HERO_FACTS, FEATURE_GROUPS, LAYOUT_FACTS, LICENCE_URL, REPO_URL, SELF_HOST_FACTS, SELF_HOST_STEPS, WEB_APP_URL } from "./content";
+import { APK_URL, ASSISTANT_ENV, ASSISTANT_FACTS, COMPARE, FAQ, HERO_FACTS, FEATURE_GROUPS, EINK_FACTS, LAYOUT_FACTS, LICENCE_URL, REPO_URL, SELF_HOST_FACTS, SELF_HOST_STEPS, WEB_APP_URL } from "./content";
 import { HeroPhone } from "./hero-phone";
 import { ModuleMap } from "./module-map";
-import { DESKTOP_ALT, SCREEN_ALT, desktopScreenSrc, screenSrc } from "./screens";
+import { DESKTOP_ALT, EINK_ALT, EINK_H, EINK_W, SCREEN_ALT, desktopScreenSrc, einkScreenSrc, screenSrc } from "./screens";
 import styles from "./landing.module.css";
 import { SignIn, SignInHref } from "./sign-in";
 import { HERO_STORIES, ROOM_STORIES } from "./stories";
@@ -204,6 +204,33 @@ export function LandingPage({
                 </div>
                 <ul className={styles.layoutsList}>
                   {LAYOUT_FACTS.map((f) => (
+                    <li key={f.title}>
+                      <b>{f.title}.</b> {f.text}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </section>
+
+          <section id="e-ink" className={styles.section} aria-labelledby="e-ink-title">
+            <div className={styles.wrap}>
+              <div className={styles.einkFrame}>
+                <div className={styles.einkMat}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={einkScreenSrc("home")} alt={EINK_ALT} width={EINK_W} height={EINK_H} loading="lazy" decoding="async" />
+                </div>
+              </div>
+              <div className={styles.einkCopy}>
+                <div className={styles.sectionHead}>
+                  <p className={styles.eyebrow}>E-Ink theme</p>
+                  <h2 id="e-ink-title" className={cn(styles.display, styles.sectionTitle)}>
+                    Leave it on the wall
+                  </h2>
+                  <p className={styles.sectionLede}>Put Rooftap on an e-paper tablet or frame by the door. The household&apos;s day stays on screen, sharp and still.</p>
+                </div>
+                <ul className={styles.layoutsList}>
+                  {EINK_FACTS.map((f) => (
                     <li key={f.title}>
                       <b>{f.title}.</b> {f.text}
                     </li>

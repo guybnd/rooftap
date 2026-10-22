@@ -6,6 +6,7 @@
 //   npm run landing:screens -w apps/web            every scene
 //   npm run landing:screens -w apps/web -- home    one scene
 //   npm run landing:screens -w apps/web -- --desktop   the desktop shots
+//   npm run landing:screens -w apps/web -- --eink      the E-Ink wall frame shots
 //
 // Needs Playwright with Chromium (`npx playwright install chromium`, or set
 // PLAYWRIGHT_MODULE to an installed playwright package).
@@ -21,15 +22,20 @@ const dist = join(web, "landing-static/demo/dist");
 const out = join(web, "public/landing/screens");
 // Where the marks (the rects of the things the stories tap) go, for the page to read.
 const marksFile = join(web, "src/components/landing/screen-marks.json");
-const desktop = process.argv.includes("--desktop");
-const only = process.argv.slice(2).filter((a) => a !== "--desktop");
+const eink = process.argv.includes("--eink");
+const desktop = eink || process.argv.includes("--desktop");
+const only = process.argv.slice(2).filter((a) => a !== "--desktop" && a !== "--eink");
 
 // The device the screens are shot on: a 390 pt phone at 2x, or with
 // --desktop a 1440 x 900 browser window (the wide layout), written as
 // desktop-<scene>.webp. The desktop shots carry no marks.
-const VIEWPORT = desktop ? { width: 1440, height: 900 } : { width: 390, height: 844 };
+// --eink a 1280 x 800 e-paper tablet in the E-Ink theme, written as
+// eink-<scene>.webp, also with no marks.
+const VIEWPORT = eink ? { width: 1280, height: 800 } : desktop ? { width: 1440, height: 900 } : { width: 390, height: 844 };
 const SCALE = desktop ? 1.5 : 2;
 export const DESKTOP_SCENES = ["home", "groceries-aisles", "costs", "tasks"];
+export const EINK_SCENES = ["home"];
+const PREFIX = eink ? "eink-" : desktop ? "desktop-" : "";
 
 async function loadPlaywright() {
   const candidates = [process.env.PLAYWRIGHT_MODULE, "playwright", "/opt/node-tools/node_modules/playwright/index.mjs"].filter(Boolean);
@@ -240,14 +246,14 @@ async function main() {
   // The scene list lives in the page.
   await page.goto(`http://127.0.0.1:${port}/?scene=__list`, { waitUntil: "networkidle" });
   const scenes = await page.evaluate(() => window.__demo?.scenes ?? []);
-  const pool = desktop ? scenes.filter((s) => DESKTOP_SCENES.includes(s)) : scenes;
+  const pool = eink ? scenes.filter((s) => EINK_SCENES.includes(s)) : desktop ? scenes.filter((s) => DESKTOP_SCENES.includes(s)) : scenes;
   const wanted = only.length ? pool.filter((s) => only.includes(s)) : pool;
   if (!wanted.length) throw new Error(`no scenes match ${only.join(", ")}`);
   const marks = existsSync(marksFile) ? JSON.parse(readFileSync(marksFile, "utf8")) : {};
 
   for (const id of wanted) {
     errors.length = 0;
-    await page.goto(`http://127.0.0.1:${port}/?scene=${encodeURIComponent(id)}`, { waitUntil: "networkidle" });
+    await page.goto(`http://127.0.0.1:${port}/?scene=${encodeURIComponent(id)}${eink ? "&theme=e-ink" : ""}`, { waitUntil: "networkidle" });
     await page.waitForTimeout(400);
     const actions = await page.evaluate(() => window.__demo?.actions ?? []);
     for (const a of actions) {
@@ -261,9 +267,9 @@ async function main() {
     await page.evaluate(() => document.fonts.ready);
     await page.waitForTimeout(300);
     const png = await page.screenshot({ type: "png" });
-    writeFileSync(join(out, `${desktop ? "desktop-" : ""}${id}.webp`), await toWebp(png));
+    writeFileSync(join(out, `${PREFIX}${id}.webp`), await toWebp(png));
     if (desktop) {
-      console.log(`desktop-${id}${errors.length ? `  (page errors: ${errors.join(" | ").slice(0, 300)})` : ""}`);
+      console.log(`${PREFIX}${id}${errors.length ? `  (page errors: ${errors.join(" | ").slice(0, 300)})` : ""}`);
       continue;
     }
     // Measure the marks: the rects of what the story taps or points at, in CSS px.

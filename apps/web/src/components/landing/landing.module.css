@@ -2119,3 +2119,38 @@ button.liveHint:focus-visible {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* ---------- E-Ink wall frame ---------- */
+/* A light e-paper frame on the dark page: a pale bezel and a mat around the
+   real E-Ink screen. */
+.einkFrame {
+  padding: clamp(10px, 1.8vw, 22px);
+  border-radius: clamp(8px, 1.2vw, 14px);
+  background: #e4e2dc;
+  box-shadow: 0 40px 80px -30px rgba(0, 0, 0, 0.7);
+}
+.einkMat {
+  padding: clamp(4px, 0.8vw, 10px);
+  border-radius: 4px;
+  background: #f2f2f2;
+}
+.einkMat img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.einkCopy {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: clamp(28px, 5vw, 64px);
+  align-items: end;
+  margin-top: clamp(32px, 5vw, 56px);
+}
+.einkCopy .sectionHead {
+  margin-bottom: 0;
+}
+@media (max-width: 860px) {
+  .einkCopy {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

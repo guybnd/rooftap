@@ -245,6 +245,14 @@ export const COMPARE: ReadonlyArray<[job: string, separate: string, homeup: stri
   ["Where the data lives", "Each app's own servers", "One Postgres database, on your server."],
 ];
 
+/** The E-Ink theme on an always-on screen. */
+export const EINK_FACTS: readonly { title: string; text: string }[] = [
+  { title: "Flat greys", text: "No glow, shadow or colour wash. Text stays sharp on e-paper." },
+  { title: "No motion", text: "Pages change at once, so the screen does not ghost." },
+  { title: "Same data", text: "It is the same app, so a tick on a phone shows on the wall." },
+  { title: "One setting", text: "Settings, then Appearance, then E-Ink. It works on the web app and the Android app." },
+];
+
 /** One app, two layouts: what each screen size gets. */
 export const LAYOUT_FACTS: readonly { title: string; text: string }[] = [
   { title: "Phone layout", text: "On a phone or a narrow window, you get one column, a tab bar, swipes and press-and-hold. The Android app uses this layout too." },

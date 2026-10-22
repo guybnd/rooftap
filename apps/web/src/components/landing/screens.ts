@@ -172,3 +172,9 @@ export const DESKTOP_ALT: Record<DesktopScreenId, string> = {
   tasks: "Tasks on a wide screen: this week and later in two columns",
 };
 export const desktopScreenSrc = (id: DesktopScreenId) => `landing/screens/desktop-${id}.webp`;
+
+// The E-Ink wall frame, shot at 1280 x 800 in the E-Ink theme (`npm run landing:screens -w apps/web -- --eink`).
+export const EINK_W = 1280;
+export const EINK_H = 800;
+export const EINK_ALT = "Home in the E-Ink theme on a landscape e-paper frame: today, the weather chart and the week board, with Groceries beside them, all in greys";
+export const einkScreenSrc = (id: "home") => `landing/screens/eink-${id}.webp`;

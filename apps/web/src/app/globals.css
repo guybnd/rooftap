@@ -532,6 +532,13 @@
 [data-theme="e-ink"] .grocery-glyph {
   filter: grayscale(1);
 }
+/* The spectrum logo draws in ink: one flat colour, no gradient. */
+[data-theme="e-ink"] .rooftap-spectrum path {
+  stroke: currentColor;
+}
+[data-theme="e-ink"] .rooftap-spectrum circle {
+  fill: currentColor;
+}
 [data-theme="e-ink"] .foil-text {
   background: none;
   -webkit-text-fill-color: currentColor;

@@ -10,7 +10,7 @@ const SPECTRUM = ["#FF7A5C", "#FFC93D", "#5FE0B0", "#7CB8FF", "#9C8BFF", "#FF7AB
 export function RooftapMark({ className, spectrum = false }: { className?: string; spectrum?: boolean }) {
   const id = `rooftap-spectrum-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   return (
-    <svg viewBox={ROOFTAP_MARK.viewBox} aria-hidden className={className}>
+    <svg viewBox={ROOFTAP_MARK.viewBox} aria-hidden className={spectrum ? `rooftap-spectrum ${className ?? ""}` : className}>
       {spectrum && (
         <defs>
           <linearGradient id={id} gradientUnits="userSpaceOnUse" x1="232" y1="0" x2="792" y2="0">
