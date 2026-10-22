@@ -26,6 +26,7 @@ import type {
   ShopperOffer,
   ShopperPick,
   ShopperPriceSnapshot,
+  ScoutMessage,
   ShopperSearch,
   ShopperWant,
   UserSettings,
@@ -840,6 +841,7 @@ export const assistantConversations: AssistantConversation[] = [
   conv("conv-holiday", "chat", "Holiday in March", 3 * 24 * 60),
   conv("conv-spend", "chat", "Grocery spend this month", 2 * 24 * 60),
   conv("conv-week", "chat", "Cooking this week", 4 * 24 * 60),
+  conv("conv-microwave", "chat", "Find a microwave", 19),
   // Quick asks still open, so each one shows its answer and takes a follow-up.
   conv("conv-dinner", "quick", "Dinner tonight", 8, { closes_at: minutesFromNow(22) }),
   conv("conv-dentist", "quick", "When is the dentist?", 12, { closes_at: minutesFromNow(18) }),
@@ -956,6 +958,82 @@ const dentistChat: AssistantMessage[] = [
   msg("q-2", "assistant", 12, `**Dentist** is on ${new Date(now.getTime() + 2 * 86_400_000).toLocaleDateString("en-AU", { weekday: "long" })} at 2:30 PM. Travel is about 28 minutes, so leave by 2 PM.`),
 ];
 
+// ── Scout thread ─────────────────────────────────────────────────────────────
+// A microwave brief the Assistant started, a question, then a change that
+// searched again. Its own run so the TV run's frames stay as they are.
+
+/** The Scout run the Assistant started: two picks, both over the $120 budget. */
+export const scoutMicrowave: ShopperSearch = {
+  id: "scout-mw",
+  group_id: GROUP,
+  brief: { text: "A 25 litre microwave for reheating and defrosting", budget_min_cents: null, budget_max_cents: 12000, need_by: null, where: ["nearby", "online"] },
+  status: "done",
+  error: null,
+  stores_checked: 15,
+  key_source: "household",
+  created_by: AVA,
+  created_at: minutesAgo(19),
+  updated_at: minutesAgo(18),
+  finished_at: minutesAgo(18),
+  thread_id: null,
+  deleted: false,
+};
+
+/** The run Scout started when Ava changed the search. */
+export const scoutMicrowaveGrill: ShopperSearch = {
+  ...scoutMicrowave,
+  id: "scout-mw-2",
+  brief: { ...scoutMicrowave.brief, text: "A 25 litre microwave with a grill, for reheating and defrosting", budget_max_cents: 16000 },
+  stores_checked: 12,
+  created_at: minutesAgo(4),
+  updated_at: minutesAgo(3),
+  finished_at: minutesAgo(3),
+  thread_id: "scout-mw",
+};
+
+const mwPick = (search: ShopperSearch, rank: number, label: string, title: string, why: string, cents: number, store: string, extra: Partial<ShopperPick> = {}): ShopperPick => ({
+  ...pick(rank, label, title, why, cents, store, extra),
+  id: `pick-${search.id}-${rank}`,
+  search_id: search.id,
+  created_at: search.created_at,
+  updated_at: search.created_at,
+});
+
+export const scoutMicrowavePicks: ShopperPick[] = [
+  mwPick(scoutMicrowave, 1, "best value", "LG NeoChef 25L Smart Inverter", "The closest to the budget, with even inverter defrosting. It is $25 over.", 14500, "Go Get Appliances", { stretch: true }),
+  mwPick(scoutMicrowave, 2, "other brand", "Panasonic NN-ST34NB 25L 900W", "A current model from a well regarded brand. It is $39 over, so choose it only if brand matters more than price.", 15900, "DMS Appliances", { stretch: true }),
+  mwPick(scoutMicrowaveGrill, 1, "best value", "Sharp 25L Grill Microwave", "25 litres with a grill, and in stock nearby. $21 under the new budget.", 13900, "Bing Lee"),
+  mwPick(scoutMicrowaveGrill, 2, "best grill", "Panasonic NN-GT35NB 23L Grill", "The best grill of the three, a little smaller at 23 litres.", 14800, "JB Hi-Fi"),
+  mwPick(scoutMicrowaveGrill, 3, "biggest", "LG NeoChef 39L Smart Inverter Grill", "The biggest, for whole dinner plates and casserole dishes.", 15900, "Harvey Norman", { in_stock: null }),
+];
+
+export const scoutMicrowaveMessages: ScoutMessage[] = [
+  { id: "sm-1", group_id: GROUP, thread_id: "scout-mw", role: "user", text: "Why is there nothing under $120?", pick_id: null, search_id: null, created_by: AVA, created_at: minutesAgo(9), updated_at: minutesAgo(9), deleted: false },
+  {
+    id: "sm-2",
+    group_id: GROUP,
+    thread_id: "scout-mw",
+    role: "scout",
+    text: "The cheapest 25 litre inverter microwaves start at $139 today. Under $120 I only found 20 litre models. If 20 litres is fine I can search for those. Otherwise pick 1 is the closest at $145.",
+    pick_id: null,
+    search_id: null,
+    created_by: AVA,
+    created_at: minutesAgo(8),
+    updated_at: minutesAgo(8),
+    deleted: false,
+  },
+  { id: "sm-3", group_id: GROUP, thread_id: "scout-mw", role: "user", text: "OK, go up to $160, but it needs a grill", pick_id: null, search_id: null, created_by: AVA, created_at: minutesAgo(5), updated_at: minutesAgo(5), deleted: false },
+  { id: "sm-4", group_id: GROUP, thread_id: "scout-mw", role: "scout", text: "Searching again: up to $160, with a grill.", pick_id: null, search_id: "scout-mw-2", created_by: AVA, created_at: minutesAgo(4), updated_at: minutesAgo(4), deleted: false },
+];
+
+/** A named chat where Ava asked the Assistant to find a microwave, and it started Scout. */
+const microwaveChat: AssistantMessage[] = [
+  msg("k-1", "user", 20, "Can you find us a microwave? About 25 litres, under $120.", { author: "Ava" }),
+  msg("k-2", "assistant", 19, "I asked Scout to look. It checks your stores and comes back in about a minute with up to three picks. [Open Scout](/shopper/scout/scout-mw)", {
+    proposal: proposal("confirmed", [["start_scout", "shopper", { text: "A 25 litre microwave" }, 'Ask Scout to find "A 25 litre microwave"']]),
+  }),
+];
+
 /** Each conversation's messages, by conversation id. */
 export const assistantMessages: Record<string, AssistantMessage[]> = {
   "conv-household": householdThread,
@@ -966,6 +1044,7 @@ export const assistantMessages: Record<string, AssistantMessage[]> = {
   "conv-dinner": dinnerChat,
   "conv-dentist": dentistChat,
   "conv-week": weekChat,
+  "conv-microwave": microwaveChat,
 };
 
 /** Home Assistant, connected through its MCP Server integration, under Act. */

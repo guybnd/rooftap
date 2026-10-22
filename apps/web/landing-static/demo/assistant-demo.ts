@@ -83,6 +83,13 @@ interface Scenario {
 
 const scenarios: Scenario[] = [
   {
+    test: /\bfind\b|\bbuy\b|scout|shop for|look for|new (?:tv|microwave|fridge|kettle|vacuum)/i,
+    answer: () => ({
+      content: "I asked Scout to look. It checks your stores and comes back in about a minute with up to three picks. [Open Scout](/shopper/scout/scout-mw)",
+      proposal: { state: "confirmed", items: items([["start_scout", "shopper", { text: "A 25 litre microwave" }, 'Ask Scout to find "A 25 litre microwave"']]) },
+    }),
+  },
+  {
     test: /spen[dt]|budget|afford|how much|cost|bills?\b|money/i,
     answer: () => ({
       content:
@@ -167,7 +174,7 @@ const scenarios: Scenario[] = [
 
 const HELP: Answer = {
   content:
-    "This demo answers a few things the way your Assistant would. Try:\n\n- Add milk and bread to the list\n- What can we cook tonight?\n- Turn off the lights\n- Is the house locked?\n- Remind Noa to clean the gutters tomorrow\n- How much have we spent this month?\n- What's on this week?",
+    "This demo answers a few things the way your Assistant would. Try:\n\n- Add milk and bread to the list\n- What can we cook tonight?\n- Turn off the lights\n- Is the house locked?\n- Remind Noa to clean the gutters tomorrow\n- How much have we spent this month?\n- What's on this week?\n- Find us a microwave under $120",
 };
 
 function answerFor(text: string): Answer {

@@ -30,6 +30,7 @@ const PAGES = [
   "/shopper",
   "/shopper/w-vacuum",
   "/shopper/scout/scout-tv",
+  "/shopper/scout/scout-mw",
   "/rewards",
   "/setup",
   "/homesearch",

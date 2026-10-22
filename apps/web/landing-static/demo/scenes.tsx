@@ -302,6 +302,21 @@ export const SCENES: Scene[] = [
     actions: [{ click: "text=Hisense 65" }, { wait: 700 }],
     marks: { watch: "text=Watch the price", why: "text=Bright enough for a sunny room" },
   },
+  // A Scout thread: a question answered, then a change that searched again.
+  {
+    id: "shopper-scout-thread",
+    path: "/shopper/scout/scout-mw",
+    params: { id: "scout-mw" },
+    page: ScoutRun,
+    actions: [{ scroll: 2000 }, { wait: 400 }],
+    marks: {
+      ask: ["text=Why is there nothing under $120?", 1],
+      answer: "text=/cheapest 25 litre/",
+      again: "text=Searching again",
+      grill: '[class*="list-item"]:has-text("Sharp 25L")',
+      composer: "textarea",
+    },
+  },
 
   // Rewards: the wallet, a store lookup, the card at the till, and the perks.
   {
@@ -364,6 +379,14 @@ export const SCENES: Scene[] = [
     page: AssistantThread,
     actions: [{ scroll: 2000 }, { wait: 400 }],
     marks: { garage: ["text=Turn off \"Garage door\" in Home Assistant", 1], porch: ["text=Turn on \"Porch light\" in Home Assistant", 3], ask: ["text=Turn on the porch light", 1] },
+  },
+  // A named chat where the assistant started a Scout search.
+  {
+    id: "assistant-scout",
+    path: "/assistant/conv-microwave",
+    params: { id: "conv-microwave" },
+    page: AssistantThread,
+    marks: { ask: ["text=Can you find us a microwave", 1], scout: ["text=Ask Scout to find", 3], open: 'p:has-text("I asked Scout to look")' },
   },
   // A named chat that planned Saturday across Recipes, Checklists and Tasks.
   {

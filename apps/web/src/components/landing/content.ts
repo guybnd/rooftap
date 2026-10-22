@@ -147,7 +147,7 @@ export const FEATURE_GROUPS: readonly FeatureGroup[] = [
       ["Every store", "price, distance and stock"],
       ["Price sources", "pluggable per region, and open to new ones"],
       ["Plan to buy", "a to-do in Tasks and a planned cost in Costs"],
-      ["Scout", "up to three AI picks for a brief, each with its reason"],
+      ["Scout", "up to three AI picks for a brief, each with its reason, and follow-up questions"],
     ],
   },
   {

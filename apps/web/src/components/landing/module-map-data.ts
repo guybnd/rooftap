@@ -7,7 +7,7 @@ import type { ScreenId } from "./screens";
 // module-map-data.test.ts fails when a two-module feature has no line here,
 // or a line names a feature that does not join its two modules.
 
-export type MapModule = Exclude<ModuleId, "assistant" | "mcp">;
+export type MapModule = Exclude<ModuleId, "mcp">;
 
 /** Short names: the map has no room for "Tasks & Reminders". */
 export const MAP_LABEL: Record<MapModule, string> = {
@@ -23,6 +23,7 @@ export const MAP_LABEL: Record<MapModule, string> = {
   shopper: "Shopper",
   rewards: "Rewards",
   "google-calendar": "Google Calendar",
+  assistant: "Assistant",
 };
 
 /** The section whose hue a module's tile takes. */
@@ -44,6 +45,7 @@ export const POS: Record<MapModule, { wide: [number, number]; tall: [number, num
   rewards: { wide: [130, 420], tall: [62, 530] },
   groceries: { wide: [400, 420], tall: [62, 360] },
   recipes: { wide: [650, 420], tall: [180, 530] },
+  assistant: { wide: [290, 330], tall: [62, 262] },
 };
 
 export interface MapShot {
@@ -146,6 +148,16 @@ export const MAP_LINKS: readonly MapLink[] = [
     features: ["shopper.costs"],
     text: "Plan to buy on a Shopper item adds a planned one-off cost to the budget.",
     shots: [{ scene: "shopper-item-buy", mark: "plan" }],
+  },
+  {
+    a: "assistant",
+    b: "shopper",
+    features: ["shopper.assistant-scout"],
+    text: "Ask the Assistant to find something and it starts a Scout search. On the search you ask about a pick or change what you want, and new picks land below.",
+    shots: [
+      { scene: "assistant-scout", mark: "open" },
+      { scene: "shopper-scout-thread", mark: "again" },
+    ],
   },
   {
     a: "calendar",

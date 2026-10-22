@@ -115,6 +115,10 @@ export const MODULE_FEATURES = {
     modules: ['shopper', 'costs'],
     what: 'A planned one-off cost from Plan to buy on a Shopper item.',
   },
+  'shopper.assistant-scout': {
+    modules: ['shopper', 'assistant'],
+    what: 'Asking the assistant to find something to buy, which starts a Scout search, and reading its picks in a chat.',
+  },
 
   // ── Costs ────────────────────────────────────────────────────────────────
   'costs.from-groceries': {

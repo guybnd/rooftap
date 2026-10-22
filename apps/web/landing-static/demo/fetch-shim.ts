@@ -4,6 +4,10 @@ import { chat, decide, getConversation, listConversations, updateConversation } 
 import {
   homeAssistantStatus,
   homeAssistantTools,
+  scoutMicrowave,
+  scoutMicrowaveGrill,
+  scoutMicrowaveMessages,
+  scoutMicrowavePicks,
   scoutPicks,
   shopperWants,
   scoutSearch,
@@ -43,7 +47,7 @@ function scoutFollowUp(url: URL, init?: RequestInit) {
 
 /** Watch the price on a demo pick: the item it is already on, or a new one shaped like it. */
 function scoutWatch(pickId: string) {
-  const pick = scoutPicks.find((p) => p.id === pickId);
+  const pick = [...scoutPicks, ...scoutMicrowavePicks].find((p) => p.id === pickId);
   const known = shopperWants.find((w) => w.id === pick?.want_id);
   const tv = shopperWants.find((w) => w.id === "w-tv")!;
   return { want: known ?? { ...tv, id: `w-${pickId}`, title: pick?.title ?? tv.title, query: pick?.title ?? tv.title, notes: pick?.why ?? null } };
@@ -143,6 +147,14 @@ const answers: [RegExp, Answer][] = [
   [/^\/api\/shopper\/scout\/picks\//, (url) => scoutWatch(url.pathname.split("/").pop() ?? "")],
   [/^\/api\/shopper\/scout\/[^/]+\/messages/, scoutFollowUp],
   [/^\/api\/shopper\/scout\/scout-tv/, () => ({ search: scoutSearch, picks: scoutPicks })],
+  [
+    /^\/api\/shopper\/scout\/scout-mw/,
+    () => ({
+      search: scoutMicrowave,
+      picks: scoutMicrowavePicks.filter((p) => p.search_id === scoutMicrowave.id),
+      thread: { runs: [scoutMicrowave, scoutMicrowaveGrill], picks: scoutMicrowavePicks, messages: scoutMicrowaveMessages },
+    }),
+  ],
   [/^\/api\/shopper\/lookup/, () => ({ offers: 5, sources: ["serpapi-google-shopping"], failed: [] })],
   // Assistant.
   [/^\/api\/assistant\/status/, () => assistantStatus],

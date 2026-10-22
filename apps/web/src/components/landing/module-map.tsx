@@ -241,7 +241,7 @@ export function ModuleMap() {
           <>
             <p className={styles.mapCardPair}>
               <Chip id={pick.module} />
-              <span className={styles.mapCount}>{moduleLinks.length} links</span>
+              <span className={styles.mapCount}>{moduleLinks.length} {moduleLinks.length === 1 ? "link" : "links"}</span>
             </p>
             <ul className={styles.mapList}>
               {moduleLinks.map(([l, i]) => (
