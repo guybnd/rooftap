@@ -44,6 +44,9 @@ import {
   canonicalizeItemName,
   sortGroceriesFlat,
   DEFAULT_GROCERY_SORT_MODE,
+  GROCERY_SHOW_KEY,
+  parseGroceryShow,
+  type GroceryShowFilter,
 } from '@homeup/core';
 import {
   Plus,
@@ -57,7 +60,6 @@ import {
   WalletCards,
   LayoutList,
   MoreHorizontal,
-  SlidersHorizontal,
   Search,
   ArrowUpDown,
   Receipt,
@@ -69,8 +71,9 @@ import { GroceryItemCard, GroceryItemCardStandalone } from './grocery-item-card'
 import { ListGroup } from '@/components/ui/list-item';
 import { GroceryItemModal } from './grocery-item-modal';
 import { SectionSearchBar } from '@/components/section-search-bar';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { useFuzzySearch } from '@/hooks/use-fuzzy-search';
-import { PopMenu, MenuDivider, MenuItem, MenuLabel } from '../setup/pop-menu';
+import { PopMenu, MenuItem, MenuLabel } from '../setup/pop-menu';
 import { memberLabel } from '../setup/member-label';
 import { getRegionProvider, groceryItems$, loyaltyCards$, sortLoyaltyCards, type LoyaltyCard, useReconnectSync, useStoreHelpers, useStoreLoaded, createPendingActionTracker, usePendingIds, createUndoBatchTracker } from '@homeup/core';
 import { fetchItemLibrary, buildLibraryMap, resolveItemDefaults, learnItemLibrary, type LibraryOverride } from '@homeup/core';
@@ -223,11 +226,11 @@ export default function GroceriesPage() {
   // remote-driven run from a local one and avoid a multi-device sync ping-pong.
   const remoteUpdateRef = useRef(false);
 
-  const [hideNonNeeded, setHideNonNeeded] = useState(false);
+  // The Show switch (To buy / Everything), remembered in localStorage and
+  // hydrated in an effect below to keep SSR and the client in step.
+  const [show, setShow] = useState<GroceryShowFilter>(() => parseGroceryShow(null));
+  const hideNonNeeded = show === 'needed';
   const [sortMode, setSortMode] = useState<GrocerySortMode>(DEFAULT_GROCERY_SORT_MODE);
-  // HOUP-317: stashed "Only needed" value while in One list, restored on the
-  // way back to By aisle. Null on a cold load into flat (nothing to restore).
-  const hideNonNeededStashRef = useRef<boolean | null>(null);
   const [search, setSearch] = useState('');
   // While a query is active the list shows every match: "Only needed" would
   // otherwise hide a have/bought item you searched for with no way to tell.
@@ -273,17 +276,24 @@ export default function GroceriesPage() {
     // *pending* marker (see persistSortMode) rather than a fallback — it only
     // exists while a write is unconfirmed, so it must win over a DB value that
     // predates it. A confirmed write clears the mirror, so the DB is consulted
-    // whenever there's nothing pending. A hydrated 'flat' mode couples "Only
-    // needed" on too, same as onChange, but with no stash — a cold load has no
-    // prior aisle-mode value, so returning to By aisle lands on `false`,
-    // today's default.
+    // whenever there's nothing pending. Sorting no longer touches the Show
+    // switch: that has its own control now.
     const dbMode = userSettings?.grocery_sort_mode;
     const savedMode = loadSortMode() ?? (isGrocerySortMode(dbMode) ? dbMode : null);
-    if (savedMode) {
-      setSortMode(savedMode);
-      if (savedMode === 'flat') setHideNonNeeded(true);
-    }
+    if (savedMode) setSortMode(savedMode);
   }, [cacheLoading, userSettings]);
+
+  useEffect(() => {
+    try {
+      setShow(parseGroceryShow(localStorage.getItem(GROCERY_SHOW_KEY)));
+    } catch {
+      /* storage blocked: keep the default */
+    }
+  }, []);
+  const handleShowChange = useCallback((next: GroceryShowFilter) => {
+    setShow(next);
+    try { localStorage.setItem(GROCERY_SHOW_KEY, next); } catch { /* noop */ }
+  }, []);
 
   // Hydrate collapsed-aisle state from localStorage once on mount. Done in an
   // effect (not a lazy useState initializer) to avoid an SSR/client hydration
@@ -342,20 +352,11 @@ export default function GroceriesPage() {
     }
   }, [refreshCache]);
 
-  // HOUP-317: switching to One list stashes the current "Only needed" and
-  // forces it on; switching back restores the stash.
   const handleSortModeChange = useCallback((mode: GrocerySortMode) => {
     if (mode === sortMode) return;
     setSortMode(mode);
     void persistSortMode(mode);
-    if (mode === 'flat') {
-      hideNonNeededStashRef.current = hideNonNeeded;
-      setHideNonNeeded(true);
-    } else {
-      setHideNonNeeded(hideNonNeededStashRef.current ?? false);
-      hideNonNeededStashRef.current = null;
-    }
-  }, [sortMode, hideNonNeeded, persistSortMode]);
+  }, [sortMode, persistSortMode]);
 
   useEffect(() => {
     const dismissed = localStorage.getItem(SHOPPING_TOOLTIP_KEY);
@@ -981,10 +982,9 @@ export default function GroceriesPage() {
     return [...fuzzyItems, ...items.filter((i) => aisles.includes(i.aisle) && !seen.has(i.id))];
   }, [fuzzyItems, items, searchEntry.name, customAisles]);
 
-  // HOUP-317: One list's flat ordering — same search + "Only needed" filter
+  // HOUP-317: One list's flat ordering — same search + To buy filter
   // contract as the aisle view (including the pendingIds grace window), then
-  // the shared essentials-first/A-to-Z comparator. Load-bearing here because
-  // One list enters with "Only needed" on.
+  // the shared essentials-first/A-to-Z comparator.
   const flatItems = useMemo(
     () => sortGroceriesFlat(searchedItems.filter((i) => !filterNeeded || i.status === 'needed' || pendingIds.has(i.id))),
     [searchedItems, filterNeeded, pendingIds],
@@ -1075,29 +1075,20 @@ export default function GroceriesPage() {
   const shopTotal = cartCents ?? sessionSum;
   const openAdd = () => { setEditingItem(undefined); setDefaultAisle('other'); setIsModalOpen(true); };
 
-  // View menu (search row and collapsed bar): By aisle / One list and Only
-  // needed, moved out of the old control row. The HOUP-317 coupling stays in
-  // handleSortModeChange; the dot says Only needed is on (H2: a small dose).
-  const viewMenu = (
+  // Collapsed bar's sort menu (the list bar holds the same choice in full).
+  const sortMenu = (
     <PopMenu
       align="right"
       width="w-56"
-      triggerLabel={hideNonNeeded ? 'View options, Only needed is on' : 'View options'}
-      triggerClassName="relative grid h-11 w-11 flex-shrink-0 place-items-center rounded-lg border border-border bg-muted text-foreground transition-colors hover:bg-accent"
-      trigger={
-        <>
-          <SlidersHorizontal className="h-4 w-4" />
-          {hideNonNeeded && <span aria-hidden className="absolute right-2 top-2 h-2 w-2 rounded-full bg-primary" />}
-        </>
-      }
+      triggerLabel={`Sort: ${sortMode === 'flat' ? 'One list' : 'By aisle'}`}
+      triggerClassName="grid h-11 w-11 flex-shrink-0 place-items-center rounded-lg border border-border bg-muted text-foreground transition-colors hover:bg-accent"
+      trigger={<ArrowUpDown className="h-4 w-4" />}
     >
       {(close) => (
         <>
-          <MenuLabel>View</MenuLabel>
+          <MenuLabel>Sort</MenuLabel>
           <MenuItem active={sortMode === 'aisle'} onClick={() => { handleSortModeChange('aisle'); close(); }}>By aisle</MenuItem>
           <MenuItem active={sortMode === 'flat'} onClick={() => { handleSortModeChange('flat'); close(); }}>One list</MenuItem>
-          <MenuDivider />
-          <MenuItem active={hideNonNeeded} onClick={() => setHideNonNeeded((v) => !v)}>Only needed</MenuItem>
         </>
       )}
     </PopMenu>
@@ -1190,7 +1181,22 @@ export default function GroceriesPage() {
           <button onClick={() => setCardsOpen(true)} aria-label="Rewards cards" title="Rewards cards" className={iconButtonClass}>
             <WalletCards className="h-4 w-4" />
           </button>
-          {items.length > 0 && viewMenu}
+          {items.length > 0 && (
+            <SegmentedControl
+              ariaLabel="Show"
+              size="sm"
+              tone="accent"
+              wrap
+              className="w-fit flex-shrink-0"
+              options={[
+                { value: 'needed', label: 'To buy' },
+                { value: 'all', label: 'All' },
+              ]}
+              value={show}
+              onChange={handleShowChange}
+            />
+          )}
+          {items.length > 0 && sortMenu}
           {/* H5: the bar replaces the head, so its Add is the same one accent. */}
           <button
             onClick={openAdd}
@@ -1281,7 +1287,7 @@ export default function GroceriesPage() {
           }
         />
 
-        {/* Search row: the search box, then View (sort mode + Only needed). */}
+        {/* Search row. */}
         {items.length > 0 && (
           <div ref={searchWrapRef} className={cn('flex items-center gap-2', wideAisles && 'max-w-2xl')}>
             <SectionSearchBar
@@ -1291,7 +1297,6 @@ export default function GroceriesPage() {
               placeholder="Search or add, e.g. 2 milk"
               className="max-w-none"
             />
-            {viewMenu}
           </div>
         )}
       </div>
@@ -1337,7 +1342,7 @@ export default function GroceriesPage() {
             <p className="mt-0.5 text-xs text-muted-foreground">
               Swipe a row <span className="text-success">right for Got it</span> to count it toward today&apos;s spend,
               or <span className="text-primary">left for Have it</span> if it&apos;s already at home.
-              <span className="hidden sm:inline"> Drag the grip to reorder.</span> Only needed hides the rest.
+              <span className="hidden sm:inline"> Drag the grip to reorder.</span> To buy hides the rest.
             </p>
           </div>
           <button
@@ -1347,6 +1352,38 @@ export default function GroceriesPage() {
           >
             <X className="h-4 w-4" />
           </button>
+        </div>
+      )}
+
+      {/* The list bar (Guy, 2026-10-22, option C): what the list holds and
+          how it is arranged, as two small toggles right above the rows. */}
+      {items.length > 0 && (
+        <div className={cn('flex items-center justify-between gap-2', wideAisles && 'max-w-2xl')}>
+          <SegmentedControl
+            ariaLabel="Show"
+            size="sm"
+            tone="accent"
+            wrap
+            className="w-fit"
+            options={[
+              { value: 'needed', label: 'To buy' },
+              { value: 'all', label: 'All items' },
+            ]}
+            value={show}
+            onChange={handleShowChange}
+          />
+          <SegmentedControl
+            ariaLabel="Arrange"
+            size="sm"
+            wrap
+            className="w-fit"
+            options={[
+              { value: 'aisle', label: 'Aisles' },
+              { value: 'flat', label: 'One list' },
+            ]}
+            value={sortMode}
+            onChange={handleSortModeChange}
+          />
         </div>
       )}
 
@@ -1632,10 +1669,8 @@ export default function GroceriesPage() {
         />
       )}
 
-      {/* Add custom aisle — HOUP-317: also gated to By aisle. The mode-switch
-          coupling hides this incidentally on entry, but "Only needed" stays
-          live inside One list (AC 5), so turning it off there would
-          otherwise bring this back under a list showing no aisles. */}
+      {/* Add custom aisle — HOUP-317: also gated to By aisle, so a list
+          showing no aisles never offers one. */}
       {!hideNonNeeded && !searching && !selectMode && !reordering && sortMode === 'aisle' && (
         <div>
           {showAddAisle ? (

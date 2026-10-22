@@ -32,6 +32,9 @@ export interface SegmentedControlProps<T extends string> {
    * label still reaches assistive tech via each segment's own accessibility
    * label. Requires every option to pass `icon`. */
   iconOnly?: boolean;
+  /** `accent` tints the chosen segment coral (Hearth: --primary marks what
+   * is interactive and on), for a filter that should read at a glance. */
+  tone?: 'neutral' | 'accent';
   accessibilityLabel?: string;
   className?: string;
 }
@@ -44,6 +47,7 @@ export function SegmentedControl<T extends string>({
   fitContent = false,
   size = 'md',
   iconOnly = false,
+  tone = 'neutral',
   accessibilityLabel,
   className,
 }: SegmentedControlProps<T>) {
@@ -74,7 +78,7 @@ export function SegmentedControl<T extends string>({
               'flex-row items-center justify-center gap-1.5 rounded-md',
               wrap || fitContent ? 'flex-none' : 'flex-1',
               size === 'sm' ? 'px-2 py-1' : 'px-3 py-1.5',
-              active && 'bg-background shadow-sm border border-border'
+              active && (tone === 'accent' ? 'border border-primary/40 bg-primary/15' : 'bg-background shadow-sm border border-border')
             )}
           >
             {opt.icon}
@@ -83,7 +87,7 @@ export function SegmentedControl<T extends string>({
                 className={cn(
                   'font-medium',
                   size === 'sm' ? 'text-xs' : 'text-sm',
-                  active ? 'text-foreground' : 'text-muted-foreground'
+                  active ? (tone === 'accent' ? 'text-primary' : 'text-foreground') : 'text-muted-foreground'
                 )}
               >
                 {opt.label}

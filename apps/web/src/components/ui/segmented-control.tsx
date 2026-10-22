@@ -21,6 +21,9 @@ interface SegmentedControlProps<T extends string> {
   /** Let segments wrap to a second line (for many options, e.g. cadence). */
   wrap?: boolean;
   size?: "sm" | "md";
+  /** `accent` tints the chosen segment coral (Hearth: --primary marks what
+   * is interactive and on), for a filter that should read at a glance. */
+  tone?: "neutral" | "accent";
   ariaLabel?: string;
   className?: string;
 }
@@ -31,6 +34,7 @@ export function SegmentedControl<T extends string>({
   onChange,
   wrap = false,
   size = "md",
+  tone = "neutral",
   ariaLabel,
   className,
 }: SegmentedControlProps<T>) {
@@ -58,7 +62,9 @@ export function SegmentedControl<T extends string>({
               wrap ? "flex-none" : "flex-1",
               size === "sm" ? "px-2 py-1 text-xs" : "px-3 py-1.5 text-sm",
               active
-                ? "bg-background text-foreground shadow-sm ring-1 ring-border"
+                ? tone === "accent"
+                  ? "bg-primary/15 text-primary ring-1 ring-primary/40"
+                  : "bg-background text-foreground shadow-sm ring-1 ring-border"
                 : "text-muted-foreground hover:text-foreground"
             )}
           >

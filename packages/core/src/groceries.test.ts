@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GROCERY_UNDO_LABELS, formatEntryQuantity, groceryAislesMatching, grocerySearchAddOptions, isReAddDismissed, parseGroceryEntry, recentGroceryPicks, sortGroceriesFlat, suggestReAdd } from './groceries';
+import { GROCERY_UNDO_LABELS, parseGroceryShow, formatEntryQuantity, groceryAislesMatching, grocerySearchAddOptions, isReAddDismissed, parseGroceryEntry, recentGroceryPicks, sortGroceriesFlat, suggestReAdd } from './groceries';
 import type { LibraryOverride } from './item-library';
 import type { GroceryItem } from './types';
 
@@ -257,5 +257,14 @@ describe('GROCERY_UNDO_LABELS', () => {
     expect(GROCERY_UNDO_LABELS.added(1, 'Milk')).toBe('Milk added to list');
     expect(GROCERY_UNDO_LABELS.added(3, 'Milk')).toBe('3 items added to list');
     expect(GROCERY_UNDO_LABELS.reset(2)).toBe('2 items back to Needed');
+  });
+});
+
+describe("grocery Show switch", () => {
+  it("parses a stored value and falls back to all", () => {
+    expect(parseGroceryShow("needed")).toBe("needed");
+    expect(parseGroceryShow("all")).toBe("all");
+    expect(parseGroceryShow(null)).toBe("all");
+    expect(parseGroceryShow("junk")).toBe("all");
   });
 });

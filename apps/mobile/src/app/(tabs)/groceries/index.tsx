@@ -53,7 +53,6 @@ import {
   Receipt,
   RotateCcw,
   Search,
-  SlidersHorizontal,
   SquareCheck,
   Trash2,
   WalletCards,
@@ -75,6 +74,7 @@ import {
   ReorderableList,
   ScreenBackground,
   SectionSearchBar,
+  SegmentedControl,
   toast,
   useArrivals,
 } from '@homeup/ui';
@@ -95,12 +95,14 @@ import {
   canonicalizeItemName,
   sortGroceriesFlat,
   DEFAULT_GROCERY_SORT_MODE,
+  GROCERY_SHOW_KEY,
+  parseGroceryShow,
+  type GroceryShowFilter,
   todayStr,
   isBoughtToday,
   ensureSession,
   updateSession,
   closeSession,
-  effectiveSessionTotal,
   syncSession,
   getEnabledModules,
   isFeatureEnabled,
@@ -219,8 +221,10 @@ interface GroceriesListHeaderProps {
   modeActive: boolean;
   onExitMode: () => void;
   onOpenMore: (anchor: ActionMenuAnchor) => void;
-  onOpenView: (anchor: ActionMenuAnchor) => void;
-  viewFiltered: boolean;
+  sortMode: GrocerySortMode;
+  onSortModeChange: (mode: GrocerySortMode) => void;
+  show: GroceryShowFilter;
+  onShowChange: (show: GroceryShowFilter) => void;
   onOpenCards: () => void;
   onAddItem: () => void;
   onHeadLayout: (bottom: number) => void;
@@ -285,8 +289,10 @@ function GroceriesListHeader({
   modeActive,
   onExitMode,
   onOpenMore,
-  onOpenView,
-  viewFiltered,
+  sortMode,
+  onSortModeChange,
+  show,
+  onShowChange,
   onOpenCards,
   onAddItem,
   onHeadLayout,
@@ -344,11 +350,6 @@ function GroceriesListHeader({
             placeholder="Search or add, e.g. 2 milk"
             className="flex-1"
           />
-          {/* HOUP-317's By aisle / One list and "Only needed", folded into one
-              menu; the dot says "Only needed" is on (it hides rows). */}
-          <MenuIconButton label="List view options" onOpen={onOpenView} dot={viewFiltered}>
-            <SlidersHorizontal size={16} className="text-foreground" />
-          </MenuIconButton>
         </View>
       </View>
 
@@ -390,6 +391,52 @@ function GroceriesListHeader({
           )}
         </>
       )}
+
+      {itemsCount > 0 && (
+        <GroceriesListBar sortMode={sortMode} onSortModeChange={onSortModeChange} show={show} onShowChange={onShowChange} />
+      )}
+    </View>
+  );
+}
+
+/** The list bar (Guy, 2026-10-22, option C): what the list holds and how it
+ *  is arranged, as two small toggles right above the rows they control. */
+function GroceriesListBar({
+  sortMode,
+  onSortModeChange,
+  show,
+  onShowChange,
+}: {
+  sortMode: GrocerySortMode;
+  onSortModeChange: (mode: GrocerySortMode) => void;
+  show: GroceryShowFilter;
+  onShowChange: (show: GroceryShowFilter) => void;
+}) {
+  return (
+    <View className="flex-row items-center justify-between gap-2 pt-1">
+      <SegmentedControl
+        accessibilityLabel="Show"
+        fitContent
+        size="sm"
+        tone="accent"
+        options={[
+          { value: 'needed', label: 'To buy' },
+          { value: 'all', label: 'All items' },
+        ]}
+        value={show}
+        onChange={onShowChange}
+      />
+      <SegmentedControl
+        accessibilityLabel="Arrange"
+        fitContent
+        size="sm"
+        options={[
+          { value: 'aisle', label: 'Aisles' },
+          { value: 'flat', label: 'One list' },
+        ]}
+        value={sortMode}
+        onChange={onSortModeChange}
+      />
     </View>
   );
 }
@@ -443,8 +490,8 @@ function GroceriesTripSummary({ estTotal, buyableCount, unpricedCount, showTrack
 interface GroceriesCollapsedBarProps {
   topInset: number;
   neededCount: number;
-  caption: string | undefined;
-  viewFiltered: boolean;
+  show: GroceryShowFilter;
+  onShowChange: (show: GroceryShowFilter) => void;
   onSearch: () => void;
   onOpenCards: () => void;
   onOpenView: (anchor: ActionMenuAnchor) => void;
@@ -452,9 +499,9 @@ interface GroceriesCollapsedBarProps {
 }
 
 /** The slim bar that takes over once the lede has scrolled away, so the list
- *  gets the screen while you shop: the count, then search (back to the top),
- *  Rewards cards, view options and Add. */
-function GroceriesCollapsedBar({ topInset, neededCount, caption, viewFiltered, onSearch, onOpenCards, onOpenView, onAddItem }: GroceriesCollapsedBarProps) {
+ *  gets the screen while you shop: the count and the Show switch, then search
+ *  (back to the top), Rewards cards, sort and Add. */
+function GroceriesCollapsedBar({ topInset, neededCount, show, onShowChange, onSearch, onOpenCards, onOpenView, onAddItem }: GroceriesCollapsedBarProps) {
   return (
     <Animated.View
       entering={FadeIn.duration(MOTION_DURATIONS_MS.fast)}
@@ -467,14 +514,18 @@ function GroceriesCollapsedBar({ topInset, neededCount, caption, viewFiltered, o
           {neededCount}
         </Text>
         <View className="min-w-0 flex-1">
-          <Text numberOfLines={1} className="text-title text-muted-foreground">
-            to buy
-          </Text>
-          {caption != null && (
-            <Text numberOfLines={1} className="text-caption text-muted-foreground">
-              {caption}
-            </Text>
-          )}
+          <SegmentedControl
+            accessibilityLabel="Show"
+            fitContent
+            size="sm"
+            tone="accent"
+            options={[
+              { value: 'needed', label: 'To buy' },
+              { value: 'all', label: 'All' },
+            ]}
+            value={show}
+            onChange={onShowChange}
+          />
         </View>
         <Button size="icon-sm" variant="outline" onPress={onSearch} accessibilityLabel="Search or add">
           <Search size={16} className="text-foreground" />
@@ -482,8 +533,8 @@ function GroceriesCollapsedBar({ topInset, neededCount, caption, viewFiltered, o
         <Button size="icon-sm" variant="outline" onPress={onOpenCards} accessibilityLabel="Rewards cards">
           <WalletCards size={16} className="text-foreground" />
         </Button>
-        <MenuIconButton label="List view options" onOpen={onOpenView} dot={viewFiltered}>
-          <SlidersHorizontal size={16} className="text-foreground" />
+        <MenuIconButton label="Sort" onOpen={onOpenView}>
+          <ArrowUpDown size={16} className="text-foreground" />
         </MenuIconButton>
         <Button size="icon-sm" onPress={onAddItem} accessibilityLabel="Add item" className="rounded-full">
           <Plus size={16} className="text-primary-foreground" />
@@ -662,15 +713,15 @@ export default function GroceriesSectionScreen() {
   const remoteUpdateRef = React.useRef(0);
   const sessionFetchVersionRef = React.useRef(0);
   const [search, setSearch] = React.useState('');
-  const [hideNonNeeded, setHideNonNeeded] = React.useState(false);
+  // The Show switch, remembered on this device (expo-secure-store, like the
+  // collapsed aisles below).
+  const [show, setShow] = React.useState<GroceryShowFilter>(() => parseGroceryShow(null));
+  const hideNonNeeded = show === 'needed';
   // While a query is active the list shows every match: "Needed only" would
   // otherwise hide a have/bought item you searched for with no way to tell.
   const searching = search.trim().length > 0;
   const filterNeeded = hideNonNeeded && !searching;
   const [sortMode, setSortMode] = React.useState<GrocerySortMode>(DEFAULT_GROCERY_SORT_MODE);
-  // HOUP-317: stashed "Only needed" value while in One list, restored on the
-  // way back to By aisle. Null on a cold load into flat (nothing to restore).
-  const hideNonNeededStashRef = React.useRef<boolean | null>(null);
   const [collapsedAisles, setCollapsedAisles] = React.useState<Set<string>>(new Set());
   const [formOpen, setFormOpen] = React.useState(false);
   const [editingItem, setEditingItem] = React.useState<GroceryItem | undefined>();
@@ -735,21 +786,28 @@ export default function GroceriesSectionScreen() {
     })();
   }, []);
 
+  React.useEffect(() => {
+    void SecureStore.getItemAsync(GROCERY_SHOW_KEY)
+      .then((raw) => {
+        if (raw) setShow(parseGroceryShow(raw));
+      })
+      .catch(() => {});
+  }, []);
+  const handleShowChange = React.useCallback((next: GroceryShowFilter) => {
+    setShow(next);
+    void SecureStore.setItemAsync(GROCERY_SHOW_KEY, next).catch(() => {});
+  }, []);
+
   // HOUP-317: list view mode syncs via user_settings.grocery_sort_mode —
   // mirrors costs/index.tsx's costs_period hydration (native has no
-  // localStorage mirror, so the DB is the only source). A hydrated 'flat'
-  // couples "Only needed" on too, same as onSortModeChange, but with no
-  // stash — a cold load has no prior aisle-mode value, so returning to By
-  // aisle lands on `false`, today's default.
+  // localStorage mirror, so the DB is the only source). Sorting no longer
+  // touches the Show switch: that has its own control now.
   const sortModeHydratedRef = React.useRef(false);
   React.useEffect(() => {
     if (cacheLoading || sortModeHydratedRef.current) return;
     sortModeHydratedRef.current = true;
     const dbMode = userSettings?.grocery_sort_mode;
-    if (dbMode === 'aisle' || dbMode === 'flat') {
-      setSortMode(dbMode);
-      if (dbMode === 'flat') setHideNonNeeded(true);
-    }
+    if (dbMode === 'aisle' || dbMode === 'flat') setSortMode(dbMode);
   }, [cacheLoading, userSettings]);
 
   const persistSortMode = React.useCallback(async (mode: GrocerySortMode) => {
@@ -766,23 +824,15 @@ export default function GroceriesSectionScreen() {
     }
   }, []);
 
-  // HOUP-317: switching to One list stashes the current "Only needed" and
-  // forces it on; switching back restores the stash. Also exits Reorder —
-  // One list has no drag-to-reorder.
+  // HOUP-317: switching to One list exits Reorder — One list has no
+  // drag-to-reorder.
   const handleSortModeChange = React.useCallback((mode: GrocerySortMode) => {
     if (mode === sortMode) return;
     haptics.select();
     setSortMode(mode);
     void persistSortMode(mode);
-    if (mode === 'flat') {
-      hideNonNeededStashRef.current = hideNonNeeded;
-      setHideNonNeeded(true);
-      setReorderMode(false);
-    } else {
-      setHideNonNeeded(hideNonNeededStashRef.current ?? false);
-      hideNonNeededStashRef.current = null;
-    }
-  }, [sortMode, hideNonNeeded, persistSortMode]);
+    if (mode === 'flat') setReorderMode(false);
+  }, [sortMode, persistSortMode]);
 
   // Session fetch (once per group); realtime below keeps the mounted screen in
   // step with other clients while actions still re-set local state immediately.
@@ -1760,8 +1810,6 @@ export default function GroceriesSectionScreen() {
     ].filter(Boolean);
     return fragments.length ? fragments.join(' · ') : undefined;
   })();
-  // While a shop is tracked the collapsed bar shows the running total instead.
-  const collapsedCaption = session?.tracking === 'on' ? `${formatMoney(effectiveSessionTotal(session))} in cart` : ledeCaption;
 
   const closeMenus = () => {
     setMoreAnchor(null);
@@ -1784,7 +1832,6 @@ export default function GroceriesSectionScreen() {
   const viewItems: ActionMenuItem[] = [
     { key: 'aisle', label: 'By aisle', checked: sortMode === 'aisle', onPress: () => (closeMenus(), handleSortModeChange('aisle')) },
     { key: 'flat', label: 'One list', checked: sortMode === 'flat', onPress: () => (closeMenus(), handleSortModeChange('flat')) },
-    { key: 'needed', label: 'Only needed', checked: hideNonNeeded, onPress: () => (closeMenus(), setHideNonNeeded((v) => !v)) },
   ];
 
   const listHeaderElement = (
@@ -1797,8 +1844,10 @@ export default function GroceriesSectionScreen() {
       modeActive={selectMode || reorderMode}
       onExitMode={() => (selectMode ? exitSelectMode() : setReorderMode(false))}
       onOpenMore={setMoreAnchor}
-      onOpenView={setViewAnchor}
-      viewFiltered={hideNonNeeded}
+      sortMode={sortMode}
+      onSortModeChange={handleSortModeChange}
+      show={show}
+      onShowChange={handleShowChange}
       onOpenCards={() => setCardsOpen(true)}
       onAddItem={() => openAdd()}
       onHeadLayout={(bottom) => {
@@ -1996,8 +2045,8 @@ export default function GroceriesSectionScreen() {
         <GroceriesCollapsedBar
           topInset={insets.top}
           neededCount={neededCount}
-          caption={collapsedCaption}
-          viewFiltered={hideNonNeeded}
+          show={show}
+          onShowChange={handleShowChange}
           onSearch={() => listRef.current?.scrollToOffset({ offset: 0, animated: true })}
           onOpenCards={() => setCardsOpen(true)}
           onOpenView={setViewAnchor}

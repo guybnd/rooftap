@@ -127,6 +127,16 @@ export function countNeeded(items: GroceryItem[]): number {
   return items.filter((i) => i.status === "needed").length;
 }
 
+/** The list's Show switch: only what still needs buying, or every item. */
+export type GroceryShowFilter = "needed" | "all";
+export const DEFAULT_GROCERY_SHOW: GroceryShowFilter = "all";
+/** Device-local key that remembers the Show switch between visits. */
+export const GROCERY_SHOW_KEY = "homeup-grocery-show";
+
+export function parseGroceryShow(raw: string | null | undefined): GroceryShowFilter {
+  return raw === "needed" || raw === "all" ? raw : DEFAULT_GROCERY_SHOW;
+}
+
 /** Essentials that still need buying — surfaced on the Home hub (FLUX-185). */
 export function essentialNeeded(items: GroceryItem[]): GroceryItem[] {
   return items.filter((i) => i.is_essential && i.status === "needed");
