@@ -10,7 +10,7 @@ This page tells you what Rooftap protects, what it trusts, and what you must do 
 |---|---|---|
 | `db` (Postgres) | All household data, accounts, keys | `127.0.0.1:5432` on the host only, unless you set `POSTGRES_BIND` |
 | `kong` (API gateway) | Nothing. It routes auth, data, realtime, storage and functions. | Every interface on `KONG_HTTP_PORT` (8000), or only this machine with `KONG_BIND=127.0.0.1` |
-| `app` (web app and API) | Nothing. It reads `.env` and the database. | Every interface on `APP_PORT` (3000), or only this machine with `APP_BIND=127.0.0.1` |
+| `app` (web app and API) | Nothing. It reads `.env` and the database. | Every interface on `APP_PORT` (3737), or only this machine with `APP_BIND=127.0.0.1` |
 | `storage` | Uploaded files, in the `storage-data` volume | Through Kong only |
 | `.env` | The JWT secret, the service-role key, the database password, `HOUSEHOLD_KEYS_SECRET` | The host file system |
 
@@ -61,8 +61,8 @@ The official Android app sends your household data only to the server you pick o
 
 ## What you must do
 
-1. Create your account right after the first start. Until the first account exists, any person who can reach port 3000 can create the owner account.
-2. Keep ports 3000 and 8000 off the internet. Use the `https`, `tailscale-funnel` or `cloudflare-tunnel` profile for remote access. Each one gives one HTTPS address. If a profile is the only way in, set `APP_BIND=127.0.0.1` and `KONG_BIND=127.0.0.1` in `.env`.
+1. Create your account right after the first start. Until the first account exists, any person who can reach port 3737 can create the owner account.
+2. Keep ports 3737 and 8000 off the internet. Use the `https`, `tailscale-funnel` or `cloudflare-tunnel` profile for remote access. Each one gives one HTTPS address. If a profile is the only way in, set `APP_BIND=127.0.0.1` and `KONG_BIND=127.0.0.1` in `.env`.
 3. Keep `ALLOW_AUTH_BYPASS` empty. It exists for local tests only.
 4. Back up `.env` and the `db-data` volume, and encrypt the backups.
 5. Update Rooftap when a release lists a security fix. `migrate` applies the database changes on the next start.

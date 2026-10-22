@@ -8,6 +8,8 @@ Each change people would notice gets a `whats-new/` entry (see `whats-new/README
 
 ## Unreleased
 
+- Self-hosting: a new install serves the web app on port 3737, not 3000. `scripts/self-host-init.sh` keeps an existing install on 3000. If you start the stack with `docker compose up` and your `.env` has no `APP_PORT` line, add `APP_PORT=3000` to keep the old port.
+
 ## 1.1.1 (2026-10-22)
 
 This release ships a new APK. It is the first one signed with Rooftap's own key, and the first APK since 1.0.0. Everything listed under 1.1.0 is in it too, because 1.1.0 shipped without an APK.

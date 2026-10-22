@@ -16,7 +16,7 @@ cp .env.example .env
 ./scripts/self-host-init.sh -d
 ```
 
-Then open <http://localhost:3000> and create the owner account. You need no outside accounts.
+Then open <http://localhost:3737> and create the owner account. You need no outside accounts.
 
 **Always start the stack with `./scripts/self-host-init.sh`, not with `docker compose up`.** The script writes the first-boot secrets into `.env` before any container starts. A plain `docker compose up` starts every service with empty secrets. "First-boot secrets" below explains why.
 
@@ -184,7 +184,7 @@ A later version can inject these values at request time in place of the build. T
 
 The phone app asks on first start: "Official" or "my own server". It reads `GET /api/public-config` from the server you enter. That tells it the Supabase address and the modules to use, so you need no custom app build. A phone needs two things:
 
-- **HTTPS.** Android release builds refuse plain `http://` to any host but localhost. A LAN address like `http://192.168.1.20:3000` does not work.
+- **HTTPS.** Android release builds refuse plain `http://` to any host but localhost. A LAN address like `http://192.168.1.20:3737` does not work.
 - **One address that the phone can reach.** The phone sends auth, data, realtime and storage to `SUPABASE_PUBLIC_URL`. If you leave it unset, it is `http://localhost:8000`, which on a phone is the phone itself.
 
 The compose file has four optional ways to get both. Each gives one hostname with a real certificate. It sends Supabase's API paths (`/auth/v1`, `/rest/v1`, `/realtime/v1`, `/storage/v1`, `/functions/v1`) to Kong and everything else to the web app.
@@ -259,7 +259,7 @@ Uncomment the `tailscaled.sock` volume on the `caddy` service, so that Caddy can
 
 The `app` image is a production build, so it has the web app manifest and the offline service worker. A browser that can install web apps can add Rooftap to the home screen or the desktop. It then opens in its own window, works offline from its cache, and on Android accepts shared photos, PDFs and calendar files.
 
-Browsers install a web app, and run its service worker, only over HTTPS. `http://localhost:3000` counts as secure on the server itself. Every other device needs the HTTPS setup above:
+Browsers install a web app, and run its service worker, only over HTTPS. `http://localhost:3737` counts as secure on the server itself. Every other device needs the HTTPS setup above:
 
 1. Start the `https` profile with a public domain or a Tailscale name.
 2. Set `NEXT_PUBLIC_SUPABASE_URL` to the same `https://` address and rebuild with `./scripts/self-host-init.sh -d --build`. The installed app blocks an `http://` value as mixed content.
@@ -278,7 +278,7 @@ Browser push notifications are optional and need VAPID keys (`.env.example` expl
 - **Push notifications** to the phone app go through Expo's push service (`exp.host`) under the official app's Expo project. This works from a self-hosted server with no Expo account of your own.
 - **Your own phone app build.** The public repo has no `apps/mobile/google-services.json`. Without it the APK builds, but it gets no push notifications. To get push, create a Firebase project, add an Android app with your package name, and put its `google-services.json` in `apps/mobile/`. `apps/mobile/google-services.example.json` shows the shape. In the Google Cloud console, restrict the key to your package name and SHA-1 fingerprint. You also need your own Expo project. You do not need any of this for the official app.
 - **Google sign-in on the phone** redirects to `mobile://callback`. Add it to `ADDITIONAL_REDIRECT_URLS` in `.env`. Also add it, and `https://<your domain>/auth/v1/callback`, to the allowed redirect URIs of your Google OAuth client.
-- **Without Caddy.** Any reverse proxy works if it serves the web app and Kong on one HTTPS address with the path split above. Kong listens on `${KONG_HTTP_PORT:-8000}` and the app on `${APP_PORT:-3000}` on the host. Postgres listens on `127.0.0.1` unless you set `POSTGRES_BIND`.
+- **Without Caddy.** Any reverse proxy works if it serves the web app and Kong on one HTTPS address with the path split above. Kong listens on `${KONG_HTTP_PORT:-8000}` and the app on `${APP_PORT:-3737}` on the host. Postgres listens on `127.0.0.1` unless you set `POSTGRES_BIND`.
 
 ### App updates
 
@@ -315,6 +315,8 @@ git pull
 ```
 
 You need `--build`, because the build makes the `app` image from source. Without it, the web app keeps the old code. New migrations apply on start (the `migrate` service records what it applied). The edge functions are a bind mount, so they use the new code when `edge-runtime` restarts.
+
+New installs serve the web app on port 3737. Older installs used 3000. The script keeps an older install on 3000 by adding `APP_PORT=3000` to `.env`.
 
 Before `migrate` applies new migrations to an install with data, it saves a backup of the database to `backups/pre-migrate-<UTC time>.dump` in the repo folder. It keeps the newest five. `MIGRATE_BACKUP_KEEP` in `.env` changes the number, and `MIGRATE_BACKUP=off` turns the backup off. If the backup fails, `migrate` applies nothing and stops with an error. `docker compose logs migrate` shows why.
 

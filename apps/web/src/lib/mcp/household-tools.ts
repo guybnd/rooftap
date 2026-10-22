@@ -5,7 +5,8 @@ import { listCostItems, isTaskOwnerEnabled, type ModuleId } from "@homeup/core";
 import { aiBlockedMessage, parseScoutBrief, scoutLatestRun, scoutRunStatus, scoutTitle, SCOUT_BRIEF_MAX, type Group } from "@homeup/core";
 import { hasOfferSources, scoutBrain, startScoutRun } from "@/lib/shopper/scout";
 import { readThread } from "@/lib/shopper/scout-thread";
-import { totalForPeriod, monthlyAmount, CATEGORY_META } from "@homeup/core";
+import { totalForPeriod, monthlyAmount, CATEGORY_META, summariseSpending } from "@homeup/core";
+import { visibleBankTransactions } from "@/lib/up-bank";
 import {
   buildChecklistItem,
   buildLoggedCost,
@@ -1128,6 +1129,62 @@ export function householdTools({ admin, userId, groupId, enabled }: HouseholdToo
               error: latest.error,
               picks,
               link: `/shopper/scout/${root.id}`,
+            }),
+          },
+        ],
+      };
+    }
+  );
+
+  // Up Bank connector: the caller's Up transactions, and those of household
+  // members who share theirs. Read only; amounts in cents, money out negative.
+  tool(
+    "get_bank_spending",
+    {
+      description:
+        "Up Bank: spending from the bank transactions this person may see (their own, plus household members who share theirs). Totals by category and the matching transactions, newest first. Amounts in cents; money out is negative. Transfers between their own accounts are left out. Defaults to the last 30 days.",
+      inputSchema: {
+        from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe("First day, YYYY-MM-DD."),
+        to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe("Last day, YYYY-MM-DD, included."),
+        search: z.string().max(100).optional().describe("Words in the description, e.g. a store name."),
+        category: z.string().max(60).optional().describe("Up category id, e.g. takeaway, groceries, fuel."),
+        limit: z.number().int().min(1).max(100).optional(),
+      },
+    },
+    async ({ from, to, search, category, limit }) => {
+      if (!groupId) return noGroupError();
+      const end = to ? new Date(`${to}T00:00:00Z`).getTime() + 86_400_000 : Date.now();
+      const start = from ? new Date(`${from}T00:00:00Z`).getTime() : end - 30 * 86_400_000;
+      if (!(end > start) || end - start > 400 * 86_400_000) return toolError("Pick a range of up to about a year.");
+      let rows = await visibleBankTransactions(admin, {
+        userId,
+        groupId,
+        from: new Date(start).toISOString(),
+        to: new Date(end).toISOString(),
+        limit: 5000,
+      });
+      const words = search?.trim().toLowerCase();
+      if (words) rows = rows.filter((r) => `${r.description} ${r.message ?? ""}`.toLowerCase().includes(words));
+      if (category) rows = rows.filter((r) => r.category === category || r.parent_category === category);
+      const summary = summariseSpending(rows, from ?? new Date(start).toISOString().slice(0, 10), { recent: limit ?? 30 });
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              from: new Date(start).toISOString().slice(0, 10),
+              to: new Date(end - 1).toISOString().slice(0, 10),
+              spent_cents: summary.spentCents,
+              received_cents: summary.receivedCents,
+              by_category: summary.categories.map((c) => ({ category: c.id, label: c.label, cents: c.cents })),
+              transactions: summary.recent.map((t) => ({
+                date: t.occurredAt.slice(0, 10),
+                description: t.description,
+                amount_cents: t.amountCents,
+                category: t.category,
+                pending: t.pending,
+                mine: t.userId === userId,
+              })),
             }),
           },
         ],

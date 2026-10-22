@@ -299,6 +299,7 @@ export const SETTINGS_MENU_HUES: Readonly<Record<string, SectionHue>> = {
   appearance: 'rose',
   notifications: 'coral',
   integrations: 'sun',
+  connectors: 'fern',
   about: 'sky',
   'whats-new': 'mint',
   server: 'teal',

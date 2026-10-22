@@ -44,6 +44,7 @@ export const MCP_TOOLS: McpToolMeta[] = [
   { name: 'get_watchlist', kind: 'read', module: 'shopper' },
   { name: 'start_scout', kind: 'write', module: 'shopper' },
   { name: 'get_scout_run', kind: 'read', module: 'shopper' },
+  { name: 'get_bank_spending', kind: 'read', module: 'costs' },
 ];
 
 export const MCP_TOOL_BY_NAME: Record<string, McpToolMeta> = Object.fromEntries(

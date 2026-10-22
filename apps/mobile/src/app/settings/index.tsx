@@ -22,6 +22,7 @@ import {
   ChevronRight,
   Info,
   KeyRound,
+  Plug,
   LogOut,
   Palette,
   Server,
@@ -58,6 +59,7 @@ const GLOBAL_MENU_ICONS: Record<string, LucideIcon> = {
   users: Users,
   appearance: Palette,
   notifications: Bell,
+  connectors: Plug,
   integrations: KeyRound,
   about: Info,
 };

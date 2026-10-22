@@ -94,6 +94,7 @@ import { randomUUID } from '@/lib/uuid';
 import { CostDashboard } from '@/features/costs/cost-dashboard';
 import { CostRow, categoryTint } from '@/features/costs/cost-card';
 import { CostModal } from '@/features/costs/cost-modal';
+import { UpSpendingCard } from '@/features/costs/up-spending';
 import { sectionIconFor } from '@/lib/section-icons';
 
 const PERIODS: Period[] = ['weekly', 'monthly', 'yearly'];
@@ -703,6 +704,11 @@ export default function CostsSectionScreen() {
         selectedMonthIdx={selectedMonthIdx}
         onSelectMonth={selectMonth}
       />
+
+      {/* Up Bank connector: this month's spending from the person's Up account. */}
+      {modules.server('connectors.up-bank') && (
+        <UpSpendingCard currentUserId={currentUserId ?? null} nameOf={(uid) => memberLabel(uid, memberProfiles)} />
+      )}
 
       {/* The list's controls sit above what they act on (H5): search, then the
           period the totals below are shown in (Who pays + category totals).

@@ -15,6 +15,6 @@
 		reverse_proxy localhost:{$KONG_HTTP_PORT:8000}
 	}
 	handle {
-		reverse_proxy localhost:{$APP_PORT:3000}
+		reverse_proxy localhost:{$APP_PORT:3737}
 	}
 }

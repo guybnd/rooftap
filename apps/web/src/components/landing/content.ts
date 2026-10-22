@@ -11,7 +11,7 @@ export const SELF_HOST_STEPS: ReadonlyArray<{ title: string; text: string; code?
     text: "It generates the secrets on first boot and starts the stack.",
     code: ["git clone https://github.com/guybnd/rooftap", "cd rooftap && cp .env.example .env", "./scripts/self-host-init.sh -d"],
   },
-  { title: "Open the app", text: "Open port 3000 in a browser and create the first account. The Android app asks for your server address on first run." },
+  { title: "Open the app", text: "Open port 3737 in a browser and create the first account. The Android app asks for your server address on first run." },
 ];
 
 /** What one server gives you. */

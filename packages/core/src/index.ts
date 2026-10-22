@@ -67,6 +67,7 @@ export * from './assistant-prompt';
 export * from './assistant-api';
 export * from './assistant-stream';
 export * from './home-assistant';
+export * from './up-bank';
 export * from './document-folders';
 export * from './events';
 export * from './event-tickets';

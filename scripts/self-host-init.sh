@@ -34,6 +34,13 @@ if [ ! -f "$ENV_FILE" ]; then
     echo "No $ENV_FILE and no .env.example found; create $ENV_FILE at the repo root first." >&2
     exit 1
   fi
+elif ! grep -qE "^APP_PORT=" "$ENV_FILE"; then
+  # The default web port moved from 3000 to 3737. An install whose .env
+  # predates the APP_PORT line keeps 3000, so its bookmarks, SITE_URL and
+  # proxies still work.
+  [ -n "$(tail -c1 "$ENV_FILE")" ] && echo >> "$ENV_FILE"
+  printf 'APP_PORT=3000\n' >> "$ENV_FILE"
+  echo "Kept the web app on port 3000 (APP_PORT in $ENV_FILE). New installs use 3737."
 fi
 
 # True (exit 0) if $1 (a var name) is absent from .env, empty, or still a

@@ -5,14 +5,14 @@
 // the app has a single code path. Run by the `telegram` compose profile:
 //   docker compose --profile telegram up -d
 // Needs TELEGRAM_BOT_TOKEN and TELEGRAM_WEBHOOK_SECRET (the app reads the
-// same two). APP_PORT defaults to 3000.
+// same two). APP_PORT defaults to 3737.
 //
 // The app dedupes on update_id, so a restart that re-reads an update never
 // answers twice.
 
 const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
 const secret = process.env.TELEGRAM_WEBHOOK_SECRET?.trim();
-const target = process.env.TELEGRAM_FORWARD_URL || `http://127.0.0.1:${process.env.APP_PORT || 3000}/api/assistant/telegram/webhook`;
+const target = process.env.TELEGRAM_FORWARD_URL || `http://127.0.0.1:${process.env.APP_PORT || 3737}/api/assistant/telegram/webhook`;
 
 if (!token || !secret) {
   console.error("[telegram-poller] TELEGRAM_BOT_TOKEN and TELEGRAM_WEBHOOK_SECRET must both be set.");

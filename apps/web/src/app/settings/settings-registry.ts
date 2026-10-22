@@ -18,6 +18,7 @@ import { HouseholdAiKeys } from "@/components/household-ai-keys";
 import { McpSettings } from "@/components/mcp-settings";
 import { UsersManager } from "@/components/users-manager";
 import { CostsSettings } from "@/components/costs-settings";
+import { UpBankSettings } from "@/components/up-bank-settings";
 import { GroceriesSettings } from "@/components/groceries-settings";
 import { ChecklistsSettings } from "@/components/checklists-settings";
 import { HouseholdSettings } from "@/components/household-settings";
@@ -44,6 +45,7 @@ export const globalMenus: GlobalMenu[] = [
   { key: "users", label: "Users", panels: [GroupManager, UsersManager] },
   { key: "appearance", label: "Appearance", panels: [AppearanceSettings] },
   { key: "notifications", label: "Notifications", panels: [NotificationsSettings] },
+  { key: "connectors", label: "Connectors", panels: [UpBankSettings] },
   { key: "integrations", label: "Integrations & keys", panels: [HouseholdAiKeys, AiProvidersSettings, ApiKeysSettings, PatSettings, McpSettings] },
   { key: "whats-new", label: "What's new", panels: [WhatsNewHistory] },
 ];

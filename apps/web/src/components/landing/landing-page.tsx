@@ -164,6 +164,9 @@ export function LandingPage({
                   Most actions do more than one thing. Plan to buy a TV and you get a to-do and a line in the budget. Finish a shopping trip and its total goes to Costs. You do not have to update each module by hand. Hover or tap a line to see what it does.
                 </p>
               </div>
+            </div>
+            {/* The map takes more of a wide screen than the text above it. */}
+            <div className={cn(styles.wrap, styles.wrapWide)}>
               <ModuleMap />
             </div>
           </section>

@@ -114,7 +114,7 @@ services:
       API_EXTERNAL_URL: ${SUPABASE_PUBLIC_URL:-http://localhost:8000}/auth/v1
       GOTRUE_DB_DRIVER: postgres
       GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@db:5432/postgres
-      GOTRUE_SITE_URL: ${SITE_URL:-http://localhost:3000}
+      GOTRUE_SITE_URL: ${SITE_URL:-http://localhost:3737}
       GOTRUE_URI_ALLOW_LIST: ${ADDITIONAL_REDIRECT_URLS:-}
       # Locked after the first account exists by default — see .docs/self-hosting.md 'Auth' section.
       # Set GOTRUE_DISABLE_SIGNUP=false in .env to reopen registration.
@@ -324,7 +324,7 @@ services:
       # Modules this server offers (comma-separated ids, empty = all). See
       # .env.example and .docs/modules.md.
       HOMEUP_MODULES: ${HOMEUP_MODULES:-}
-      PORT: ${APP_PORT:-3000}
+      PORT: ${APP_PORT:-3737}
       # Host networking, so this is the host address the app listens on.
       # APP_BIND=127.0.0.1 keeps it off the network (see .env.example).
       HOSTNAME: ${APP_BIND:-0.0.0.0}
@@ -381,7 +381,7 @@ services:
     environment:
       HOMEUP_DOMAIN: ${HOMEUP_DOMAIN:-}
       KONG_HTTP_PORT: ${KONG_HTTP_PORT:-8000}
-      APP_PORT: ${APP_PORT:-3000}
+      APP_PORT: ${APP_PORT:-3737}
     volumes:
       - ./docker/volumes/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
@@ -405,7 +405,7 @@ services:
     network_mode: host
     environment:
       KONG_HTTP_PORT: ${KONG_HTTP_PORT:-8000}
-      APP_PORT: ${APP_PORT:-3000}
+      APP_PORT: ${APP_PORT:-3737}
     volumes:
       - ./docker/volumes/caddy/Caddyfile.tunnel:/etc/caddy/Caddyfile:ro
 
@@ -458,7 +458,7 @@ services:
     environment:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-}
-      APP_PORT: ${APP_PORT:-3000}
+      APP_PORT: ${APP_PORT:-3737}
     volumes:
       - ./scripts/telegram-poller.mjs:/poller.mjs:ro
     command: ["node", "/poller.mjs"]

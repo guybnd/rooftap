@@ -46,6 +46,7 @@ import { useFuzzySearch } from '@/hooks/use-fuzzy-search';
 import { CostDashboard } from './cost-chart';
 import { PopMenu, MenuItem, MenuLabel } from '../setup/pop-menu';
 import { memberLabel, memberAvatar } from '../setup/member-label';
+import { UpSpendingCard } from './up-spending';
 import { useWideLayout } from '@/lib/desktop-layout';
 import { cn } from '@/lib/utils';
 
@@ -64,6 +65,7 @@ export default function CostsPage() {
   // setup (module-features.ts). Off means its source store isn't read at all.
   const suggestRent = modules.feature('costs.suggest-rent');
   const suggestSetup = modules.feature('costs.suggest-setup');
+  const upBank = modules.server('connectors.up-bank');
 
   const apts$ = apartments$(suggestRent ? group?.id : undefined);
   useReconnectSync(apts$);
@@ -469,6 +471,7 @@ export default function CostsPage() {
           onSelectCategory={(cat) => setSelectedCategory((prev) => (prev === cat ? null : cat))}
         />
       )}
+      {upBank && <UpSpendingCard currentUserId={currentUserId} nameOf={(uid) => memberLabel(uid, memberProfiles)} />}
       </div>
 
       <div className="space-y-5">

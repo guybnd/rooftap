@@ -63,7 +63,7 @@ cp .env.example .env
 ./scripts/self-host-init.sh -d
 ```
 
-The first run writes every secret into `.env`, builds the app, starts the stack and applies the database migrations. Back up `.env`. Then open http://localhost:3000. The first visit creates the owner account. After that, registration closes, and the owner adds household members in **Settings → Users**.
+The first run writes every secret into `.env`, builds the app, starts the stack and applies the database migrations. Back up `.env`. Then open http://localhost:3737. The first visit creates the owner account. After that, registration closes, and the owner adds household members in **Settings → Users**.
 
 Everything else is optional. `.env.example` explains each setting:
 

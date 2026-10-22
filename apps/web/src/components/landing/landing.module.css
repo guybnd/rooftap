@@ -25,6 +25,10 @@
   padding-left: var(--gutter);
   padding-right: max(20px, env(safe-area-inset-right, 0px));
 }
+/* A section that needs the width of a wide screen, such as the module map. */
+.wrapWide {
+  max-width: clamp(var(--measure), 88vw, 1720px);
+}
 
 .eyebrow {
   font-family: var(--font-mono), ui-monospace, monospace;
@@ -1725,6 +1729,33 @@
 .mapList button:focus-visible {
   outline: 3px solid var(--ring);
   outline-offset: 2px;
+}
+/* On a wide screen the map and its labels grow with it, so the card stays readable beside it. */
+@media (min-width: 1440px) {
+  .mapNode {
+    height: 40px;
+    gap: 10px;
+    padding: 0 16px 0 7px;
+    font-size: 15.5px;
+  }
+  .mapTile {
+    width: 28px;
+    height: 28px;
+    border-radius: 9px;
+  }
+  .mapCard {
+    gap: 18px;
+  }
+  .mapCardPair {
+    font-size: 17px;
+  }
+  .mapCardText {
+    font-size: 19px;
+  }
+  .mapCrops {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+  }
 }
 @media (max-width: 960px) {
   .mapGrid {

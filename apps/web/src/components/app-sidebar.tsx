@@ -15,6 +15,7 @@ import {
   Bell,
   Blocks,
   KeyRound,
+  Plug,
   Palette,
   Sparkles,
   SlidersHorizontal,
@@ -59,6 +60,7 @@ const GLOBAL_MENU_ICONS: Record<string, LucideIcon> = {
   users: Users,
   appearance: Palette,
   notifications: Bell,
+  connectors: Plug,
   integrations: KeyRound,
   "whats-new": Sparkles,
 };

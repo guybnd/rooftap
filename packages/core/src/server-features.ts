@@ -65,6 +65,10 @@ export const SERVER_FEATURES = {
     minSchema: '20261022093000_archive_chats_and_scout',
     label: 'archiving and deleting Scout searches',
   },
+  'connectors.up-bank': {
+    minSchema: '20261022120000_up_bank',
+    label: 'connecting your Up Bank account',
+  },
 } as const satisfies Record<string, ServerFeatureDef>;
 
 export type ServerFeatureId = keyof typeof SERVER_FEATURES;

@@ -312,6 +312,7 @@ describe('server schema', () => {
       'asking Scout about its picks and changing a search',
       'archiving assistant chats and taking back a delete',
       'archiving and deleting Scout searches',
+      'connecting your Up Bank account',
     ]);
 
     act(() => setServerSchema('20261020050000_mcp_oauth'));
@@ -343,6 +344,7 @@ describe('server schema', () => {
       'asking Scout about its picks and changing a search',
       'archiving assistant chats and taking back a delete',
       'archiving and deleting Scout searches',
+      'connecting your Up Bank account',
       ]);
     } finally {
       delete mcp.minSchema;

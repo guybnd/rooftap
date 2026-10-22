@@ -42,6 +42,8 @@ export async function middleware(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/api/mcp") ||
     // HOUP-446: Telegram posts bot updates with its secret header, no session.
     request.nextUrl.pathname.startsWith("/api/assistant/telegram/webhook") ||
+    // Up Bank posts transaction events signed with the connection's secret, no session.
+    request.nextUrl.pathname.startsWith("/api/up-bank/webhook/") ||
     // MCP sign-in (lib/mcp-oauth.ts): discovery, app registration and token
     // exchange are called by the connecting app, never with a session.
     request.nextUrl.pathname.startsWith("/.well-known/oauth-") ||

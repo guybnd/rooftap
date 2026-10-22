@@ -30,6 +30,7 @@ import { AgentsManager } from './panels/agents-manager';
 import { SetupStoresSettings } from './panels/setup-stores-settings';
 import { HouseholdSettings } from './panels/household-settings';
 import { CostsSettings } from './panels/costs-settings';
+import { UpBankSettings } from './panels/up-bank-settings';
 import { GroceriesSettings } from './panels/groceries-settings';
 import { ChecklistsSettings } from './panels/checklists-settings';
 import { CalendarSetup } from './panels/calendar-setup';
@@ -48,6 +49,7 @@ export const globalMenus: GlobalMenu[] = [
   { key: 'users', label: 'Users', panels: [GroupManager, UsersManager] },
   { key: 'appearance', label: 'Appearance', panels: [AppearanceSettings, MotionSettings, HapticsSettings] },
   { key: 'notifications', label: 'Notifications', panels: [NotificationsSettings] },
+  { key: 'connectors', label: 'Connectors', panels: [UpBankSettings] },
   { key: 'integrations', label: 'Integrations & keys', panels: [HouseholdAiKeys, AiProvidersSettings, ApiKeysSettings, PatSettings, McpSettings] },
   { key: 'about', label: 'About & updates', panels: [AppUpdates] },
 ];
