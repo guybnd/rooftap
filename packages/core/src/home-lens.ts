@@ -13,6 +13,7 @@ import {
   parseLocalDateOnly,
   totalForPeriod,
 } from './costs';
+import { isBill } from './money-insights';
 
 /** The shortcuts that open a lens. Setup and countdown keep their plain behaviour. Shopper's (HOUP-434) shows its watched items. */
 export type HomeLensKey = 'budgetPulse' | 'billsDue' | 'shoppingList' | 'shopperWatch';
@@ -135,6 +136,8 @@ export function buildBillsLens(items: CostItem[], now: Date, windowDays = LENS_W
   const from = midnight(now);
   const rows: BillsLensRow[] = [];
   for (const item of items) {
+    // Groceries and other spending estimates recur but have no due date.
+    if (!isOneOff(item) && !isBill(item)) continue;
     const provider = item.provider && item.provider !== item.name ? item.provider : null;
     const occurrence = nextOccurrence(item, from);
     if (occurrence) {

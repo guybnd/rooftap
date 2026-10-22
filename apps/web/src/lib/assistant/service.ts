@@ -338,7 +338,7 @@ export async function findConversation(ctx: AssistantContext, id: string): Promi
   return row;
 }
 
-async function householdThread(ctx: AssistantContext): Promise<ConversationRow> {
+async function householdThread(ctx: Pick<AssistantContext, "admin" | "groupId">): Promise<ConversationRow> {
   const { data: existing } = await ctx.admin
     .from("assistant_conversations")
     .select("*")
@@ -821,6 +821,46 @@ async function postToHousehold(
     budget: "ok",
     afterReply: async () => {},
     posted: message,
+  };
+}
+
+/**
+ * Posts a server note (the weekly money digest) to the household thread as
+ * the assistant, on the 'routine' channel. Null when a note starting with
+ * the same `marker` went out in the last `quietDays`, so a cron that runs
+ * twice posts once.
+ */
+export async function postHouseholdRoutine(
+  admin: SupabaseClient,
+  groupId: string,
+  text: string,
+  opts: { marker: string; quietDays: number; now?: Date }
+): Promise<{ conversation: AssistantConversation; message: AssistantMessage } | null> {
+  const now = opts.now ?? new Date();
+  const conversation = await householdThread({ admin, groupId });
+  const { data: recent } = await admin
+    .from("assistant_messages")
+    .select("id")
+    .eq("conversation_id", conversation.id)
+    .eq("channel", "routine")
+    .like("content", `${opts.marker}%`)
+    .gte("created_at", new Date(now.getTime() - opts.quietDays * 86_400_000).toISOString())
+    .limit(1);
+  if (recent?.length) return null;
+  const { data: row, error } = await admin
+    .from("assistant_messages")
+    .insert({ conversation_id: conversation.id, group_id: groupId, user_id: null, role: "assistant", content: text, channel: "routine" })
+    .select("*")
+    .single();
+  if (error || !row) throw new Error(error?.message ?? "Could not save the note");
+  const touched = {
+    last_active_at: (row as MessageRow).created_at ?? now.toISOString(),
+    ...(conversation.archived_at ? { archived_at: null } : {}),
+  };
+  await admin.from("assistant_conversations").update(touched).eq("id", conversation.id);
+  return {
+    conversation: toConversation({ ...conversation, ...touched }, 0),
+    message: { ...toMessage(row as MessageRow, new Map())!, author: "Rooftap" },
   };
 }
 

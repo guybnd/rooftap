@@ -43,6 +43,8 @@ export interface UpBankConnection {
   shareMode?: BankShareMode;
   /** Payments from this person's joint accounts are filed as cost lines. Missing before 'connectors.up-bank-auto'. */
   autoCosts?: boolean;
+  /** The Sunday money note in the Assistant's Household chat. Missing before 'connectors.up-bank-digest'. */
+  weeklyDigest?: boolean;
   /** Up pushes new transactions to this server as they happen. */
   live: boolean;
   lastSyncedAt: string | null;
@@ -61,6 +63,7 @@ export interface UpBankSaveInput {
   shared?: boolean;
   shareMode?: BankShareMode;
   autoCosts?: boolean;
+  weeklyDigest?: boolean;
 }
 
 export interface UpBankSyncResult {
@@ -144,6 +147,8 @@ export interface CostBankLink extends BankLinkRule {
   lastPaidAt: string | null;
   /** The latest settled payment, positive cents. */
   lastAmountCents: number | null;
+  /** The settled payment before that, positive cents (a price change). Missing from older servers. */
+  prevAmountCents?: number | null;
 }
 
 export interface UpOverview extends UpSpending {
@@ -254,6 +259,8 @@ export interface SpendingTransaction {
   occurredAt: string;
   /** Who connected the account it came from. */
   userId: string;
+  /** The cost line it counts toward. */
+  costItemId?: string | null;
 }
 
 export interface UpSpending {
@@ -456,6 +463,7 @@ export function summariseSpending(
       pending: r.status === 'HELD',
       occurredAt: r.occurred_at,
       userId: r.user_id,
+      costItemId: r.cost_item_id ?? null,
     }));
 
   return { month, spentCents: spent, receivedCents: received, categories, recent, people: Array.from(people) };
@@ -667,7 +675,8 @@ export function costBankLinks(
   return rules.map((rule) => {
     const mine = sorted.filter((r) => r.cost_item_id === rule.cost_item_id && !r.hidden);
     const last = mine[0] ?? null;
-    const lastSettled = mine.find((r) => r.status === 'SETTLED') ?? null;
+    const settled = mine.filter((r) => r.status === 'SETTLED');
+    const lastSettled = settled[0] ?? null;
     return {
       costItemId: rule.cost_item_id,
       match: rule.match,
@@ -675,6 +684,7 @@ export function costBankLinks(
       count: mine.length,
       lastPaidAt: last?.occurred_at ?? null,
       lastAmountCents: lastSettled ? -lastSettled.amount_cents : null,
+      prevAmountCents: settled[1] ? -settled[1].amount_cents : null,
     };
   });
 }
@@ -926,18 +936,50 @@ export interface VendorPlan {
   cadence: CostCadence;
   amountCents: number;
   estimate: boolean;
-  /** The first payment's day, YYYY-MM-DD: a one-off lands in that month. */
+  /** YYYY-MM-DD: the first payment's day for a regular line, the latest payment's for a one-off (it lands in that month). */
   startDate: string;
 }
 
 const DAY_MS = 86_400_000;
 
+/** Days between payments for each cadence a vendor line can keep, with the slack each gap may take. */
+const REGULAR_GAPS: readonly { cadence: Exclude<CostCadence, 'one_off'>; days: number; slack: number; min: number }[] = [
+  { cadence: 'weekly', days: 7, slack: 1.5, min: 3 },
+  { cadence: 'fortnightly', days: 14, slack: 2, min: 3 },
+  { cadence: 'monthly', days: 30.4, slack: 4, min: 2 },
+  { cadence: 'quarterly', days: 91, slack: 10, min: 2 },
+  { cadence: 'yearly', days: 365, slack: 20, min: 2 },
+];
+
 /**
- * The plan for a vendor's cost line from its real payments (any order). One
- * payment is a one-off. Regular payments keep their cadence: the latest
- * amount, or the average of the latest three when amounts vary. Irregular
- * ones (a supermarket, a cafe) become a monthly estimate: what was spent
- * over the last three months (or since the first payment), per month.
+ * The cadence of payments that come out on a schedule: every gap fits one
+ * cadence, the amounts stay within 15% (or $3) of their middle value, and
+ * the latest payment isn't overdue by more than half a cycle. Weekly and
+ * fortnightly need three payments, so two dinners a week apart don't make
+ * a weekly line. Null when the payments aren't that regular.
+ */
+function regularCadence(out: readonly { amount_cents: number; occurred_at: string }[], now: Date): Exclude<CostCadence, 'one_off'> | null {
+  const times = out.map((p) => Date.parse(p.occurred_at)).sort((a, b) => a - b);
+  const gaps = times.slice(1).map((t, i) => (t - times[i]) / DAY_MS);
+  const amounts = out.map((p) => Math.abs(p.amount_cents)).sort((a, b) => a - b);
+  const middle = amounts[Math.floor(amounts.length / 2)];
+  if (amounts.some((a) => Math.abs(a - middle) > Math.max(middle * 0.15, 300))) return null;
+  const sinceLast = (now.getTime() - times[times.length - 1]) / DAY_MS;
+  for (const g of REGULAR_GAPS) {
+    if (out.length < g.min) continue;
+    if (gaps.every((gap) => Math.abs(gap - g.days) <= g.slack) && sinceLast <= g.days * 1.5 + g.slack) return g.cadence;
+  }
+  return null;
+}
+
+/**
+ * The plan for a vendor's cost line from its real payments (any order).
+ * Payments that come out on a schedule at about the same amount
+ * (regularCadence) keep that cadence: the latest amount, or the average of
+ * the latest three when amounts vary a little. Anything else (one payment, a
+ * shop, a cafe, a few purchases) is a one-off at the latest payment: the
+ * bank's payments show what it really took each month, and nothing is
+ * planned ahead for it.
  */
 export function vendorPlan(payments: readonly { amount_cents: number; occurred_at: string }[], now: Date = new Date()): VendorPlan | null {
   const out = payments
@@ -945,21 +987,13 @@ export function vendorPlan(payments: readonly { amount_cents: number; occurred_a
     .slice()
     .sort((a, b) => b.occurred_at.localeCompare(a.occurred_at));
   if (!out.length) return null;
-  const first = out[out.length - 1].occurred_at;
-  const startDate = localDay(first);
   const amounts = out.map((p) => p.amount_cents);
-  if (out.length === 1) return { cadence: 'one_off', amountCents: Math.abs(amounts[0]), estimate: false, startDate };
-  const cadence = guessCadence(out.map((p) => p.occurred_at));
-  if (cadence !== 'one_off') {
+  const cadence = out.length > 1 ? regularCadence(out, now) : null;
+  if (cadence) {
     const estimate = bankAmountsVary(amounts);
-    return { cadence, amountCents: bankLineAmount(amounts, estimate) ?? 0, estimate, startDate };
+    return { cadence, amountCents: bankLineAmount(amounts, estimate) ?? 0, estimate, startDate: localDay(out[out.length - 1].occurred_at) };
   }
-  const since = now.getTime() - 91 * DAY_MS;
-  const recent = out.filter((p) => Date.parse(p.occurred_at) >= since);
-  const days = Math.max(1, (now.getTime() - Math.max(since, Date.parse(first))) / DAY_MS);
-  const months = Math.min(3, Math.max(1, days / 30.4));
-  const spent = recent.reduce((sum, p) => sum - p.amount_cents, 0);
-  return { cadence: 'monthly', amountCents: Math.round(spent / months), estimate: true, startDate };
+  return { cadence: 'one_off', amountCents: Math.abs(amounts[0]), estimate: false, startDate: localDay(out[0].occurred_at) };
 }
 
 function localDay(iso: string): string {

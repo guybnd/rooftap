@@ -118,7 +118,7 @@ describe("hero modules behind a module", () => {
 
   const goneWithout: Partial<Record<ModuleId, string[]>> = {
     household: ["whosOnHook", "unassignedNudge", "streak"],
-    costs: ["budgetPulse", "billsDue"],
+    costs: ["budgetPulse", "billsDue", "spaceBudget", "spaceBills"],
     groceries: ["shoppingList"],
     setup: ["setupProgress"],
     shopper: ["shopperWatch"],

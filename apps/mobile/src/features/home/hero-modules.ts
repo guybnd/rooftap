@@ -12,9 +12,9 @@
 // group is an opt-in row of up to three shortcuts, so its defaults are off
 // (a saved toggle still wins).
 import type { CostItem, ModuleFeatureId } from '@homeup/core';
-import { daysBetweenDates, isHeroModuleAvailable, nextOccurrence, parseLocalDateOnly } from '@homeup/core';
+import { daysBetweenDates, isHeroModuleAvailable, nextOccurrence, isBill, parseLocalDateOnly } from '@homeup/core';
 
-export type HeroModuleGroup = 'header' | 'day' | 'home' | 'tips';
+export type HeroModuleGroup = 'header' | 'day' | 'home' | 'tips' | 'spaces';
 
 export interface HeroModuleMeta {
   key: string;
@@ -144,6 +144,20 @@ export const HERO_MODULES: HeroModuleMeta[] = [
     description: "Today's sunset and golden-hour time.",
     defaultOn: false,
   },
+  {
+    key: 'spaceBudget',
+    group: 'spaces',
+    label: 'Budget',
+    description: 'Your Budget space at the bottom of Home.',
+    defaultOn: true,
+  },
+  {
+    key: 'spaceBills',
+    group: 'spaces',
+    label: 'Bills',
+    description: 'Your Bills space at the bottom of Home: what falls due this week.',
+    defaultOn: true,
+  },
 ];
 
 export function isModuleEnabled(key: string, config: Record<string, boolean> | null | undefined): boolean {
@@ -191,7 +205,8 @@ export function upcomingBills(items: CostItem[], now: Date): UpcomingBill[] {
   const results: UpcomingBill[] = [];
   for (const item of items) {
     const label = item.provider || item.name;
-    const occurrence = nextOccurrence(item, fromMidnight);
+    // Spending estimates (groceries, cafes) recur but have no due date.
+    const occurrence = item.cadence !== 'one_off' && !isBill(item) ? null : nextOccurrence(item, fromMidnight);
     if (occurrence) {
       const days = daysBetweenDates(fromMidnight, occurrence);
       if (days <= BILLS_DUE_WINDOW_DAYS) results.push({ key: `${item.id}-due`, label, days, discountEnding: false });

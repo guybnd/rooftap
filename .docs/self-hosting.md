@@ -167,6 +167,24 @@ The app encrypts the token with `HOUSEHOLD_KEYS_SECRET`, so that secret must be 
 
 Owners choose one trust level for Home Assistant (Read, Ask first, Act) and can turn off single tools. Reads (`GetLiveContext`) always run. Actions such as switching a device or setting a light obey the trust level, and Rooftap cannot undo them.
 
+## Scheduled jobs
+
+Two features need a request on a timer. Set `CRON_SECRET` in `.env` and send it as `Authorization: Bearer $CRON_SECRET`. The hosted server uses Vercel Cron for both.
+
+| Request | What it does | Suggested time |
+|---|---|---|
+| `GET /api/shopper/refresh` | Checks prices for watched Shopper items. See [shopper-sources.md](shopper-sources.md). | Daily |
+| `GET /api/up-bank/digest` | Posts the weekly money digest to each household's Assistant chat. It runs for households with the Assistant, Costs and a shared Up Bank connection. | Sunday morning |
+
+For example, in the host's crontab:
+
+```
+0 5 * * * curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://your-server/api/shopper/refresh
+0 8 * * 0 curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://your-server/api/up-bank/digest
+```
+
+The digest posts once in five days at most, so a second run does nothing.
+
 ## Build-time settings (`NEXT_PUBLIC_*`)
 
 Next.js writes the `NEXT_PUBLIC_*` values into the JavaScript bundle when it builds. To change one, you rebuild the image.

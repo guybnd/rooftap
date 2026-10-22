@@ -279,6 +279,8 @@ export const HERO_MODULE_FEATURES: Readonly<Partial<Record<string, ModuleFeature
   streak: 'hub.tasks',
   budgetPulse: 'hub.budget',
   billsDue: 'hub.budget',
+  spaceBudget: 'hub.budget',
+  spaceBills: 'hub.budget',
   shoppingList: 'hub.shopping',
   setupProgress: 'hub.setup-progress',
   shopperWatch: 'hub.shopper',

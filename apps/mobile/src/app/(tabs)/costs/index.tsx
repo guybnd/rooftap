@@ -100,7 +100,7 @@ import { randomUUID } from '@/lib/uuid';
 import { CostDashboard } from '@/features/costs/cost-dashboard';
 import { CostRow, categoryTint } from '@/features/costs/cost-card';
 import { CostModal } from '@/features/costs/cost-modal';
-import { UpSpendingCard } from '@/features/costs/up-spending';
+import { MoneyInsights } from '@/features/costs/money-insights';
 import { upBankApi } from '@/features/costs/up-bank-api';
 import { CostsViewSwitch, MoneyView, type CostsView } from '@/features/costs/money-view';
 import { sectionIconFor } from '@/lib/section-icons';
@@ -735,13 +735,19 @@ function CostsScreenBody() {
         onSelectMonth={selectMonth}
       />
 
-      {/* Up Bank connector: this month's spending from the person's Up account. */}
+      {/* Up Bank connector: forecast, nudges and the latest payments (money-insights.tsx). */}
       {modules.server('connectors.up-bank') && (
-        <UpSpendingCard
+        <MoneyInsights
+          items={planItems}
+          allItems={items}
+          budgetCents={budgetCents}
           currentUserId={currentUserId ?? null}
           nameOf={(uid) => memberLabel(uid, memberProfiles)}
-          items={items}
-          budgetCents={budgetCents}
+          onOpenItem={(it) => {
+            setEditingItem(it);
+            setModalOpen(true);
+          }}
+          onOpenMoney={() => setView('money')}
           onSetAmount={(item, cents) => patchRow(item.id, { amount: cents })}
         />
       )}

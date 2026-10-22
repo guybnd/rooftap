@@ -66,15 +66,24 @@ export async function PUT(request: Request) {
   if (body.autoCosts !== undefined && typeof body.autoCosts !== "boolean") {
     return NextResponse.json({ error: "Filing payments as costs is on or off." }, { status: 400 });
   }
+  if (body.weeklyDigest !== undefined && typeof body.weeklyDigest !== "boolean") {
+    return NextResponse.json({ error: "The weekly digest is on or off." }, { status: 400 });
+  }
 
   if (!pasted) {
     if (!existing) return NextResponse.json({ error: "Paste your personal access token from api.up.com.au." }, { status: 400 });
     // auto_costs only goes in once the server has it (the row read back carries it).
     const autoCosts = body.autoCosts !== undefined && existing.auto_costs !== undefined ? { auto_costs: body.autoCosts } : {};
-    if (shareMode !== undefined || Object.keys(autoCosts).length) {
+    const digest = body.weeklyDigest !== undefined && existing.weekly_digest !== undefined ? { weekly_digest: body.weeklyDigest } : {};
+    if (shareMode !== undefined || Object.keys(autoCosts).length || Object.keys(digest).length) {
       const { error } = await req.admin
         .from("up_bank_connections")
-        .update({ ...(shareMode !== undefined ? sharingColumns(shareMode, existing) : {}), ...autoCosts, updated_at: new Date().toISOString() })
+        .update({
+          ...(shareMode !== undefined ? sharingColumns(shareMode, existing) : {}),
+          ...autoCosts,
+          ...digest,
+          updated_at: new Date().toISOString(),
+        })
         .eq("user_id", req.userId);
       if (error) return NextResponse.json({ error: "Could not save that." }, { status: 500 });
       // Turning filing on files what's there now; sharing changes who can see what.

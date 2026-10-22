@@ -20,9 +20,10 @@ const GROUP_LABELS: Record<HeroModuleGroup, string> = {
   day: 'Your day',
   home: 'Shortcuts, up to 3',
   tips: 'Smart tips',
+  spaces: 'Spaces',
 };
 
-const GROUP_ORDER: HeroModuleGroup[] = ['header', 'day', 'tips', 'home'];
+const GROUP_ORDER: HeroModuleGroup[] = ['header', 'day', 'tips', 'home', 'spaces'];
 
 export function HeroCustomizeSheet({
   open,

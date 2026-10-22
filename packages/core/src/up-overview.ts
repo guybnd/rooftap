@@ -14,6 +14,7 @@ export type UpViewScope = Exclude<BankScope, 'all'>;
 
 import { createContext, createElement, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { BankActuals } from './costs';
+import { bankActualsOf } from './money-insights';
 import { monthStartOf, type BankScope, type CostBankLink, type UpBankApi, type UpBankStatus, type UpOverview, type UpSpending } from './up-bank';
 
 export interface UpOverviewState {
@@ -173,14 +174,7 @@ export function useBankActuals(): BankActuals | undefined {
   const { data } = useUpOverview();
   return useMemo(() => {
     if (!data?.actuals) return undefined;
-    const byItem = new Map<string, Map<string, number>>();
-    for (const a of data.actuals) {
-      const months = byItem.get(a.costItemId) ?? new Map<string, number>();
-      months.set(a.month, (months.get(a.month) ?? 0) + a.cents);
-      byItem.set(a.costItemId, months);
-    }
-    const linked = new Set<string>([...byItem.keys(), ...(data.links ?? []).map((l) => l.costItemId)]);
-    return { linked, byItem, since: data.actualsSince ?? null };
+    return bankActualsOf(data.actuals, data.links ?? [], data.actualsSince ?? null);
   }, [data]);
 }
 

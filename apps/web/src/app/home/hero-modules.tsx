@@ -24,6 +24,7 @@ import {
   isOneOff,
   totalForPeriod,
   nextOccurrence,
+  isBill,
   daysBetweenDates,
   parseLocalDateOnly,
   daysUntilLabel,
@@ -37,7 +38,7 @@ import { localDateISO, HUB, type HeroItem, type MemberProfiles } from './hub-sha
 import { type WeatherData } from './use-weather';
 import { weatherRecommendation, rainLaterLabel, currentUvIndex, isDryingDay, sunsetInfo, UV_HIGH_THRESHOLD } from './weather-tips';
 
-export type HeroModuleGroup = 'header' | 'day' | 'home' | 'tips';
+export type HeroModuleGroup = 'header' | 'day' | 'home' | 'tips' | 'spaces';
 
 export interface HeroModuleContext {
   todayCount: number;
@@ -175,7 +176,8 @@ function upcomingBills(items: CostItem[], now: Date): UpcomingBill[] {
   const results: UpcomingBill[] = [];
   for (const item of items) {
     const label = item.provider || item.name;
-    const occurrence = nextOccurrence(item, fromMidnight);
+    // Spending estimates (groceries, cafes) recur but have no due date.
+    const occurrence = item.cadence !== 'one_off' && !isBill(item) ? null : nextOccurrence(item, fromMidnight);
     if (occurrence) {
       const days = daysBetweenDates(fromMidnight, occurrence);
       if (days <= BILLS_DUE_WINDOW_DAYS) results.push({ key: `${item.id}-due`, label, days, discountEnding: false });
@@ -545,6 +547,20 @@ export const HERO_MODULES: HeroModule[] = [
         />
       );
     },
+  },
+  {
+    key: 'spaceBudget',
+    group: 'spaces',
+    label: 'Budget',
+    description: 'Your Budget space at the bottom of Home.',
+    defaultOn: true,
+  },
+  {
+    key: 'spaceBills',
+    group: 'spaces',
+    label: 'Bills',
+    description: 'Your Bills space at the bottom of Home: what falls due this week.',
+    defaultOn: true,
   },
 ];
 

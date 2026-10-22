@@ -1364,7 +1364,7 @@ export default function HomeSectionScreen() {
           </View>
         )}
         {costsVisible && (
-          <View style={showIf(!shownLens || shownLens === 'budgetPulse')}>
+          <View style={showIf(shownLens === 'budgetPulse' || (!shownLens && heroOn('spaceBudget')))}>
             <BudgetSpace
               group={group}
               currentUserId={currentUserId}
@@ -1376,7 +1376,7 @@ export default function HomeSectionScreen() {
           </View>
         )}
         {costsVisible && (
-          <View style={showIf(!shownLens || shownLens === 'billsDue')}>
+          <View style={showIf(shownLens === 'billsDue' || (!shownLens && heroOn('spaceBills')))}>
             <BillsSpace costItems={costItemsList} expanded={shownLens === 'billsDue'} now={now} />
           </View>
         )}

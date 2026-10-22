@@ -81,6 +81,10 @@ export const SERVER_FEATURES = {
     minSchema: '20261022140000_bank_auto_costs',
     label: 'filing joint Up payments as costs',
   },
+  'connectors.up-bank-digest': {
+    minSchema: '20261022150000_bank_weekly_digest',
+    label: 'the weekly money digest',
+  },
 } as const satisfies Record<string, ServerFeatureDef>;
 
 export type ServerFeatureId = keyof typeof SERVER_FEATURES;

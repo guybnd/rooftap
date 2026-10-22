@@ -48,6 +48,8 @@ export interface UpConnectionRow {
   share_mode?: BankShareMode;
   /** Missing on servers before 20261022140000_bank_auto_costs. */
   auto_costs?: boolean;
+  /** Missing on servers before 20261022150000_bank_weekly_digest. */
+  weekly_digest?: boolean;
   hook_id: string;
   webhook_id: string | null;
   encrypted_webhook_secret: string | null;
@@ -92,6 +94,7 @@ export async function upBankStatus(admin: SupabaseClient, userId: string, groupI
           shared: shareModeOf(row) !== "none",
           shareMode: shareModeOf(row),
           ...(row.auto_costs !== undefined ? { autoCosts: row.auto_costs } : {}),
+          ...(row.weekly_digest !== undefined ? { weeklyDigest: row.weekly_digest } : {}),
           live: !!row.webhook_id,
           lastSyncedAt: row.last_synced_at,
         }
@@ -421,7 +424,8 @@ async function autoFileJointPayments(
     const category = costCategoryFromUp(upCategory);
     newLines.push({
       group_id: groupId,
-      name: payee.name.slice(0, 200),
+      // Up's raw text can end in a stray backslash ("LUNE FITZROY\\").
+      name: payee.name.replace(/[\\\s]+$/, "").slice(0, 200) || payee.name.slice(0, 200),
       category,
       amount: plan.amountCents,
       cadence: plan.cadence,

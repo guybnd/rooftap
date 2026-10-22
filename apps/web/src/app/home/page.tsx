@@ -55,6 +55,7 @@ import { SummaryHero } from './summary-hero';
 import { useWeather } from './use-weather';
 import { useWideLayout } from '@/lib/desktop-layout';
 import { BudgetSpace, BillsSpace } from './money-spaces';
+import { isModuleShown } from './hero-modules';
 import { GroceriesWidget } from './groceries-widget';
 import { SetupTile, HomeSearchTile, ShopperTile, AssistantTile } from './section-tiles';
 import { DeskHome } from './desk-home';
@@ -241,6 +242,8 @@ export default function HomeHubPage() {
   // Modules: bill and document reminders show with Costs and Documents, whether
   // or not Tasks is (task-modules.ts).
   const costsVisible = !isHidden('costs');
+  // Each person picks which Spaces Home shows (Customize your summary > Spaces).
+  const spaceOn = (key: string) => isModuleShown(key, userSettings?.home_hero_modules, modules.feature);
   const documentsVisible = !isHidden('documents');
 
   // ── FLUX-236: Today hero range picker (Today / This Week / This Month / Upcoming) ───────
@@ -729,10 +732,10 @@ export default function HomeHubPage() {
             ) : null },
             // The desk has room for the whole list, not just the essentials (Guy, 2026-10-22).
             groceries: { label: 'Groceries', node: !isHidden('groceries') ? <GroceriesWidget group={group} currentUserId={currentUserId} expanded /> : null },
-            budget: { label: 'Budget', node: costsVisible ? (
+            budget: { label: 'Budget', node: costsVisible && spaceOn('spaceBudget') ? (
               <BudgetSpace group={group} currentUserId={currentUserId} costItems={costItemsList} budgetCents={userSettings?.costs_budget_monthly ?? null} expanded={false} now={new Date()} />
             ) : null },
-            bills: { label: 'Bills', node: costsVisible ? <BillsSpace costItems={costItemsList} expanded={false} now={new Date()} /> : null },
+            bills: { label: 'Bills', node: costsVisible && spaceOn('spaceBills') ? <BillsSpace costItems={costItemsList} expanded={false} now={new Date()} /> : null },
             setup: { label: 'Home Setup', node: !isHidden('setup') ? <SetupTile group={group} /> : null },
             search: { label: 'Home Search', node: searchVisible ? <HomeSearchTile apartments={apartments} appointments={appointments} /> : null },
             shopper: { label: 'Shopper', node: !isHidden('shopper') ? <ShopperTile group={group} expanded={false} /> : null },
@@ -808,7 +811,7 @@ export default function HomeHubPage() {
         {!isHidden('groceries') && (!lens || lens === 'shoppingList') && (
           <GroceriesWidget group={group} currentUserId={currentUserId} expanded={lens === 'shoppingList'} />
         )}
-        {costsVisible && (!lens || lens === 'budgetPulse') && (
+        {costsVisible && (lens === 'budgetPulse' || (!lens && spaceOn('spaceBudget'))) && (
           <BudgetSpace
             group={group}
             currentUserId={currentUserId}
@@ -818,7 +821,7 @@ export default function HomeHubPage() {
             now={new Date()}
           />
         )}
-        {costsVisible && (!lens || lens === 'billsDue') && (
+        {costsVisible && (lens === 'billsDue' || (!lens && spaceOn('spaceBills'))) && (
           <BillsSpace costItems={costItemsList} expanded={lens === 'billsDue'} now={new Date()} />
         )}
         {!lens && !isHidden('setup') && <SetupTile group={group} />}

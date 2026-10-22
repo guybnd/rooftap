@@ -172,7 +172,7 @@ describe('costBankLinks and bankNudges', () => {
   ];
   it('reads the latest settled payment once per Up transaction', () => {
     expect(costBankLinks(rows, rules)).toEqual([
-      { costItemId: 'rent', match: 'RAY WHITE', keepAmount: false, count: 2, lastPaidAt: '2026-10-01T00:00:00Z', lastAmountCents: 245000 },
+      { costItemId: 'rent', match: 'RAY WHITE', keepAmount: false, count: 2, lastPaidAt: '2026-10-01T00:00:00Z', lastAmountCents: 245000, prevAmountCents: 240000 },
     ]);
   });
   it('nudges a recurring line whose latest payment differs', () => {
@@ -425,15 +425,23 @@ describe('vendorPlan', () => {
     const plan = vendorPlan([p(-30000, '2026-07-01T00:00:00Z'), p(-35600, '2026-08-01T00:00:00Z'), p(-32000, '2026-09-01T00:00:00Z'), p(-29000, '2026-10-01T00:00:00Z')], now);
     expect(plan).toMatchObject({ cadence: 'monthly', estimate: true, amountCents: Math.round((35600 + 32000 + 29000) / 3) });
   });
-  it('turns irregular shopping into a monthly estimate of the last three months', () => {
+  it('makes irregular shopping a one-off at the latest payment', () => {
     const plan = vendorPlan(
       [p(-10000, '2026-07-01T00:00:00Z'), p(-5000, '2026-08-20T00:00:00Z'), p(-8000, '2026-08-24T00:00:00Z'), p(-12000, '2026-10-10T00:00:00Z')],
       now,
     );
-    expect(plan?.cadence).toBe('monthly');
-    expect(plan?.estimate).toBe(true);
-    // 91 days back reaches 23 Jul: 5000 + 8000 + 12000 over those 91 days.
-    expect(plan?.amountCents).toBe(Math.round(25000 / (91 / 30.4)));
+    expect(plan).toMatchObject({ cadence: 'one_off', amountCents: 12000, estimate: false, startDate: '2026-10-10' });
+  });
+  it('needs similar amounts on a schedule to be regular', () => {
+    // Monthly gaps, but amounts all over the place: a shop, not a bill.
+    expect(vendorPlan([p(-4000, '2026-08-10T00:00:00Z'), p(-24000, '2026-09-10T00:00:00Z'), p(-9000, '2026-10-10T00:00:00Z')], now)?.cadence).toBe('one_off');
+    // Two equal payments a week apart: not enough to call it weekly.
+    expect(vendorPlan([p(-17100, '2026-10-01T00:00:00Z'), p(-17100, '2026-10-08T00:00:00Z')], now)?.cadence).toBe('one_off');
+    // Three a week apart is.
+    expect(vendorPlan([p(-1500, '2026-10-01T00:00:00Z'), p(-1500, '2026-10-08T00:00:00Z'), p(-1500, '2026-10-15T00:00:00Z')], now)?.cadence).toBe('weekly');
+  });
+  it('stops calling a subscription regular once it is well overdue', () => {
+    expect(vendorPlan([p(-2299, '2026-06-01T00:00:00Z'), p(-2299, '2026-07-01T00:00:00Z')], now)?.cadence).toBe('one_off');
   });
   it('ignores money in', () => {
     expect(vendorPlan([p(2000, '2026-10-01T00:00:00Z')], now)).toBeNull();

@@ -291,7 +291,7 @@ describe("isHeroModuleAvailable", () => {
   const HERO_KEYS = [
     "weather", "count", "nextUp", "whosOnHook", "unassignedNudge", "streak",
     "budgetPulse", "billsDue", "shoppingList", "shopperWatch", "setupProgress", "countdown",
-    "tipRain", "tipUv", "tipDrying", "tipSunset",
+    "tipRain", "tipUv", "tipDrying", "tipSunset", "spaceBudget", "spaceBills",
   ];
   const availableWith = (enabled: ReadonlySet<string>) =>
     HERO_KEYS.filter((k) => isHeroModuleAvailable(k, (id) => isFeatureEnabled(id, enabled)));
@@ -309,7 +309,7 @@ describe("isHeroModuleAvailable", () => {
 
   const goneWithout: Partial<Record<ModuleId, string[]>> = {
     household: ["whosOnHook", "unassignedNudge", "streak"],
-    costs: ["budgetPulse", "billsDue"],
+    costs: ["budgetPulse", "billsDue", "spaceBudget", "spaceBills"],
     groceries: ["shoppingList"],
     setup: ["setupProgress"],
     shopper: ["shopperWatch"],

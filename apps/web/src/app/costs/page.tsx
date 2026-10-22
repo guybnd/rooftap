@@ -50,7 +50,7 @@ import { useFuzzySearch } from '@/hooks/use-fuzzy-search';
 import { CostDashboard } from './cost-chart';
 import { PopMenu, MenuItem, MenuLabel } from '../setup/pop-menu';
 import { memberLabel, memberAvatar } from '../setup/member-label';
-import { UpSpendingCard } from './up-spending';
+import { MoneyInsights } from './money-insights';
 import { UpOverviewProvider } from '@homeup/core';
 import { CostsViewSwitch, MoneyView, type CostsView } from './money-view';
 import { upBankApi } from '@/lib/up-bank-client';
@@ -503,11 +503,17 @@ export default function CostsPage() {
         />
       )}
       {upBank && (
-        <UpSpendingCard
+        <MoneyInsights
+          items={planItems}
+          allItems={items}
+          budgetCents={budgetCents}
           currentUserId={currentUserId}
           nameOf={(uid) => memberLabel(uid, memberProfiles)}
-          items={items}
-          budgetCents={budgetCents}
+          onOpenItem={(it) => {
+            setEditingItem(it);
+            setIsModalOpen(true);
+          }}
+          onOpenMoney={() => setView('money')}
           onSetAmount={(item, cents) => patchRow(item.id, { amount: cents })}
         />
       )}

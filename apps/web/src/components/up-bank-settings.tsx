@@ -37,6 +37,8 @@ export function UpBankSettings() {
   // Older servers only know on or off.
   const modes = modules.server("connectors.up-bank-sharing");
   const autoFiling = modules.server("connectors.up-bank-auto");
+  // The digest is an Assistant message, so it needs the Assistant on.
+  const digest = modules.server("connectors.up-bank-digest") && modules.isEnabled("assistant");
   const [status, setStatus] = useState<UpBankStatus | null>(null);
   const [editing, setEditing] = useState(false);
   const [token, setToken] = useState("");
@@ -98,6 +100,18 @@ export function UpBankSettings() {
     try {
       setStatus(await upBankApi.save({ autoCosts }));
       if (autoCosts) toast.success("Joint payments are being filed in Costs");
+    } catch (err) {
+      setStatus(before);
+      toast.error(err instanceof Error ? err.message : "Could not save that.");
+    }
+  };
+
+  const setWeeklyDigest = async (weeklyDigest: boolean) => {
+    if (!status?.connection) return;
+    const before = status;
+    setStatus({ ...status, connection: { ...status.connection, weeklyDigest } });
+    try {
+      setStatus(await upBankApi.save({ weeklyDigest }));
     } catch (err) {
       setStatus(before);
       toast.error(err instanceof Error ? err.message : "Could not save that.");
@@ -182,6 +196,15 @@ export function UpBankSettings() {
                 checked={connection.autoCosts}
                 disabled={!status.allowed || (connection.shareMode ?? "none") === "none"}
                 onChange={(on) => void setAutoCosts(on)}
+              />
+            )}
+            {digest && modes && connection.weeklyDigest !== undefined && (
+              <SettingsSwitchRow
+                title="Weekly money digest"
+                description="On Sundays the assistant posts the week's shared spending, anything worth a look and the bills ahead in the Household chat."
+                checked={connection.weeklyDigest}
+                disabled={!status.allowed || (connection.shareMode ?? "none") === "none"}
+                onChange={(on) => void setWeeklyDigest(on)}
               />
             )}
           </SettingsInset>
