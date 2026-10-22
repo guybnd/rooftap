@@ -91,8 +91,6 @@ The web app installs like an app on Android, iPhone, iPad and desktop. Open your
 - The Android app is not on Google Play yet. Install the APK from [Releases](https://github.com/guybnd/rooftap/releases).
 - Happy to receive external contributions for additional modules or improvements.
 
-
-
 ## Development
 
 ```bash
