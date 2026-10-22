@@ -226,7 +226,8 @@ export const FAQ: ReadonlyArray<[question: string, answer: string]> = [
 
 /** The hosted web app, and the Android APKs on the public repo's Releases page. */
 export const WEB_APP_URL = "https://homeup.vercel.app";
-export const APK_URL = "https://github.com/guybnd/rooftap/releases";
+export const REPO_URL = "https://github.com/guybnd/rooftap";
+export const APK_URL = `${REPO_URL}/releases`;
 
 export const LICENCE_URL = "https://www.elastic.co/licensing/elastic-license";
 

@@ -56,6 +56,13 @@ export const SCREEN_IDS = [
   "assistant-home-assistant",
   "assistant-settings",
   "assistant-spending",
+  "readme-event-ticket",
+  "map-costs-suggest",
+  "map-calendar-sunday",
+  "map-appointments",
+  "map-documents-receipts",
+  "map-documents-recipe",
+  "map-setup-doc",
 ] as const;
 
 export type ScreenId = (typeof SCREEN_IDS)[number];
@@ -114,6 +121,13 @@ export const SCREEN_ALT: Record<ScreenId, string> = {
   "assistant-home-assistant": "Settings for Home Assistant: connected with a token, the trust level for all of Home Assistant, and a switch per tool",
   "assistant-settings": "Settings for the Assistant: Read, Ask or Act per module, and the models for chats and quick asks",
   "assistant-spending": "Assistant spending: a 5 dollar monthly budget, and a switch to the cheaper model at the limit",
+  "readme-event-ticket": "The Jazz night's event: 56 dollars kept in the Budget as Going out, and its ticket from the document store",
+  "map-costs-suggest": "Costs suggests two lines from other modules: rent of 820 dollars a week from the chosen home, and 4,350 dollars of Home Setup purchases",
+  "map-calendar-sunday": "Sunday on the calendar: a chore, Mia's birthday from Google Calendar, and two viewings from Home Search",
+  "map-appointments": "Home Search viewings with a suggestion from Google Calendar: Inspection 12 Separation St, to import as an appointment",
+  "map-documents-receipts": "Receipts in Documents: the FreshCo receipt linked to Groceries and Costs, and the fridge receipt linked to Home Setup",
+  "map-documents-recipe": "The lasagne recipe photo in Documents, linked to its recipe",
+  "map-setup-doc": "Home Setup: the fridge, bought for 1,090 dollars, with a Doc chip for its receipt",
 };
 
 /** The frame's address. Relative, so the same markup works at / and on GitHub Pages. */

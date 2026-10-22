@@ -605,6 +605,22 @@ export const googleEvents = [
   },
 ];
 
+/** A Google Calendar event that looks like a viewing, as GET /api/calendar/suggestions returns it. */
+export const googleSuggestions = [
+  {
+    ...googleEvents[1],
+    id: "gc-inspection",
+    gcal_event_id: "gcal-3",
+    title: "Inspection 12 Separation St",
+    location: "12 Separation St, Northcote",
+    starts_at: at(SATURDAY, "11:00"),
+    ends_at: at(SATURDAY, "11:20"),
+    visibility: "group",
+    matched_apartment_id: "ap-wattle",
+    state: "suggested",
+  },
+];
+
 // ── Documents ────────────────────────────────────────────────────────────────
 const doc = (id: string, title: string, doc_type: Document["doc_type"], extra: Partial<Document> = {}): Document => ({
   ...base,
@@ -643,6 +659,14 @@ export const documentLinks: DocumentLink[] = [
 /** The Jazz night's ticket, filed in Event tickets and linked to the event. Only the README scenes seed these. */
 export const ticketsFolder: DocumentFolder = { id: "f-tickets", group_id: GROUP, name: "Event tickets", parent_id: null, created_by: NOA, created_at: STAMP, updated_at: STAMP };
 export const jazzTicket = doc("d-jazz-ticket", "Jazz at the Lighthouse ticket", "other", { folder_id: "f-tickets", uploaded_by: NOA, tags: ["tickets"] });
+/** Documents linked to Groceries, Recipes and Home Setup, for the landing page's module map. Only the map scenes seed these. */
+export const lasagnePhoto = doc("d-lasagne-photo", "Lasagne recipe photo", "other", { source: "capture", mime_type: "image/jpeg", filename: "lasagne.jpg", tags: ["recipes"], created_at: at(-5, "18:40"), updated_at: at(-5, "18:40") });
+export const fridgeReceipt = doc("d-fridge-receipt", "Fridge receipt", "receipt", { source: "capture", tags: ["kitchen"], created_at: at(-12, "15:10"), updated_at: at(-12, "15:10") });
+export const mapDocumentLinks: DocumentLink[] = [
+  { id: "dl-receipt-trip", document_id: "d-receipt", group_id: GROUP, entity_type: "grocery_session", entity_id: "gs-0", link_role: "receipt", created_at: STAMP },
+  { id: "dl-lasagne", document_id: "d-lasagne-photo", group_id: GROUP, entity_type: "recipe", entity_id: "r-lasagne", link_role: "source", created_at: STAMP },
+  { id: "dl-fridge", document_id: "d-fridge-receipt", group_id: GROUP, entity_type: "setup_item", entity_id: "su-fridge", link_role: "receipt", created_at: STAMP },
+];
 /** The robot vacuum's warranty, filed after the purchase. Only the README scenes seed it. */
 export const vacuumWarranty = doc("d-vacuum-warranty", "Roborock Q7 warranty", "warranty", { expiry_date: day(728), tags: ["appliances"], metadata: { manufacturer: "Roborock", model: "Q7", purchase_date: day(-2) }, source: "warranty", created_at: at(-2, "18:00"), updated_at: at(-2, "18:00") });
 export const jazzTicketLink: DocumentLink = { id: "dl-jazz", document_id: "d-jazz-ticket", group_id: GROUP, entity_type: "event", entity_id: "e-jazz", link_role: "ticket", created_at: STAMP };

@@ -4,9 +4,9 @@ import { Fragment, useEffect, useRef, type MouseEvent } from "react";
 import { cn } from "@/lib/utils";
 import { AskPanel } from "./ask";
 import { SectionTile } from "./cards";
-import { APK_URL, ASSISTANT_ENV, ASSISTANT_FACTS, COMPARE, FAQ, HERO_FACTS, FEATURE_GROUPS, LAYOUT_FACTS, LICENCE_URL, SELF_HOST_FACTS, SELF_HOST_STEPS, WEB_APP_URL } from "./content";
-import { Fits } from "./fits";
+import { APK_URL, ASSISTANT_ENV, ASSISTANT_FACTS, COMPARE, FAQ, HERO_FACTS, FEATURE_GROUPS, LAYOUT_FACTS, LICENCE_URL, REPO_URL, SELF_HOST_FACTS, SELF_HOST_STEPS, WEB_APP_URL } from "./content";
 import { HeroPhone } from "./hero-phone";
+import { ModuleMap } from "./module-map";
 import { DESKTOP_ALT, SCREEN_ALT, desktopScreenSrc, screenSrc } from "./screens";
 import styles from "./landing.module.css";
 import { SignIn, SignInHref } from "./sign-in";
@@ -26,6 +26,18 @@ const NO_SCRIPT_CSS = `
 .${styles.caption}{grid-area:auto;opacity:1;transform:none}
 .${styles.steps},.${styles.lines}{display:none}
 `;
+
+/** GitHub's mark, for the repository link. */
+function GitHubMark() {
+  return (
+    <svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"
+      />
+    </svg>
+  );
+}
 
 /** Closes the Modules menu once a module is picked. */
 function closeMenuOnPick(e: MouseEvent<HTMLDetailsElement>) {
@@ -106,21 +118,22 @@ export function LandingPage({
                 <p className={styles.sectionLede}>
                   Run it on a machine you own with one script. The web app and the Android app point at your server. A household assistant runs there too, with your model and your Telegram bot.
                 </p>
-                <div className={styles.ctaRow}>
+                {/* Two labelled pairs of equal buttons: host it, or try it first. */}
+                <div className={styles.heroCtas}>
+                  <span className={styles.heroCtaLabel}>Host it</span>
                   <a href="#self-host" className={styles.button}>
                     Run your own
                   </a>
-                  <a href="#modules" className={styles.ghost}>
-                    See the modules
+                  <a href={REPO_URL} className={styles.ghost}>
+                    <GitHubMark />
+                    View on GitHub
                   </a>
-                </div>
-                <div className={cn(styles.ctaRow, styles.tryRow)}>
-                  <span>Try it</span>
+                  <span className={styles.heroCtaLabel}>Try it</span>
                   <a href={WEB_APP_URL} className={styles.ghost}>
                     Open the web app
                   </a>
                   <a href={APK_URL} className={styles.ghost}>
-                    Download the Android APK
+                    Android APK
                   </a>
                 </div>
                 <p className={styles.heroFacts}>
@@ -152,9 +165,11 @@ export function LandingPage({
                 <h2 id="fits-title" className={cn(styles.display, styles.sectionTitle)}>
                   One module fills the next
                 </h2>
-                <p className={styles.sectionLede}>You enter a thing once. The modules after it pick it up.</p>
+                <p className={styles.sectionLede}>
+                  You enter a thing once. The modules linked to it pick it up. Each line below is one link. When a module is off, its links do not show.
+                </p>
               </div>
-              <Fits />
+              <ModuleMap />
             </div>
           </section>
 

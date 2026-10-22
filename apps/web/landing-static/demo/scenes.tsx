@@ -3,7 +3,7 @@
 // page's eight stories are told with these frames.
 import { lazy, type ComponentType, type LazyExoticComponent } from "react";
 import { buildPlanToBuyTask } from "@homeup/core";
-import { costItems, documentLinks, documents, events, groceries, groceriesMidShop, grocery, jazzTicket, jazzTicketLink, SATURDAY, seed, seedTable, shopperOffers, shopperWants, tasks, ticketsFolder, todaysSession, vacuumWarranty } from "./fixtures";
+import { costItems, documentLinks, documents, events, fridgeReceipt, groceries, groceriesMidShop, grocery, HOUSEHOLD, jazzTicket, jazzTicketLink, lasagnePhoto, mapDocumentLinks, SATURDAY, seed, seedTable, shopperOffers, shopperWants, tasks, ticketsFolder, todaysSession, vacuumWarranty } from "./fixtures";
 
 /** A tap, a drag or a wait the screenshot script performs in order, in the page. */
 export type Action =
@@ -87,10 +87,22 @@ function withTicket() {
   seedTable("document_folders", [ticketsFolder]);
 }
 
+/** Documents linked to a grocery trip, a recipe and a setup item, for the module map. */
+function withMapDocuments() {
+  const docs = [...documents, lasagnePhoto, fridgeReceipt];
+  seed({ documents: docs });
+  // The demo client does not filter or embed, so each row carries its document for Home Setup's Doc chip.
+  seedTable("document_links", [...documentLinks, ...mapDocumentLinks].map((l) => ({ ...l, documents: docs.find((d) => d.id === l.document_id) })));
+}
+
 /** The calendar opens on today; the story's night out is on Saturday. */
 const saturday = new Date();
 saturday.setDate(saturday.getDate() + SATURDAY);
 const toSaturday: Action[] = SATURDAY === 0 ? [] : [{ click: `text=/^${saturday.getDate()}$/` }, { wait: 300 }];
+/** The Sunday after it opens the next week of the strip: the arrow, then the day. */
+const sunday = new Date(saturday);
+sunday.setDate(sunday.getDate() + 1);
+const toSunday: Action[] = [{ tap: [360, 178] }, { wait: 400 }, { click: `text=/^${sunday.getDate()}$/` }, { wait: 300 }];
 
 export const SCENES: Scene[] = [
   // 1. Home: everything at a glance, with the Upcoming feed fed by every room.
@@ -387,7 +399,14 @@ export const SCENES: Scene[] = [
   },
 
   // README journeys: frames the landing stories do not use.
-  { id: "readme-event-ticket", path: "/calendar", page: Calendar, prepare: withTicket, actions: [...toSaturday, { click: "text=Agenda" }, { wait: 400 }, { click: "text=Jazz at the Lighthouse >> visible=true" }, { wait: 600 }, { scroll: 2000 }, { wait: 600 }] },
+  {
+    id: "readme-event-ticket",
+    path: "/calendar",
+    page: Calendar,
+    prepare: withTicket,
+    actions: [...toSaturday, { click: "text=Agenda" }, { wait: 400 }, { click: "text=Jazz at the Lighthouse >> visible=true" }, { wait: 600 }, { scroll: 2000 }, { wait: 600 }],
+    marks: { ticket: "text=Jazz at the Lighthouse ticket", budget: ["text=Kept in the Budget as Going out.", 1] },
+  },
   { id: "readme-documents-tickets", path: "/documents", page: Documents, prepare: withTicket },
   { id: "readme-assistant-week", path: "/assistant/conv-week", params: { id: "conv-week" }, page: AssistantThread, actions: [{ scroll: 2000 }, { wait: 400 }] },
   { id: "readme-homesearch", path: "/homesearch", page: HomeSearch },
@@ -395,6 +414,26 @@ export const SCENES: Scene[] = [
   { id: "readme-documents-lease", path: "/documents", page: Documents, actions: [{ click: "text=Leases >> visible=true" }, { wait: 400 }] },
   { id: "readme-tasks-lease", path: "/tasks", page: Tasks, actions: [{ scroll: 800 }, { wait: 400 }] },
   { id: "readme-documents-vacuum", path: "/documents", page: Documents, prepare: () => seed({ documents: [...documents, vacuumWarranty] }), actions: [{ click: "text=Warranties >> visible=true" }, { wait: 400 }] },
+
+  // The landing page's module map: one frame for each link the stories do not show.
+  {
+    id: "map-costs-suggest",
+    path: "/costs",
+    page: Costs,
+    prepare: () => {
+      HOUSEHOLD.group.chosen_apartment_id = "ap-ocean";
+      HOUSEHOLD.userSettings.costs_hide_section_suggestions = false;
+      seed({ cost_items: costItems.filter((c) => c.id !== "c-rent") });
+    },
+    actions: [{ scroll: 640 }, { wait: 400 }],
+    marks: { rent: "text=/chosen home/", setup: "text=/estimated$/" },
+  },
+  // Sunday's agenda: two viewings and a birthday from Google Calendar.
+  { id: "map-calendar-sunday", path: "/calendar", page: Calendar, actions: [...toSunday, { click: "text=Agenda" }, { wait: 500 }], marks: { viewing: "text=/Rose St/ >> visible=true", birthday: "text=Mia's birthday >> visible=true" } },
+  { id: "map-appointments", path: "/appointments", page: Appointments, actions: [{ wait: 400 }], marks: { suggestion: "text=Inspection 12 Separation St" } },
+  { id: "map-documents-receipts", path: "/documents", page: Documents, prepare: withMapDocuments, actions: [{ click: "text=Receipts >> visible=true" }, { wait: 400 }], marks: { receipt: "text=FreshCo receipt >> visible=true", fridge: "text=Fridge receipt >> visible=true" } },
+  { id: "map-documents-recipe", path: "/documents", page: Documents, prepare: withMapDocuments, actions: [{ fill: "input[placeholder^='Search documents']", value: "Lasagne" }, { wait: 500 }], marks: { photo: "text=Lasagne recipe photo >> visible=true" } },
+  { id: "map-setup-doc", path: "/setup", page: Setup, prepare: withMapDocuments, actions: [{ wait: 400 }], marks: { doc: "text=/^Doc$/ >> visible=true" } },
 ];
 
 /** The live demo's pages, by path; a path with an id matches its prefix. */

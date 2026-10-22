@@ -1272,15 +1272,35 @@
 .heroText .ctaRow {
   margin-top: 6px;
 }
-.tryRow {
-  align-items: center;
+/* Two rows of two equal buttons, each row under its own small label. */
+.heroCtas {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  width: min(100%, 440px);
+  margin-top: 6px;
 }
-.tryRow > span {
+.heroCtas > a {
+  justify-content: center;
+  gap: 8px;
+  padding-inline: 12px;
+  white-space: nowrap;
+}
+.heroCtaLabel {
+  grid-column: 1 / -1;
+  margin-bottom: -4px;
   font-family: var(--font-mono), ui-monospace, monospace;
   font-size: 13px;
   letter-spacing: 0.02em;
   color: var(--muted-foreground);
-  margin-right: 4px;
+}
+.heroCtaLabel:not(:first-child) {
+  margin-top: 6px;
+}
+@media (max-width: 380px) {
+  .heroCtas {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 .heroFacts {
   font-family: var(--font-mono), ui-monospace, monospace;
@@ -1510,40 +1530,213 @@
   color: var(--muted-foreground);
 }
 
-/* ---------- how the modules fit ---------- */
-.chains {
+/* ---------- module map ---------- */
+/* Every module and every link between two of them. Lines sit in an SVG in
+   map units; modules are buttons placed by percentage over it, so the same
+   numbers place both. A lit line turns wine red with a soft glow. */
+.mapGrid {
+  --wine: oklch(0.6 0.17 22);
+  --wine-glow: oklch(0.5 0.17 18);
   display: grid;
-  gap: 56px;
-}
-.chain {
-  display: grid;
-  gap: 18px;
-}
-.chainTitle {
-  font-family: var(--font-heading), system-ui, sans-serif;
-  font-weight: 700;
-  font-size: 22px;
-  letter-spacing: -0.01em;
-}
-.chainLinks {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 32px minmax(0, 1fr) 32px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+  gap: clamp(20px, 3vw, 40px);
   align-items: start;
+}
+.mapBox {
+  display: grid;
   gap: 12px;
+  min-width: 0;
+}
+.map {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+.mapLines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.mapLines path {
+  fill: none;
+  stroke-linecap: round;
+}
+.mapLine {
+  stroke: color-mix(in oklab, var(--muted-foreground) 32%, transparent);
+  stroke-width: 1.6;
+  vector-effect: non-scaling-stroke;
+  transition:
+    stroke var(--motion-fast, 150ms) ease,
+    stroke-width var(--motion-fast, 150ms) ease,
+    opacity var(--motion-fast, 150ms) ease;
+}
+.mapGlow {
+  stroke: transparent;
+  stroke-width: 9;
+  vector-effect: non-scaling-stroke;
+  filter: blur(3px);
+}
+.mapHit {
+  stroke: transparent;
+  stroke-width: 18;
+  vector-effect: non-scaling-stroke;
+  cursor: pointer;
+  pointer-events: stroke;
+  outline: none;
+}
+.mapLines g:not([data-on]) .mapLine {
+  opacity: 0.45;
+}
+.mapLines g[data-on] .mapLine {
+  stroke: var(--wine);
+  stroke-width: 2.6;
+}
+.mapLines g[data-on] .mapGlow {
+  stroke: color-mix(in oklab, var(--wine-glow) 40%, transparent);
+}
+.mapNode {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 13px 0 6px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--foreground);
+  font-size: 13.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  transform: translate(-50%, -50%);
+  opacity: 0.5;
+  cursor: pointer;
+  transition:
+    opacity var(--motion-fast, 150ms) ease,
+    border-color var(--motion-fast, 150ms) ease,
+    background-color var(--motion-fast, 150ms) ease;
+}
+.mapNode[data-on] {
+  opacity: 1;
+}
+.mapNode[data-chosen] {
+  border-color: var(--wine);
+  background: color-mix(in oklab, var(--card) 82%, var(--wine) 18%);
+}
+.mapNode:hover {
+  opacity: 1;
+}
+.mapNode:focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 3px;
+}
+.map[data-layout="tall"] .mapNode {
+  height: 28px;
+  gap: 6px;
+  padding: 0 10px 0 4px;
+  font-size: 12px;
+}
+.mapTile {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 8px;
+  background: var(--hue-tile);
+  color: var(--hue-glyph);
+}
+.map[data-layout="tall"] .mapTile {
+  width: 20px;
+  height: 20px;
+  border-radius: 7px;
+}
+.mapHint {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  color: var(--muted-foreground);
+}
+.mapCard {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+  min-width: 0;
+  min-height: 320px;
+}
+.mapCardPair {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted-foreground);
+  font-size: 14px;
+}
+.mapChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--foreground);
+  font-weight: 650;
+  font-size: 15px;
+}
+.mapCount {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 13px;
+}
+.mapCardText {
+  font-size: 17px;
+  line-height: 1.5;
+}
+.mapCrops {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+}
+.mapList {
+  display: grid;
+  gap: 8px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
-.chainArrow {
-  align-self: center;
-  justify-self: center;
-  margin-top: -64px;
-  color: var(--muted-foreground);
-}
-.chainLink {
+.mapList button {
   display: grid;
-  gap: 14px;
-  min-width: 0;
+  gap: 6px;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--card);
+  text-align: left;
+  color: var(--muted-foreground);
+  font-size: 14.5px;
+  line-height: 1.45;
+  cursor: pointer;
+  transition: background-color var(--motion-fast, 150ms) ease;
+}
+.mapList button:hover {
+  background: var(--secondary);
+}
+.mapList button:focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 2px;
+}
+@media (max-width: 960px) {
+  .mapGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .mapCard {
+    min-height: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mapLine,
+  .mapNode {
+    transition: none;
+  }
 }
 .crop {
   position: relative;
@@ -1563,31 +1756,6 @@
   box-shadow:
     0 0 0 2px var(--hue-glyph),
     0 0 24px 2px var(--hue-glow);
-}
-.chainText {
-  display: grid;
-  gap: 6px;
-}
-.chainModule {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 650;
-}
-.chainText p {
-  font-size: 15.5px;
-  line-height: 1.45;
-  color: var(--muted-foreground);
-}
-@media (max-width: 860px) {
-  .chainLinks {
-    grid-template-columns: minmax(0, 1fr);
-    max-width: 420px;
-  }
-  .chainArrow {
-    margin-top: 0;
-    transform: rotate(90deg);
-  }
 }
 
 /* ---------- comparison ---------- */

@@ -13,6 +13,7 @@ import {
   at,
   SATURDAY,
   googleEvents,
+  googleSuggestions,
   shopperDeals,
   shopperSources,
 } from "./fixtures";
@@ -91,6 +92,7 @@ const answers: [RegExp, Answer][] = [
   [/^\/api\/calendar\/status/, () => ({ connected: true, settings: { selected_calendar_ids: ["primary"], suggest_mode: "both", dedicated_calendar_id: null, keywords: [], pull_enabled: true, push_todos_enabled: true } })],
   [/^\/api\/calendar\/calendars/, () => ({ calendars: [{ id: "primary", summary: "ava@example.com", primary: true, selected: true }, { id: "family", summary: "Family", selected: true }] })],
   [/^\/api\/calendar\/events/, () => ({ events: googleEvents })],
+  [/^\/api\/calendar\/suggestions/, () => ({ suggestions: googleSuggestions })],
   [/^\/api\/event-travel/, () => ({ minutes: 28 })],
   [/^\/api\/event-forecast/, () => ({ tempC: 18, weatherCode: 2, precipitationProbability: 40, summary: "Partly cloudy" })],
   [
