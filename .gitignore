@@ -47,10 +47,11 @@ supabase/.temp/
 # which also silently blocked CI workflows from ever being committed. Ignore the
 # directory's *contents* rather than the directory itself (git cannot re-include
 # a path whose parent dir is excluded), then re-admit workflows and the
-# local actions they use.
+# local actions they use, and the README pictures the public repo ships.
 .github/*
 !.github/workflows/
 !.github/actions/
+!.github/readme/
 
 # OS
 .DS_Store
