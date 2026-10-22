@@ -90,6 +90,7 @@ import { toastUndoDelete } from '@/lib/undo-toast';
 import { useGroceryUndo } from './use-grocery-undo';
 import { GroceryGlyph } from '@/components/grocery-glyph';
 import { useMediaQuery, useWideLayout } from '@/lib/desktop-layout';
+import { prefersStillMotion } from "@/lib/still-motion";
 
 const SHOPPING_TOOLTIP_KEY = 'homeup_shopping_tooltip_dismissed';
 
@@ -391,7 +392,7 @@ export default function GroceriesPage() {
   // first (inside the tap, so a phone raises its keyboard), then glide.
   const jumpToSearch = () => {
     searchWrapRef.current?.querySelector('input')?.focus({ preventScroll: true });
-    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const reduce = prefersStillMotion();
     headEl?.scrollIntoView({ block: 'start', behavior: reduce ? 'auto' : 'smooth' });
   };
 

@@ -13,7 +13,6 @@ import Animated, {
   interpolate,
   runOnJS,
   useAnimatedStyle,
-  useReducedMotion,
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
@@ -31,7 +30,7 @@ import {
   type AssistantConversation,
   type ThreadTarget,
 } from '@homeup/core';
-import { Button, ListGroup, Text, toast, useKeyboardOffset, useThemeMaterial } from '@homeup/ui';
+import { Button, ListGroup, Text, toast, useKeyboardOffset, useThemeMaterial, useStillMotion } from '@homeup/ui';
 import { useDataCache } from '@/lib/data-cache';
 import { useOpenRoute } from '@/lib/tab-routes';
 import { assistantApi } from './assistant-api';
@@ -297,7 +296,7 @@ function PopupSurface({
   const frame = useSafeAreaFrame();
   const insets = useSafeAreaInsets();
   const material = useThemeMaterial();
-  const still = useReducedMotion();
+  const still = useStillMotion();
   const keyboardOffset = useKeyboardOffset(insets.bottom);
   const [visible, setVisible] = React.useState(open);
   const progress = useSharedValue(0);

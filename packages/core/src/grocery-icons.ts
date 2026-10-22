@@ -192,3 +192,19 @@ export function getGroceryEmoji(name: string, aisle: string): string {
 export function groceryGlyphSvg(emoji: string): string | undefined {
   return GROCERY_GLYPH_SVGS[emoji.replace(/\uFE0F/g, '')];
 }
+
+/**
+ * The same SVG with every hex colour turned to its grey (Rec. 709 luma), for
+ * the e-paper theme: the art keeps its shape and shading without colour.
+ */
+export function greyscaleSvg(svg: string): string {
+  return svg.replace(/#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b/g, (_, hex: string) => {
+    const full = hex.length === 3 ? hex.replace(/./g, (c) => c + c) : hex;
+    const r = parseInt(full.slice(0, 2), 16);
+    const g = parseInt(full.slice(2, 4), 16);
+    const b = parseInt(full.slice(4, 6), 16);
+    const y = Math.round(0.2126 * r + 0.7152 * g + 0.0722 * b);
+    const h = y.toString(16).padStart(2, '0');
+    return `#${h}${h}${h}`;
+  });
+}

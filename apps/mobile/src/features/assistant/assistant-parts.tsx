@@ -9,7 +9,6 @@ import Animated, {
   Easing,
   cancelAnimation,
   useAnimatedStyle,
-  useReducedMotion,
   useSharedValue,
   withDelay,
   withRepeat,
@@ -17,7 +16,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useRouter, type Href } from 'expo-router';
 import { ArrowUp, Check, X } from 'lucide-react-native';
-import { Text, LeadingTile, cn } from '@homeup/ui';
+import { Text, LeadingTile, cn, useStillMotion } from '@homeup/ui';
 import {
   GHOST_REPLY_GROW_MS,
   GHOST_REPLY_LINES,
@@ -208,7 +207,7 @@ function GhostLine({ index, width, still }: { index: number; width: number; stil
 
 /** Rooftap working on a reply: faint lines grow where the answer will sit, shimmering until it lands. */
 export function Thinking({ draft }: { draft?: AssistantDraft | null }) {
-  const still = useReducedMotion();
+  const still = useStillMotion();
   const text = draft?.text.trimStart() ?? '';
   // HOUP-509 (Hearth §8 "Streamed reply"): the answer replaces the lines as it is written.
   if (text) {

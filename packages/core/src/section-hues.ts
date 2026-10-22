@@ -9,6 +9,15 @@
 // section-hue-css.ts), so there is no second copy to keep in step.
 import type { ColorScheme } from './theme-preference';
 
+/**
+ * Which swatch set a theme wears: its light/dark scheme, or `ink` for the
+ * e-paper theme, where every section shares one grey tile and the glow is off.
+ */
+export type HueScheme = ColorScheme | 'ink';
+
+/** The one grey swatch every section wears under the e-paper theme. */
+export const INK_HUE_SWATCH: SectionHueSwatch = { tile: '#DCDCDC', glyph: '#1A1A1A', glow: '#1A1A1A' };
+
 export type SectionHue =
   | 'coral'
   | 'lilac'
@@ -107,8 +116,8 @@ export const SECTION_HUES: Record<SectionHue, Record<ColorScheme, SectionHueSwat
   },
 };
 
-/** Glow strength per scheme: louder on the dark ground, softer on paper. */
-export const SECTION_GLOW_OPACITY: Record<ColorScheme, number> = { dark: 0.42, light: 0.3 };
+/** Glow strength per scheme: louder on the dark ground, softer on paper, none on e-paper. */
+export const SECTION_GLOW_OPACITY: Record<HueScheme, number> = { dark: 0.42, light: 0.3, ink: 0 };
 
 /** Which hue each section (sections.ts id) wears. Home is the hub and wears coral. */
 export const SECTION_HUE_BY_SECTION: Readonly<Record<string, SectionHue>> = {
@@ -134,6 +143,11 @@ export function sectionHue(sectionId: string): SectionHue {
 }
 
 /** A section's tile, glyph and glow colours for one colour scheme. */
-export function sectionHueSwatch(sectionId: string, scheme: ColorScheme): SectionHueSwatch {
-  return SECTION_HUES[sectionHue(sectionId)][scheme];
+export function sectionHueSwatch(sectionId: string, scheme: HueScheme): SectionHueSwatch {
+  return scheme === 'ink' ? INK_HUE_SWATCH : SECTION_HUES[sectionHue(sectionId)][scheme];
+}
+
+/** One hue's swatch for a scheme (the e-paper scheme wears the shared grey). */
+export function hueSwatch(hue: SectionHue, scheme: HueScheme): SectionHueSwatch {
+  return scheme === 'ink' ? INK_HUE_SWATCH : SECTION_HUES[hue][scheme];
 }

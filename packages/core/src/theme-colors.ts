@@ -92,11 +92,14 @@ export interface ThemeTokens {
 // Hearth v2: the Ember pair leads (it is what the default "follow the
 // device" preference resolves to, see theme-preference.ts); the Axis Mundi
 // pair (HOUP-295) stays selectable. Day before night within each pair.
+// E-Ink (revived after HOUP-295 cut the old one) is a single flat, still,
+// greyscale theme for e-paper screens (see STILL_THEME_IDS).
 export const THEME_IDS = [
   "ember-day",
   "ember-night",
   "axis-mundi-day",
   "axis-mundi-night",
+  "e-ink",
 ] as const;
 
 export type ThemeId = (typeof THEME_IDS)[number];
@@ -283,6 +286,53 @@ export const THEME_TOKENS: Record<ThemeId, ThemeTokens> = {
         bg: "oklch(0.245 0.016 297 / 1)",
         border: "oklch(0.36 0.014 298 / 1)",
         highlight: "oklch(1 0 0 / 0.04)",
+        shadow: "oklch(0 0 0 / 0)",
+      },
+      texture: { kind: "none", opacity: 0 },
+    },
+  },
+  "e-ink": {
+    radius: "0.75rem",
+    colors: {
+      "background": "oklch(0.95 0 0)",
+      "foreground": "oklch(0.16 0 0)",
+      "card": "oklch(0.985 0 0)",
+      "card-foreground": "oklch(0.16 0 0)",
+      "popover": "oklch(0.985 0 0)",
+      "popover-foreground": "oklch(0.16 0 0)",
+      "primary": "oklch(0.16 0 0)",
+      "primary-foreground": "oklch(0.985 0 0)",
+      "secondary": "oklch(0.9 0 0)",
+      "secondary-foreground": "oklch(0.16 0 0)",
+      "muted": "oklch(0.91 0 0)",
+      "muted-foreground": "oklch(0.42 0 0)",
+      "accent": "oklch(0.89 0 0)",
+      "accent-foreground": "oklch(0.16 0 0)",
+      "destructive": "oklch(0.3 0 0)",
+      "success": "oklch(0.35 0 0)",
+      "success-foreground": "oklch(0.985 0 0)",
+      "warning": "oklch(0.45 0 0)",
+      "warning-foreground": "oklch(0.985 0 0)",
+      "border": "oklch(0.78 0 0)",
+      "input": "oklch(0.8 0 0)",
+      "ring": "oklch(0.16 0 0)",
+      "axis": "oklch(0.16 0 0)",
+      "sidebar": "oklch(0.97 0 0)",
+      "sidebar-foreground": "oklch(0.22 0 0)",
+      "sidebar-primary": "oklch(0.16 0 0)",
+      "sidebar-primary-foreground": "oklch(0.985 0 0)",
+      "sidebar-accent": "oklch(0.9 0 0)",
+      "sidebar-accent-foreground": "oklch(0.16 0 0)",
+      "sidebar-border": "oklch(0.78 0 0)",
+      "sidebar-ring": "oklch(0.16 0 0)",
+    },
+    material: {
+      // Flat: no shadow, glass edge or texture survives an e-paper refresh.
+      cardShadow: "none",
+      glass: {
+        bg: "oklch(0.985 0 0 / 1)",
+        border: "oklch(0.78 0 0 / 1)",
+        highlight: "oklch(1 0 0 / 0)",
         shadow: "oklch(0 0 0 / 0)",
       },
       texture: { kind: "none", opacity: 0 },

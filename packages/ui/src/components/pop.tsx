@@ -10,7 +10,6 @@ import * as React from 'react';
 import Animated, {
   Easing,
   useAnimatedStyle,
-  useReducedMotion,
   useSharedValue,
   withDelay,
   withSequence,
@@ -25,13 +24,14 @@ import {
   POP_OUT_SHRINK,
   POP_OUT_SWELL,
 } from '@homeup/core';
+import { useStillMotion } from '../theme/theme-provider';
 
 const SWIFT_OUT = Easing.bezier(0.16, 1, 0.3, 1);
 const EASE_IN = Easing.bezier(0.42, 0, 1, 1);
 
 /** `start(action)` pops the view out, then runs `action`; later calls are ignored. */
 export function usePopOut() {
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useStillMotion();
   const scale = useSharedValue(1);
   const opacity = useSharedValue(1);
   const leaving = React.useRef(false);
@@ -72,7 +72,7 @@ interface PopInProps {
 }
 
 export function PopIn({ active, className, style, children }: PopInProps) {
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useStillMotion();
   const scale = useSharedValue(1);
   const opacity = useSharedValue(1);
   React.useEffect(() => {

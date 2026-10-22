@@ -25,14 +25,13 @@ import { Pressable, View, type LayoutRectangle } from 'react-native';
 import Animated, {
   Easing,
   useAnimatedStyle,
-  useReducedMotion,
   useSharedValue,
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
 import { MoreHorizontal } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Text, cn, haptics, MeridianAxis, TabGlide, useThemeMaterial } from '@homeup/ui';
+import { Text, cn, haptics, MeridianAxis, TabGlide, useThemeMaterial, useStillMotion } from '@homeup/ui';
 import {
   MOTION_DURATIONS_MS,
   assignTabSlot,
@@ -103,7 +102,7 @@ function TabFace({
   hue: SectionHueSwatch | undefined;
   badge: number | null;
 }) {
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useStillMotion();
   const pop = useSharedValue(1);
   const wasActive = React.useRef(active);
   React.useEffect(() => {

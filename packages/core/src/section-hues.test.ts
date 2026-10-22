@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { sections, profileSection } from "./sections";
-import { SECTION_HUE_BY_SECTION, SECTION_HUE_IDS, SECTION_HUES, sectionHue, sectionHueSwatch } from "./section-hues";
+import { INK_HUE_SWATCH, SECTION_GLOW_OPACITY, SECTION_HUE_BY_SECTION, SECTION_HUE_IDS, SECTION_HUES, hueSwatch, sectionHue, sectionHueSwatch } from "./section-hues";
 
 const HEX = /^#[0-9A-F]{6}$/;
 
@@ -29,5 +29,13 @@ describe("section hues", () => {
     expect(sectionHue("nope")).toBe("slate");
     expect(sectionHueSwatch("nope", "dark")).toEqual(SECTION_HUES.slate.dark);
     expect(sectionHueSwatch("groceries", "light")).toEqual(SECTION_HUES.mint.light);
+  });
+
+  it("gives every section the one grey swatch and no glow on e-paper", () => {
+    expect(sectionHueSwatch("groceries", "ink")).toEqual(INK_HUE_SWATCH);
+    expect(sectionHueSwatch("nope", "ink")).toEqual(INK_HUE_SWATCH);
+    expect(hueSwatch("sky", "ink")).toEqual(INK_HUE_SWATCH);
+    expect(hueSwatch("sky", "light")).toEqual(SECTION_HUES.sky.light);
+    expect(SECTION_GLOW_OPACITY.ink).toBe(0);
   });
 });

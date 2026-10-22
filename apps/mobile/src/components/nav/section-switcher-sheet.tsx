@@ -28,7 +28,6 @@ import Animated, {
   Easing,
   cancelAnimation,
   useAnimatedStyle,
-  useReducedMotion,
   useSharedValue,
   withRepeat,
   withSequence,
@@ -50,6 +49,7 @@ import {
   ListItemTitle,
   ListItemTrailing,
   useThemeMaterial,
+  useStillMotion,
 } from '@homeup/ui';
 import {
   MOTION_DURATIONS_MS,
@@ -131,7 +131,7 @@ function SpaceTile({
 }: SpaceTileProps) {
   const Icon = sectionIcons[section.iconId];
   const swatch = sectionHueSwatch(section.id, scheme);
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useStillMotion();
   const hold = useHoldFill(REARRANGE_HOLD_MS);
 
   const origin = spaceGridCellOrigin(index, cellWidth);

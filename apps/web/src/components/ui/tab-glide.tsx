@@ -15,6 +15,7 @@
 import { useEffect, useRef } from "react";
 import { MOTION_DURATIONS_MS, TAB_GLIDE_SIZE, motionEaseOut, tabBlobPath, tabGlideEdges } from "@homeup/core";
 import { navShiftElapsedMs } from "@/lib/view-transitions";
+import { prefersStillMotion } from "@/lib/still-motion";
 
 const GLIDE_MS = MOTION_DURATIONS_MS.slow;
 
@@ -40,7 +41,7 @@ interface Glide {
 }
 
 function prefersReducedMotion(): boolean {
-  return typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  return prefersStillMotion();
 }
 
 export function TabGlide({ target, hue }: { target: TabGlideTarget | null; hue: string | undefined }) {

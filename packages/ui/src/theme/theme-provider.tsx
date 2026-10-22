@@ -16,6 +16,7 @@
 import * as React from 'react';
 import { View, type ViewProps } from 'react-native';
 import { vars } from 'nativewind';
+import { ReducedMotionConfig, ReduceMotion, useReducedMotion } from 'react-native-reanimated';
 import type { ThemeId } from '@homeup/core';
 import { BackgroundTexture } from '../components/background-texture';
 import { themeMaterial, themeVars, type ResolvedThemeMaterial } from './theme-vars';
@@ -27,6 +28,16 @@ const ThemeMaterialContext = React.createContext<ResolvedThemeMaterial>(themeMat
 /** The active theme's resolved material tokens — card shadow, glass edges, background texture. */
 export function useThemeMaterial(): ResolvedThemeMaterial {
   return React.useContext(ThemeMaterialContext);
+}
+
+/**
+ * True when motion should be still: the device asks for reduced motion, or
+ * the theme is the e-paper one. Use it wherever a component branches on
+ * reduced motion; Reanimated's own useReducedMotion only sees the device.
+ */
+export function useStillMotion(): boolean {
+  const reduced = useReducedMotion();
+  return reduced || React.useContext(ThemeMaterialContext).still;
 }
 
 export interface ThemeProviderProps extends ViewProps {
@@ -43,6 +54,9 @@ export function ThemeProvider({ themeId = DEFAULT_THEME_ID, style, children, ...
     // lazily mounted tab) then lands on the theme, not on white.
     <View style={[{ flex: 1, backgroundColor: material.background }, themeStyle, style]} {...props}>
       <ThemeMaterialContext.Provider value={material}>
+        {/* The e-paper theme makes every Reanimated animation instant, the
+            same switch the device's reduced-motion setting flips. */}
+        {material.still && <ReducedMotionConfig mode={ReduceMotion.Always} />}
         <BackgroundTexture kind={material.textureKind} opacity={material.textureOpacity} color={material.textureColor} />
         {children}
       </ThemeMaterialContext.Provider>

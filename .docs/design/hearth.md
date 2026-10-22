@@ -216,12 +216,13 @@ A Moment lands with `celebrate()` as it appears, after the `success()` the finis
 
 Hearth is composition; it must survive every theme untouched. Themes own hue, radius, texture, shadow. Hearth owns hierarchy, meter scale, spacing rhythm, accent discipline.
 
-**v2 roster: four themes in two pairs.**
+**v2 roster: four themes in two pairs, plus E-Ink.**
 
 | Pair | Ids | Character |
 |---|---|---|
 | **Ember** (default) | `ember-day`, `ember-night` | Coral `--primary`, warm paper (day) and warm ink (night) grounds, a rounder radius (1.125rem), the section glow on. |
 | **Axis Mundi** | `axis-mundi-day`, `axis-mundi-night` | Gilt accent split, masonry surfaces, Cinzel capitals, the meridian (§10.1). No section glow. |
+| **E-Ink** | `e-ink` | For e-paper screens (§10.2). Neutral greys, `--primary` is ink, a 0.75rem radius. Flat and still. |
 
 **The setting is a preference, not a theme** (`packages/core/src/theme-preference.ts`). The default preference `system` ("Match device") follows the phone or browser's light/dark setting and resolves to Ember Day or Ember Night; picking any of the four themes pins it. Both platforms resolve through `resolveThemePreference`, so web and native never disagree. The preference is stored under `homeup-theme-pref`, a new key, so everyone starts on Match device and Axis stays one tap away in Appearance settings.
 
@@ -233,6 +234,15 @@ The theme pair layering a small, scoped design-language addition on top of Heart
 - **Gilt is Axis's only glow.** Under Axis Mundi the hero node's static glow is the sole decorative glow, so the section glow is switched off there (`useThemeMaterial().sectionGlow` on native, `[data-theme^="axis-mundi"] .section-glow { display: none }` on web). Under Ember the section glow is the only decorative glow and there is no meridian.
 - Before adding a third meridian mount point, re-read this rule: the motif is deliberately singular per view, not a general-purpose divider.
 - **The accent split (FLUX-1571, amended HOUP-296): see H2 and §3.**
+
+### 10.2 E-Ink
+
+One light theme for e-paper phones, tablets and readers. E-paper redraws slowly and ghosts every in-between frame, so the theme is **flat** and **still**. Both apps gate on core's `isStillTheme`, never on the id.
+
+- **Flat.** No section glow, no card shadow, no blur, no gradient. One border level stays, as everywhere.
+- **Still.** Every motion token is 0ms. Tab glide, the page shift, the Now card burst and the moment's zoom are off, as under the device's reduced-motion setting. Native: `ThemeProvider` mounts Reanimated's `ReducedMotionConfig` and components branch on `useStillMotion()`. Web: the `--motion-*` tokens collapse, animations and transitions are cut, and `runNavTransition` skips the View Transition.
+- **Grey identity.** Every section tile wears one grey (`INK_HUE_SWATCH`, hue scheme `ink`). Grocery art draws in greys. Cost categories take a grey ramp, and the stacked chart adds a pattern per category.
+- **Status by words.** The status hues are greys, so a status still needs its word ("2 overdue"), as H2 already asks.
 
 ## 11. Layout and component conventions
 

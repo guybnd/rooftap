@@ -2,7 +2,7 @@
 // property record the Tailwind preset's `var(--color-x)` / `var(--radius-x)`
 // references resolve against (see ../../tailwind-preset.js). This is the
 // runtime half of the token bridge — the preset only ever declares names.
-import { deriveRadiusScale, THEME_TOKENS, type BodyTextureKind, type ColorScheme, type ThemeId } from '@homeup/core';
+import { deriveRadiusScale, isStillTheme, THEME_TOKENS, type BodyTextureKind, type HueScheme, type ThemeId } from '@homeup/core';
 import { isLightOklch, resolveBoxShadowOklch, resolveOklchToRgba, resolveOklchToRgbTriplet } from './resolve-color';
 
 export type ThemeVars = Record<
@@ -95,13 +95,23 @@ export interface ResolvedThemeMaterial {
    * theme, and the Android window behind everything (expo-system-ui).
    */
   background: string;
-  /** Which swatch of a section hue (section-hues.ts) this theme wears: light ground = 'light'. */
-  scheme: ColorScheme;
+  /**
+   * Which swatch of a section hue (section-hues.ts) this theme wears: light
+   * ground = 'light', dark = 'dark', the e-paper theme = 'ink' (one grey).
+   */
+  scheme: HueScheme;
   /**
    * Hearth v2: the section glow is Ember material. Axis Mundi keeps its
-   * meridian as its one decorative element instead, so it gets no glow.
+   * meridian as its one decorative element instead, so it gets no glow;
+   * neither does the flat e-paper theme.
    */
   sectionGlow: boolean;
+  /**
+   * The e-paper theme (core isStillTheme): every animation is instant and
+   * the tab glide is off, as under the device's reduced-motion setting.
+   * Read it through useStillMotion(), which ORs the two.
+   */
+  still: boolean;
 }
 
 /** Resolved once per theme id, reusing themeVars' cache — not a per-render cost. */
@@ -120,7 +130,8 @@ export function themeMaterial(themeId: ThemeId): ResolvedThemeMaterial {
     axisColor: AXIS_MUNDI_THEME_IDS.has(themeId) ? resolveOklchToRgba(THEME_TOKENS[themeId].colors.axis) : null,
     statusBarStyle: isLightOklch(THEME_TOKENS[themeId].colors.background) ? 'dark' : 'light',
     background: `rgb(${vars['--color-background'].split(' ').join(', ')})`,
-    scheme: isLightOklch(THEME_TOKENS[themeId].colors.background) ? 'light' : 'dark',
-    sectionGlow: !AXIS_MUNDI_THEME_IDS.has(themeId),
+    scheme: isStillTheme(themeId) ? 'ink' : isLightOklch(THEME_TOKENS[themeId].colors.background) ? 'light' : 'dark',
+    sectionGlow: !AXIS_MUNDI_THEME_IDS.has(themeId) && !isStillTheme(themeId),
+    still: isStillTheme(themeId),
   };
 }

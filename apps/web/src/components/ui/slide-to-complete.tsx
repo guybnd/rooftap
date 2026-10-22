@@ -18,6 +18,7 @@ import { ArrowRight, Check } from "lucide-react";
 import { MOTION_DURATIONS_MS, MOTION_EASE, SLIDE_FINISH_AT, SLIDE_ZIPPER_STEPS } from "@homeup/core";
 import { cn } from "@/lib/utils";
 import { pop, zipper } from "@/lib/haptics";
+import { prefersStillMotion } from "@/lib/still-motion";
 
 const THUMB = 48;
 const INSET = 4;
@@ -31,7 +32,7 @@ const SPARK_FROM = THUMB / 2 - 2;
 const SPARK_TO = THUMB / 2 + 26;
 
 export function prefersReducedMotion(): boolean {
-  return typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  return prefersStillMotion();
 }
 
 export function SlideToComplete({

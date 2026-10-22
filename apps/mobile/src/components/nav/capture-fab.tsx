@@ -10,13 +10,12 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   runOnJS,
   useAnimatedStyle,
-  useReducedMotion,
   useSharedValue,
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import { ASK_HOLD_MS, askHoldZipperMs, sectionHueSwatch } from '@homeup/core';
-import { cn, haptics, useThemeMaterial } from '@homeup/ui';
+import { cn, haptics, useThemeMaterial, useStillMotion } from '@homeup/ui';
 import { RooftapMark } from '@/components/brand/rooftap-mark';
 
 /** How far up a swipe must travel (or how fast) to open the chat. */
@@ -36,8 +35,8 @@ export interface CaptureFabProps {
 }
 
 export function CaptureFab({ onPress, onAsk, unread, className }: CaptureFabProps) {
-  const { scheme } = useThemeMaterial();
-  const still = useReducedMotion();
+  const { scheme, still: flat } = useThemeMaterial();
+  const still = useStillMotion();
   const hue = sectionHueSwatch('assistant', scheme);
   const lift = useSharedValue(0);
   const charge = useSharedValue(0);
@@ -156,7 +155,7 @@ export function CaptureFab({ onPress, onAsk, unread, className }: CaptureFabProp
             style={[{ backgroundColor: hue.glow }, glowStyle]}
           />
         )}
-        <View className="h-12 w-12 items-center justify-center rounded-full bg-primary shadow-lg">
+        <View className={cn('h-12 w-12 items-center justify-center rounded-full bg-primary', !flat && 'shadow-lg')}>
           <RooftapMark size={26} className="text-primary-foreground" />
         </View>
         {unread && (

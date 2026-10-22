@@ -31,6 +31,7 @@ import { HOLD_FILL_DELAY_MS, useLongPress } from '@/hooks/use-long-press';
 import { HoldFillOverlay } from '@/components/ui/hold-fill-overlay';
 import { tick } from '@/lib/haptics';
 import { SuggestReAddSection } from './suggest-re-add-section';
+import { prefersStillMotion } from "@/lib/still-motion";
 
 const CHIP_CLASS =
   'relative inline-flex min-h-[36px] items-center gap-1 overflow-hidden rounded-full border border-border bg-muted px-3 py-1.5 text-sm text-foreground hover:bg-accent transition-colors';
@@ -196,7 +197,7 @@ function RunningLowChip({
     if (leaving) return;
     setLeaving(true);
     tick();
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const reduced = prefersStillMotion();
     timer.current = setTimeout(onAdd, reduced ? 0 : POP_OUT_MS);
   };
   const { handlers, consumeClick, progress } = useLongPress(() => setMenuOpen(true), true, {

@@ -14,7 +14,7 @@ import * as SecureStore from 'expo-secure-store';
 import { ChevronDown, CloudOff, MapPin } from 'lucide-react-native';
 import Svg, { Defs, Line, LinearGradient, Path, Stop } from 'react-native-svg';
 import { Text, haptics, useThemeMaterial, cn } from '@homeup/ui';
-import { SECTION_HUES, SKY_RIBBON_OPEN_STORAGE_KEY, describeDayRibbon, type RibbonHour, type WeatherData } from '@homeup/core';
+import { hueSwatch, SKY_RIBBON_OPEN_STORAGE_KEY, describeDayRibbon, type RibbonHour, type WeatherData } from '@homeup/core';
 import { iconAndLabelForCode } from './weather-icons';
 
 /** Whether the day ribbon is open on this device. Starts collapsed. */
@@ -135,7 +135,7 @@ function smoothPath(points: [number, number][]): string {
 
 export function DayRibbon({ hours }: { hours: RibbonHour[] }) {
   const material = useThemeMaterial();
-  const hue = SECTION_HUES.sky[material.scheme];
+  const hue = hueSwatch('sky', material.scheme);
   const [width, setWidth] = React.useState(0);
   const [picked, setPicked] = React.useState<number | null>(null);
   const col = hours.length > 0 ? width / hours.length : 0;

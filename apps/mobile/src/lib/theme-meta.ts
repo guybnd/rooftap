@@ -15,13 +15,14 @@ export interface ThemeMeta {
 }
 
 // Hearth v2: "Match device" (Ember Day/Night) is the default; the Axis Mundi
-// pair (HOUP-295) stays selectable.
+// pair (HOUP-295) and E-Ink stay selectable.
 export const themeMeta: ThemeMeta[] = [
   { id: 'system', name: 'Match device', description: 'Ember Day or Night, set by your device', accent: ['#F6F3EF', '#121016'] },
   { id: 'ember-day', name: 'Ember Day', description: 'Warm paper, one coral accent', accent: '#C8462A' },
   { id: 'ember-night', name: 'Ember Night', description: 'Warm ink with a coral glow', accent: '#FF7A5C' },
   { id: 'axis-mundi-day', name: 'Axis Day', description: 'Sunlit limestone and deep gilt', accent: '#a87a1f' },
   { id: 'axis-mundi-night', name: 'Axis Night', description: 'Cut basalt, gilt and working blue', accent: '#d9a441' },
+  { id: 'e-ink', name: 'E-Ink', description: 'Flat greys and no motion, for e-paper screens', accent: '#1A1A1A' },
 ];
 
 export function themeMetaFor(id: ThemePreference): ThemeMeta | undefined {

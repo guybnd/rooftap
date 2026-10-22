@@ -220,7 +220,7 @@ export function CostDashboard({
                 {recurringByCategory(b).reverse().map((s) => (
                   <div
                     key={s.category}
-                    className={CATEGORY_COLOR[s.category].fill + (i > currentIdx ? ` ${PROJECTED_OPACITY}` : '')}
+                    className={`cost-chart-segment ${CATEGORY_COLOR[s.category].fill}` + (i > currentIdx ? ` ${PROJECTED_OPACITY}` : '')}
                     style={{ height: `${(s.amount / max) * 100}%` }}
                   />
                 ))}
@@ -282,7 +282,7 @@ export function CostDashboard({
             {recurringCategories.map((c) => (
               <div
                 key={c}
-                className={CATEGORY_COLOR[c].fill}
+                className={`cost-chart-segment ${CATEGORY_COLOR[c].fill}`}
                 style={{ width: `${((selectedBucket.byCategory[c] - (oneOffByCategory[c] ?? 0)) / selectedBucket.total) * 100}%` }}
               />
             ))}

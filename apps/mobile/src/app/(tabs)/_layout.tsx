@@ -1,9 +1,8 @@
 import * as React from 'react';
 import { Tabs } from 'expo-router';
 import { Easing, useWindowDimensions } from 'react-native';
-import { useReducedMotion } from 'react-native-reanimated';
 import { MOTION_DURATIONS_MS, TAB_SHIFT_FRACTION, getSectionByPath } from '@homeup/core';
-import { SectionProvider, TabGround } from '@homeup/ui';
+import { SectionProvider, TabGround, useStillMotion } from '@homeup/ui';
 import { useTabBarSections } from '@/components/nav/use-tab-bar-sections';
 import { tabScreenOrder } from '@/lib/tab-routes';
 
@@ -45,7 +44,7 @@ export default function TabsLayout() {
 // and the window.
 const TabsNavigator = React.memo(function TabsNavigator({ screens }: { screens: readonly string[] }) {
   const { width } = useWindowDimensions();
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useStillMotion();
   const shift = Math.round(width * TAB_SHIFT_FRACTION);
 
   const screenOptions = React.useMemo<React.ComponentProps<typeof Tabs>['screenOptions']>(

@@ -269,6 +269,65 @@
     --card-shadow: 0 1px 2px oklch(0.3 0.03 50 / 0.05), 0 10px 28px oklch(0.3 0.03 50 / 0.07);
   }
 
+  /* ========================================================================
+     THEME: E-Ink
+     Revived for e-paper screens (the old one went with HOUP-295). Neutral
+     greys only, one border level, no shadow, glass or texture. The flat and
+     still rules sit after the section glow below. Mirrors core's
+     THEME_TOKENS["e-ink"].
+     ======================================================================== */
+  [data-theme="e-ink"] {
+    --background: oklch(0.95 0 0);
+    --foreground: oklch(0.16 0 0);
+    --card: oklch(0.985 0 0);
+    --card-foreground: oklch(0.16 0 0);
+    --popover: oklch(0.985 0 0);
+    --popover-foreground: oklch(0.16 0 0);
+    --primary: oklch(0.16 0 0);
+    --primary-foreground: oklch(0.985 0 0);
+    --secondary: oklch(0.9 0 0);
+    --secondary-foreground: oklch(0.16 0 0);
+    --muted: oklch(0.91 0 0);
+    --muted-foreground: oklch(0.42 0 0);
+    --accent: oklch(0.89 0 0);
+    --accent-foreground: oklch(0.16 0 0);
+    --destructive: oklch(0.3 0 0);
+    --success: oklch(0.35 0 0);
+    --success-foreground: oklch(0.985 0 0);
+    --warning: oklch(0.45 0 0);
+    --warning-foreground: oklch(0.985 0 0);
+    --border: oklch(0.78 0 0);
+    --input: oklch(0.8 0 0);
+    --ring: oklch(0.16 0 0);
+    --axis: oklch(0.16 0 0);
+    --radius: 0.75rem;
+    --sidebar: oklch(0.97 0 0);
+    --sidebar-foreground: oklch(0.22 0 0);
+    --sidebar-primary: oklch(0.16 0 0);
+    --sidebar-primary-foreground: oklch(0.985 0 0);
+    --sidebar-accent: oklch(0.9 0 0);
+    --sidebar-accent-foreground: oklch(0.16 0 0);
+    --sidebar-border: oklch(0.78 0 0);
+    --sidebar-ring: oklch(0.16 0 0);
+    --noise-opacity: 0;
+    --noise-blend: multiply;
+    --texture-opacity: 0;
+    --body-texture: none;
+    --glass-bg: oklch(0.985 0 0 / 1);
+    --glass-border: oklch(0.78 0 0 / 1);
+    --glass-highlight: oklch(1 0 0 / 0);
+    --glass-shadow: oklch(0 0 0 / 0);
+    --card-shadow: none;
+    /* Still: every Hearth motion token is instant, as under reduced motion. */
+    --motion-fast: 0ms;
+    --motion-base: 0ms;
+    --motion-slow: 0ms;
+    --motion-exit: 0ms;
+    --motion-settle: 0ms;
+    --motion-ease-out: linear;
+    --motion-ease-in: linear;
+  }
+
   * {
     @apply border-border outline-ring/50;
   }
@@ -440,6 +499,93 @@
 [data-theme^="axis-mundi"] .section-glow {
   display: none;
 }
+
+/* E-Ink: flat and still. Nothing glows, blurs or casts a shadow, and nothing
+   moves: e-paper redraws slowly and ghosts every in-between frame. Focus
+   rings stay (they are Tailwind ring shadows, not --tw-shadow). Category
+   colours turn into a grey ramp, and the stacked chart adds a pattern per
+   category, because its segments carry no label of their own. */
+[data-theme="e-ink"] .section-glow {
+  display: none;
+}
+[data-theme="e-ink"] *,
+[data-theme="e-ink"] *::before,
+[data-theme="e-ink"] *::after {
+  --tw-shadow: 0 0 #0000 !important;
+  --tw-inset-shadow: 0 0 #0000 !important;
+  text-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  animation-duration: 0s !important;
+  animation-delay: 0s !important;
+  animation-iteration-count: 1 !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}
+[data-theme="e-ink"]::view-transition-group(*),
+[data-theme="e-ink"]::view-transition-old(*),
+[data-theme="e-ink"]::view-transition-new(*) {
+  animation: none !important;
+}
+/* Grocery art keeps its shape in greys (native does the same through core's
+   greyscaleSvg). */
+[data-theme="e-ink"] .grocery-glyph {
+  filter: grayscale(1);
+}
+[data-theme="e-ink"] .foil-text {
+  background: none;
+  -webkit-text-fill-color: currentColor;
+}
+[data-theme="e-ink"] .cat-idx-0, [data-theme="e-ink"] .cat-idx-1, [data-theme="e-ink"] .cat-idx-2,
+[data-theme="e-ink"] .cat-idx-3, [data-theme="e-ink"] .cat-idx-4, [data-theme="e-ink"] .cat-idx-5,
+[data-theme="e-ink"] .cat-idx-6, [data-theme="e-ink"] .cat-idx-7, [data-theme="e-ink"] .cat-idx-8,
+[data-theme="e-ink"] .cat-idx-9 {
+  color: var(--foreground) !important;
+}
+[data-theme="e-ink"] .cat-idx-0 { background-color: oklch(0.2 0 0) !important; border-color: oklch(0.2 0 0) !important; }
+[data-theme="e-ink"] .cat-idx-1 { background-color: oklch(0.3 0 0) !important; border-color: oklch(0.3 0 0) !important; }
+[data-theme="e-ink"] .cat-idx-2 { background-color: oklch(0.38 0 0) !important; border-color: oklch(0.38 0 0) !important; }
+[data-theme="e-ink"] .cat-idx-3 { background-color: oklch(0.46 0 0) !important; border-color: oklch(0.46 0 0) !important; }
+[data-theme="e-ink"] .cat-idx-4 { background-color: oklch(0.54 0 0) !important; border-color: oklch(0.54 0 0) !important; }
+[data-theme="e-ink"] .cat-idx-5 { background-color: oklch(0.62 0 0) !important; border-color: oklch(0.62 0 0) !important; }
+[data-theme="e-ink"] .cat-idx-6 { background-color: oklch(0.7 0 0) !important; border-color: oklch(0.7 0 0) !important; }
+[data-theme="e-ink"] .cat-idx-7 { background-color: oklch(0.78 0 0) !important; border-color: oklch(0.78 0 0) !important; }
+[data-theme="e-ink"] .cat-idx-8 { background-color: oklch(0.84 0 0) !important; border-color: oklch(0.84 0 0) !important; }
+[data-theme="e-ink"] .cat-idx-9 { background-color: oklch(0.9 0 0) !important; border-color: oklch(0.6 0 0) !important; }
+/* Category labels keep the ink with no fill; glyph chips get one light grey. */
+[data-theme="e-ink"] [class*="text-"]:not([class*="bg-"]).cat-idx-0,
+[data-theme="e-ink"] [class*="text-"]:not([class*="bg-"]).cat-idx-1,
+[data-theme="e-ink"] [class*="text-"]:not([class*="bg-"]).cat-idx-2,
+[data-theme="e-ink"] [class*="text-"]:not([class*="bg-"]).cat-idx-3,
+[data-theme="e-ink"] [class*="text-"]:not([class*="bg-"]).cat-idx-4,
+[data-theme="e-ink"] [class*="text-"]:not([class*="bg-"]).cat-idx-5,
+[data-theme="e-ink"] [class*="text-"]:not([class*="bg-"]).cat-idx-6,
+[data-theme="e-ink"] [class*="text-"]:not([class*="bg-"]).cat-idx-7,
+[data-theme="e-ink"] [class*="text-"]:not([class*="bg-"]).cat-idx-8,
+[data-theme="e-ink"] [class*="text-"]:not([class*="bg-"]).cat-idx-9 {
+  background-color: transparent !important;
+}
+[data-theme="e-ink"] [class*="bg-"][class*="text-"].cat-idx-0,
+[data-theme="e-ink"] [class*="bg-"][class*="text-"].cat-idx-1,
+[data-theme="e-ink"] [class*="bg-"][class*="text-"].cat-idx-2,
+[data-theme="e-ink"] [class*="bg-"][class*="text-"].cat-idx-3,
+[data-theme="e-ink"] [class*="bg-"][class*="text-"].cat-idx-4,
+[data-theme="e-ink"] [class*="bg-"][class*="text-"].cat-idx-5,
+[data-theme="e-ink"] [class*="bg-"][class*="text-"].cat-idx-6,
+[data-theme="e-ink"] [class*="bg-"][class*="text-"].cat-idx-7,
+[data-theme="e-ink"] [class*="bg-"][class*="text-"].cat-idx-8,
+[data-theme="e-ink"] [class*="bg-"][class*="text-"].cat-idx-9 {
+  background-color: color-mix(in oklch, var(--foreground) 10%, transparent) !important;
+  border-color: transparent !important;
+}
+[data-theme="e-ink"] .cost-chart-segment.cat-idx-1 { background-image: repeating-linear-gradient(45deg, transparent 0 3px, oklch(1 0 0 / 0.5) 3px 6px); }
+[data-theme="e-ink"] .cost-chart-segment.cat-idx-2 { background-image: repeating-linear-gradient(-45deg, transparent 0 3px, oklch(1 0 0 / 0.5) 3px 6px); }
+[data-theme="e-ink"] .cost-chart-segment.cat-idx-3 { background-image: repeating-linear-gradient(90deg, transparent 0 3px, oklch(1 0 0 / 0.4) 3px 6px); }
+[data-theme="e-ink"] .cost-chart-segment.cat-idx-4 { background-image: repeating-linear-gradient(0deg, transparent 0 3px, oklch(0 0 0 / 0.35) 3px 6px); }
+[data-theme="e-ink"] .cost-chart-segment.cat-idx-5 { background-image: radial-gradient(oklch(1 0 0 / 0.6) 1px, transparent 1px); background-size: 5px 5px; }
+[data-theme="e-ink"] .cost-chart-segment.cat-idx-6 { background-image: repeating-linear-gradient(45deg, transparent 0 2px, oklch(0 0 0 / 0.35) 2px 5px); }
+[data-theme="e-ink"] .cost-chart-segment.cat-idx-7 { background-image: repeating-linear-gradient(-45deg, transparent 0 2px, oklch(0 0 0 / 0.35) 2px 5px); }
+[data-theme="e-ink"] .cost-chart-segment.cat-idx-8 { background-image: radial-gradient(oklch(0 0 0 / 0.4) 1px, transparent 1px); background-size: 4px 4px; }
 
 @layer utilities {
   /* Hearth v2 (Pulse): the `hero` type step — the one huge number a

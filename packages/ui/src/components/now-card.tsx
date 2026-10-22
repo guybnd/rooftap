@@ -22,11 +22,11 @@
 import * as React from 'react';
 import { Pressable, Text, View, type LayoutChangeEvent } from 'react-native';
 import { Gesture, GestureDetector, type GestureType } from 'react-native-gesture-handler';
-import Animated, { Easing, runOnJS, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { MOTION_DURATIONS_MS, nowQueueIndex } from '@homeup/core';
 import { cn } from '../lib/cn';
-import { useThemeMaterial } from '../theme/theme-provider';
+import { useThemeMaterial, useStillMotion } from '../theme/theme-provider';
 import { SegmentMeter } from './hero-lede';
 import { LeadingTile, type LeadingTileIcon } from './leading-tile';
 import { SlideToComplete } from './slide-to-complete';
@@ -180,7 +180,7 @@ const EASE_IN = Easing.bezier(0.42, 0, 1, 1);
 type Via = 'gesture' | 'button' | null;
 
 export function NowCardPager({ items, className }: NowCardPagerProps) {
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useStillMotion();
   const [width, setWidth] = React.useState(0);
   // Which item the person paged to (null follows the head), where it was, so
   // the card holds its place when that item leaves the queue, and how they got there.

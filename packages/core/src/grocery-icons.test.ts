@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AISLE_EMOJI, GROCERY_ITEM_EMOJIS, getGroceryEmoji, groceryGlyphSvg } from './grocery-icons';
+import { AISLE_EMOJI, GROCERY_ITEM_EMOJIS, getGroceryEmoji, greyscaleSvg, groceryGlyphSvg } from './grocery-icons';
 import { AISLE_META } from './groceries';
 
 describe('groceryGlyphSvg', () => {
@@ -21,5 +21,13 @@ describe('groceryGlyphSvg', () => {
 
   it('is undefined for an unknown emoji', () => {
     expect(groceryGlyphSvg('🚀')).toBeUndefined();
+  });
+});
+
+describe('greyscaleSvg', () => {
+  it('turns every hex colour into its grey and leaves the rest alone', () => {
+    expect(greyscaleSvg('<path fill="#ff0000" stroke="#FFF" d="M0 0"/>')).toBe('<path fill="#363636" stroke="#ffffff" d="M0 0"/>');
+    const lemon = greyscaleSvg(groceryGlyphSvg(getGroceryEmoji('Lemons', 'produce'))!);
+    for (const hex of lemon.match(/#[0-9a-f]{6}/gi) ?? []) expect(hex.slice(1, 3)).toBe(hex.slice(3, 5));
   });
 });

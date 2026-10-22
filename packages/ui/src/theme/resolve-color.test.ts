@@ -109,6 +109,16 @@ describe('themeMaterial (HOUP-132)', () => {
     expect(themeMaterial('axis-mundi-night').sectionGlow).toBe(false);
   });
 
+  it('E-Ink: grey hue scheme, no glow, still motion, dark status bar icons', () => {
+    const ink = themeMaterial('e-ink');
+    expect(ink.scheme).toBe('ink');
+    expect(ink.sectionGlow).toBe(false);
+    expect(ink.still).toBe(true);
+    expect(ink.statusBarStyle).toBe('dark');
+    expect(ink.cardShadow).toBe('none');
+    expect(themeMaterial('ember-day').still).toBe(false);
+  });
+
   it('formats background as a comma rgb(...) string matching --color-background', () => {
     for (const themeId of Object.keys(THEME_TOKENS) as Array<keyof typeof THEME_TOKENS>) {
       const [r, g, b] = themeVars(themeId)['--color-background'].split(' ');

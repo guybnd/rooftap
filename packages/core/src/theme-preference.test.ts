@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   isLightTheme,
+  isStillTheme,
   isThemePreference,
   parseThemePreference,
   resolveThemePreference,
@@ -34,5 +35,11 @@ describe('theme preference', () => {
     expect(isLightTheme('axis-mundi-day')).toBe(true);
     expect(isLightTheme('ember-night')).toBe(false);
     expect(isLightTheme('axis-mundi-night')).toBe(false);
+    expect(isLightTheme('e-ink')).toBe(true);
+  });
+
+  it('keeps motion still only under the e-paper theme', () => {
+    expect(isStillTheme('e-ink')).toBe(true);
+    for (const id of THEME_IDS.filter((t) => t !== 'e-ink')) expect(isStillTheme(id), id).toBe(false);
   });
 });

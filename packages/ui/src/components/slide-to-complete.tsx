@@ -18,7 +18,6 @@ import Animated, {
   interpolate,
   runOnJS,
   useAnimatedStyle,
-  useReducedMotion,
   useSharedValue,
   withDelay,
   withSequence,
@@ -29,6 +28,7 @@ import { ArrowRight, Check } from 'lucide-react-native';
 import { MOTION_DURATIONS_MS, SLIDE_FINISH_AT, SLIDE_ZIPPER_STEPS } from '@homeup/core';
 import { cn } from '../lib/cn';
 import { pop as popHaptic, zipper } from '../lib/haptics';
+import { useStillMotion } from '../theme/theme-provider';
 
 const THUMB = 48;
 const INSET = 4;
@@ -51,7 +51,7 @@ export interface SlideToCompleteProps extends ViewProps {
 }
 
 export function SlideToComplete({ onComplete, label = 'Slide to finish', disabled, className, ...props }: SlideToCompleteProps) {
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useStillMotion();
   const [trackWidth, setTrackWidth] = React.useState(0);
   const [finished, setFinished] = React.useState(false);
   const offset = useSharedValue(0);

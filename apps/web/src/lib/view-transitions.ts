@@ -4,12 +4,13 @@
 // View Transitions API (no React `<ViewTransition>` component: that export
 // requires a react@canary build and this repo pins stable react@19, so the
 // imperative `document.startViewTransition()` API is the supported surface).
-// Unsupported browsers (iOS Safari, older Chrome) and `prefers-reduced-motion`
-// both fall through to a plain instant navigation — see globals.css, whose
-// `--motion-*` tokens already collapse to 0ms under reduced motion.
+// Unsupported browsers (iOS Safari, older Chrome), `prefers-reduced-motion`
+// and the e-paper theme fall through to a plain instant navigation — see
+// globals.css, whose `--motion-*` tokens also collapse to 0ms under both.
 
 import type { MouseEvent } from "react";
 import type { useRouter } from "next/navigation";
+import { prefersStillMotion } from "./still-motion";
 
 export type NavTransitionType = "crossfade" | "shift-forward" | "shift-back" | "descend" | "back" | "portal";
 
@@ -52,7 +53,7 @@ export function notifyRouteSettled(): void {
  * competing transform on the same element, FLUX-1553 reground caveat).
  */
 export function runNavTransition(type: NavTransitionType, navigate: () => void): void {
-  if (!supportsViewTransitions()) {
+  if (!supportsViewTransitions() || prefersStillMotion()) {
     navigate();
     return;
   }

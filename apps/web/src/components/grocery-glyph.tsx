@@ -10,7 +10,7 @@ export function GroceryGlyph({ emoji, size = 20, className }: { emoji: string; s
   return (
     <span
       aria-hidden
-      className={cn('inline-flex shrink-0 items-center justify-center select-none [&>svg]:size-full', className)}
+      className={cn('grocery-glyph inline-flex shrink-0 items-center justify-center select-none [&>svg]:size-full', className)}
       style={{ width: size, height: size, fontSize: size * 0.85, lineHeight: 1 }}
       {...(svg ? { dangerouslySetInnerHTML: { __html: svg } } : { children: emoji })}
     />

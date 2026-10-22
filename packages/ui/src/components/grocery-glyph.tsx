@@ -4,7 +4,8 @@
 import * as React from 'react';
 import { Text, View } from 'react-native';
 import { SvgAst, parse, type JsxAST } from 'react-native-svg';
-import { groceryGlyphSvg } from '@homeup/core';
+import { greyscaleSvg, groceryGlyphSvg } from '@homeup/core';
+import { useThemeMaterial } from '../theme/theme-provider';
 
 export interface GroceryGlyphProps {
   /** An emoji from getGroceryEmoji or AISLE_META. */
@@ -15,24 +16,26 @@ export interface GroceryGlyphProps {
 
 // Parsed once per glyph for the whole app: SvgXml re-parses its string on
 // every mount, which made a long grocery list (Home's Groceries filter) slow
-// to open.
+// to open. The e-paper theme draws the same art in greys.
 const astCache = new Map<string, JsxAST | null>();
-function glyphAst(emoji: string): JsxAST | null {
-  let ast = astCache.get(emoji);
+function glyphAst(emoji: string, grey: boolean): JsxAST | null {
+  const key = grey ? `grey:${emoji}` : emoji;
+  let ast = astCache.get(key);
   if (ast === undefined) {
     const xml = groceryGlyphSvg(emoji);
     try {
-      ast = xml ? parse(xml) : null;
+      ast = xml ? parse(grey ? greyscaleSvg(xml) : xml) : null;
     } catch {
       ast = null;
     }
-    astCache.set(emoji, ast);
+    astCache.set(key, ast);
   }
   return ast;
 }
 
 export const GroceryGlyph = React.memo(function GroceryGlyph({ emoji, size = 20 }: GroceryGlyphProps) {
-  const ast = glyphAst(emoji);
+  const { still } = useThemeMaterial();
+  const ast = glyphAst(emoji, still);
   return (
     <View
       style={{ width: size, height: size }}

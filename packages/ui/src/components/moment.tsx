@@ -8,6 +8,7 @@ import { AccessibilityInfo, Modal, Pressable, Text, View } from 'react-native';
 import Animated, { FadeIn, ZoomIn } from 'react-native-reanimated';
 import { Check } from 'lucide-react-native';
 import { MOTION_DURATIONS_MS } from '@homeup/core';
+import { useThemeMaterial } from '../theme/theme-provider';
 
 function useReduceMotion(): boolean {
   const [reduceMotion, setReduceMotion] = React.useState(false);
@@ -37,9 +38,11 @@ export interface MomentProps {
 }
 
 export function Moment({ open, onDismiss, title, caption, detail, actionLabel = 'Nice' }: MomentProps) {
-  const reduceMotion = useReduceMotion();
+  const deviceReduced = useReduceMotion();
+  const { still } = useThemeMaterial();
+  const reduceMotion = deviceReduced || still;
   return (
-    <Modal visible={open} onRequestClose={onDismiss} animationType="fade" statusBarTranslucent navigationBarTranslucent>
+    <Modal visible={open} onRequestClose={onDismiss} animationType={still ? 'none' : 'fade'} statusBarTranslucent navigationBarTranslucent>
       <Pressable
         onPress={onDismiss}
         accessibilityRole="button"

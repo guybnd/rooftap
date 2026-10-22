@@ -13,10 +13,10 @@
 // the views holding it fade (animated SVG props broke on Android, §8).
 import * as React from 'react';
 import { StyleSheet, View } from 'react-native';
-import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { MOTION_DURATIONS_MS, SECTION_GLOW_OPACITY, sectionHueSwatch } from '@homeup/core';
-import { useThemeMaterial } from '../theme/theme-provider';
+import { useThemeMaterial, useStillMotion } from '../theme/theme-provider';
 import { BackgroundTexture } from './background-texture';
 
 const SectionContext = React.createContext<string | null>(null);
@@ -162,7 +162,7 @@ function GlowBlend({ section }: { section: string | null }) {
 }
 
 function GlowLayer({ section, shown, instant }: { section: string | null; shown: boolean; instant: boolean }) {
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useStillMotion();
   const opacity = useSharedValue(shown && instant ? 1 : 0);
   React.useEffect(() => {
     opacity.value = reduceMotion ? (shown ? 1 : 0) : withTiming(shown ? 1 : 0, BLEND);

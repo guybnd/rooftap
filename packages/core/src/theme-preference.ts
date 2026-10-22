@@ -26,7 +26,14 @@ export const SYSTEM_THEME_IDS: Record<ColorScheme, ThemeId> = {
 export const THEME_PREFERENCE_STORAGE_KEY = 'homeup-theme-pref';
 
 /** Themes whose ground is light (dark status-bar icons, no `.dark` class on web). */
-export const LIGHT_THEME_IDS: readonly ThemeId[] = ['ember-day', 'axis-mundi-day'];
+export const LIGHT_THEME_IDS: readonly ThemeId[] = ['ember-day', 'axis-mundi-day', 'e-ink'];
+
+/**
+ * Themes for e-paper screens: flat (no glow, shadow or blur), greyscale
+ * section tiles, and still (every transition is instant, no tab glide).
+ * Both apps gate on isStillTheme rather than naming the id.
+ */
+export const STILL_THEME_IDS: readonly ThemeId[] = ['e-ink'];
 
 export function isThemeId(value: unknown): value is ThemeId {
   return typeof value === 'string' && (THEME_IDS as readonly string[]).includes(value);
@@ -49,4 +56,8 @@ export function resolveThemePreference(preference: ThemePreference, scheme: Colo
 
 export function isLightTheme(themeId: ThemeId): boolean {
   return LIGHT_THEME_IDS.includes(themeId);
+}
+
+export function isStillTheme(themeId: ThemeId): boolean {
+  return STILL_THEME_IDS.includes(themeId);
 }

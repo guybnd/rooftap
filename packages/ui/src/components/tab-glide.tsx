@@ -22,7 +22,6 @@ import Animated, {
   Easing,
   interpolateColor,
   useAnimatedStyle,
-  useReducedMotion,
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
@@ -33,6 +32,7 @@ import {
   tabGlideEdges,
   tabPebbleMetrics,
 } from '@homeup/core';
+import { useStillMotion } from '../theme/theme-provider';
 
 // The page shift's spec ((tabs) navigator transitionSpec): Hearth `slow`,
 // swift-out.
@@ -57,7 +57,7 @@ export interface TabGlideProps {
 }
 
 export function TabGlide({ target, color }: TabGlideProps) {
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useStillMotion();
   // One glide: from one tab centre to the next, `progress` 0 to 1 eased.
   const fromCx = useSharedValue(0);
   const toCx = useSharedValue(0);

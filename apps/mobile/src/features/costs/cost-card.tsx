@@ -84,6 +84,7 @@ import {
   type CostCategory,
   type CostCadence,
   type CostItem,
+  type HueScheme,
   type GroupMember,
   currencySymbol,
 } from '@homeup/core';
@@ -147,8 +148,13 @@ const CATEGORY_TILE: Record<'light' | 'dark', Record<CostCategory, { tile: strin
   },
 };
 
+// The e-paper theme: one grey chip for every category; the glyph and the
+// group's name tell them apart.
+const INK_TINT = { tile: 'bg-foreground/10', glyph: 'text-foreground', title: 'text-muted-foreground' };
+
 /** A category's tint (chip, glyph and group title classes) in a theme, or null for an unknown category. */
-export function categoryTint(scheme: 'light' | 'dark', category: string) {
+export function categoryTint(scheme: HueScheme, category: string) {
+  if (scheme === 'ink') return category in CATEGORY_TILE.light ? INK_TINT : null;
   return CATEGORY_TILE[scheme][category as CostCategory] ?? null;
 }
 
