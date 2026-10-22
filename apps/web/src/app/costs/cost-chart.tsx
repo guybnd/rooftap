@@ -56,12 +56,12 @@ interface CostDashboardProps {
 export function CostDashboard({
   items,
   currentMonthStart,
-  monthlyTotal,
+  monthlyTotal: planTotal,
   budget,
   budgetCents,
-  budgetDelta,
-  momDelta,
-  hasPrevMonthData,
+  budgetDelta: planDelta,
+  momDelta: planMom,
+  hasPrevMonthData: planHasPrev,
   prevMonthLabel,
   editingBudget,
   budgetDraft,
@@ -86,6 +86,15 @@ export function CostDashboard({
     () => monthlyProjection(items, new Date(year, 0, 1), 12, currentMonthStart, bank),
     [items, year, currentMonthStart, bank]
   );
+
+  // With bank data the month's total is what it holds: payments so far, bills
+  // still to come and the usual everyday spend. The regular plan alone would
+  // leave out every shop the bank files as a one-off line.
+  const live = !!bank && bank.linked.size > 0;
+  const monthlyTotal = live ? buckets[currentIdx].total : planTotal;
+  const budgetDelta = live ? budgetCents - monthlyTotal : planDelta;
+  const hasPrevMonthData = live ? currentIdx > 0 && buckets[currentIdx - 1].total > 0 : planHasPrev;
+  const momDelta = live && currentIdx > 0 ? monthlyTotal - buckets[currentIdx - 1].total : planMom;
 
   const selectedIdx = selectedMonthIdx ?? currentIdx;
   const selectedBucket = buckets[selectedIdx];

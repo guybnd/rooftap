@@ -426,10 +426,8 @@ function CostsScreenBody() {
   // of double-counting the full forecast alongside separately-summed one-offs.
   const stepBack = stepBackByCategory(planItems, startOfMonth, startOfMonth);
   const stepBackMonthlyTotal = Object.values(stepBack).reduce((sum, r) => sum + r.effective, 0);
-  const monthlyTotal =
+  const planTotal =
     recurring.filter((i) => !i.is_estimate).reduce((sum, i) => sum + monthlyAmount(i), 0) + stepBackMonthlyTotal;
-  const budgetCents = budget ? budget * 100 : 0;
-  const budgetDelta = budgetCents - monthlyTotal;
   const daysLeft = endOfMonth.getDate() - today.getDate();
 
   // vs-last-month KPI tile (HOUP-174, ported from apps/web/src/app/costs/
@@ -447,7 +445,14 @@ function CostsScreenBody() {
     const d = parseLocalDateOnly(i.start_date);
     return d >= startOfPrevMonth && d <= endOfCurrentMonth;
   });
-  const [prevMonthBucket, currentMonthBucket] = monthlyProjection(momItems, startOfPrevMonth, 2, today, bank);
+  // With bank data the month's total is what it holds: payments so far, bills
+  // still to come and the usual everyday spend. The regular plan alone would
+  // leave out every shop the bank files as a one-off line.
+  const live = !!bank && bank.linked.size > 0;
+  const [prevMonthBucket, currentMonthBucket] = monthlyProjection(live ? planItems : momItems, startOfPrevMonth, 2, today, bank);
+  const monthlyTotal = live ? currentMonthBucket.total : planTotal;
+  const budgetCents = budget ? budget * 100 : 0;
+  const budgetDelta = budgetCents - monthlyTotal;
   const hasPrevMonthData = prevMonthBucket.total > 0;
   const momDelta = currentMonthBucket.total - prevMonthBucket.total;
   // H2: a month-over-month change crosses no budget, so it is not a status;
