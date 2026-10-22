@@ -81,6 +81,7 @@ import {
   type StepBackResult,
   useEntityCommentCount,
   useModules,
+  useCostBankLink,
   type CostCategory,
   type CostCadence,
   type CostItem,
@@ -226,6 +227,8 @@ export function CostRow({
   selected,
   onToggleSelect,
 }: CostRowProps) {
+  // Up Bank: a line linked to payments says when it was last paid instead of its date.
+  const bankLink = useCostBankLink(item.id);
 
   const [expanded, setExpanded] = React.useState<'docs' | 'comments' | null>(null);
   const [quickSheetOpen, setQuickSheetOpen] = React.useState(false);
@@ -291,6 +294,7 @@ export function CostRow({
     return null;
   })();
   const expiry = expiryFragment(item);
+  const paidAgo = bankLink?.lastPaidAt ? timeAgo(bankLink.lastPaidAt) : null;
 
   // Portals (PC1-7): attachments + comments both "open in place" (neutral
   // tone), rendered as the row's second content line via PortalChipRow —
@@ -360,7 +364,7 @@ export function CostRow({
         </ListItemTitle>
         {/* Meta (H6): at most two fragments. A contract or discount ending
             within 30 days is the status fragment and takes the date's place. */}
-        {(expiry || dateLabel || item.provider) && (
+        {(expiry || paidAgo || dateLabel || item.provider) && (
           <ListItemMeta>
             {expiry ? (
               <Text
@@ -369,6 +373,10 @@ export function CostRow({
                 numberOfLines={1}
               >
                 {expiry.text}
+              </Text>
+            ) : paidAgo ? (
+              <Text className="text-caption text-success" style={{ fontVariant: ['tabular-nums'] }} numberOfLines={1}>
+                Paid {paidAgo.toLowerCase()}
               </Text>
             ) : dateLabel ? (
               <Text className="text-caption text-muted-foreground" style={{ fontVariant: ['tabular-nums'] }}>

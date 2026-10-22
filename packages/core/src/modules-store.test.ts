@@ -313,6 +313,7 @@ describe('server schema', () => {
       'archiving assistant chats and taking back a delete',
       'archiving and deleting Scout searches',
       'connecting your Up Bank account',
+      'Up balances and linking payments to costs',
     ]);
 
     act(() => setServerSchema('20261020050000_mcp_oauth'));
@@ -345,6 +346,7 @@ describe('server schema', () => {
       'archiving assistant chats and taking back a delete',
       'archiving and deleting Scout searches',
       'connecting your Up Bank account',
+      'Up balances and linking payments to costs',
       ]);
     } finally {
       delete mcp.minSchema;

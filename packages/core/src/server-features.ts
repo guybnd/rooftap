@@ -69,6 +69,10 @@ export const SERVER_FEATURES = {
     minSchema: '20261022120000_up_bank',
     label: 'connecting your Up Bank account',
   },
+  'connectors.up-bank-links': {
+    minSchema: '20261022123000_bank_links',
+    label: 'Up balances and linking payments to costs',
+  },
 } as const satisfies Record<string, ServerFeatureDef>;
 
 export type ServerFeatureId = keyof typeof SERVER_FEATURES;

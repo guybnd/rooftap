@@ -32,6 +32,7 @@ import {
 import { randomUUID } from '@/lib/uuid';
 import { getCurrentSupabaseClient } from '@/lib/supabase-client';
 import { CostDocuments } from './cost-documents';
+import { CostBankLink } from './cost-bank-link';
 import { CategoryChip } from './cost-card';
 import { sectionIconFor } from '@/lib/section-icons';
 
@@ -228,6 +229,10 @@ export function CostModal({ open, item, groupId, currentUserId, defaultName, def
           />
         </FieldRow>
       </FormSection>
+
+      {item?.id ? (
+        <CostBankLink costItemId={item.id} category={form.category as CostCategory} amountCents={Math.round((form.amount ?? 0) * 100)} />
+      ) : null}
 
       {detailsCount > 0 && (
         <DetailsDisclosure count={detailsCount}>

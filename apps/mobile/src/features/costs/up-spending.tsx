@@ -1,58 +1,34 @@
-// Up Bank connector: this month's spending on the Costs screen. It leads with
-// one Display number (H1), lists the biggest categories and the latest
-// transactions as hairline-divided rows inside the one card (H4), and reads
-// new transactions from Up each time Costs opens (the server skips that when
-// it read Up under a minute ago). It shows only once this person has
-// connected Up in Settings > Connectors.
+// Up Bank connector: Up on the Costs screen. Everyday and saver balances and
+// this month's spending lead as three small figures (the screen's Hero stays
+// the planned total, H1), then any cost line whose latest Up payment differs
+// from its amount, with one Update action each, then the biggest categories
+// and the latest transactions as hairline-divided rows inside the one card
+// (H4). It shows only once this person has connected Up in Settings >
+// Connectors. Data comes from core's UpOverviewProvider (up-overview.ts).
 // Web twin: apps/web/src/app/costs/up-spending.tsx.
-import { useEffect, useState } from 'react';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { Card, Text } from '@homeup/ui';
-import { formatMoney, monthStartOf, timeAgo, type UpBankStatus, type UpSpending } from '@homeup/core';
-import { upBankApi } from './up-bank-api';
+import { bankNudges, formatMoney, timeAgo, useUpOverview, type CostItem } from '@homeup/core';
 
 const AUD = { currency: 'AUD' };
 const TABULAR = { fontVariant: ['tabular-nums' as const] };
 
-export function UpSpendingCard({ nameOf, currentUserId }: { nameOf: (userId: string) => string; currentUserId: string | null }) {
-  const [status, setStatus] = useState<UpBankStatus | null>(null);
-  const [spending, setSpending] = useState<UpSpending | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const month = monthStartOf(new Date());
-
-  useEffect(() => {
-    let live = true;
-    void (async () => {
-      try {
-        const s = await upBankApi.status();
-        if (!live) return;
-        setStatus(s);
-        if (!s.allowed || !s.connection) return;
-        // Show what's stored straight away, then again once Up has been read.
-        const first = await upBankApi.spending(month);
-        if (live) setSpending(first);
-        const synced = await upBankApi.sync().catch((err: unknown) => {
-          if (live) setError(err instanceof Error ? err.message : "Couldn't reach Up.");
-          return null;
-        });
-        if (synced && live) {
-          setStatus(synced.status);
-          if (synced.saved > 0) {
-            const next = await upBankApi.spending(month);
-            if (live) setSpending(next);
-          }
-        }
-      } catch (err) {
-        if (live) setError(err instanceof Error ? err.message : "Couldn't load Up spending.");
-      }
-    })();
-    return () => {
-      live = false;
-    };
-  }, [month]);
-
+export function UpSpendingCard({
+  nameOf,
+  currentUserId,
+  items,
+  onSetAmount,
+}: {
+  nameOf: (userId: string) => string;
+  currentUserId: string | null;
+  items: CostItem[];
+  onSetAmount: (item: CostItem, cents: number) => void;
+}) {
+  const { status, data: spending, error } = useUpOverview();
   if (!status?.allowed || !status.connection) return null;
   const monthName = new Date().toLocaleString('default', { month: 'long' });
+  const nudges = spending?.links ? bankNudges(items, spending.links) : [];
+  const hasBalances = !!spending?.accounts && spending.accounts.length > 0;
 
   return (
     <Card size="sm" className="gap-0 rounded-3xl px-4">
@@ -62,17 +38,51 @@ export function UpSpendingCard({ nameOf, currentUserId }: { nameOf: (userId: str
         <Text className="py-2 text-sm text-muted-foreground">{error ?? 'Reading your transactions…'}</Text>
       ) : (
         <>
-          <View className="flex-row items-baseline gap-2 pt-1">
-            <Text className="text-3xl font-semibold text-foreground" style={TABULAR}>
-              {formatMoney(spending.spentCents, AUD)}
-            </Text>
-            <Text className="text-sm text-muted-foreground">spent</Text>
-          </View>
-          <Text className="text-xs text-muted-foreground" style={TABULAR}>
-            {spending.receivedCents > 0 ? `${formatMoney(spending.receivedCents, AUD)} in · ` : ''}
+          {hasBalances ? (
+            <View className="flex-row gap-3 pt-2">
+              <Figure label="Everyday" cents={spending.everydayCents ?? 0} />
+              <Figure label="Savers" cents={spending.saversCents ?? 0} />
+              <Figure label="Spent" cents={spending.spentCents} />
+            </View>
+          ) : (
+            <View className="flex-row items-baseline gap-2 pt-1">
+              <Text className="text-3xl font-semibold text-foreground" style={TABULAR}>
+                {formatMoney(spending.spentCents, AUD)}
+              </Text>
+              <Text className="text-sm text-muted-foreground">spent</Text>
+            </View>
+          )}
+          <Text className="pt-1 text-xs text-muted-foreground" style={TABULAR}>
+            {spending.receivedCents > 0 ? `${formatMoney(spending.receivedCents, AUD)} in this month · ` : ''}
             {status.connection.live ? 'updates live' : `read ${(timeAgo(status.connection.lastSyncedAt) ?? 'just now').toLowerCase()}`}
           </Text>
           {error && <Text className="pt-1 text-xs text-destructive">{error}</Text>}
+
+          {nudges.length > 0 && (
+            <View className="mt-2 border-t border-border/60">
+              {nudges.map((n, i) => (
+                <View key={n.item.id} className={`min-h-[52px] flex-row items-center gap-3 py-2 ${i > 0 ? 'border-t border-border/60' : ''}`}>
+                  <View className="h-2 w-2 rounded-full bg-warning" />
+                  <View className="min-w-0 flex-1">
+                    <Text numberOfLines={1} className="text-sm font-medium text-foreground">
+                      {n.item.name} went {n.paidCents > (n.item.amount ?? 0) ? 'up' : 'down'}
+                    </Text>
+                    <Text numberOfLines={1} className="text-xs text-muted-foreground" style={TABULAR}>
+                      Paid {formatMoney(n.paidCents)} {(timeAgo(n.paidAt) ?? '').toLowerCase()}, the line says {formatMoney(n.item.amount ?? 0)}
+                    </Text>
+                  </View>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => onSetAmount(n.item, n.paidCents)}
+                    hitSlop={8}
+                    className="min-h-11 justify-center px-1"
+                  >
+                    <Text className="text-sm font-semibold text-primary">Update</Text>
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          )}
 
           {spending.categories.length > 0 && (
             <View className="mt-2 border-t border-border/60">
@@ -123,5 +133,16 @@ export function UpSpendingCard({ nameOf, currentUserId }: { nameOf: (userId: str
         </>
       )}
     </Card>
+  );
+}
+
+function Figure({ label, cents }: { label: string; cents: number }) {
+  return (
+    <View className="min-w-0 flex-1">
+      <Text className="text-[10.5px] font-medium uppercase tracking-[1px] text-muted-foreground">{label}</Text>
+      <Text numberOfLines={1} className="text-lg font-semibold text-foreground" style={TABULAR}>
+        {formatMoney(cents, AUD)}
+      </Text>
+    </View>
   );
 }

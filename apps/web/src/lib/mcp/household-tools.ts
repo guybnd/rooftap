@@ -5,8 +5,8 @@ import { listCostItems, isTaskOwnerEnabled, type ModuleId } from "@homeup/core";
 import { aiBlockedMessage, parseScoutBrief, scoutLatestRun, scoutRunStatus, scoutTitle, SCOUT_BRIEF_MAX, type Group } from "@homeup/core";
 import { hasOfferSources, scoutBrain, startScoutRun } from "@/lib/shopper/scout";
 import { readThread } from "@/lib/shopper/scout-thread";
-import { totalForPeriod, monthlyAmount, CATEGORY_META, summariseSpending } from "@homeup/core";
-import { visibleBankTransactions } from "@/lib/up-bank";
+import { totalForPeriod, monthlyAmount, CATEGORY_META, summariseAccounts, summariseSpending } from "@homeup/core";
+import { visibleBankAccounts, visibleBankTransactions } from "@/lib/up-bank";
 import {
   buildChecklistItem,
   buildLoggedCost,
@@ -1142,7 +1142,7 @@ export function householdTools({ admin, userId, groupId, enabled }: HouseholdToo
     "get_bank_spending",
     {
       description:
-        "Up Bank: spending from the bank transactions this person may see (their own, plus household members who share theirs). Totals by category and the matching transactions, newest first. Amounts in cents; money out is negative. Transfers between their own accounts are left out. Defaults to the last 30 days.",
+        "Up Bank: account balances and spending from the bank data this person may see (their own, plus household members who share theirs). Current balances per account, totals by category and the matching transactions, newest first. Amounts in cents; money out is negative. Transfers between their own accounts and payments hidden from spending are left out. Defaults to the last 30 days.",
       inputSchema: {
         from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe("First day, YYYY-MM-DD."),
         to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe("Last day, YYYY-MM-DD, included."),
@@ -1164,14 +1164,22 @@ export function householdTools({ admin, userId, groupId, enabled }: HouseholdToo
         limit: 5000,
       });
       const words = search?.trim().toLowerCase();
-      if (words) rows = rows.filter((r) => `${r.description} ${r.message ?? ""}`.toLowerCase().includes(words));
+      if (words) rows = rows.filter((r) => `${r.description} ${r.message ?? ""} ${(r.tags ?? []).join(" ")}`.toLowerCase().includes(words));
       if (category) rows = rows.filter((r) => r.category === category || r.parent_category === category);
       const summary = summariseSpending(rows, from ?? new Date(start).toISOString().slice(0, 10), { recent: limit ?? 30 });
+      // Balances arrive with servers that have bank_accounts; older ones have none to show.
+      const balances = summariseAccounts(await visibleBankAccounts(admin, userId, groupId).catch(() => []));
       return {
         content: [
           {
             type: "text",
             text: JSON.stringify({
+              accounts: balances.accounts.map((a) => ({
+                name: a.name,
+                type: a.type === "SAVER" ? "saver" : "everyday",
+                joint: a.joint,
+                balance_cents: a.balanceCents,
+              })),
               from: new Date(start).toISOString().slice(0, 10),
               to: new Date(end - 1).toISOString().slice(0, 10),
               spent_cents: summary.spentCents,

@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input';
 import { CostDocuments } from '@/app/costs/cost-documents';
 import { sectionIconFor } from '@/lib/section-icons';
 import { CategoryGlyph } from './category-glyph';
+import { CostBankLink } from './cost-bank-link';
 
 // Hearth v2 (E1): the sheet header wears the section's identity tile.
 const COSTS_SECTION = { id: 'costs', Icon: sectionIconFor('costs') };
@@ -254,6 +255,10 @@ export function CostModal({ isOpen, item, groupId, defaultCategory, defaultName,
           />
         </FieldRow>
       </FormSection>
+
+      {item?.id && (
+        <CostBankLink costItemId={item.id} category={form.category} amountCents={Math.round((form.amount ?? 0) * 100)} />
+      )}
 
       <DetailsDisclosure count={detailsCount}>
         {isRecurring && (

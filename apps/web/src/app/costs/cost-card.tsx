@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
 import type { CostItem, CostCadence, CostCategory, GroupMember } from '@homeup/core';
 import { CATEGORY_META, CADENCE_LABEL, formatMoney, isOneOff, nextOccurrence, parseLocalDateOnly, daysUntilISO, useEntityCommentCount, type StepBackResult, currencySymbol } from '@homeup/core';
-import { timeAgo } from '@homeup/core';
+import { timeAgo, useCostBankLink } from '@homeup/core';
 import { CATEGORY_ICON, CategoryGlyph } from './category-glyph';
 import { costDateLabel, expiryLabel } from './cost-dates';
 import { EditableText } from '@/components/ui/editable-text';
@@ -34,6 +34,7 @@ import { memberLabel } from '../setup/member-label';
 import { useRowContextMenu, withRowMenu } from '@/components/ui/row-context-menu';
 import { EntityComments } from '@/components/entity-comments';
 import { CostDocuments } from './cost-documents';
+
 import { LinkedDocuments } from '@/components/documents/linked-documents';
 import { listCostDocumentPaths, listDocumentsForEntity } from '@/lib/documents';
 import { syncCostReminders } from '@homeup/core';
@@ -125,6 +126,7 @@ export function CostCard({
   onEdit,
 }: CostCardProps) {
   const [expanded, setExpanded] = useState<'docs' | 'comments' | null>(null);
+  const bankLink = useCostBankLink(item.id);
   const [holdMenuOpen, setHoldMenuOpen] = useState(false);
   const [docCount, setDocCount] = useState<number | null>(null);
   // FLUX-109: bumped whenever a docs panel mutates, to recompute the eager count.
@@ -299,12 +301,21 @@ export function CostCard({
   // A contract or discount ending within 30 days (or already ended) is the
   // status fragment and takes the date's place, tinted as a word; otherwise
   // the line is when · provider. The full dates live in the editor.
+  // A line linked to Up payments says when it was last paid instead of its
+  // date (core up-overview.ts), so the row answers "has this gone out yet?".
   const expirySoon = !!expiry && expiry.days <= 30;
+  const paidAgo = bankLink?.lastPaidAt ? timeAgo(bankLink.lastPaidAt) : null;
   const metaParts: ReactNode[] = [];
   if (expirySoon) {
     metaParts.push(
       <span key="expiry" className={cn('shrink-0 tabular-nums', expiry.days < 0 ? 'text-destructive' : 'text-warning')}>
         {expiryLabel(expiry.label, expiry.days)}
+      </span>
+    );
+  } else if (paidAgo) {
+    metaParts.push(
+      <span key="paid" className="shrink-0 tabular-nums text-success">
+        Paid {paidAgo.toLowerCase()}
       </span>
     );
   } else if (dateLabel) {

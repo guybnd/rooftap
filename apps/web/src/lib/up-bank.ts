@@ -3,7 +3,11 @@ import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   UP_API_BASE,
+  isLinkablePayment,
+  linkedCostItem,
+  upAccountRow,
   upTransactionRow,
+  type BankAccountRow,
   type BankTransaction,
   type UpAccountResource,
   type UpBankStatus,
@@ -105,15 +109,30 @@ export async function checkUpToken(token: string): Promise<void> {
   await upFetch(token, "/util/ping");
 }
 
-async function upAccountNames(token: string): Promise<Map<string, string>> {
-  const names = new Map<string, string>();
+async function upAccounts(token: string): Promise<UpAccountResource[]> {
+  const accounts: UpAccountResource[] = [];
   let next: string | null = "/accounts?page[size]=100";
   while (next) {
     const page: { data: UpAccountResource[]; links: { next: string | null } } = await upFetch(token, next);
-    for (const a of page.data) names.set(a.id, a.attributes.displayName);
+    accounts.push(...page.data);
     next = page.links.next;
   }
-  return names;
+  return accounts;
+}
+
+/** Saves this person's accounts and balances, and drops accounts Up no longer lists (closed savers). */
+async function saveAccounts(admin: SupabaseClient, row: UpConnectionRow, accounts: UpAccountResource[]): Promise<Map<string, string>> {
+  const owner = { groupId: row.group_id, userId: row.user_id };
+  const rows = accounts.map((a) => ({ ...upAccountRow(a, owner), updated_at: new Date().toISOString() }));
+  if (rows.length) {
+    const { error } = await admin.from("bank_accounts").upsert(rows, { onConflict: "source,user_id,external_id" });
+    if (error) console.warn("[up-bank] accounts not saved", error.message);
+  }
+  const listed = new Set(rows.map((r) => r.external_id));
+  const { data: stored } = await admin.from("bank_accounts").select("id, external_id").eq("user_id", row.user_id).eq("source", "up");
+  const gone = (stored ?? []).filter((a) => !listed.has(a.external_id as string)).map((a) => a.id as string);
+  if (gone.length) await admin.from("bank_accounts").delete().in("id", gone);
+  return new Map(accounts.map((a) => [a.id, a.attributes.displayName]));
 }
 
 function upsertRows(admin: SupabaseClient, rows: Omit<BankTransaction, "id">[]) {
@@ -142,7 +161,7 @@ export async function syncUp(admin: SupabaseClient, row: UpConnectionRow, opts: 
     ? Date.parse(row.last_synced_at) - RESYNC_DAYS * 86_400_000
     : now - FIRST_SYNC_DAYS * 86_400_000;
   const since = new Date(sinceMs).toISOString();
-  const accounts = await upAccountNames(token);
+  const accounts = await saveAccounts(admin, row, await upAccounts(token));
 
   const rows: Omit<BankTransaction, "id">[] = [];
   let next: string | null = `/transactions?page[size]=100&filter[since]=${encodeURIComponent(since)}`;
@@ -172,11 +191,110 @@ export async function syncUp(admin: SupabaseClient, row: UpConnectionRow, opts: 
     if (gone.length) await admin.from("bank_transactions").delete().in("id", gone);
   }
 
+  await applyBankLinks(admin, row.group_id, { userId: row.user_id, since });
+
   await admin
     .from("up_bank_connections")
     .update({ last_synced_at: new Date(now).toISOString(), updated_at: new Date(now).toISOString() })
     .eq("user_id", row.user_id);
   return rows.length;
+}
+
+// ── Links to cost lines ──────────────────────────────────────────────────
+
+export interface BankLinkRow {
+  cost_item_id: string;
+  group_id: string;
+  match: string;
+  keep_amount: boolean;
+  created_by: string | null;
+  created_at: string;
+}
+
+export async function bankLinkRows(admin: SupabaseClient, groupId: string): Promise<BankLinkRow[]> {
+  const { data } = await admin.from("bank_links").select("*").eq("group_id", groupId).order("created_at");
+  return (data ?? []) as BankLinkRow[];
+}
+
+/** Rows read per pass when applying link rules. */
+const LINK_BATCH = 5000;
+
+/**
+ * Applies the household's link rules to stored payments: every payment a rule
+ * fits gets that cost line, and a payment no rule fits any more loses its
+ * line. Payments linked by hand stay as they are. Then each line that keeps
+ * its amount in step takes its latest settled payment's amount. Limit it to
+ * one person's payments since an instant after a read from Up; leave both out
+ * after a rule changes.
+ */
+export async function applyBankLinks(
+  admin: SupabaseClient,
+  groupId: string,
+  scope: { userId?: string; since?: string } = {},
+): Promise<void> {
+  const rules = await bankLinkRows(admin, groupId);
+  let query = admin
+    .from("bank_transactions")
+    .select("id, description, raw_text, tags, amount_cents, is_transfer, cost_item_id, link_kind")
+    .eq("group_id", groupId)
+    .or("link_kind.is.null,link_kind.eq.rule")
+    .order("occurred_at", { ascending: false })
+    .limit(LINK_BATCH);
+  if (scope.userId) query = query.eq("user_id", scope.userId);
+  if (scope.since) query = query.gte("occurred_at", scope.since);
+  const { data, error } = await query;
+  if (error) {
+    console.warn("[up-bank] links not applied", error.message);
+    return;
+  }
+
+  // Group the changes by target so each line costs one update.
+  const moves = new Map<string, string[]>();
+  for (const t of (data ?? []) as Pick<BankTransaction, "id" | "description" | "raw_text" | "tags" | "amount_cents" | "is_transfer" | "cost_item_id" | "link_kind">[]) {
+    const target = linkedCostItem(t, rules);
+    if ((t.cost_item_id ?? null) === target) continue;
+    const key = target ?? "";
+    moves.set(key, [...(moves.get(key) ?? []), t.id]);
+  }
+  for (const [target, ids] of moves) {
+    for (let i = 0; i < ids.length; i += 500) {
+      await admin
+        .from("bank_transactions")
+        .update(target ? { cost_item_id: target, link_kind: "rule" } : { cost_item_id: null, link_kind: null })
+        .in("id", ids.slice(i, i + 500));
+    }
+  }
+
+  await keepAmountsInStep(admin, groupId, rules);
+}
+
+/**
+ * Sets each keep-in-step line's amount to its latest settled payment. Only
+ * payments the person who made the link can see count, so nobody's private
+ * account sets a shared line.
+ */
+async function keepAmountsInStep(admin: SupabaseClient, groupId: string, rules: BankLinkRow[]): Promise<void> {
+  for (const rule of rules.filter((r) => r.keep_amount && r.created_by)) {
+    const people = await visibleUserIds(admin, rule.created_by!, groupId);
+    const { data: last } = await admin
+      .from("bank_transactions")
+      .select("amount_cents, is_transfer")
+      .eq("cost_item_id", rule.cost_item_id)
+      .in("user_id", people)
+      .eq("status", "SETTLED")
+      .eq("hidden", false)
+      .order("occurred_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!last || !isLinkablePayment(last as Pick<BankTransaction, "amount_cents" | "is_transfer">)) continue;
+    const amount = -Number(last.amount_cents);
+    await admin
+      .from("cost_items")
+      .update({ amount })
+      .eq("id", rule.cost_item_id)
+      .eq("group_id", groupId)
+      .neq("amount", amount);
+  }
 }
 
 // ── Webhooks ─────────────────────────────────────────────────────────────
@@ -244,17 +362,45 @@ export async function applyUpEvent(
     return;
   }
   if (event.eventType !== "TRANSACTION_CREATED" && event.eventType !== "TRANSACTION_SETTLED") return;
-  const [res, accounts] = await Promise.all([
+  const [res, accountList] = await Promise.all([
     upFetch<{ data: UpTransactionResource }>(token, `/transactions/${encodeURIComponent(event.transactionId)}`),
-    upAccountNames(token),
+    upAccounts(token),
   ]);
-  const { error } = await upsertRows(admin, [
-    upTransactionRow(res.data, { groupId: row.group_id, userId: row.user_id }, accounts),
-  ]);
+  const accounts = await saveAccounts(admin, row, accountList);
+  const saved = upTransactionRow(res.data, { groupId: row.group_id, userId: row.user_id }, accounts);
+  const { error } = await upsertRows(admin, [saved]);
   if (error) throw new Error(error.message);
+  await applyBankLinks(admin, row.group_id, {
+    userId: row.user_id,
+    since: new Date(Date.parse(saved.occurred_at) - 60_000).toISOString(),
+  });
 }
 
 // ── Reading ──────────────────────────────────────────────────────────────
+
+/** The person, plus household members who share their bank data. */
+export async function visibleUserIds(admin: SupabaseClient, userId: string, groupId: string): Promise<string[]> {
+  const { data: sharing } = await admin
+    .from("up_bank_connections")
+    .select("user_id")
+    .eq("group_id", groupId)
+    .eq("shared", true);
+  return Array.from(new Set([userId, ...(sharing ?? []).map((s) => s.user_id as string)]));
+}
+
+/** Accounts this person may see: their own and those of people who share theirs. */
+export async function visibleBankAccounts(admin: SupabaseClient, userId: string, groupId: string): Promise<BankAccountRow[]> {
+  const people = await visibleUserIds(admin, userId, groupId);
+  const { data, error } = await admin
+    .from("bank_accounts")
+    .select("*")
+    .eq("group_id", groupId)
+    .in("user_id", people)
+    .order("created_at");
+  if (error) throw new Error(error.message);
+  // The viewer's own copy of a joint account comes first, so it's the one kept.
+  return ((data ?? []) as BankAccountRow[]).sort((a, b) => Number(b.user_id === userId) - Number(a.user_id === userId));
+}
 
 /**
  * Transactions this person may see between two instants: their own, plus
@@ -264,12 +410,7 @@ export async function visibleBankTransactions(
   admin: SupabaseClient,
   input: { userId: string; groupId: string; from: string; to: string; limit?: number },
 ): Promise<BankTransaction[]> {
-  const { data: sharing } = await admin
-    .from("up_bank_connections")
-    .select("user_id")
-    .eq("group_id", input.groupId)
-    .eq("shared", true);
-  const people = Array.from(new Set([input.userId, ...(sharing ?? []).map((s) => s.user_id as string)]));
+  const people = await visibleUserIds(admin, input.userId, input.groupId);
   const { data, error } = await admin
     .from("bank_transactions")
     .select("*")

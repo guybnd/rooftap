@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
+import type { CostItem } from './types';
 import {
+  bankMatchFits,
+  bankNudges,
+  bankPayees,
+  costBankLinks,
+  linkedCostItem,
   monthRange,
+  normaliseBankMatch,
+  summariseAccounts,
+  upAccountRow,
   summariseSpending,
   upCategoryLabel,
   upTokenLooksValid,
@@ -92,6 +101,102 @@ describe('upTransactionRow', () => {
   });
   it('marks transfers between own accounts', () => {
     expect(upTransactionRow(upTx({ transfer: true }), { groupId: 'g', userId: 'u' }, new Map()).is_transfer).toBe(true);
+  });
+  it('keeps Up tags and raw text that differs from the description', () => {
+    const t = upTx();
+    t.relationships.tags = { data: [{ id: 'rent' }, { id: 'Holiday' }] };
+    t.attributes.rawText = 'GUZMAN Y GOMEZ NEWTOWN AU';
+    const r = upTransactionRow(t, { groupId: 'g', userId: 'u' }, new Map());
+    expect(r.tags).toEqual(['rent', 'Holiday']);
+    expect(r.raw_text).toBe('GUZMAN Y GOMEZ NEWTOWN AU');
+  });
+});
+
+describe('link rules', () => {
+  const pay = (over: Partial<BankTransaction>) => row({ amount_cents: -245000, ...over });
+  it('matches a payee name inside the description or raw text, ignoring case and spacing', () => {
+    expect(bankMatchFits('ray white', pay({ description: 'RAY  WHITE NEWTOWN' }))).toBe(true);
+    expect(bankMatchFits('ray white', pay({ description: 'Transfer', raw_text: 'Ray White Newtown' }))).toBe(true);
+    expect(bankMatchFits('ray white', pay({ description: 'Coles' }))).toBe(false);
+  });
+  it('matches an Up tag with #', () => {
+    expect(bankMatchFits('#Rent', pay({ description: 'Anyone', tags: ['rent'] }))).toBe(true);
+    expect(bankMatchFits('#rent', pay({ description: 'Rent', tags: [] }))).toBe(false);
+  });
+  it('tidies a typed match', () => {
+    expect(normaliseBankMatch('  Ray   White ')).toBe('Ray White');
+    expect(normaliseBankMatch('# rent')).toBe('#rent');
+    expect(normaliseBankMatch('#')).toBeNull();
+    expect(normaliseBankMatch('a')).toBeNull();
+  });
+  it('links money out to the first rule that fits, and leaves hand links alone', () => {
+    const rules = [
+      { cost_item_id: 'rent', match: 'RAY WHITE' },
+      { cost_item_id: 'other', match: 'RAY' },
+    ];
+    expect(linkedCostItem(pay({ description: 'Ray White' }), rules)).toBe('rent');
+    expect(linkedCostItem(pay({ description: 'Ray White', amount_cents: 500 }), rules)).toBeNull();
+    expect(linkedCostItem(pay({ description: 'Ray White', is_transfer: true }), rules)).toBeNull();
+    expect(linkedCostItem(pay({ description: 'Ray White', cost_item_id: 'mine', link_kind: 'manual' }), rules)).toBe('mine');
+    expect(linkedCostItem(pay({ description: 'Coles', cost_item_id: 'rent', link_kind: 'rule' }), rules)).toBeNull();
+  });
+});
+
+describe('costBankLinks and bankNudges', () => {
+  const rules = [{ cost_item_id: 'rent', match: 'RAY WHITE', keep_amount: false }];
+  const rows = [
+    row({ external_id: 'a', cost_item_id: 'rent', amount_cents: -240000, occurred_at: '2026-09-01T00:00:00Z' }),
+    row({ external_id: 'b', cost_item_id: 'rent', amount_cents: -245000, occurred_at: '2026-10-01T00:00:00Z' }),
+    row({ external_id: 'b', user_id: 'u2', cost_item_id: 'rent', amount_cents: -245000, occurred_at: '2026-10-01T00:00:00Z' }),
+    row({ external_id: 'c', cost_item_id: 'rent', amount_cents: -1, hidden: true, occurred_at: '2026-10-05T00:00:00Z' }),
+  ];
+  it('reads the latest settled payment once per Up transaction', () => {
+    expect(costBankLinks(rows, rules)).toEqual([
+      { costItemId: 'rent', match: 'RAY WHITE', keepAmount: false, count: 2, lastPaidAt: '2026-10-01T00:00:00Z', lastAmountCents: 245000 },
+    ]);
+  });
+  it('nudges a recurring line whose latest payment differs', () => {
+    const item = { id: 'rent', amount: 240000, cadence: 'monthly' } as CostItem;
+    const links = costBankLinks(rows, rules);
+    expect(bankNudges([item], links)).toEqual([{ item, paidCents: 245000, paidAt: '2026-10-01T00:00:00Z' }]);
+    expect(bankNudges([{ ...item, amount: 245000 }], links)).toEqual([]);
+    expect(bankNudges([{ ...item, cadence: 'one_off' }], links)).toEqual([]);
+    expect(bankNudges([item], [{ ...links[0], keepAmount: true }])).toEqual([]);
+  });
+});
+
+describe('bankPayees', () => {
+  it('puts payees in a fitting Up category first, then the most frequent, with tags', () => {
+    const rows = [
+      row({ external_id: '1', description: 'Coles', category: 'groceries', occurred_at: '2026-10-03T00:00:00Z' }),
+      row({ external_id: '2', description: 'Coles', category: 'groceries', occurred_at: '2026-10-02T00:00:00Z' }),
+      row({ external_id: '3', description: 'Ray White', category: 'rent-and-mortgage', tags: ['rent'], amount_cents: -245000, occurred_at: '2026-10-01T00:00:00Z' }),
+      row({ external_id: '4', description: 'Pay', amount_cents: 400000 }),
+    ];
+    const payees = bankPayees(rows, { category: 'rent' });
+    expect(payees.map((p) => p.match)).toEqual(['Ray White', '#rent', 'Coles']);
+    expect(payees[2]).toMatchObject({ count: 2, lastAmountCents: 1000, suggested: false });
+    expect(bankPayees(rows, { query: 'col' }).map((p) => p.match)).toEqual(['Coles']);
+  });
+});
+
+describe('summariseAccounts', () => {
+  it('totals everyday and saver balances, counting a joint account once and leaving home loans out', () => {
+    const owner = { groupId: 'g', userId: 'u1' };
+    const acc = (id: string, type: string, cents: number, ownership = 'INDIVIDUAL') =>
+      upAccountRow({ id, attributes: { displayName: id, accountType: type, ownershipType: ownership, balance: { currencyCode: 'AUD', valueInBaseUnits: cents } } }, owner);
+    const joint = acc('2up', 'TRANSACTIONAL', 64000, 'JOINT');
+    const out = summariseAccounts([
+      acc('spending', 'TRANSACTIONAL', 128410),
+      joint,
+      { ...joint, user_id: 'u2' },
+      acc('holiday', 'SAVER', 630000),
+      acc('loan', 'HOME_LOAN', -50000000),
+    ]);
+    expect(out.everydayCents).toBe(192410);
+    expect(out.saversCents).toBe(630000);
+    expect(out.accounts.map((a) => a.id)).toEqual(['spending', '2up', 'holiday']);
+    expect(out.accounts[1].joint).toBe(true);
   });
 });
 

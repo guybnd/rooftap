@@ -142,6 +142,7 @@ export async function DELETE() {
   }
   const { error } = await req.admin.from("bank_transactions").delete().eq("user_id", req.userId).eq("source", "up");
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  await req.admin.from("bank_accounts").delete().eq("user_id", req.userId).eq("source", "up");
   const gone = await req.admin.from("up_bank_connections").delete().eq("user_id", req.userId);
   if (gone.error) return NextResponse.json({ error: gone.error.message }, { status: 500 });
   return NextResponse.json({ ok: true });

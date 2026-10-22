@@ -80,6 +80,7 @@ import {
   useStoreHelpers,
   useStoreLoaded,
   useModules,
+  UpOverviewProvider,
   type Apartment,
   type CostCadence,
   type CostCategory,
@@ -95,6 +96,7 @@ import { CostDashboard } from '@/features/costs/cost-dashboard';
 import { CostRow, categoryTint } from '@/features/costs/cost-card';
 import { CostModal } from '@/features/costs/cost-modal';
 import { UpSpendingCard } from '@/features/costs/up-spending';
+import { upBankApi } from '@/features/costs/up-bank-api';
 import { sectionIconFor } from '@/lib/section-icons';
 
 const PERIODS: Period[] = ['weekly', 'monthly', 'yearly'];
@@ -707,7 +709,12 @@ export default function CostsSectionScreen() {
 
       {/* Up Bank connector: this month's spending from the person's Up account. */}
       {modules.server('connectors.up-bank') && (
-        <UpSpendingCard currentUserId={currentUserId ?? null} nameOf={(uid) => memberLabel(uid, memberProfiles)} />
+        <UpSpendingCard
+          currentUserId={currentUserId ?? null}
+          nameOf={(uid) => memberLabel(uid, memberProfiles)}
+          items={items}
+          onSetAmount={(item, cents) => patchRow(item.id, { amount: cents })}
+        />
       )}
 
       {/* The list's controls sit above what they act on (H5): search, then the
@@ -784,6 +791,7 @@ export default function CostsSectionScreen() {
       momDelta, prevMonthBucket, projectedRestOfYear, yearToDate, editingBudget, budgetDraft,
       budget, budgetDelta, budgetCents, daysLeft, period, selectedMonthIdx, selectedMonthStart, isEmptyList, isNoMatch,
       yearBuckets, currentMonthIdx, selectedCategory, byPayer, whoPaysCollapsed, memberProfiles,
+      items, patchRow,
     ]
   );
 
@@ -916,6 +924,7 @@ export default function CostsSectionScreen() {
   };
 
   return (
+    <UpOverviewProvider api={upBankApi} enabled={modules.server('connectors.up-bank')} linking={modules.server('connectors.up-bank-links')}>
     <ScreenBackground>
       <FlashList
         ref={listRef}
@@ -1045,6 +1054,7 @@ export default function CostsSectionScreen() {
         }}
       />
     </ScreenBackground>
+    </UpOverviewProvider>
   );
 }
 

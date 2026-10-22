@@ -15,6 +15,8 @@
 // Pure: the shapes the apps and /api/up-bank share, mapping Up's JSON to a
 // stored row, and the spending summary both apps and the assistant read.
 
+import type { CostCategory, CostItem } from './types';
+
 export const UP_API_BASE = 'https://api.up.com.au/api/v1';
 
 /** Up personal access tokens start with this. */
@@ -66,6 +68,88 @@ export interface BankTransaction {
   is_transfer: boolean;
   occurred_at: string;
   settled_at: string | null;
+  /** The person's own Up tags. Missing on rows read before tags were kept. */
+  tags?: string[];
+  /** The bank's own text for the payment, when it differs from the description. */
+  raw_text?: string | null;
+  /** The cost line this payment counts toward. */
+  cost_item_id?: string | null;
+  /** How it got that line: a link rule, or picked by hand. */
+  link_kind?: 'rule' | 'manual' | null;
+  /** Left out of every spending total. */
+  hidden?: boolean;
+  note?: string | null;
+}
+
+/** A `bank_accounts` row: one Up account and its balance at the last read. */
+export interface BankAccountRow {
+  user_id: string;
+  group_id: string;
+  source: 'up';
+  external_id: string;
+  name: string;
+  account_type: 'SAVER' | 'TRANSACTIONAL' | 'HOME_LOAN';
+  ownership: 'INDIVIDUAL' | 'JOINT';
+  balance_cents: number;
+  currency: string;
+}
+
+export interface BankAccountSummary {
+  id: string;
+  name: string;
+  type: BankAccountRow['account_type'];
+  joint: boolean;
+  balanceCents: number;
+  /** Who connected it. A joint account connected by two people shows once. */
+  userId: string;
+}
+
+/**
+ * A cost line's link to bank payments. `match` is a payee's name (any
+ * payment whose description contains it, ignoring case) or `#tag` for an Up
+ * tag. With `keepAmount` the server sets the line's amount to each new
+ * settled payment's.
+ */
+export interface BankLinkRule {
+  match: string;
+  keepAmount: boolean;
+}
+
+/** What a viewer can see of a cost line's linked payments. */
+export interface CostBankLink extends BankLinkRule {
+  costItemId: string;
+  /** Linked payments the viewer can see, in the last 120 days. */
+  count: number;
+  lastPaidAt: string | null;
+  /** The latest settled payment, positive cents. */
+  lastAmountCents: number | null;
+}
+
+export interface UpOverview extends UpSpending {
+  accounts: BankAccountSummary[];
+  /** Everyday (transactional) accounts together, cents. */
+  everydayCents: number;
+  /** Savers together, cents. */
+  saversCents: number;
+  links: CostBankLink[];
+}
+
+/** One payee or tag to link a cost line to, from the viewer's recent payments. */
+export interface BankPayee {
+  /** What a link rule stores: the payee's description, or `#tag`. */
+  match: string;
+  label: string;
+  count: number;
+  lastAmountCents: number;
+  lastPaidAt: string;
+  categoryLabel: string | null;
+  /** Up files it under a category that fits the cost line's. */
+  suggested: boolean;
+}
+
+export interface CostBankDetail {
+  rule: BankLinkRule | null;
+  payments: SpendingTransaction[];
 }
 
 export interface SpendingCategory {
@@ -129,6 +213,7 @@ export interface UpTransactionResource {
     status: 'HELD' | 'SETTLED';
     description: string;
     message: string | null;
+    rawText?: string | null;
     amount: { currencyCode: string; valueInBaseUnits: number };
     settledAt: string | null;
     createdAt: string;
@@ -138,12 +223,34 @@ export interface UpTransactionResource {
     transferAccount?: Rel;
     category?: Rel;
     parentCategory?: Rel;
+    tags?: { data: { id: string }[] };
   };
 }
 
 export interface UpAccountResource {
   id: string;
-  attributes: { displayName: string };
+  attributes: {
+    displayName: string;
+    accountType?: string;
+    ownershipType?: string;
+    balance?: { currencyCode: string; valueInBaseUnits: number };
+  };
+}
+
+/** Maps one Up account to the row stored for this person. */
+export function upAccountRow(a: UpAccountResource, owner: { groupId: string; userId: string }): BankAccountRow {
+  const type = a.attributes.accountType;
+  return {
+    user_id: owner.userId,
+    group_id: owner.groupId,
+    source: 'up',
+    external_id: a.id,
+    name: a.attributes.displayName,
+    account_type: type === 'SAVER' || type === 'HOME_LOAN' ? type : 'TRANSACTIONAL',
+    ownership: a.attributes.ownershipType === 'JOINT' ? 'JOINT' : 'INDIVIDUAL',
+    balance_cents: a.attributes.balance?.valueInBaseUnits ?? 0,
+    currency: a.attributes.balance?.currencyCode ?? 'AUD',
+  };
 }
 
 /** Maps one Up transaction to the row stored for this person, minus the row's own id. */
@@ -162,6 +269,8 @@ export function upTransactionRow(
     account_name: accountId ? accountNames.get(accountId) ?? null : null,
     description: a.description.trim() || 'Transaction',
     message: a.message?.trim() || null,
+    raw_text: a.rawText?.trim() && a.rawText.trim() !== a.description.trim() ? a.rawText.trim() : null,
+    tags: (t.relationships.tags?.data ?? []).map((tag) => tag.id),
     amount_cents: a.amount.valueInBaseUnits,
     currency: a.amount.currencyCode,
     category: t.relationships.category?.data?.id ?? null,
@@ -217,7 +326,7 @@ export function summariseSpending(
   const people = new Set<string>();
   for (const r of unique) {
     people.add(r.user_id);
-    if (r.is_transfer) continue;
+    if (r.is_transfer || r.hidden) continue;
     if (r.amount_cents < 0) {
       spent += -r.amount_cents;
       const key = r.category ?? r.parent_category ?? 'uncategorised';
@@ -234,7 +343,7 @@ export function summariseSpending(
   })).sort((a, b) => b.cents - a.cents);
 
   const recent = unique
-    .filter((r) => !r.is_transfer)
+    .filter((r) => !r.is_transfer && !r.hidden)
     .slice(0, opts.recent ?? 8)
     .map((r) => ({
       id: r.id,
@@ -248,6 +357,212 @@ export function summariseSpending(
     }));
 
   return { month, spentCents: spent, receivedCents: received, categories, recent, people: Array.from(people) };
+}
+
+
+// ── Linking payments to cost lines ───────────────────────────────────────
+
+/** Up's categories that fit a cost line's category, for suggesting payees. */
+export const UP_COST_CATEGORY: Readonly<Record<string, CostCategory>> = {
+  'rent-and-mortgage': 'rent',
+  utilities: 'utilities',
+  internet: 'internet',
+  'mobile-phone': 'internet',
+  'home-insurance-and-rates': 'insurance',
+  'car-insurance-and-maintenance': 'insurance',
+  'tv-and-music': 'subscription',
+  'games-and-software': 'subscription',
+  'news-magazines-and-books': 'subscription',
+  groceries: 'grocery_estimate',
+};
+
+function squash(text: string): string {
+  return text.trim().replace(/\s+/g, ' ').toUpperCase();
+}
+
+/** Tidies what a person types or picks into the form a rule stores. */
+export function normaliseBankMatch(raw: string): string | null {
+  const text = raw.trim().replace(/\s+/g, ' ');
+  if (text.startsWith('#')) {
+    const tag = text.slice(1).trim();
+    return tag ? `#${tag}` : null;
+  }
+  return text.length >= 2 ? text : null;
+}
+
+/** Whether a payment fits a link rule's match: a payee name inside its description, or `#tag`. */
+export function bankMatchFits(match: string, row: Pick<BankTransaction, 'description' | 'raw_text' | 'tags'>): boolean {
+  if (match.startsWith('#')) {
+    const tag = match.slice(1).toLowerCase();
+    return (row.tags ?? []).some((t) => t.toLowerCase() === tag);
+  }
+  const needle = squash(match);
+  if (!needle) return false;
+  return squash(row.description).includes(needle) || (!!row.raw_text && squash(row.raw_text).includes(needle));
+}
+
+/** Money out that isn't a move between own accounts: the payments a cost line can link to. */
+export function isLinkablePayment(row: Pick<BankTransaction, 'amount_cents' | 'is_transfer'>): boolean {
+  return row.amount_cents < 0 && !row.is_transfer;
+}
+
+/**
+ * The cost line a payment belongs to under a household's link rules: the
+ * first rule (oldest first) that fits. Payments linked by hand keep their
+ * line.
+ */
+export function linkedCostItem(
+  row: Pick<BankTransaction, 'description' | 'raw_text' | 'tags' | 'amount_cents' | 'is_transfer' | 'cost_item_id' | 'link_kind'>,
+  rules: readonly { cost_item_id: string; match: string }[],
+): string | null {
+  if (row.link_kind === 'manual') return row.cost_item_id ?? null;
+  if (!isLinkablePayment(row)) return null;
+  return rules.find((r) => bankMatchFits(r.match, row))?.cost_item_id ?? null;
+}
+
+/** Joint accounts arrive once per person who connected them; keep the first copy. */
+function uniqueByExternal<T extends { external_id: string }>(rows: readonly T[]): T[] {
+  const seen = new Set<string>();
+  return rows.filter((r) => {
+    if (seen.has(r.external_id)) return false;
+    seen.add(r.external_id);
+    return true;
+  });
+}
+
+export function summariseAccounts(rows: readonly BankAccountRow[]): {
+  accounts: BankAccountSummary[];
+  everydayCents: number;
+  saversCents: number;
+} {
+  const accounts = uniqueByExternal(rows)
+    .filter((a) => a.account_type !== 'HOME_LOAN')
+    .map((a) => ({
+      id: a.external_id,
+      name: a.name,
+      type: a.account_type,
+      joint: a.ownership === 'JOINT',
+      balanceCents: a.balance_cents,
+      userId: a.user_id,
+    }))
+    .sort((a, b) => (a.type === b.type ? b.balanceCents - a.balanceCents : a.type === 'TRANSACTIONAL' ? -1 : 1));
+  let everydayCents = 0;
+  let saversCents = 0;
+  for (const a of accounts) {
+    if (a.type === 'SAVER') saversCents += a.balanceCents;
+    else everydayCents += a.balanceCents;
+  }
+  return { accounts, everydayCents, saversCents };
+}
+
+function toSpendingTransaction(r: BankTransaction): SpendingTransaction {
+  return {
+    id: r.id,
+    description: r.description,
+    amountCents: r.amount_cents,
+    category: r.category,
+    categoryLabel: upCategoryLabel(r.category),
+    pending: r.status === 'HELD',
+    occurredAt: r.occurred_at,
+    userId: r.user_id,
+  };
+}
+
+/** The payments a viewer can see that are linked to one cost line, newest first. */
+export function linkedPayments(rows: readonly BankTransaction[], costItemId: string, limit = 6): SpendingTransaction[] {
+  return uniqueByExternal(
+    rows.slice().sort((a, b) => b.occurred_at.localeCompare(a.occurred_at)),
+  )
+    .filter((r) => r.cost_item_id === costItemId && !r.hidden)
+    .slice(0, limit)
+    .map(toSpendingTransaction);
+}
+
+/** Each linked cost line's latest payment, from the rows a viewer can see. */
+export function costBankLinks(
+  rows: readonly BankTransaction[],
+  rules: readonly { cost_item_id: string; match: string; keep_amount: boolean }[],
+): CostBankLink[] {
+  const sorted = uniqueByExternal(rows.slice().sort((a, b) => b.occurred_at.localeCompare(a.occurred_at)));
+  return rules.map((rule) => {
+    const mine = sorted.filter((r) => r.cost_item_id === rule.cost_item_id && !r.hidden);
+    const last = mine[0] ?? null;
+    const lastSettled = mine.find((r) => r.status === 'SETTLED') ?? null;
+    return {
+      costItemId: rule.cost_item_id,
+      match: rule.match,
+      keepAmount: rule.keep_amount,
+      count: mine.length,
+      lastPaidAt: last?.occurred_at ?? null,
+      lastAmountCents: lastSettled ? -lastSettled.amount_cents : null,
+    };
+  });
+}
+
+/**
+ * Payees and tags a viewer could link a cost line to, from their recent
+ * payments. Ones Up files under a category that fits the line come first,
+ * then the most frequent.
+ */
+export function bankPayees(
+  rows: readonly BankTransaction[],
+  opts: { category?: CostCategory | null; query?: string; limit?: number } = {},
+): BankPayee[] {
+  const byMatch = new Map<string, BankPayee>();
+  const query = squash(opts.query ?? '');
+  const sorted = uniqueByExternal(rows.slice().sort((a, b) => b.occurred_at.localeCompare(a.occurred_at)));
+  for (const r of sorted) {
+    if (!isLinkablePayment(r) || r.hidden) continue;
+    const suggested = !!opts.category && !!r.category && UP_COST_CATEGORY[r.category] === opts.category;
+    const keys: { match: string; label: string }[] = [{ match: r.description, label: r.description }];
+    for (const tag of r.tags ?? []) keys.push({ match: `#${tag}`, label: `Tag: ${tag}` });
+    for (const k of keys) {
+      if (query && !squash(k.label).includes(query) && !squash(k.match).includes(query)) continue;
+      const id = k.match.toUpperCase();
+      const seen = byMatch.get(id);
+      if (seen) {
+        seen.count += 1;
+        seen.suggested ||= suggested;
+      } else {
+        byMatch.set(id, {
+          match: k.match,
+          label: k.label,
+          count: 1,
+          lastAmountCents: -r.amount_cents,
+          lastPaidAt: r.occurred_at,
+          categoryLabel: k.match.startsWith('#') ? null : upCategoryLabel(r.category),
+          suggested,
+        });
+      }
+    }
+  }
+  return Array.from(byMatch.values())
+    .sort((a, b) => Number(b.suggested) - Number(a.suggested) || b.count - a.count || b.lastPaidAt.localeCompare(a.lastPaidAt))
+    .slice(0, opts.limit ?? 30);
+}
+
+export interface CostBankNudge {
+  item: CostItem;
+  paidCents: number;
+  paidAt: string;
+}
+
+/**
+ * Recurring cost lines whose latest linked payment differs from the line's
+ * amount. Lines that keep their amount in step are left out: the server
+ * already moved them.
+ */
+export function bankNudges(items: readonly CostItem[], links: readonly CostBankLink[]): CostBankNudge[] {
+  const byId = new Map(items.map((i) => [i.id, i]));
+  const out: CostBankNudge[] = [];
+  for (const link of links) {
+    const item = byId.get(link.costItemId);
+    if (!item || item.cadence === 'one_off' || link.keepAmount) continue;
+    if (link.lastAmountCents == null || !link.lastPaidAt) continue;
+    if (link.lastAmountCents === (item.amount ?? 0)) continue;
+    out.push({ item, paidCents: link.lastAmountCents, paidAt: link.lastPaidAt });
+  }
+  return out;
 }
 
 // ── Client ───────────────────────────────────────────────────────────────
@@ -268,6 +583,24 @@ export function createUpBankApi(call: UpBankCall) {
       const q = new URLSearchParams({ month, from: range.from.toISOString(), to: range.to.toISOString() });
       return call<UpSpending>(`/api/up-bank/spending?${q.toString()}`);
     },
+    /** Spending plus balances and cost-line links (servers with 'connectors.up-bank-links'). */
+    overview: (month: string) => {
+      const range = monthRange(month);
+      if (!range) return Promise.reject(new Error('Not a month.'));
+      const q = new URLSearchParams({ month, from: range.from.toISOString(), to: range.to.toISOString() });
+      return call<UpOverview>(`/api/up-bank/overview?${q.toString()}`);
+    },
+    payees: (input: { category?: CostCategory | null; query?: string }) => {
+      const q = new URLSearchParams();
+      if (input.category) q.set('category', input.category);
+      if (input.query) q.set('q', input.query);
+      return call<BankPayee[]>(`/api/up-bank/payees?${q.toString()}`);
+    },
+    costLink: (costItemId: string) => call<CostBankDetail>(`/api/up-bank/links/${encodeURIComponent(costItemId)}`),
+    setCostLink: (costItemId: string, rule: BankLinkRule) =>
+      call<CostBankDetail>(`/api/up-bank/links/${encodeURIComponent(costItemId)}`, { method: 'PUT', body: rule }),
+    removeCostLink: (costItemId: string) =>
+      call<CostBankDetail>(`/api/up-bank/links/${encodeURIComponent(costItemId)}`, { method: 'DELETE' }),
   };
 }
 
