@@ -78,12 +78,21 @@ export function SegmentedControl<T extends string>({
               'flex-row items-center justify-center gap-1.5 rounded-md',
               wrap || fitContent ? 'flex-none' : 'flex-1',
               size === 'sm' ? 'px-2 py-1' : 'px-3 py-1.5',
-              active && (tone === 'accent' ? 'border border-primary/40 bg-primary/15' : 'bg-background shadow-sm border border-border')
+              // Every segment carries a 1px border (transparent when idle) so
+              // picking one never changes widths: Android kept the old width
+              // and wrapped "To buy" to "To" when the border moved away.
+              'border',
+              active
+                ? tone === 'accent'
+                  ? 'border-primary/40 bg-primary/15'
+                  : 'bg-background shadow-sm border-border'
+                : 'border-transparent'
             )}
           >
             {opt.icon}
             {!iconOnly && (
               <Text
+                numberOfLines={1}
                 className={cn(
                   'font-medium',
                   size === 'sm' ? 'text-xs' : 'text-sm',
