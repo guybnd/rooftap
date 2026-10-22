@@ -2,6 +2,8 @@
 
 > **TL;DR** Run `./scripts/self-host-init.sh -d`. It starts Rooftap and a bundled Supabase stack on your own machine, with no cloud account and no outside sign-up. You sign in with a local account. Google sign-in, Calendar sync and AI are optional.
 
+For what the server protects, what it sends out and what you must do yourself, read [Security model](security.md).
+
 ## Quick start
 
 ```bash

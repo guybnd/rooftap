@@ -103,6 +103,23 @@ const nextConfig: NextConfig = {
     ],
   },
   serverExternalPackages: ["pdfjs-dist"],
+  // Security audit (2026-10-22): no other site may frame the app. Without
+  // this, a page could load the MCP sign-in consent screen in a hidden frame
+  // and trick a signed-in person into clicking Allow. Same-origin frames
+  // (the landing page's live demo) still work.
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+        ],
+      },
+    ];
+  },
   async redirects() {
     return [
       // The Home Search section's route was renamed from /dashboard to /homesearch

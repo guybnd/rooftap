@@ -6,6 +6,7 @@ import { resolveServerKey } from "@/lib/admin-config";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerSupabase } from "@/lib/supabase/server";
 import { requireModules } from "@/lib/server-modules";
+import { assertPublicUrl } from "@/lib/event-page";
 import { APARTMENT_PHOTO_URL_TTL_SECONDS } from "@homeup/core";
 
 export const maxDuration = 60;
@@ -67,19 +68,31 @@ async function fetchListingHtml(url: string): Promise<string> {
     return res.text();
   }
 
-  const res = await fetch(url, {
-    headers: {
-      "User-Agent":
-        "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36",
-      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-      "Accept-Language": "en-AU,en;q=0.9",
-      "Sec-Fetch-Dest": "document",
-      "Sec-Fetch-Mode": "navigate",
-      "Sec-Fetch-Site": "none",
-      "Upgrade-Insecure-Requests": "1",
-    },
-    signal: AbortSignal.timeout(15_000),
-  });
+  // A pasted link must not reach the server's own network (localhost, the
+  // LAN, cloud metadata), so every hop of a redirect is checked too.
+  let target = await assertPublicUrl(url);
+  let res: Response | null = null;
+  for (let hop = 0; hop < 5; hop++) {
+    res = await fetch(target, {
+      redirect: "manual",
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36",
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-AU,en;q=0.9",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Upgrade-Insecure-Requests": "1",
+      },
+      signal: AbortSignal.timeout(15_000),
+    });
+    const location = res.headers.get("location");
+    if (res.status < 300 || res.status >= 400 || !location) break;
+    target = await assertPublicUrl(new URL(location, target).toString());
+    res = null;
+  }
+  if (!res) throw new Error("The listing link redirected too many times.");
 
   if (!res.ok) {
     throw new Error(`Listing site returned HTTP ${res.status}. Try a domain.com.au link, or add SCRAPER_API_KEY.`);
