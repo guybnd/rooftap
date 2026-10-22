@@ -5,6 +5,7 @@ import {
   homeAssistantStatus,
   homeAssistantTools,
   scoutPicks,
+  shopperWants,
   scoutSearch,
   assistantSettings,
   assistantStatus,
@@ -19,6 +20,34 @@ import {
 } from "./fixtures";
 
 type Answer = (url: URL, init?: RequestInit) => unknown;
+
+let followUps = 0;
+/** A follow-up on a demo Scout run: no model here, so the answer says what the app would do. */
+function scoutFollowUp(url: URL, init?: RequestInit) {
+  const threadId = url.pathname.split("/")[4];
+  const { text = "", pick_id = null } = JSON.parse(String(init?.body ?? "{}")) as { text?: string; pick_id?: string | null };
+  const now = new Date().toISOString();
+  const base = { group_id: scoutSearch.group_id, thread_id: threadId, pick_id: null, search_id: null, created_by: null, created_at: now, updated_at: now, deleted: false };
+  return {
+    messages: [
+      { ...base, id: `sm-demo-${++followUps}`, role: "user", text, pick_id },
+      {
+        ...base,
+        id: `sm-demo-${++followUps}`,
+        role: "scout",
+        text: "This demo has no AI model. In the app Scout answers from its picks, or searches again with your change and adds the new picks here.",
+      },
+    ],
+  };
+}
+
+/** Watch the price on a demo pick: the item it is already on, or a new one shaped like it. */
+function scoutWatch(pickId: string) {
+  const pick = scoutPicks.find((p) => p.id === pickId);
+  const known = shopperWants.find((w) => w.id === pick?.want_id);
+  const tv = shopperWants.find((w) => w.id === "w-tv")!;
+  return { want: known ?? { ...tv, id: `w-${pickId}`, title: pick?.title ?? tv.title, query: pick?.title ?? tv.title, notes: pick?.why ?? null } };
+}
 
 const hour = new Date();
 hour.setMinutes(0, 0, 0);
@@ -111,6 +140,8 @@ const answers: [RegExp, Answer][] = [
   // Shopper: prices are already in the stores; a check finds what is there.
   [/^\/api\/shopper\/sources/, () => ({ sources: shopperSources })],
   [/^\/api\/shopper\/deals/, (url) => ({ deals: url.searchParams.get("wantId") === "w-vacuum" ? shopperDeals : [] })],
+  [/^\/api\/shopper\/scout\/picks\//, (url) => scoutWatch(url.pathname.split("/").pop() ?? "")],
+  [/^\/api\/shopper\/scout\/[^/]+\/messages/, scoutFollowUp],
   [/^\/api\/shopper\/scout\/scout-tv/, () => ({ search: scoutSearch, picks: scoutPicks })],
   [/^\/api\/shopper\/lookup/, () => ({ offers: 5, sources: ["serpapi-google-shopping"], failed: [] })],
   // Assistant.

@@ -1,7 +1,7 @@
 // Entry for the screen demo (see vite.config.mjs): mounts the app shell and
 // the scene's page with the seeded household.
 /// <reference types="vite/client" />
-import { StrictMode, Suspense } from "react";
+import { Component, StrictMode, Suspense, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { ALL_MODULE_IDS, setAvailableModules, setModuleRows, THEME_PREFERENCE_STORAGE_KEY } from "@homeup/core";
 import "../../src/app/globals.css";
@@ -21,6 +21,9 @@ declare global {
   }
 }
 
+const RELOAD_KEY = "demo-reload-path";
+const RELOAD_AT_KEY = "demo-reload-at";
+
 const params = new URLSearchParams(window.__demoSearch ?? location.search);
 const scene = findScene(params.get("scene"));
 /** The live demo: people tap through the pages, and their changes stay until they reload. */
@@ -33,6 +36,16 @@ if (params.get("theme")) localStorage.setItem(THEME_PREFERENCE_STORAGE_KEY, para
 scene.prepare?.();
 if (live) seedLiveExtras();
 setDemoRoute({ path: scene.path, search: "", params: scene.params ?? {} });
+// A reload after a stale page file (see PageBoundary) comes back to that page.
+if (live) {
+  try {
+    const reloadedTo = sessionStorage.getItem(RELOAD_KEY);
+    sessionStorage.removeItem(RELOAD_KEY);
+    if (reloadedTo && reloadedTo !== scene.path) navigate(reloadedTo);
+  } catch {
+    // Storage is blocked: the demo opens on Home.
+  }
+}
 // Every module is on, and the server offers them all.
 setModuleRows(ALL_MODULE_IDS.map((id) => ({ group_id: "demo-home", module_id: id, enabled: true, updated_by: null, updated_at: "" })));
 setAvailableModules(null);
@@ -144,14 +157,69 @@ function LivePage() {
   return <Page key={path} />;
 }
 
+/**
+ * Each demo page is its own file, loaded when someone first opens it. After
+ * the site is published again those file names change, so a demo left open
+ * from before asks for a file that is gone. That reloads the demo once, back
+ * on the same page. Any other error shows a note in place of the page, so the
+ * rest of the demo keeps working.
+ */
+class PageBoundary extends Component<{ path: string; children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidCatch(error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!/dynamically imported module|importing a module script|error loading dynamically/i.test(message)) return;
+    try {
+      // Once a minute at most, so a file that is really missing cannot loop.
+      if (Date.now() - Number(sessionStorage.getItem(RELOAD_AT_KEY) ?? 0) < 60_000) return;
+      sessionStorage.setItem(RELOAD_AT_KEY, String(Date.now()));
+      sessionStorage.setItem(RELOAD_KEY, this.props.path);
+    } catch {
+      return;
+    }
+    location.reload();
+  }
+
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <div className="grid min-h-[60vh] place-items-center p-8 text-center text-muted-foreground">
+        <p>
+          This page did not load.{" "}
+          <button type="button" className="font-medium text-primary" onClick={() => location.reload()}>
+            Reload the demo
+          </button>
+        </p>
+      </div>
+    );
+  }
+}
+
+function Boundary({ children }: { children: ReactNode }) {
+  const { path } = useDemoRoute();
+  // A new page starts with a fresh boundary.
+  return (
+    <PageBoundary key={path} path={path}>
+      {children}
+    </PageBoundary>
+  );
+}
+
 const Page = live ? LivePage : scene.page;
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <ThemeProvider>
       <AppSidebar>
-        <Suspense fallback={null}>
-          <Page />
-        </Suspense>
+        <Boundary>
+          <Suspense fallback={null}>
+            <Page />
+          </Suspense>
+        </Boundary>
       </AppSidebar>
     </ThemeProvider>
   </StrictMode>

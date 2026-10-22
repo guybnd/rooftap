@@ -67,7 +67,7 @@ export function useScoutThread(id: string, api: ScoutThreadApi) {
             ? {
                 ...prev,
                 runs: out.search ? [...prev.runs, out.search] : prev.runs,
-                messages: [...prev.messages, ...out.messages],
+                messages: [...prev.messages, ...(out.messages ?? [])],
               }
             : prev,
         );

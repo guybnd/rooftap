@@ -17,6 +17,7 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "smoke": "node scripts/smoke-test.mjs",
+    "smoke:demo": "node scripts/demo-smoke.mjs",
     "test": "vitest run",
     "check": "npm run typecheck && npm run test && npm run smoke"
   },

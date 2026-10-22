@@ -1,13 +1,15 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import type { ShopperPick } from "@homeup/core";
 import { runLookup } from "@/lib/shopper/lookup";
 import { shopperRequest } from "@/lib/shopper/route-helpers";
 import { readRun, watchPick } from "@/lib/shopper/scout";
 
 // HOUP-435: act on a Scout pick. `watch` puts it on the household's
-// watchlist (linked to its run) and checks its prices straight away, so the
-// item opens with today's offers. Picks are written by the server only, which
-// is why this goes through the API rather than sync.
+// watchlist (linked to its run) and answers at once. The first price check
+// runs after the response: it calls every price source and can take most of
+// a minute, and the item page shows the offers when the check lands. Picks
+// are written by the server only, which is why this goes through the API
+// rather than sync.
 export const maxDuration = 60;
 
 type Params = { params: Promise<{ id: string }> };
@@ -28,7 +30,8 @@ export async function POST(request: Request, { params }: Params) {
   try {
     const want = await watchPick(req.admin, pick, search, req.userId);
     // A failed first check is fine: the daily refresh picks it up.
-    await runLookup(req.admin, want, req.group).catch((err) => console.warn("[scout] first check failed", err instanceof Error ? err.message : err));
+    const check = () => runLookup(req.admin, want, req.group).catch((err) => console.warn("[scout] first check failed", err instanceof Error ? err.message : err));
+    after(check);
     return NextResponse.json({ want });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "Could not watch it." }, { status: 500 });
