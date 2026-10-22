@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getSessionUser } from "@/lib/supabase/session";
 
 interface WeatherPayload {
   tempC: number;
@@ -63,6 +64,11 @@ function setCacheEntry(key: string, data: WeatherPayload): void {
 }
 
 export async function GET(request: NextRequest) {
+  // Signed-in people only: the middleware lets any request with a Bearer
+  // header through to /api, so the route checks the token itself.
+  if (!(await getSessionUser())) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   const latParam = request.nextUrl.searchParams.get("lat");
   const lngParam = request.nextUrl.searchParams.get("lng");
 

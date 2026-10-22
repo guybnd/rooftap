@@ -260,7 +260,9 @@ services:
       - storage
       - edge-runtime
     ports:
-      - "${KONG_HTTP_PORT:-8000}:8000"
+      # KONG_BIND=127.0.0.1 keeps the gateway off the network when a Caddy or
+      # tunnel profile is the only way in (see .env.example).
+      - "${KONG_BIND:-0.0.0.0}:${KONG_HTTP_PORT:-8000}:8000"
     environment:
       KONG_DATABASE: "off"
       # /usr/local/kong/, not /home/kong/ — that's Kong's own install dir,
@@ -323,6 +325,9 @@ services:
       # .env.example and .docs/modules.md.
       HOMEUP_MODULES: ${HOMEUP_MODULES:-}
       PORT: ${APP_PORT:-3000}
+      # Host networking, so this is the host address the app listens on.
+      # APP_BIND=127.0.0.1 keeps it off the network (see .env.example).
+      HOSTNAME: ${APP_BIND:-0.0.0.0}
       # Dev/E2E escape hatch — leave unset on any internet-reachable instance.
       # See .env.example.
       ALLOW_AUTH_BYPASS: ${ALLOW_AUTH_BYPASS:-}

@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getSessionUser } from "@/lib/supabase/session";
 
 export async function GET(request: NextRequest) {
+  // Signed-in people only: the middleware lets any request with a Bearer
+  // header through to /api, so the route checks the token itself.
+  if (!(await getSessionUser())) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
   if (!token) {
     return NextResponse.json({ error: "Mapbox token not configured" }, { status: 500 });

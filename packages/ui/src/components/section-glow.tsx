@@ -13,7 +13,7 @@
 // it move and fade (animated SVG props broke on Android, §8).
 import * as React from 'react';
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { GLOW_AURA, GLOW_DRIFT_REST, SECTION_GLOW_OPACITY, sectionHueSwatch, useNavShiftMs } from '@homeup/core';
 import { useThemeMaterial, useStillMotion } from '../theme/theme-provider';
@@ -172,9 +172,10 @@ export function TabGround({ sectionId, driftX = GLOW_DRIFT_REST, children }: Tab
 
 /**
  * One glow per section seen, in a band that drifts to `driftX`, over the
- * theme's still aura. The newest comes up over the ones before as they let
- * go; a quick second switch picks up from wherever the glow is, and a layer
- * leaves only once it has faded.
+ * theme's still aura. The newest comes up over the ones before while they
+ * hold, so the colour turns from one hue to the next with no washed-out
+ * middle; a quick second switch picks up from wherever the glow is, and the
+ * layers below leave once the newest is fully up.
  */
 function GlowBlend({ section, driftX }: { section: string | null; driftX: number }) {
   const duration = useNavShiftMs();
@@ -218,6 +219,7 @@ function GlowBlend({ section, driftX }: { section: string | null; driftX: number
             key={layer ?? 'none'}
             section={layer}
             shown={i === layers.length - 1}
+            hold={layers[layers.length - 1] !== null}
             instant={!mounted.current}
             duration={duration}
           />
@@ -230,21 +232,27 @@ function GlowBlend({ section, driftX }: { section: string | null; driftX: number
 interface GlowLayerProps {
   section: string | null;
   shown: boolean;
+  /** A layer below the newest keeps its strength while the newest comes up over it. */
+  hold: boolean;
   instant: boolean;
   /** The page shift's duration, ms. */
   duration: number;
 }
 
-function GlowLayer({ section, shown, instant, duration }: GlowLayerProps) {
+function GlowLayer({ section, shown, hold, instant, duration }: GlowLayerProps) {
   const reduceMotion = useStillMotion();
   const opacity = useSharedValue(shown && instant ? 1 : 0);
   React.useEffect(() => {
+    // Two half-faded layers let the ground show through, which washes the
+    // blend out towards the background. So only the newest fades; the ones
+    // below stay as they are until GlowBlend drops them. A switch to a
+    // section without a glow has nothing to cover them, so they fade out.
     if (reduceMotion) opacity.value = shown ? 1 : 0;
-    else if (shown) opacity.value = withTiming(1, { duration: duration * 0.55, easing: SWIFT_OUT });
-    else opacity.value = withDelay(duration * 0.35, withTiming(0, { duration: duration * 0.65, easing: SWIFT_OUT }));
+    else if (shown) opacity.value = withTiming(1, { duration, easing: SWIFT_OUT });
+    else if (!hold) opacity.value = withTiming(0, { duration, easing: SWIFT_OUT });
     // Only a show or hide starts a fade; a speed change waits for the next one.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shown, reduceMotion, opacity]);
+  }, [shown, hold, reduceMotion, opacity]);
   const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
   if (!section) return null;
   return (

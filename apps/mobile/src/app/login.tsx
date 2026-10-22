@@ -13,6 +13,7 @@ import { normalizeIdentifier } from '@homeup/core';
 import { Text, Button, Input, ScreenBackground } from '@homeup/ui';
 import { getStoredServer, type ServerSelection } from '@/lib/server-config';
 import { getSupabaseClient } from '@/lib/supabase-client';
+import { completeOAuthRedirect } from '@/lib/oauth-redirect';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -91,22 +92,15 @@ export default function LoginScreen() {
       if (result.type !== 'success' || !result.url) return;
 
       const { params, errorCode } = getQueryParams(result.url);
-      if (errorCode || params.error) {
-        setError(params.error_description || params.error || errorCode || 'Google sign-in failed');
+      const outcome = await completeOAuthRedirect(supabase.auth, params, errorCode);
+      if (outcome.status === 'error') {
+        setError(outcome.message);
         return;
       }
-      if (params.access_token && params.refresh_token) {
-        const { error: sessionError } = await supabase.auth.setSession({
-          access_token: params.access_token,
-          refresh_token: params.refresh_token,
-        });
-        if (sessionError) {
-          setError(sessionError.message);
-          return;
-        }
+      if (outcome.status === 'signed-in') {
         router.replace('/home');
       } else {
-        // The redirect landed back in the app but carried neither tokens nor
+        // The redirect landed back in the app but carried neither a code nor
         // an error param — happens when Supabase's Auth → URL Configuration
         // redirect allowlist doesn't include this app's scheme, so it
         // silently redirects to the project's Site URL instead of `redirectTo`

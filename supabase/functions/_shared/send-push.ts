@@ -6,7 +6,7 @@
 // supabase/functions/README.md. The base64url VAPID keys here match the keys the
 // client and Next app use, so no key reformatting is needed.
 import webpush from "npm:web-push@3.6.7";
-import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.111.0";
 
 // Configure VAPID only when both keys are present. Doing this at module load with
 // `!` non-null assertions would throw on a missing secret and turn the whole

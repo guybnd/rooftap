@@ -117,6 +117,9 @@ export function createNativeClient({ url, anonKey, storage }: CreateNativeClient
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: false,
+      // OAuth redirects carry a one-time code that only this device can
+      // exchange (apps/mobile/src/lib/oauth-redirect.ts), never tokens.
+      flowType: 'pkce',
     },
   });
 }

@@ -19,7 +19,7 @@ import {
   updateEvent,
 } from "../_shared/google-calendar.ts";
 import type { GoogleCalendarConnection, GoogleEventInput } from "../_shared/google-calendar.ts";
-import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.111.0";
 
 type EntityType = "task" | "appointment";
 type TriggerOp = "INSERT" | "UPDATE" | "DELETE";

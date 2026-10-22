@@ -1,11 +1,47 @@
 import { AI_CATALOG, AI_SETTINGS_KEY, cleanAiServerSettings, isBuiltInProvider, parseModelRef, type AiServerSettings } from "@homeup/core";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { canStoreHouseholdKeys, decryptHouseholdKey, encryptHouseholdKey } from "@/lib/ai/household-keys";
 
 // HOUP-25: owner-editable third-party API keys, stored server-side in the
 // service-role-only `admin_config` table (zero client RLS — mirrors
 // personal_access_tokens). resolveServerKey() is the read path every
 // consumer should use: it prefers the stored value and falls back to
 // process.env, so an empty table reproduces today's behavior exactly.
+
+// Security audit (2026-10-22): values are encrypted at rest with
+// HOUSEHOLD_KEYS_SECRET (AES-256-GCM, the same helper as households' own AI
+// keys), so a database backup alone does not give away the server's API
+// keys. Without the secret, values stay in clear text as before. A value
+// that this server's secret can't read counts as unset, so .env applies.
+const ENCRYPTED_PREFIX = "enc:";
+
+export function sealAdminConfigValue(value: string): string {
+  return canStoreHouseholdKeys() ? ENCRYPTED_PREFIX + encryptHouseholdKey(value) : value;
+}
+
+export function openAdminConfigValue(stored: string | null | undefined): string | undefined {
+  if (stored == null) return undefined;
+  if (!stored.startsWith(ENCRYPTED_PREFIX)) return stored;
+  return decryptHouseholdKey(stored.slice(ENCRYPTED_PREFIX.length)) ?? undefined;
+}
+
+// Values saved before encryption existed are sealed the first time they are read.
+async function sealLegacyValues(admin: SupabaseClient, rows: { key: string; value: string | null }[]): Promise<void> {
+  if (!canStoreHouseholdKeys()) return;
+  const legacy = rows.filter((r) => r.value != null && !r.value.startsWith(ENCRYPTED_PREFIX));
+  for (const row of legacy) {
+    try {
+      await admin
+        .from("admin_config")
+        .update({ value: sealAdminConfigValue(row.value as string) })
+        .eq("key", row.key)
+        .eq("value", row.value as string);
+    } catch {
+      // Best effort: the clear value still works and is sealed on its next save.
+    }
+  }
+}
 
 export async function getAdminConfigValue(key: string): Promise<string | undefined> {
   const admin = createAdminClient();
@@ -14,7 +50,8 @@ export async function getAdminConfigValue(key: string): Promise<string | undefin
     .select("value")
     .eq("key", key)
     .maybeSingle();
-  return data?.value ?? undefined;
+  if (data?.value != null) await sealLegacyValues(admin, [{ key, value: data.value }]);
+  return openAdminConfigValue(data?.value);
 }
 
 // Throws when the write fails, so a caller never reports a key as saved that
@@ -23,7 +60,7 @@ export async function setAdminConfigValue(key: string, value: string): Promise<v
   const admin = createAdminClient();
   const { error } = await admin
     .from("admin_config")
-    .upsert({ key, value, updated_at: new Date().toISOString() });
+    .upsert({ key, value: sealAdminConfigValue(value), updated_at: new Date().toISOString() });
   if (error) throw new Error(error.message);
 }
 
@@ -35,7 +72,9 @@ export async function setAdminConfigValue(key: string, value: string): Promise<v
 export async function resolveServerKeys(keys: readonly string[]): Promise<(key: string) => Promise<string | undefined>> {
   const admin = createAdminClient();
   const { data } = await admin.from("admin_config").select("key, value").in("key", [...keys]);
-  const stored = new Map(((data ?? []) as { key: string; value: string | null }[]).map((r) => [r.key, r.value ?? undefined]));
+  const rows = (data ?? []) as { key: string; value: string | null }[];
+  await sealLegacyValues(admin, rows);
+  const stored = new Map(rows.map((r) => [r.key, openAdminConfigValue(r.value)]));
   return async (key) => stored.get(key) ?? process.env[key];
 }
 

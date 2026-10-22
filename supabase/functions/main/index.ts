@@ -5,7 +5,7 @@
 // service: it's the router that dispatches /functions/v1/<name> requests to
 // the matching sibling directory (calendar-push, calendar-sync,
 // notify-due-tasks, notify-task-assigned, notify-task-comment).
-import * as jose from 'jsr:@panva/jose@6'
+import * as jose from 'jsr:@panva/jose@6.2.13'
 
 console.log('main function started')
 

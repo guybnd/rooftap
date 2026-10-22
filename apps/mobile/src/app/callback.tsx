@@ -4,8 +4,8 @@
 // expo-router as an in-app navigation with no matching route, surfacing an
 // "Unmatched Route" flash before login.tsx's own openAuthSessionAsync()
 // promise resolved and navigated onward. This screen is the landing pad for
-// that deep link: it tries to parse + set the session itself (the same
-// tokens login.tsx's promise-based handler is racing to land, in case the OS
+// that deep link: it tries to finish the sign-in itself (the same
+// code login.tsx's promise-based handler is racing to exchange, in case the OS
 // delivers the redirect as a Linking event rather than resolving the
 // browser-session promise — a known platform inconsistency), then shows a
 // branded spinner until a session exists either way, and times out back to
@@ -26,6 +26,7 @@ import { getQueryParams } from 'expo-auth-session/build/QueryParams';
 import { ScreenBackground } from '@homeup/ui';
 import { getStoredServer } from '@/lib/server-config';
 import { getSupabaseClient } from '@/lib/supabase-client';
+import { completeOAuthRedirect } from '@/lib/oauth-redirect';
 
 const FALLBACK_TIMEOUT_MS = 8000;
 
@@ -56,30 +57,22 @@ export default function CallbackScreen() {
         return;
       }
 
-      // This screen's own URL may carry the tokens directly (the deep link
-      // that routed here in the first place) — set the session from them if
-      // so. Idempotent with login.tsx: whichever of the two sets it first
-      // wins, the other's setSession() call is a harmless no-op overwrite of
-      // the same tokens.
+      // This screen's own URL may carry the sign-in code (the deep link that
+      // routed here in the first place). completeOAuthRedirect shares one
+      // exchange per code with login.tsx, so whichever screen gets there
+      // first signs in and the other gets the same result.
       if (url) {
         const { params, errorCode } = getQueryParams(url);
-        if (params.access_token && params.refresh_token) {
-          const { error } = await supabase.auth.setSession({
-            access_token: params.access_token,
-            refresh_token: params.refresh_token,
-          });
-          if (cancelled) return;
-          router.replace(error ? '/login' : '/home');
-          return;
-        }
-        if (errorCode || params.error) {
-          router.replace('/login');
+        const outcome = await completeOAuthRedirect(supabase.auth, params, errorCode);
+        if (cancelled) return;
+        if (outcome.status !== 'no-code') {
+          router.replace(outcome.status === 'signed-in' ? '/home' : '/login');
           return;
         }
       }
 
-      // No tokens on this screen's own URL — login.tsx's handler owns this
-      // sign-in attempt via openAuthSessionAsync(); wait for its setSession()
+      // No code on this screen's own URL — login.tsx's handler owns this
+      // sign-in attempt via openAuthSessionAsync(); wait for its code exchange
       // to land.
       const {
         data: { subscription },

@@ -9,8 +9,8 @@ This page tells you what Rooftap protects, what it trusts, and what you must do 
 | Part | Holds | Reachable from |
 |---|---|---|
 | `db` (Postgres) | All household data, accounts, keys | `127.0.0.1:5432` on the host only, unless you set `POSTGRES_BIND` |
-| `kong` (API gateway) | Nothing. It routes auth, data, realtime, storage and functions. | Every interface on `KONG_HTTP_PORT` (8000) |
-| `app` (web app and API) | Nothing. It reads `.env` and the database. | Every interface on `APP_PORT` (3000), because it uses host networking |
+| `kong` (API gateway) | Nothing. It routes auth, data, realtime, storage and functions. | Every interface on `KONG_HTTP_PORT` (8000), or only this machine with `KONG_BIND=127.0.0.1` |
+| `app` (web app and API) | Nothing. It reads `.env` and the database. | Every interface on `APP_PORT` (3000), or only this machine with `APP_BIND=127.0.0.1` |
 | `storage` | Uploaded files, in the `storage-data` volume | Through Kong only |
 | `.env` | The JWT secret, the service-role key, the database password, `HOUSEHOLD_KEYS_SECRET` | The host file system |
 
@@ -33,7 +33,7 @@ Tables that hold secrets or server state (`admin_config`, `household_ai_keys`, `
 | Account passwords | The auth server (GoTrue) stores a bcrypt hash. |
 | Bot API keys and MCP sign-in tokens | A SHA-256 hash. The full key shows once. |
 | Household AI keys, Home Assistant tokens | AES-256-GCM, with a key from `HOUSEHOLD_KEYS_SECRET` |
-| Operator API keys (`admin_config`) | Plain text, readable by the service role only |
+| Operator API keys (`admin_config`) | AES-256-GCM with the same secret. Without `HOUSEHOLD_KEYS_SECRET`, plain text that only the service role can read. |
 | Google Calendar refresh tokens | Plain text, readable by the service role only |
 
 A person with a copy of the database and of `.env` can read every secret above except the hashes. Treat both as one secret. [Self-hosting](self-hosting.md) has the backup and encryption-at-rest steps.
@@ -57,12 +57,12 @@ The browser also loads the PDF.js worker from `unpkg.com` when a person reads a 
 
 ## The phone app
 
-The official Android app sends your household data only to the server you pick on the sign-in screen. It also registers with the Expo push service to get a push token. It keeps the session in the Android Keystore through `expo-secure-store`. It gets JavaScript updates over the air from the Rooftap project on Expo, so you trust that update channel when you install the official APK. If you do not want that, build the APK yourself from this repository.
+The official Android app sends your household data only to the server you pick on the sign-in screen. It also registers with the Expo push service to get a push token. It keeps the session in the Android Keystore through `expo-secure-store`. Google sign-in uses PKCE, so the link back into the app carries a one-time code that only that phone can use. It gets JavaScript updates over the air from the Rooftap project on Expo, so you trust that update channel when you install the official APK. If you do not want that, build the APK yourself from this repository.
 
 ## What you must do
 
 1. Create your account right after the first start. Until the first account exists, any person who can reach port 3000 can create the owner account.
-2. Keep ports 3000 and 8000 off the internet. Use the `https`, `tailscale-funnel` or `cloudflare-tunnel` profile for remote access. Each one gives one HTTPS address.
+2. Keep ports 3000 and 8000 off the internet. Use the `https`, `tailscale-funnel` or `cloudflare-tunnel` profile for remote access. Each one gives one HTTPS address. If a profile is the only way in, set `APP_BIND=127.0.0.1` and `KONG_BIND=127.0.0.1` in `.env`.
 3. Keep `ALLOW_AUTH_BYPASS` empty. It exists for local tests only.
 4. Back up `.env` and the `db-data` volume, and encrypt the backups.
 5. Update Rooftap when a release lists a security fix. `migrate` applies the database changes on the next start.
@@ -71,5 +71,5 @@ The official Android app sends your household data only to the server you pick o
 ## Known limits
 
 - The stack confirms new accounts without email, because it has no mail server.
-- Edge functions load their libraries from `esm.sh` and `jsr.io` when the container starts.
+- Edge functions load their libraries from `esm.sh` and `jsr.io` when the container starts. The versions are pinned.
 - Rooftap does not encrypt the database or the uploaded files itself. Use disk encryption on the host.

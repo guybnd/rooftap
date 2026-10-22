@@ -2,7 +2,7 @@
 // and calendar-* edge functions. The rules live in module-rules.ts (the Deno twin of core);
 // this file only loads the inputs: the server's HOMEUP_MODULES and the
 // household's group_modules rows.
-import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.111.0";
 import { MODULE_DEFAULTS, parseModuleList, resolveEnabledModules } from "./module-rules.ts";
 
 export { isGoogleCalendarPushEnabled, taskOpenHref, taskOwnerModule } from "./module-rules.ts";

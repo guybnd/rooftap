@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getSessionUser } from "@/lib/supabase/session";
 import type { NearbyPOI } from '@homeup/core';
 
 const cache = new Map<string, { pois: NearbyPOI[]; expires: number }>();
@@ -81,6 +82,11 @@ async function queryOverpass(query: string): Promise<OverpassElement[]> {
 }
 
 export async function GET(request: NextRequest) {
+  // Signed-in people only: the middleware lets any request with a Bearer
+  // header through to /api, so the route checks the token itself.
+  if (!(await getSessionUser())) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   const { searchParams } = request.nextUrl;
   const south = parseFloat(searchParams.get("south") ?? "");
   const west = parseFloat(searchParams.get("west") ?? "");

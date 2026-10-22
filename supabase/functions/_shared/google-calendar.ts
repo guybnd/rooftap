@@ -2,7 +2,7 @@
 // calendar-sync Edge Functions. This is a twin of src/lib/google-calendar.ts
 // (Node/Next.js) — Deno can't resolve that module graph, so the two are kept
 // separate on purpose. Do not import across them.
-import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.111.0";
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const CALENDAR_API = "https://www.googleapis.com/calendar/v3";

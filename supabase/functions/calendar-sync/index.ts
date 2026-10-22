@@ -29,7 +29,7 @@ import {
   resolveTargetMembers,
   shouldBePushed,
 } from "../calendar-push/index.ts";
-import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.111.0";
 
 type EntityType = "task" | "appointment";
 type EntityRecord = Record<string, any>;

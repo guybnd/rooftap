@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
 // resolveParsingProvider (HOUP-43) reads AI_PARSING_PROVIDER via
 // getAdminConfigValue, which goes through createAdminClient — mock the
@@ -20,7 +20,7 @@ vi.mock("@/lib/supabase/admin", () => ({
   }),
 }));
 
-import { resolveParsingProvider } from "@/lib/admin-config";
+import { openAdminConfigValue, resolveParsingProvider, sealAdminConfigValue } from "@/lib/admin-config";
 
 describe("resolveParsingProvider", () => {
   beforeEach(() => {
@@ -51,5 +51,35 @@ describe("resolveParsingProvider", () => {
     expect(await resolveParsingProvider("listing")).toBe("openai");
     expect(await resolveParsingProvider("receipt")).toBe("openai");
     expect(await resolveParsingProvider("recipe")).toBe("gemini");
+  });
+});
+
+describe("admin_config encryption at rest", () => {
+  const secret = process.env.HOUSEHOLD_KEYS_SECRET;
+  afterEach(() => {
+    if (secret === undefined) delete process.env.HOUSEHOLD_KEYS_SECRET;
+    else process.env.HOUSEHOLD_KEYS_SECRET = secret;
+  });
+
+  it("seals a value when the server has a secret, and opens it again", () => {
+    process.env.HOUSEHOLD_KEYS_SECRET = "a-test-secret-of-enough-length";
+    const sealed = sealAdminConfigValue("sk-live-123");
+    expect(sealed.startsWith("enc:")).toBe(true);
+    expect(sealed).not.toContain("sk-live-123");
+    expect(openAdminConfigValue(sealed)).toBe("sk-live-123");
+  });
+
+  it("keeps clear text without a secret, and reads older clear values", () => {
+    delete process.env.HOUSEHOLD_KEYS_SECRET;
+    expect(sealAdminConfigValue("sk-live-123")).toBe("sk-live-123");
+    expect(openAdminConfigValue("sk-live-123")).toBe("sk-live-123");
+    expect(openAdminConfigValue(null)).toBeUndefined();
+  });
+
+  it("treats a value sealed under another secret as unset", () => {
+    process.env.HOUSEHOLD_KEYS_SECRET = "a-test-secret-of-enough-length";
+    const sealed = sealAdminConfigValue("sk-live-123");
+    process.env.HOUSEHOLD_KEYS_SECRET = "a-different-secret-entirely";
+    expect(openAdminConfigValue(sealed)).toBeUndefined();
   });
 });
