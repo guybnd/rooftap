@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
+import { Maximize2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import styles from "./landing.module.css";
 import { DESKTOP_ALT, DESKTOP_H, DESKTOP_SCREEN_IDS, DESKTOP_W, SCREEN_ALT, SCREEN_H, SCREEN_W, desktopScreenSrc, screenSrc, type ScreenId } from "./screens";
@@ -41,6 +43,37 @@ export function HeroPhone({ demoHref = null }: { demoHref?: string | null }) {
     setShown(0);
   };
 
+  // Full screen: the live demo's own frame fills the screen, so the demo keeps
+  // what was changed in it and lays itself out for the screen's width. The
+  // frame mounts first if the demo is not live yet, inside the same tap.
+  // Where a page cannot go full screen (iPhone Safari), the demo opens in a
+  // new tab instead.
+  const frame = useRef<HTMLIFrameElement>(null);
+  const fullScreen = () => {
+    if (!demoHref) return;
+    if (!live) flushSync(() => setLive(true));
+    const el = frame.current;
+    if (el?.requestFullscreen && document.fullscreenEnabled) el.requestFullscreen().catch(() => window.open(demoHref, "_blank", "noopener"));
+    else window.open(demoHref, "_blank", "noopener");
+  };
+  const hint =
+    demoHref &&
+    (
+      <div className={styles.liveRow}>
+        {live ? (
+          <p className={styles.liveHint}>Demo household. Changes stay until you reload.</p>
+        ) : (
+          <button type="button" className={styles.liveHint} onClick={() => setLive(true)}>
+            <span className={styles.liveDot} aria-hidden="true" />
+            Try it yourself
+          </button>
+        )}
+        <button type="button" className={styles.fullButton} onClick={fullScreen} aria-label="Open the demo full screen" title="Full screen">
+          <Maximize2 className="size-4" aria-hidden="true" />
+        </button>
+      </div>
+    );
+
   const switcher = (
     <div className={styles.deviceSwitch} role="group" aria-label="Layout">
       {(["phone", "desktop"] as const).map((d) => (
@@ -61,7 +94,7 @@ export function HeroPhone({ demoHref = null }: { demoHref?: string | null }) {
         </div>
         <div ref={screen} className={styles.browserScreen}>
           {live && demoHref ? (
-            <iframe title="Rooftap demo" src={demoHref} className={styles.liveFrame} style={{ width: DESKTOP_W, height: DESKTOP_H, transform: `scale(${scale})` }} />
+            <iframe ref={frame} title="Rooftap demo" src={demoHref} className={styles.liveFrame} style={{ width: DESKTOP_W, height: DESKTOP_H, transform: `scale(${scale})` }} />
           ) : (
             DESKTOP_SCREEN_IDS.map((id, i) => (
               // eslint-disable-next-line @next/next/no-img-element
@@ -84,15 +117,7 @@ export function HeroPhone({ demoHref = null }: { demoHref?: string | null }) {
     return (
       <div className={cn(styles.heroDemo, styles.heroDesktop)}>
         {switcher}
-        {demoHref &&
-          (live ? (
-            <p className={styles.liveHint}>Demo household. Changes stay until you reload.</p>
-          ) : (
-            <button type="button" className={styles.liveHint} onClick={() => setLive(true)}>
-              <span className={styles.liveDot} aria-hidden="true" />
-              Try it yourself
-            </button>
-          ))}
+        {hint}
         {browser}
       </div>
     );
@@ -102,7 +127,7 @@ export function HeroPhone({ demoHref = null }: { demoHref?: string | null }) {
     <div className={cn(styles.phone, styles.heroPhone)} role={live ? undefined : "img"} aria-label={live ? undefined : SCREEN_ALT[HERO_SCREENS[shown]]}>
       <div ref={screen} className={styles.phoneScreen}>
         {live && demoHref ? (
-          <iframe title="Rooftap demo" src={demoHref} className={styles.liveFrame} style={{ width: SCREEN_W, height: SCREEN_H, transform: `scale(${scale})` }} />
+          <iframe ref={frame} title="Rooftap demo" src={demoHref} className={styles.liveFrame} style={{ width: SCREEN_W, height: SCREEN_H, transform: `scale(${scale})` }} />
         ) : (
           HERO_SCREENS.map((id, i) => (
             // eslint-disable-next-line @next/next/no-img-element
@@ -132,14 +157,7 @@ export function HeroPhone({ demoHref = null }: { demoHref?: string | null }) {
   return (
     <div className={styles.heroDemo}>
       {switcher}
-      {live ? (
-        <p className={styles.liveHint}>Demo household. Changes stay until you reload.</p>
-      ) : (
-        <button type="button" className={styles.liveHint} onClick={() => setLive(true)}>
-          <span className={styles.liveDot} aria-hidden="true" />
-          Try it yourself
-        </button>
-      )}
+      {hint}
       {phone}
     </div>
   );

@@ -1937,6 +1937,38 @@
   font-weight: 600;
   text-align: center;
 }
+/* The hint and the full screen button share one row. */
+.liveRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.fullButton {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--card) 70%, transparent);
+  color: var(--foreground);
+  cursor: pointer;
+  transition: background-color var(--motion-fast, 150ms) ease;
+}
+.fullButton:hover {
+  background: var(--secondary);
+}
+.fullButton:focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 3px;
+}
+/* Full screen, the frame drops its fitted size and scale and fills the screen. */
+.liveFrame:fullscreen {
+  width: 100% !important;
+  height: 100% !important;
+  transform: none !important;
+  background: var(--background);
+}
 p.liveHint {
   border-color: var(--border);
   background: transparent;
