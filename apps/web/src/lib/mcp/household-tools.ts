@@ -232,7 +232,7 @@ export function householdTools({ admin, userId, groupId, enabled }: HouseholdToo
 
   tool(
     "get_budget_summary",
-    { description: "Household budget summary for the current month (costs section)." },
+    { description: "Household budget summary for the current month (costs section): the monthly total, the total per category, and each cost line (id, name, category, monthly amount in cents, cadence, estimate, and bank: 'up' when the bank made it)." },
     async () => {
       if (!groupId) return { content: [{ type: "text", text: JSON.stringify({ total: 0, byCategory: {} }) }] };
       const items = await listCostItems(admin, groupId);
@@ -247,7 +247,16 @@ export function householdTools({ admin, userId, groupId, enabled }: HouseholdToo
           amount,
         ])
       );
-      return { content: [{ type: "text", text: JSON.stringify({ total, byCategory: labeled }) }] };
+      const lines = items.map((item) => ({
+        id: item.id,
+        name: item.name,
+        category: CATEGORY_META[item.category as keyof typeof CATEGORY_META]?.label ?? item.category,
+        monthly: Math.round(monthlyAmount(item)),
+        cadence: item.cadence,
+        estimate: item.is_estimate,
+        ...(item.bank_source ? { bank: item.bank_source } : {}),
+      }));
+      return { content: [{ type: "text", text: JSON.stringify({ total, byCategory: labeled, lines }) }] };
     }
   );
 

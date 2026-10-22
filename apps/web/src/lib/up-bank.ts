@@ -418,13 +418,14 @@ async function autoFileJointPayments(
     const plan = vendorPlan(unique, now);
     if (!plan) continue;
     const upCategory = mostCommon(unique.map((r) => r.category).filter((c): c is string => !!c));
+    const category = costCategoryFromUp(upCategory);
     newLines.push({
       group_id: groupId,
       name: payee.name.slice(0, 200),
-      category: costCategoryFromUp(upCategory),
+      category,
       amount: plan.amountCents,
       cadence: plan.cadence,
-      is_estimate: plan.estimate,
+      is_estimate: bankLineEstimate(plan.estimate, category),
       start_date: plan.startDate,
       provider: payee.name.slice(0, 200),
       bank_source: "up",
@@ -434,12 +435,8 @@ async function autoFileJointPayments(
   }
 
   if (newLines.length) {
-    const { data: made, error: madeError } = await admin.from("cost_items").insert(newLines).select("id, provider");
-    if (madeError) {
-      console.warn("[up-bank] cost lines not made", madeError.message);
-    } else {
-      for (const m of (made ?? []) as { id: string; provider: string }[]) joined.push({ lineId: m.id, key: squashName(m.provider) });
-    }
+    const made = await insertBankLines(admin, newLines);
+    for (const m of made) joined.push({ lineId: m.id, key: squashName(m.provider) });
   }
   if (!joined.length) return false;
 
@@ -490,6 +487,32 @@ async function autoFileJointPayments(
   return true;
 }
 
+/**
+ * A grocery line the bank makes is always an estimate. A fixed grocery line
+ * is a shopping trip's actual cost, one per household per day
+ * (uniq_grocery_actual_cost_line), so a fixed one would clash with a trip or
+ * with another shop paid the same day.
+ */
+function bankLineEstimate(estimate: boolean, category: string): boolean {
+  return estimate || category === "grocery_estimate";
+}
+
+/**
+ * Inserts the bank's new lines. When the batch fails, each goes in on its
+ * own, so one bad line doesn't hold back the rest.
+ */
+async function insertBankLines(admin: SupabaseClient, lines: Record<string, unknown>[]): Promise<{ id: string; provider: string }[]> {
+  const { data, error } = await admin.from("cost_items").insert(lines).select("id, provider");
+  if (!error) return (data ?? []) as { id: string; provider: string }[];
+  const made: { id: string; provider: string }[] = [];
+  for (const line of lines) {
+    const one = await admin.from("cost_items").insert(line).select("id, provider").single();
+    if (one.error) console.warn("[up-bank] cost line not made", line.name, one.error.message);
+    else made.push(one.data as { id: string; provider: string });
+  }
+  return made;
+}
+
 function mostCommon(values: readonly string[]): string | null {
   const counts = new Map<string, number>();
   for (const v of values) counts.set(v, (counts.get(v) ?? 0) + 1);
@@ -505,7 +528,7 @@ function mostCommon(values: readonly string[]): string | null {
 async function refreshBankLines(admin: SupabaseClient, groupId: string): Promise<void> {
   const { data: lines, error } = await admin
     .from("cost_items")
-    .select("id, amount, cadence, is_estimate")
+    .select("id, amount, cadence, is_estimate, category")
     .eq("group_id", groupId)
     .eq("bank_source", "up")
     .eq("deleted", false);
@@ -527,13 +550,14 @@ async function refreshBankLines(admin: SupabaseClient, groupId: string): Promise
     m.set(p.external_id, p);
   }
   const now = new Date();
-  for (const line of lines as { id: string; amount: number; cadence: string; is_estimate: boolean }[]) {
+  for (const line of lines as { id: string; amount: number; cadence: string; is_estimate: boolean; category: string }[]) {
     const plan = vendorPlan([...(byLine.get(line.id)?.values() ?? [])], now);
     if (!plan) continue;
-    if (plan.amountCents === line.amount && plan.cadence === line.cadence && plan.estimate === line.is_estimate) continue;
+    const estimate = bankLineEstimate(plan.estimate, line.category);
+    if (plan.amountCents === line.amount && plan.cadence === line.cadence && estimate === line.is_estimate) continue;
     await admin
       .from("cost_items")
-      .update({ amount: plan.amountCents, cadence: plan.cadence, is_estimate: plan.estimate })
+      .update({ amount: plan.amountCents, cadence: plan.cadence, is_estimate: estimate })
       .eq("id", line.id)
       .eq("group_id", groupId);
   }
