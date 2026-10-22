@@ -717,11 +717,15 @@ function GroceryItemCardInner({
             // the §6 done treatment (55% + strikethrough + check badge); Have
             // it reads from its muted title, glyph and "have" meta.
             bought && 'opacity-[.55]',
+            // Have it sits below the aisle's "In the cupboard" divider on a
+            // recessed inset fill (H4: a fill, not a border), so the part of
+            // the list still to buy ends at a visible line.
+            have && 'bg-muted/50',
             longPress.pressing && 'scale-[0.97]'
           )}
         >
           <ListItemLeading>
-            <span className={cn('inline-flex select-none', have && 'opacity-75')} title={am.label}>
+            <span className={cn('inline-flex select-none', have && 'opacity-55 grayscale-[.85]')} title={am.label}>
               <GroceryGlyph emoji={emoji} size={24} />
             </span>
             {/* Done treatment (Hearth §6): a check badge on the leading chip —
@@ -767,7 +771,7 @@ function GroceryItemCardInner({
                   onClick={() => { setEditingName(true); setNameValue(item.name); }}
                   className={cn(
                     'truncate cursor-text transition-colors',
-                    bought ? 'text-muted-foreground line-through' : have ? 'text-muted-foreground' : 'text-foreground'
+                    bought ? 'text-muted-foreground line-through' : have ? 'font-normal text-muted-foreground' : 'text-foreground'
                   )}
                   title="Tap to rename"
                 >
@@ -860,7 +864,8 @@ function GroceryItemCardInner({
             )}
             {/* Assignee — desktop only inline; mobile reaches it via the
                 "Assign to" section in the hold/⋯ menu below. */}
-            <div className="hidden sm:block">
+            {/* Nobody is buying a have-it item; the slot stays so prices line up. */}
+            <div className={cn('hidden sm:block', have && 'invisible')}>
               <AssigneePicker
                 value={item.assigned_to}
                 groupMembers={groupMembers}
@@ -892,7 +897,7 @@ function GroceryItemCardInner({
                 {priceDisplayCents != null ? (
                   // H2/H6: a price is a value, not a status: muted tabular,
                   // an estimate one step quieter behind its "~".
-                  <span className={cn('text-sm font-medium tabular-nums', hasExplicitPrice || priceDrag.preview != null ? 'text-muted-foreground' : 'text-muted-foreground/70')}>
+                  <span className={cn('text-sm font-medium tabular-nums', have && 'opacity-55', hasExplicitPrice || priceDrag.preview != null ? 'text-muted-foreground' : 'text-muted-foreground/70')}>
                     {hasExplicitPrice || priceDrag.preview != null ? '' : '~'}{formatMoney(priceDisplayCents)}
                   </span>
                 ) : (

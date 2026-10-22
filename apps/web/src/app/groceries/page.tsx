@@ -1583,8 +1583,17 @@ export default function GroceriesPage() {
                           {sortedItems.length > 0 ? (
                             <ListGroup>
                               <SortableContext items={sortedItems.map((i) => i.id)} strategy={verticalListSortingStrategy}>
-                                {sortedItems.map((item) => (
-                                  <div key={item.id} className={cn('flex items-start', arrivals.ids.has(item.id) && 'row-pop-in')}>
+                                {sortedItems.map((item, idx) => (
+                                  <Fragment key={item.id}>
+                                  {/* "In the cupboard" divider: the have-it rows sit below it,
+                                      so what is still to buy ends at a visible line. */}
+                                  {item.status === 'have' && sortedItems[idx - 1]?.status !== 'have' && (
+                                    <div className="flex items-center gap-1.5 bg-muted px-3 pb-1.5 pt-2">
+                                      <span className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">In the cupboard</span>
+                                      <span className="text-xs tabular-nums text-muted-foreground/70">{sortedItems.length - idx}</span>
+                                    </div>
+                                  )}
+                                  <div className={cn('flex items-start', arrivals.ids.has(item.id) && 'row-pop-in')}>
                                     {selectMode && (
                                       <input
                                         type="checkbox"
@@ -1610,6 +1619,7 @@ export default function GroceriesPage() {
                                       />
                                     </div>
                                   </div>
+                                  </Fragment>
                                 ))}
                               </SortableContext>
                             </ListGroup>

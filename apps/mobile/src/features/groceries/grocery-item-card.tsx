@@ -293,8 +293,9 @@ export function GroceryItemCard({
       holdProgress={!selectMode && !reorderMode ? holdFill.progress : undefined}
       // Hearth v2: the colored rails and row tints are retired (§3, H2/H4).
       // Got it takes the §6 done treatment (55% + strikethrough + check
-      // badge); Have it reads from its muted title and "have" meta.
-      className={cn(dragging && 'bg-accent/30', bought && 'opacity-[0.55]')}
+      // badge). Have it sits below the aisle's "In the cupboard" divider on
+      // a recessed inset fill (H4), with a greyed glyph and muted title.
+      className={cn(dragging && 'bg-accent/30', bought && 'opacity-[0.55]', have && !dragging && 'bg-muted/50')}
     >
       <ListItemLeading>
         {reorderMode ? (
@@ -310,7 +311,14 @@ export function GroceryItemCard({
           </View>
         ) : (
           <>
-            <GroceryGlyph emoji={emoji} size={20} />
+            {have ? (
+              // filter is Android-only in RN; iOS keeps the colour and the opacity.
+              <View style={{ opacity: 0.55, filter: [{ grayscale: 0.85 }] }}>
+                <GroceryGlyph emoji={emoji} size={20} />
+              </View>
+            ) : (
+              <GroceryGlyph emoji={emoji} size={20} />
+            )}
             {/* Done treatment (Hearth §6): a check badge on the leading chip
                 — the emoji itself stays put (content exception, matches web's
                 grocery-item-card.tsx:663-679). */}
@@ -347,7 +355,7 @@ export function GroceryItemCard({
               }}
               triggerClassName="min-w-0"
             >
-              <Text numberOfLines={1} className={cn(bought ? 'text-muted-foreground line-through' : have ? 'text-muted-foreground' : 'text-foreground')}>
+              <Text numberOfLines={1} className={cn(bought ? 'text-muted-foreground line-through' : have ? 'font-normal text-muted-foreground' : 'text-foreground')}>
                 {item.name}
               </Text>
             </EditableText>
@@ -417,7 +425,7 @@ export function GroceryItemCard({
               // Estimated (library-fallback) price reads visually lighter
               // than a real explicit price, so the two are distinguishable
               // at a glance.
-              !hasExplicitPrice && 'opacity-60'
+              (!hasExplicitPrice || have) && 'opacity-60'
             )}
           />
         )}

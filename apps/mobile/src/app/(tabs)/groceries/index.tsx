@@ -192,7 +192,9 @@ type GroceryRow =
   // HOUP-317: One list's tier boundary — before the first non-"needed" row.
   // Takes `groupFrameClass`'s base frame like an item row (not a bare label
   // like `aisle-header`) so it shares the card with its neighbours.
-  | { kind: 'tier-label'; id: string; pos: RowPos };
+  // In the aisle view the same row is the "In the cupboard" divider above an
+  // aisle's have-it rows, on the recessed fill those rows share.
+  | { kind: 'tier-label'; id: string; pos: RowPos; label: string; count?: number; recessed?: boolean };
 
 // HOUP-285: how long a grocery_items/grocery_sessions realtime echo
 // suppresses the session-cost sync effect below — see that effect's comment.
@@ -1394,7 +1396,7 @@ export default function GroceriesSectionScreen() {
       // With no shared key the scroll offset holds and the new view unfolds
       // below the controls.
       sorted.forEach((item, i) => {
-        if (i === tailStart) rows.push({ kind: 'tier-label', id: 'flat:tier-label', pos: nextPos() });
+        if (i === tailStart) rows.push({ kind: 'tier-label', id: 'flat:tier-label', pos: nextPos(), label: 'Not needed' });
         rows.push({ kind: 'item', id: `flat:${item.id}`, item, pos: nextPos() });
       });
       return rows;
@@ -1443,10 +1445,28 @@ export default function GroceriesSectionScreen() {
 
       if (collapsed) continue;
 
-      const lastIndex = displayItems.length - 1;
+      // "In the cupboard" divider before the first have-it row; it shares the
+      // aisle's card, so `pos` counts it as a row.
+      const haveStart = displayItems.findIndex((i) => i.status === 'have');
+      const rowCount = displayItems.length + (haveStart !== -1 ? 1 : 0);
+      let rowIndex = 0;
+      const nextPos = (): RowPos => {
+        const pos: RowPos = rowCount === 1 ? 'only' : rowIndex === 0 ? 'first' : rowIndex === rowCount - 1 ? 'last' : 'middle';
+        rowIndex++;
+        return pos;
+      };
       displayItems.forEach((item, index) => {
-        const pos: RowPos = displayItems.length === 1 ? 'only' : index === 0 ? 'first' : index === lastIndex ? 'last' : 'middle';
-        rows.push({ kind: 'item', id: item.id, item, pos });
+        if (index === haveStart) {
+          rows.push({
+            kind: 'tier-label',
+            id: `have-label:${aisleKey}`,
+            pos: nextPos(),
+            label: 'In the cupboard',
+            count: displayItems.length - haveStart,
+            recessed: true,
+          });
+        }
+        rows.push({ kind: 'item', id: item.id, item, pos: nextPos() });
       });
 
       if (!selectMode && !searching) {
@@ -1520,10 +1540,15 @@ export default function GroceriesSectionScreen() {
         // it shares the card with its neighbours, styled per virtual-list.ts's
         // `SectionRow`'s `group-header` typography/tone.
         return (
-          <View className={cn(groupFrameClass(row.pos), spacing, 'px-3 py-2')}>
+          <View className={cn(groupFrameClass(row.pos), spacing, 'flex-row items-center gap-1.5 px-3 py-2', row.recessed && 'bg-muted')}>
             <Text className="cap-inscription text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-              Not needed
+              {row.label}
             </Text>
+            {row.count != null && (
+              <Text className="text-xs text-muted-foreground/70" style={{ fontVariant: ['tabular-nums'] }}>
+                {row.count}
+              </Text>
+            )}
           </View>
         );
       }
