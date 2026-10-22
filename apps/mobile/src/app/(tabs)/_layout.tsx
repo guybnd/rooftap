@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { Tabs } from 'expo-router';
 import { Easing, useWindowDimensions } from 'react-native';
-import { TAB_SHIFT_FRACTION, getSectionByPath, glowDriftX, useNavShiftMs } from '@homeup/core';
+import { TAB_SHIFT_FADE_AT, TAB_SHIFT_FRACTION, getSectionByPath, glowDriftX, useNavShiftMs } from '@homeup/core';
 import { SectionProvider, TabGround, useStillMotion } from '@homeup/ui';
 import { DeferredScene } from '@/components/nav/deferred-scene';
 import { useTabBarSections } from '@/components/nav/use-tab-bar-sections';
@@ -126,7 +126,7 @@ const TabsNavigator = React.memo(function TabsNavigator({ screens }: { screens: 
       sceneStyleInterpolator: ({ current }) => ({
         sceneStyle: {
           opacity: current.progress.interpolate({
-            inputRange: [-1, -0.6, 0, 0.6, 1],
+            inputRange: [-1, -TAB_SHIFT_FADE_AT, 0, TAB_SHIFT_FADE_AT, 1],
             outputRange: [0, 0, 1, 0, 0],
           }),
           transform: [

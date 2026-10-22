@@ -63,6 +63,13 @@ export function SectionGlow({ sectionId }: SectionGlowProps) {
 // anywhere across the screen, and the halved radius keeps the shape).
 type GlowParts = 'all' | 'aura' | 'drift';
 
+/** The glow draws at 1/GLOW_RASTER_SCALE of its size, then scales up. */
+const GLOW_RASTER_SCALE = 4;
+const glowRasterStyle = {
+  transform: [{ scale: GLOW_RASTER_SCALE }],
+  transformOrigin: 'top left',
+} as const;
+
 function GlowGradient({ section, parts = 'all' }: { section: string; parts?: GlowParts }) {
   const material = useThemeMaterial();
   const { glow } = sectionHueSwatch(section, material.scheme);
@@ -72,8 +79,12 @@ function GlowGradient({ section, parts = 'all' }: { section: string; parts?: Glo
   const cx = parts === 'drift' ? '50%' : '88%';
   const rx = parts === 'drift' ? '42.5%' : '85%';
   const gradientId = `section-glow-${section}-${parts}`;
+  // react-native-svg rasterises on the UI thread's CPU. At full size the
+  // drift band (twice the screen wide) took 20-35ms to draw each time a
+  // switch mounted a new layer, dropping 4-5 frames as the slide began. A
+  // soft radial wash looks the same drawn small and scaled up.
   return (
-    <Svg width="100%" height="100%">
+    <Svg width={`${100 / GLOW_RASTER_SCALE}%`} height={`${100 / GLOW_RASTER_SCALE}%`} style={glowRasterStyle}>
       <Defs>
         {/* A theme's fixed aura (Sorbet) sits under the section's own wash. */}
         {aura.map((layer, i) => (

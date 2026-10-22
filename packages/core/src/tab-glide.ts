@@ -21,7 +21,13 @@ export const TAB_GLIDE_MAX_HOP = 1.5;
 export const TAB_GLIDE_SIZE = { width: 58, height: 44 } as const;
 
 /** How far a page shifts on a lateral tab switch, as a share of its width. */
-export const TAB_SHIFT_FRACTION = 0.28;
+export const TAB_SHIFT_FRACTION = 0.6;
+
+/**
+ * How far along its travel a shifting page has faded out (or, arriving,
+ * starts to show): late, so the page reads as moving, not crossfading.
+ */
+export const TAB_SHIFT_FADE_AT = 0.85;
 
 /**
  * Which way a tab switch travels along the bar: 1 toward the end, -1 back

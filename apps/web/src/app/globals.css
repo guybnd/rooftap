@@ -771,10 +771,13 @@
   /* Lateral tab switch with a known direction (Hearth §8.1 Shift): the
      page shifts the way the tab bar's pebble travels, forward = toward the
      end of the bar. --nav-shift is core's TAB_SHIFT_FRACTION of the width,
-     capped so a desktop jump stays a nudge. Clipped to the content region
+     capped so a desktop jump stays a nudge. The fade is late, as on native
+     (TAB_SHIFT_FADE_AT): the old page is gone 85% of the way along its
+     travel, which swift-out reaches about 40% into the time, and the new
+     one starts to show 15% of the way along its own (about 3% in). Clipped to the content region
      so a shifting page never paints over the sidebar. */
   :root {
-    --nav-shift: clamp(48px, 28vw, 140px);
+    --nav-shift: clamp(48px, 60vw, 280px);
   }
   html[data-nav-transition^="shift-"]::view-transition-group(route-content),
   html[data-nav-transition^="shift-"]::view-transition-image-pair(route-content) {
@@ -817,16 +820,20 @@
     from { opacity: 0; }
   }
   @keyframes nav-shift-out-forward {
+    40% { opacity: 0; }
     to { transform: translateX(calc(-1 * var(--nav-shift))); opacity: 0; }
   }
   @keyframes nav-shift-in-forward {
     from { transform: translateX(var(--nav-shift)); opacity: 0; }
+    3% { opacity: 0; }
   }
   @keyframes nav-shift-out-back {
+    40% { opacity: 0; }
     to { transform: translateX(var(--nav-shift)); opacity: 0; }
   }
   @keyframes nav-shift-in-back {
     from { transform: translateX(calc(-1 * var(--nav-shift))); opacity: 0; }
+    3% { opacity: 0; }
   }
   @keyframes nav-descend-out {
     to { transform: translateX(-30%); filter: brightness(0.85); opacity: 0.92; }
