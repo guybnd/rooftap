@@ -65,13 +65,16 @@ import {
   type SegmentOption, haptics } from '@homeup/ui';
 import {
   type TaskSnooze,
-  addDaysISO,
   applyTaskCompletion,
   bucketTasksByDueDate,
+  checklistItemsByChecklistId,
+  checklistsById,
+  compareTasksByDueDateTimeOrder,
+  groupTasksByPerson,
+  moveInCountdown,
   checklistItems$,
   checklists$,
   createPendingActionTracker,
-  daysBetweenISO,
   findOutOfSyncTasks,
   generateMovingTasks,
   isMovingActive,
@@ -91,7 +94,6 @@ import {
   type Checklist,
   type ChecklistTaskItem,
   type HouseholdTask,
-  type HouseholdTaskBuckets,
   type TaskEditableField,
 } from '@homeup/core';
 // Direct path: the barrel deliberately doesn't export client hooks (they break
@@ -107,7 +109,6 @@ import { perfMark } from '@/lib/perf-log';
 import { whyRender } from '@/lib/why-render';
 import { randomUUID } from '@/lib/uuid';
 import { isFlagParamSet } from '@/lib/route-params';
-import { compareTasksByDueDateTimeOrder } from '@/features/tasks/task-sort';
 import { createHouseholdTaskModalCallbacks } from '@/features/tasks/deferred-sheet-close';
 import { createUndoToastPresenter } from '@/lib/undo-toast';
 import { useTaskSnoozeUndo } from '@/features/tasks/use-task-snooze-undo';
@@ -150,35 +151,6 @@ const TONE_CLASS: Record<SectionTone, string> = {
 // `gap-2` header-to-frame) differs from documents/index.tsx's `gap-4`/`gap-1.5` —
 // pass explicit overrides to `rowSpacingClassName` rather than its defaults.
 const ROW_SPACING = { groupGap: 'mt-5', headerGap: 'mt-2' };
-
-// HOUP-245: tick-off linger — a task whose id is still pending its grace
-// window stays in its original due-date bucket instead of jumping straight
-// into Completed the instant `done` flips true (only the Completed bucket
-// hides behind `effectiveShowDone`, so an immediate re-bucket would make it
-// disappear with no window to undo the tap).
-function applyTickOffLinger(buckets: HouseholdTaskBuckets, pendingIds: ReadonlySet<string>): HouseholdTaskBuckets {
-  if (pendingIds.size === 0) return buckets;
-  const today = todayISO();
-  const weekOut = addDaysISO(today, 7);
-  const stillDone: HouseholdTask[] = [];
-  const overdue = [...buckets.overdue];
-  const thisWeek = [...buckets.thisWeek];
-  const upcoming = [...buckets.upcoming];
-  for (const t of buckets.done) {
-    if (!pendingIds.has(t.id)) {
-      stillDone.push(t);
-    } else if (!t.due_date) {
-      upcoming.push(t);
-    } else if (t.due_date < today) {
-      overdue.push(t);
-    } else if (t.due_date <= weekOut) {
-      thisWeek.push(t);
-    } else {
-      upcoming.push(t);
-    }
-  }
-  return { overdue, thisWeek, upcoming, done: stillDone };
-}
 
 // FLUX-60: same tiny resolver duplicated in task-quick-menu.tsx and
 // document-row.tsx rather than centralized — matches this codebase's
@@ -462,20 +434,8 @@ export default function TasksSectionScreen() {
     Object.values(checklistItemsStore$.get() ?? {}).filter((i): i is ChecklistTaskItem => !!i && !i.deleted)
   );
 
-  const checklistsById = React.useMemo(() => {
-    const map: Record<string, Checklist> = {};
-    for (const cl of checklists) map[cl.id] = cl;
-    return map;
-  }, [checklists]);
-
-  const checklistItemsByChecklistId = React.useMemo(() => {
-    const map: Record<string, ChecklistTaskItem[]> = {};
-    for (const item of checklistTaskItems) {
-      (map[item.checklist_id] ??= []).push(item);
-    }
-    for (const list of Object.values(map)) list.sort((a, b) => a.order - b.order);
-    return map;
-  }, [checklistTaskItems]);
+  const checklistsMap = React.useMemo(() => checklistsById(checklists), [checklists]);
+  const checklistItemsMap = React.useMemo(() => checklistItemsByChecklistId(checklistTaskItems), [checklistTaskItems]);
 
   const allTasks = use$(() =>
     Object.values(tasks$.get() ?? {})
@@ -718,7 +678,9 @@ export default function TasksSectionScreen() {
     .map((id) => visibleTasks.find((t) => t.id === id))
     .filter((t): t is HouseholdTask => !!t && !t.done);
   const bucketable = visibleTasks.filter((t) => !newSet.has(t.id) || t.done);
-  const buckets = applyTickOffLinger(bucketTasksByDueDate(bucketable), pendingIds);
+  // HOUP-245: a just-ticked task stays in its due-date bucket, in its place,
+  // until its grace window ends (only Completed hides behind effectiveShowDone).
+  const buckets = bucketTasksByDueDate(bucketable, pendingIds);
   // Upcoming reaches the user's window (default 90 days); further-out tasks
   // wait under a collapsed Later group. A search looks across everything.
   const { upcoming, later } = search.trim()
@@ -739,16 +701,8 @@ export default function TasksSectionScreen() {
 
   const outOfSyncCount = findOutOfSyncTasks(tasks, moveInDate).length;
 
-  // Move-in countdown (optional — screen works fine without a date).
-  let countdown: { label: string; sub: string } | null = null;
-  if (moveInDate) {
-    // H6: "Wed, Nov 11", not the raw ISO date (mirrors web).
-    const moveInLabel = new Date(`${moveInDate}T00:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-    const d = daysBetweenISO(todayISO(), moveInDate);
-    if (d > 0) countdown = { label: `${d} day${d === 1 ? '' : 's'} until move-in`, sub: moveInLabel };
-    else if (d === 0) countdown = { label: 'Move-in day is today', sub: moveInLabel };
-    else countdown = { label: `Moved in ${Math.abs(d)} day${Math.abs(d) === 1 ? '' : 's'} ago`, sub: moveInLabel };
-  }
+  // Move-in countdown (optional: the screen works fine without a date).
+  const countdown = moveInCountdown(moveInDate);
 
   // HOUP-206: flatten the date buckets (or the person-grouped view) into one
   // FlashList data array — mirrors HOUP-205's documents/index.tsx pattern.
@@ -763,37 +717,9 @@ export default function TasksSectionScreen() {
       const personTasks = visibleTasks.filter(
         (t) => !newSetForPerson.has(t.id) && (effectiveShowDone || !t.done || pendingIds.has(t.id))
       );
-      const byPerson = new Map<string, HouseholdTask[]>();
-      for (const t of personTasks) {
-        const key = t.assigned_to ?? 'unassigned';
-        const list = byPerson.get(key) ?? [];
-        list.push(t);
-        byPerson.set(key, list);
-      }
-      // Order: current user first, then other group members (board order), then
-      // any others, unassigned last (FLUX-142).
-      const orderedKeys = [
-        ...(currentUserId && byPerson.has(currentUserId) ? [currentUserId] : []),
-        ...groupMembers.map((m) => m.user_id).filter((id) => id !== currentUserId && byPerson.has(id)),
-        ...[...byPerson.keys()].filter(
-          (k) => k !== 'unassigned' && k !== currentUserId && !groupMembers.some((m) => m.user_id === k)
-        ),
-        ...(byPerson.has('unassigned') ? ['unassigned'] : []),
-      ];
-
-      const personGroups = orderedKeys.map((key) => {
-        const items = byPerson.get(key)!;
-        // Within a person: open tasks first, then by due date, then by time within
-        // a day (all-day first); undated last.
-        items.sort((a, b) => {
-          if (a.done !== b.done) return a.done ? 1 : -1;
-          if (!a.due_date) return b.due_date ? 1 : 0;
-          if (!b.due_date) return -1;
-          if (a.due_date !== b.due_date) return a.due_date < b.due_date ? -1 : 1;
-          const at = a.due_time ?? '';
-          const bt = b.due_time ?? '';
-          return at < bt ? -1 : at > bt ? 1 : 0;
-        });
+      // You first, then the other members in board order, then anyone else,
+      // Unassigned last (FLUX-142); open tasks lead each group (core).
+      const personGroups = groupTasksByPerson(personTasks, currentUserId, groupMembers.map((m) => m.user_id)).map(({ key, tasks: items }) => {
         const label = key === 'unassigned' ? 'Unassigned' : memberLabel(key, memberProfiles);
         return { header: { label, tone: 'muted' as const, count: items.length, key }, rows: items };
       });
@@ -894,8 +820,8 @@ export default function TasksSectionScreen() {
             onPriorityChange={handlePriorityChange}
             onRecurrenceChange={handleRecurrenceChange}
             onFieldChange={handleFieldChange}
-            checklistsById={checklistsById}
-            checklistItemsByChecklistId={checklistItemsByChecklistId}
+            checklistsById={checklistsMap}
+            checklistItemsByChecklistId={checklistItemsMap}
             supabase={getCurrentSupabaseClient()}
             commentCount={taskCommentCounts.counts[task.id] ?? 0}
             onCommentsChanged={taskCommentCounts.refresh}
@@ -911,8 +837,8 @@ export default function TasksSectionScreen() {
       groupMembers,
       memberProfiles,
       currentUserId,
-      checklistsById,
-      checklistItemsByChecklistId,
+      checklistsMap,
+      checklistItemsMap,
       taskCommentCounts.counts,
       taskCommentCounts.refresh,
     ]

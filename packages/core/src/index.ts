@@ -104,6 +104,7 @@ export * from './modules/calendar/calendar-span';
 export * from './modules/calendar/calendar-overlap';
 export * from './modules/calendar/calendar-sources';
 export * from './modules/household/household-tasks';
+export * from './modules/household/task-list-view';
 export * from './modules/groceries/grocery-items';
 export * from './pending-actions';
 export * from './use-pending-actions';

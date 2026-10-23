@@ -7,7 +7,7 @@ import { use$ } from '@legendapp/state/react';
 import { syncState } from '@legendapp/state';
 import { useDataCache } from '@/lib/data-cache';
 import { createClient } from '@/lib/supabase/client';
-import { HouseholdTask, Checklist, ChecklistTaskItem, householdTasks$, checklists$, checklistItems$, useReconnectSync, useStoreHelpers, useStoreLoaded, createPendingActionTracker, usePendingIds, createUndoBatchTracker, useModules, isTaskOwnerEnabled, splitUpcomingByWindow, upcomingWindowDays, type TaskSnooze } from '@homeup/core';
+import { HouseholdTask, Checklist, ChecklistTaskItem, householdTasks$, checklists$, checklistItems$, useReconnectSync, useStoreHelpers, useStoreLoaded, createPendingActionTracker, usePendingIds, createUndoBatchTracker, useModules, isTaskOwnerEnabled, splitUpcomingByWindow, upcomingWindowDays, bucketTasksByDueDate, compareTasksByDueDateTimeOrder, groupTasksByPerson, moveInCountdown, checklistsById, checklistItemsByChecklistId, type TaskSnooze } from '@homeup/core';
 import {
   Plus,
   RotateCw,
@@ -36,8 +36,6 @@ import {
   isMovingActive,
   nextOccurrenceISO,
   todayISO,
-  addDaysISO,
-  daysBetweenISO,
 } from './moving-tasks';
 import { HOUSEHOLD_TASKS_CHANGED_EVENT } from '@/hooks/use-overdue-task-count';
 import { toastUndoDelete } from '@/lib/undo-toast';
@@ -77,37 +75,14 @@ export default function TasksPage() {
     Object.values(checklistItemsStore$.get() ?? {}).filter((i): i is ChecklistTaskItem => !!i && !i.deleted)
   );
 
-  const checklistsById = useMemo(() => {
-    const map: Record<string, Checklist> = {};
-    for (const cl of checklists) map[cl.id] = cl;
-    return map;
-  }, [checklists]);
+  const checklistsMap = useMemo(() => checklistsById(checklists), [checklists]);
+  const checklistItemsMap = useMemo(() => checklistItemsByChecklistId(checklistTaskItems), [checklistTaskItems]);
 
-  const checklistItemsByChecklistId = useMemo(() => {
-    const map: Record<string, ChecklistTaskItem[]> = {};
-    for (const item of checklistTaskItems) {
-      (map[item.checklist_id] ??= []).push(item);
-    }
-    for (const list of Object.values(map)) list.sort((a, b) => a.order - b.order);
-    return map;
-  }, [checklistTaskItems]);
-
+  // Date ascending, all-day before timed, then time, then sort_order (core, shared with the phone).
   const allTasks = use$(() =>
     Object.values(tasks$.get() ?? {})
       .filter((t): t is HouseholdTask => !!t && !t.deleted)
-      .sort((a, b) => {
-        if (!a.due_date && !b.due_date) return (a.sort_order ?? 0) - (b.sort_order ?? 0);
-        if (!a.due_date) return 1;
-        if (!b.due_date) return -1;
-        if (a.due_date !== b.due_date) return a.due_date < b.due_date ? -1 : 1;
-        // Same date: all-day (null time) first, then by time, then by sort_order.
-        const at = a.due_time ?? '';
-        const bt = b.due_time ?? '';
-        if (!at && bt) return -1;
-        if (at && !bt) return 1;
-        if (at !== bt) return at < bt ? -1 : 1;
-        return (a.sort_order ?? 0) - (b.sort_order ?? 0);
-      })
+      .sort(compareTasksByDueDateTimeOrder)
   );
   // Modules: bill and document reminders go with Costs and Documents, so one
   // whose module is off leaves the list and its counts (task-modules.ts).
@@ -342,26 +317,20 @@ export default function TasksPage() {
     .map((id) => visibleTasks.find((t) => t.id === id))
     .filter((t): t is HouseholdTask => !!t);
 
-  // Bucket by due date (timezone-safe string comparison).
+  // Bucket by due date (timezone-safe string comparison). HOUP-245: a
+  // just-completed task lingers in its normal bucket (still visible, checked)
+  // until its grace window expires, instead of jumping straight to Completed.
   const today = todayISO();
-  const weekOut = addDaysISO(today, 7);
-  const overdue: HouseholdTask[] = [];
-  const thisWeek: HouseholdTask[] = [];
-  const allUpcoming: HouseholdTask[] = [];
-  const done: HouseholdTask[] = [];
-
-  for (const t of visibleTasks) {
-    if (newSet.has(t.id)) continue; // shown in "Just added"
-    // HOUP-245: a just-completed task lingers in its normal bucket (still
-    // visible, checked) until its grace window expires, instead of jumping
-    // straight to the Completed bucket.
-    const bucketAsDone = t.done && !pendingIds.has(t.id);
-    if (bucketAsDone) done.push(t);
-    else if (!t.due_date) allUpcoming.push(t);
-    else if (t.due_date < today) overdue.push(t);
-    else if (t.due_date <= weekOut) thisWeek.push(t);
-    else allUpcoming.push(t);
-  }
+  const {
+    overdue,
+    thisWeek,
+    upcoming: allUpcoming,
+    done,
+  } = bucketTasksByDueDate(
+    visibleTasks.filter((t) => !newSet.has(t.id)), // just added ones show in "Just added"
+    pendingIds,
+    today
+  );
   // Upcoming reaches the user's window (default 90 days); further-out tasks
   // wait under a collapsed Later group. A search looks across everything.
   const { upcoming, later } = search.trim()
@@ -382,16 +351,8 @@ export default function TasksPage() {
 
   const outOfSyncCount = findOutOfSyncTasks(tasks, moveInDate).length;
 
-  // Move-in countdown (optional — page works fine without a date).
-  let countdown: { label: string; sub: string } | null = null;
-  if (moveInDate) {
-    // H6: "Wed, Nov 11", not the raw ISO date.
-    const moveInLabel = new Date(`${moveInDate}T00:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-    const d = daysBetweenISO(today, moveInDate);
-    if (d > 0) countdown = { label: `${d} day${d === 1 ? '' : 's'} until move-in`, sub: moveInLabel };
-    else if (d === 0) countdown = { label: 'Move-in day is today', sub: moveInLabel };
-    else countdown = { label: `Moved in ${Math.abs(d)} day${Math.abs(d) === 1 ? '' : 's'} ago`, sub: moveInLabel };
-  }
+  // Move-in countdown (optional: the page works fine without a date).
+  const countdown = moveInCountdown(moveInDate, today);
 
   const cardProps = {
     groupMembers,
@@ -405,8 +366,8 @@ export default function TasksPage() {
       setIsModalOpen(true);
     },
     onRequestDelete: handleRequestDelete,
-    checklistsById,
-    checklistItemsByChecklistId,
+    checklistsById: checklistsMap,
+    checklistItemsByChecklistId: checklistItemsMap,
   };
 
   if (cacheLoading || (!storeLoaded && tasks.length === 0)) {
@@ -436,39 +397,9 @@ export default function TasksPage() {
     const personTasks = visibleTasks.filter(
       (t) => !newSet.has(t.id) && (showDone || !t.done || pendingIds.has(t.id))
     );
-    const byPerson = new Map<string, HouseholdTask[]>();
-    for (const t of personTasks) {
-      const key = t.assigned_to ?? 'unassigned';
-      const list = byPerson.get(key) ?? [];
-      list.push(t);
-      byPerson.set(key, list);
-    }
-    // Order: current user first, then other group members (board order), then
-    // any others, unassigned last (FLUX-142).
-    const orderedKeys = [
-      ...(currentUserId && byPerson.has(currentUserId) ? [currentUserId] : []),
-      ...groupMembers
-        .map((m) => m.user_id)
-        .filter((id) => id !== currentUserId && byPerson.has(id)),
-      ...[...byPerson.keys()].filter(
-        (k) => k !== 'unassigned' && k !== currentUserId && !groupMembers.some((m) => m.user_id === k)
-      ),
-      ...(byPerson.has('unassigned') ? ['unassigned'] : []),
-    ];
-
-    return orderedKeys.map((key) => {
-      const items = byPerson.get(key)!;
-      // Within a person: open tasks first, then by due date, then by time within
-      // a day (all-day first, FLUX-144); undated last.
-      items.sort((a, b) => {
-        if (a.done !== b.done) return a.done ? 1 : -1;
-        if (!a.due_date) return b.due_date ? 1 : 0;
-        if (!b.due_date) return -1;
-        if (a.due_date !== b.due_date) return a.due_date < b.due_date ? -1 : 1;
-        const at = a.due_time ?? '';
-        const bt = b.due_time ?? '';
-        return at < bt ? -1 : at > bt ? 1 : 0;
-      });
+    // You first, then the other members in board order, then anyone else,
+    // Unassigned last (FLUX-142). Open tasks lead each group (FLUX-144).
+    return groupTasksByPerson(personTasks, currentUserId, groupMembers.map((m) => m.user_id)).map(({ key, tasks: items }) => {
       const label = key === 'unassigned' ? 'Unassigned' : memberLabel(key, memberProfiles);
       return (
         <div key={key}>

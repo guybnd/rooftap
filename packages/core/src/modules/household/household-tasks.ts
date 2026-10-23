@@ -112,15 +112,19 @@ export interface HouseholdTaskBuckets {
 
 /**
  * Buckets tasks by due date (overdue / this week / upcoming), separating
- * completed tasks into their own bucket. Mirrors apps/web/src/app/tasks/page.tsx's
- * inline bucketing loop.
+ * completed tasks into their own bucket. HOUP-245: a just-completed task
+ * whose id is in `lingering` (its tick-off grace window) stays in its due-date
+ * bucket, in its place, instead of jumping straight to Completed.
  */
-export function bucketTasksByDueDate(tasks: HouseholdTask[]): HouseholdTaskBuckets {
-  const today = todayISO();
+export function bucketTasksByDueDate(
+  tasks: HouseholdTask[],
+  lingering?: ReadonlySet<string>,
+  today: string = todayISO()
+): HouseholdTaskBuckets {
   const weekOut = addDaysISO(today, 7);
   const buckets: HouseholdTaskBuckets = { overdue: [], thisWeek: [], upcoming: [], done: [] };
   for (const t of tasks) {
-    if (t.done) buckets.done.push(t);
+    if (t.done && !lingering?.has(t.id)) buckets.done.push(t);
     else if (!t.due_date) buckets.upcoming.push(t);
     else if (t.due_date < today) buckets.overdue.push(t);
     else if (t.due_date <= weekOut) buckets.thisWeek.push(t);
