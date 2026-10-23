@@ -125,9 +125,14 @@ export async function assistantContextFor(
  * switched-on modules, Home Assistant's when the household connected it, and
  * sending feedback to the Rooftap team.
  */
-async function turnTools(ctx: AssistantContext, settings: AssistantSettings, readOnly: boolean, deviceId?: string | null) {
+async function turnTools(
+  ctx: AssistantContext,
+  settings: AssistantSettings,
+  readOnly: boolean,
+  { deviceId, shared = false }: { deviceId?: string | null; shared?: boolean } = {}
+) {
   const household = assistantTools(
-    { admin: ctx.admin, userId: ctx.userId, groupId: ctx.groupId, enabled: ctx.enabled, deviceId },
+    { admin: ctx.admin, userId: ctx.userId, groupId: ctx.groupId, enabled: ctx.enabled, deviceId, shared },
     { settings, readOnly }
   );
   const homeAssistant = await homeAssistantTools(ctx.admin, ctx.groupId, { readOnly });
@@ -595,7 +600,10 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
   // The tools (Home Assistant's may be a round trip away) are gathered while
   // the conversation and its history are read.
   const toolsStarted = Date.now();
-  const gathering = turnTools(ctx, settings, limits.readOnly, input.cook?.deviceId).then((r) => ({ ...r, ms: Date.now() - toolsStarted }));
+  // In the household thread every member reads the reply (shared).
+  const gathering = turnTools(ctx, settings, limits.readOnly, { deviceId: input.cook?.deviceId, shared: roomKind === "household" }).then(
+    (r) => ({ ...r, ms: Date.now() - toolsStarted })
+  );
   // Settled here so a failed read below can't leave it rejecting unheard.
   gathering.catch(() => {});
 

@@ -15,7 +15,6 @@ export const MODULES_WITHOUT_TOOLS: Partial<Record<ModuleId, string>> = {
   assistant: 'The Assistant itself. Its settings stay in Settings, where an owner decides what it may do.',
   'google-calendar': 'Sync only. The events it brings in reach the Assistant through Calendar.',
   mcp: 'The door outside AI assistants use to reach the household tools. It holds no household data of its own.',
-  occasions: 'Its tools (with the "keep it from" rule) are being built in their own change.',
 };
 
 const COMMENTS = 'Comments are members talking to each other about an item, not household state to act on.';
@@ -123,9 +122,9 @@ export const TABLE_REACH: Record<string, Reach> = {
   reward_perks: { tools: ['get_rewards', 'add_reward_perk'] },
 
   // Occasions
-  occasions: { none: MODULES_WITHOUT_TOOLS.occasions! },
-  gift_ideas: { none: MODULES_WITHOUT_TOOLS.occasions! },
-  wishlist_items: { none: MODULES_WITHOUT_TOOLS.occasions! },
+  occasions: { tools: ['get_occasions', 'add_occasion'] },
+  gift_ideas: { tools: ['get_occasions', 'add_gift_ideas'] },
+  wishlist_items: { tools: ['get_occasions', 'add_wishlist_items'] },
 
   // Bin night
   bin_streams: { tools: ['get_bin_night', 'change_bin_collection', 'get_agenda'] },

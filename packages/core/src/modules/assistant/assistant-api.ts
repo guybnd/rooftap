@@ -314,6 +314,7 @@ const MODULE_NOUN: Partial<Record<ModuleId, string>> = {
   recipes: 'Recipes',
   meals: 'the meal plan',
   shopper: 'Shopper',
+  occasions: 'Occasions',
   rewards: 'Rewards',
   bins: 'Bin night',
   'home-care': 'Home care',
@@ -414,6 +415,13 @@ export function describeProposal(tool: string, module: AssistantScope, args: Rec
     if (typeof args.label === 'string' && args.label.trim() && !args.recipe_id) return `Put ${quoted(args.label)}${night} on the meal plan`;
     return `Plan a dinner${night} on the meal plan`;
   }
+  if (tool === 'add_gift_ideas' || tool === 'add_wishlist_items') {
+    const list = Array.isArray(args.ideas) ? args.ideas : Array.isArray(args.items) ? args.items : [];
+    const first = list[0] as { title?: unknown } | undefined;
+    const what = list.length === 1 ? quoted(first?.title) : `${list.length} things`;
+    return tool === 'add_gift_ideas' ? `Add ${what} as gift ideas in Occasions` : `Add ${what} to your wishlist`;
+  }
+  if (tool === 'add_occasion') return typeof args.title === 'string' && args.title.trim() ? `Add ${quoted(args.title)} to Occasions` : 'Add an occasion to Occasions';
   if (tool === 'add_checklist_item') return `Add ${quoted(args.label)} to a checklist`;
   if (tool === 'check_checklist_item') return args.done === false ? 'Untick a checklist item' : 'Tick a checklist item';
   if (tool.startsWith('create_')) return module === 'groceries' ? `Add ${quoted(name)} to Groceries` : `Add ${quoted(name)} to ${where}`;

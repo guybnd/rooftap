@@ -47,4 +47,13 @@ describe("assistantTools", () => {
     expect(bad.isError).toBe(true);
     expect(bad.content[0].text).toContain("Invalid arguments");
   });
+
+  it("never offers gift ideas in the household's shared chat", () => {
+    const settings = { ...DEFAULT_ASSISTANT_SETTINGS, trust: { occasions: "act" as const } };
+    const own = assistantTools(ctx(["occasions"]), { settings }).map((t) => t.name);
+    expect(own).toContain("add_gift_ideas");
+    const shared = assistantTools({ ...ctx(["occasions"]), shared: true }, { settings }).map((t) => t.name);
+    expect(shared).not.toContain("add_gift_ideas");
+    expect(shared).toContain("get_occasions");
+  });
 });

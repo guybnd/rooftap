@@ -322,6 +322,98 @@ describe("task tools", () => {
   });
 });
 
+describe("occasions tools", () => {
+  const base = () => ({
+    group_members: [
+      { group_id: "g1", user_id: "u1" },
+      { group_id: "g1", user_id: "u2" },
+    ],
+    occasions: [
+      { id: "o1", group_id: "g1", title: "Noa's birthday", kind: "birthday", date: "1990-03-14", repeats: true, person_id: "u2", person_name: null, budget_cents: null, notes: null, hidden_from: [], deleted: false },
+      { id: "o2", group_id: "g1", title: "Surprise for u1", kind: "other", date: "2099-01-01", repeats: false, person_id: "u1", person_name: null, budget_cents: null, notes: null, hidden_from: ["u1"], deleted: false },
+      { id: "o3", group_id: "g2", title: "Other house", kind: "birthday", date: "1990-05-01", repeats: true, person_id: null, person_name: "Jo", budget_cents: null, notes: null, hidden_from: [], deleted: false },
+    ] as Row[],
+    gift_ideas: [] as Row[],
+    wishlist_items: [{ id: "w1", group_id: "g1", user_id: "u2", title: "Book", url: null, price_cents: null, notes: null, deleted: false }] as Row[],
+    shopper_wants: [
+      { id: "s1", group_id: "g1", title: "Plain kettle", status: "watching", hidden_from: [], deleted: false },
+      { id: "s2", group_id: "g1", title: "Gift watch", status: "watching", hidden_from: ["u2"], deleted: false },
+    ] as Row[],
+  });
+  const as = async (tables: Record<string, Row[]>, name: string, args: Row, who = "u1", shared = false) => {
+    const t = householdTools({ ...ctx, userId: who, admin: fakeAdmin(tables), groupId: "g1", shared }).find((x) => x.name === name)!;
+    const res = await t.handler(args);
+    return { res, body: JSON.parse(res.content[0].text) };
+  };
+
+  it("adds a list of ideas under a member's birthday, kept from them by default", async () => {
+    const tables = base();
+    const { body } = await as(tables, "add_gift_ideas", { for_user_id: "u2", ideas: [{ title: "Book", price: 20 }, { title: "Scarf" }] });
+    expect(body).toMatchObject({ ok: true, occasion: "Noa's birthday", added: ["Book", "Scarf"], kept_from: ["Noa"] });
+    expect(tables.gift_ideas.map((i) => [i.occasion_id, i.for_user_id, i.hidden_from, i.price_cents])).toEqual([
+      ["o1", "u2", ["u2"], 2000],
+      ["o1", "u2", ["u2"], null],
+    ]);
+  });
+
+  it("asks for the birthday first when there is none, and refuses other households' occasions", async () => {
+    const tables = base();
+    tables.occasions = tables.occasions.filter((o) => o.id !== "o1");
+    const missing = await as(tables, "add_gift_ideas", { for_user_id: "u2", ideas: [{ title: "Book" }] });
+    expect(missing.res.isError).toBe(true);
+    expect(missing.body.error).toContain("add_occasion");
+    const other = await as(base(), "add_gift_ideas", { occasion_id: "o3", ideas: [{ title: "Book" }] });
+    expect(other.body.error).toBe("Occasion not found");
+    const kept = await as(base(), "add_gift_ideas", { occasion_id: "o2", ideas: [{ title: "Cake" }] });
+    expect(kept.body.error).toBe("Occasion not found");
+  });
+
+  it("keeps an idea from nobody only when asked", async () => {
+    const tables = base();
+    await as(tables, "add_gift_ideas", { occasion_id: "o1", keep_from_user_ids: [], ideas: [{ title: "Dinner out" }] });
+    expect(tables.gift_ideas[0].hidden_from).toEqual([]);
+  });
+
+  it("never shows an idea to the person it is kept from, nor that their wish is taken", async () => {
+    const tables = base();
+    await as(tables, "add_gift_ideas", { for_user_id: "u2", ideas: [{ title: "Book" }] });
+    tables.gift_ideas[0].wishlist_item_id = "w1";
+    const giver = await as(tables, "get_occasions", {});
+    expect(giver.body.occasions.map((o: Row) => o.id)).toEqual(["o1"]);
+    expect(giver.body.occasions[0].ideas).toMatchObject([{ title: "Book", kept_from: ["Noa"] }]);
+    expect(giver.body.wishlists[0].items[0].taken).toBe(true);
+    const them = await as(tables, "get_occasions", {}, "u2");
+    expect(them.body.occasions.find((o: Row) => o.id === "o1").ideas).toEqual([]);
+    expect(them.body.wishlists[0].items[0].taken).toBeUndefined();
+  });
+
+  it("shows nothing kept from anyone in the household chat, and adds no ideas there", async () => {
+    const tables = base();
+    await as(tables, "add_gift_ideas", { for_user_id: "u2", ideas: [{ title: "Book" }] });
+    tables.gift_ideas[0].wishlist_item_id = "w1";
+    const shared = await as(tables, "get_occasions", {}, "u1", true);
+    expect(shared.body.occasions[0].ideas).toEqual([]);
+    expect(shared.body.wishlists[0].items[0].taken).toBeUndefined();
+    const add = await as(tables, "add_gift_ideas", { for_user_id: "u2", ideas: [{ title: "Scarf" }] }, "u1", true);
+    expect(add.res.isError).toBe(true);
+    expect(tables.gift_ideas).toHaveLength(1);
+    const watches = await as(tables, "get_watchlist", {}, "u1", true);
+    expect(watches.body.map((w: Row) => w.title)).toEqual(["Plain kettle"]);
+    const own = await as(tables, "get_watchlist", {}, "u1");
+    expect(own.body.map((w: Row) => w.title)).toEqual(["Plain kettle", "Gift watch"]);
+  });
+
+  it("adds to the person's own wishlist and adds a birthday once", async () => {
+    const tables = base();
+    await as(tables, "add_wishlist_items", { items: [{ title: "Headphones", price: 99.5 }] }, "u2");
+    expect(tables.wishlist_items[1]).toMatchObject({ user_id: "u2", title: "Headphones", price_cents: 9950 });
+    const dup = await as(tables, "add_occasion", { kind: "birthday", date: "1990-03-14", person_user_id: "u2" });
+    expect(dup.res.isError).toBe(true);
+    const added = await as(tables, "add_occasion", { kind: "birthday", date: "1988-07-02", person_user_id: "u1" }, "u2");
+    expect(added.body).toMatchObject({ ok: true, title: "Birthday" });
+  });
+});
+
 describe("costCategoryFrom", () => {
   it("reads a category by id or label, any case", () => {
     expect(costCategoryFrom("outing")).toBe("outing");

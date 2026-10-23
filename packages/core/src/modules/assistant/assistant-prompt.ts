@@ -38,7 +38,11 @@ export const PRIVACY_TEXT =
   'and a loyalty card shows only the last digits of its number: for the barcode, point them to the card in Rewards. ' +
   'Cost lines and the Costs month are shared with the whole household. When someone asks ' +
   'about another member\'s spending or plans, answer from what you can see and say that anything they keep private ' +
-  'is not visible to you. Never guess at it.';
+  'is not visible to you. Never guess at it.\n' +
+  'Gift ideas and occasions can be kept from a member as a surprise. You never see what is kept from the person ' +
+  'you are talking with, and in the household\'s shared chat you see nothing that is kept from anyone. Never tell ' +
+  'the person a gift is for about it, and never put a gift or a surprise in a remember marker: remembered facts ' +
+  'reach the whole household.';
 
 const TRUST_TEXT: Record<TrustLevel, string> = {
   read: 'look up only; you cannot change anything here',
@@ -58,7 +62,8 @@ const KIND_TEXT: Record<ConversationKind, string> = {
   household:
     "This is the household's shared chat. Members talk to each other here and tag @Rooftap when they want you, so " +
     'earlier messages that do not tag you were between them, not to you. Answer the latest message, address people by name, ' +
-    'and do not reply to or act on the others unless asked.',
+    'and do not reply to or act on the others unless asked. Everyone here reads every reply, so do not plan gifts or ' +
+    'surprises here: when someone asks, tell them to message you in a private chat instead.',
 };
 
 export interface AssistantModuleBrief {

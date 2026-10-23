@@ -23,6 +23,9 @@ export interface AssistantToolOptions {
   readOnly?: boolean;
 }
 
+/** Tools never offered in the household's shared chat. */
+const SHARED_CHAT_HIDDEN = new Set(["add_gift_ideas"]);
+
 function jsonSchema(shape: z.ZodRawShape | undefined): Record<string, unknown> {
   if (!shape) return { type: "object", properties: {} };
   const schema = z.toJSONSchema(z.object(shape)) as Record<string, unknown>;
@@ -34,6 +37,8 @@ export function assistantTools(ctx: HouseholdToolContext, { settings, readOnly =
   return householdTools(ctx).flatMap((t) => {
     const meta = MCP_TOOL_BY_NAME[t.name];
     if (!meta || !ctx.enabled.has(meta.module)) return [];
+    // Gift ideas are kept from the person they are for, who reads the shared chat too.
+    if (ctx.shared && SHARED_CHAT_HIDDEN.has(t.name)) return [];
     const gate = toolGate(meta.kind, readOnly ? "read" : trustFor(settings.trust, meta.module), isDeleteTool(t.name));
     if (gate === "hidden") return [];
     const schema = t.inputSchema ? z.object(t.inputSchema) : null;

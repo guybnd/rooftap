@@ -190,7 +190,9 @@ async function binData(admin: Admin, groupId: string) {
 
 // ── The tools ───────────────────────────────────────────────────────────────
 
-export function moduleTools({ admin, userId, groupId, enabled }: HouseholdToolContext): HouseholdTool[] {
+export function moduleTools({ admin, userId, groupId, enabled, shared = false }: HouseholdToolContext): HouseholdTool[] {
+  // A watch kept from this person, or in the household's shared chat from anyone (Occasions).
+  const keptHere = (w: ShopperWant) => isKeptFrom(w, userId) || (shared && (w.hidden_from ?? []).length > 0);
   const tools: HouseholdTool[] = [];
 
   function tool<S extends z.ZodRawShape>(
@@ -609,7 +611,7 @@ export function moduleTools({ admin, userId, groupId, enabled }: HouseholdToolCo
     },
     async ({ title, query, target_cents, budget_cents, need_by, notes, status }, gid) => {
       const wants = await liveRows<ShopperWant>(admin, "shopper_wants", gid);
-      const dupe = wants.find((w) => !isKeptFrom(w, userId) && w.status !== "bought" && norm(w.title) === norm(title));
+      const dupe = wants.find((w) => !keptHere(w) && w.status !== "bought" && norm(w.title) === norm(title));
       if (dupe) return fail(`${dupe.title} is already on the watchlist (id ${dupe.id}); use update_watch_item.`);
       const row = {
         id: crypto.randomUUID(),
@@ -649,7 +651,7 @@ export function moduleTools({ admin, userId, groupId, enabled }: HouseholdToolCo
     },
     async ({ want_id, remove, ...fields }, gid) => {
       const { data } = await admin.from("shopper_wants").select("*").eq("id", want_id).eq("group_id", gid).eq("deleted", false);
-      const want = ((data ?? []) as ShopperWant[]).find((w) => !isKeptFrom(w, userId));
+      const want = ((data ?? []) as ShopperWant[]).find((w) => !keptHere(w));
       if (!want) return fail("Watchlist item not found");
       const patch: Row = remove ? { deleted: true } : {};
       if (!remove) {
