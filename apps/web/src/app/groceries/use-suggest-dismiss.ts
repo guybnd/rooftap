@@ -1,12 +1,10 @@
 'use client';
 
-// The X on a "Might be running low" suggestion. Runs the user's remembered
-// choice (user_settings.grocery_suggest_dismiss); when none is stored yet the
-// row's DismissMenu asks once and `dismiss` saves that pick as the default.
-// Settings > Groceries changes it later. Mirrors
-// apps/mobile/src/features/groceries/use-suggest-dismiss.ts.
-import { useState } from 'react';
-import { resolveGroceryDismissAction, type GroceryDismissAction, type GroceryItem } from '@homeup/core';
+// The X on a "Might be running low" suggestion. The hook lives in core
+// (modules/groceries/use-suggest-dismiss.ts); this binds the web settings
+// cache and client.
+import type { GroceryItem } from '@homeup/core';
+import { useSuggestDismiss as useCoreSuggestDismiss } from '@homeup/core';
 import { createClient } from '@/lib/supabase/client';
 import { useDataCache } from '@/lib/data-cache';
 
@@ -16,34 +14,5 @@ export function useSuggestDismiss(opts: {
   archive: (item: GroceryItem) => void;
 }) {
   const { userSettings, refresh } = useDataCache();
-  // Local override so the remembered pick applies on the very next click,
-  // before the settings refresh lands.
-  const [picked, setPicked] = useState<GroceryDismissAction | null>(null);
-  const dismissAction = picked ?? resolveGroceryDismissAction(userSettings?.grocery_suggest_dismiss);
-
-  const dismiss = (item: GroceryItem, action: GroceryDismissAction) => {
-    if (action === 'archive') opts.archive(item);
-    else opts.hide(item);
-    if (!dismissAction) {
-      setPicked(action);
-      void (async () => {
-        try {
-          const supabase = createClient();
-          const { data: { user } } = await supabase.auth.getUser();
-          if (!user) return;
-          await supabase
-            .from('user_settings')
-            .upsert(
-              { user_id: user.id, grocery_suggest_dismiss: action, updated_at: new Date().toISOString() },
-              { onConflict: 'user_id' },
-            );
-          refresh();
-        } catch {
-          /* offline — the local pick still applies for this session */
-        }
-      })();
-    }
-  };
-
-  return { dismissAction, dismiss };
+  return useCoreSuggestDismiss({ ...opts, stored: userSettings?.grocery_suggest_dismiss, refresh, getClient: createClient });
 }

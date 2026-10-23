@@ -44,8 +44,7 @@ import { decode } from 'base64-arraybuffer';
 import * as SecureStore from 'expo-secure-store';
 import { ArrowUpDown, BookOpen, ChevronDown, ChevronRight, Plus, Receipt, RotateCcw, SquareCheck, Trash2, X } from 'lucide-react-native';
 import { Text, ActionMenu, type ActionMenuAnchor, type ActionMenuItem, Button, cn, GroceryGlyph, haptics, Input, PopIn, ReorderableList, ScreenBackground, toast, useArrivals } from '@homeup/ui';
-import { AISLE_ORDER, CUSTOM_AISLE_COLOR_KEYS, countHave, countNeeded, createPendingActionTracker, getAisleMeta, getRegionProvider, resolveItemDefaults, suggestReAdd, grocerySearchAddOptions, groceryAislesMatching, parseGroceryEntry, canonicalizeItemName, sortGroceriesFlat, DEFAULT_GROCERY_SORT_MODE, GROCERY_SHOW_KEY, parseGroceryShow, type GroceryShowFilter, todayStr, isBoughtToday, ensureSession, updateSession, closeSession, syncSession, getEnabledModules, isFeatureEnabled, fetchTodaySession, uploadReceipt, applyReceiptLearning, formatMoney, groceryItems$, loyaltyCards$, sortLoyaltyCards, learnItemPrice, MOTION_DURATIONS_MS, usePendingIds, useReconnectSync, useStoreHelpers, useStoreLoaded, type GroceryItem, type GrocerySession, type LoyaltyCard, type GrocerySortMode, POP_IN_HOLD_MS, type SuggestReAddItem, type DocumentUploadInput, dialog } from '@homeup/core';
-import { useFuzzySearch } from '@homeup/core/src/hooks/use-fuzzy-search';
+import { AISLE_ORDER, CUSTOM_AISLE_COLOR_KEYS, countHave, countNeeded, createPendingActionTracker, getAisleMeta, getRegionProvider, resolveItemDefaults, suggestReAdd, grocerySearchAddOptions, groceryBuyableItems, groceryEstimate, groceryTripTotals, useGrocerySearch, canonicalizeItemName, sortGroceriesFlat, DEFAULT_GROCERY_SORT_MODE, GROCERY_SHOW_KEY, parseGroceryShow, type GroceryShowFilter, todayStr, isBoughtToday, ensureSession, updateSession, closeSession, syncSession, getEnabledModules, isFeatureEnabled, fetchTodaySession, uploadReceipt, applyReceiptLearning, formatMoney, groceryItems$, loyaltyCards$, sortLoyaltyCards, learnItemPrice, MOTION_DURATIONS_MS, usePendingIds, useReconnectSync, useStoreHelpers, useStoreLoaded, type GroceryItem, type GrocerySession, type LoyaltyCard, type GrocerySortMode, POP_IN_HOLD_MS, type SuggestReAddItem, type DocumentUploadInput, dialog } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
 import { NoGroupScreen } from '@/components/no-group-screen';
 import { createUndoToastPresenter } from '@/lib/undo-toast';
@@ -409,8 +408,7 @@ export default function GroceriesSectionScreen() {
     if (!session || !group || session.tracking !== 'on' || session.closed_at) return;
     perfMark('groceries:effect:sessionCostSync:start', `items=${items.length}`);
     const today = todayStr();
-    const boughtToday = items.filter((i) => isBoughtToday(i, today));
-    const summed = boughtToday.reduce((sum, i) => sum + (i.last_price ?? i.price_cents ?? priceFor(i.name) ?? 0), 0);
+    const summed = groceryTripTotals(items, priceFor, today).cents;
     if (summed === session.summed_total_cents) return;
     if (Date.now() - remoteUpdateRef.current < REMOTE_ECHO_WINDOW_MS) return;
     const sig = `${session.id}|${summed}|${session.override_total_cents}|${session.receipt_total_cents}|${session.retailer}|${session.receipt_path}`;
@@ -467,27 +465,20 @@ export default function GroceriesSectionScreen() {
     },
   });
 
-  const boughtTodayItems = React.useMemo(() => items.filter((i) => isBoughtToday(i)), [items]);
+  // Today's trip (core groceryTripTotals, shared with web): what was marked
+  // Got it today, its total (price paid, else the library price) and how
+  // many have no price. HOUP-285: the library price rescues an item bought
+  // with no stored price (the Home widget never passes one), and the
+  // no-session gate needs this live total before a session exists.
+  const trip = React.useMemo(() => groceryTripTotals(items, priceFor), [items, priceFor]);
+  const boughtTodayItems = trip.items;
   const boughtCount = boughtTodayItems.length;
   // "Reset bought" (web page.tsx's `bought`/`countBought`) is scoped to
   // status, not to today — distinct from `boughtCount` above (today-only,
   // drives the lede caption + session panel).
   const boughtStatusCount = React.useMemo(() => items.filter((i) => i.status === 'bought').length, [items]);
-  // HOUP-285: rescue via the library price the same way the running total
-  // does (line ~528) and web does (page.tsx effectivePriceCents) — without
-  // priceFor here, a library-priced item bought with no stored price/last
-  // price (e.g. via the Home widget, which never passes priceCents) reads
-  // "unpriced" in the caption even though its price is already counted.
-  const unpricedCount = boughtTodayItems.filter((i) => (i.last_price ?? i.price_cents ?? priceFor(i.name)) == null).length;
-  // HOUP-285: the no-session gate's context line needs a live estimate even
-  // before a session exists to persist a summed_total_cents into — mirrors
-  // the same reduce the sync effect uses (line ~528) and web's live
-  // `sessionSum` (page.tsx), rather than reading the (possibly absent)
-  // persisted session total.
-  const sessionSummedCents = React.useMemo(
-    () => boughtTodayItems.reduce((sum, i) => sum + (i.last_price ?? i.price_cents ?? priceFor(i.name) ?? 0), 0),
-    [boughtTodayItems, priceFor]
-  );
+  const unpricedCount = trip.unpriced;
+  const sessionSummedCents = trip.cents;
 
   // Lede counts (Hearth H1/H6: one display-weight lede, value-first fragments) —
   // mirrors web page.tsx's `needed`/`haveCount`.
@@ -497,32 +488,12 @@ export default function GroceriesSectionScreen() {
   // Re-add suggestions: 'have' items past shelf life.
   const suggestions = React.useMemo(() => suggestReAdd(items, libMap), [items, libMap]);
 
-  // Effective price = the item's own price, else the library's typical price
-  // for its name (mirrors web page.tsx's effectivePriceCents/sumEstimate).
-  const effectivePriceCents = React.useCallback(
-    (item: GroceryItem) => item.price_cents ?? priceFor(item.name),
-    [priceFor]
-  );
-  const sumEstimate = React.useCallback(
-    (list: GroceryItem[]) => list.reduce((sum, i) => sum + (effectivePriceCents(i) ?? 0), 0),
-    [effectivePriceCents]
-  );
-
-  // HOUP-225: fuzzy search (name + notes) replaces the plain `includes` scan —
-  // matches web page.tsx's `searchedItems` (via `useFuzzySearch`) exactly,
-  // including that it is NOT hideNonNeeded-filtered — that cut happens below,
-  // per-aisle, so "no items match your search" can never be confused with
-  // "everything matched is hidden by Needed only".
-  // "2 milk" searches for "milk"; the quantity rides along to the add panel.
-  const searchEntry = React.useMemo(() => parseGroceryEntry(search), [search]);
-  const fuzzyItems = useFuzzySearch(items, searchEntry.name, ['name', 'notes']);
-  // Naming an aisle ("dairy") also lists everything in it.
-  const searchedItems = React.useMemo(() => {
-    const aisles = groceryAislesMatching(searchEntry.name, customAisles);
-    if (aisles.length === 0) return fuzzyItems;
-    const seen = new Set(fuzzyItems.map((i) => i.id));
-    return [...fuzzyItems, ...items.filter((i) => aisles.includes(i.aisle) && !seen.has(i.id))];
-  }, [fuzzyItems, items, searchEntry.name, customAisles]);
+  // HOUP-225: fuzzy search on name and notes, plus everything in an aisle
+  // the query names (core useGrocerySearch, shared with web). It is NOT
+  // hideNonNeeded-filtered: that cut happens below, per aisle, so "no items
+  // match your search" can never be confused with "everything matched is
+  // hidden by Needed only".
+  const { searchEntry, searchedItems } = useGrocerySearch(items, search, customAisles);
 
   // HOUP-175: was sorting by status-rank then name, silently ignoring the
   // user's own drag order and never reading `sort_order` at all (audit
@@ -584,13 +555,12 @@ export default function GroceriesSectionScreen() {
     return [...known, ...customNames, ...emptyCustomNames, ...other];
   }, [grouped, customAisles, aisleOrder, search, hideNonNeeded, passesHideFilter]);
 
-  // Items you'll actually buy (Needed + Got it) — "Have it" is excluded from
-  // totals/progress, matching web page.tsx's buyableItems.
-  const buyableItems = React.useMemo(() => items.filter((i) => i.status !== 'have'), [items]);
-  const estTotal = sumEstimate(buyableItems);
-  const pulseUnpricedCount = React.useMemo(
-    () => buyableItems.filter((i) => effectivePriceCents(i) == null).length,
-    [buyableItems, effectivePriceCents]
+  // Items you'll actually buy (Needed + Got it); "Have it" is excluded from
+  // totals and progress (core, shared with web).
+  const buyableItems = React.useMemo(() => groceryBuyableItems(items), [items]);
+  const { cents: estTotal, unpriced: pulseUnpricedCount } = React.useMemo(
+    () => groceryEstimate(buyableItems, priceFor),
+    [buyableItems, priceFor]
   );
 
   const openAdd = React.useCallback((aisle?: string) => {
@@ -928,7 +898,7 @@ export default function GroceriesSectionScreen() {
       ];
       const meta = getAisleMeta(aisleKey, customAisles);
       const collapsed = collapsedAisles.has(aisleKey);
-      const subtotal = sumEstimate(aisleItems.filter((i) => i.status !== 'have'));
+      const subtotal = groceryEstimate(groceryBuyableItems(aisleItems), priceFor).cents;
       // HOUP-225: bought/buyable ratio (web page.tsx) — computed over the
       // full (unfiltered-by-hideNonNeeded) aisle, same as the subtotal above.
       // The all-done green tint is gone (Hearth v2 H2: neutral headers).
@@ -981,7 +951,7 @@ export default function GroceriesSectionScreen() {
       }
     }
     return rows;
-  }, [items.length, sortMode, searchedItems, orderedAisleKeys, grouped, customAisles, collapsedAisles, selectMode, sumEstimate, filterNeeded, pendingGroceryIds, searching]);
+  }, [items.length, sortMode, searchedItems, orderedAisleKeys, grouped, customAisles, collapsedAisles, selectMode, priceFor, filterNeeded, pendingGroceryIds, searching]);
 
   // HOUP-225: persists to expo-secure-store on every toggle (was in-memory
   // only) — mirrors web page.tsx's saveCollapsedAisles.
@@ -1496,7 +1466,7 @@ export default function GroceriesSectionScreen() {
                 const aisleItems = grouped.get(aisleKey) ?? [];
                 const meta = getAisleMeta(aisleKey, customAisles);
                 const collapsed = collapsedAisles.has(aisleKey);
-                const subtotal = sumEstimate(aisleItems.filter((i) => i.status !== 'have'));
+                const subtotal = groceryEstimate(groceryBuyableItems(aisleItems), priceFor).cents;
                 const aisleToBuyCount = aisleItems.filter((i) => i.status === 'needed').length;
                 return (
                   <View key={aisleKey} className="gap-2">

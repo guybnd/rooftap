@@ -39,8 +39,10 @@ import {
   formatMoney,
   suggestReAdd,
   grocerySearchAddOptions,
-  groceryAislesMatching,
-  parseGroceryEntry,
+  groceryBuyableItems,
+  groceryEstimate,
+  groceryTripTotals,
+  useGrocerySearch,
   canonicalizeItemName,
   sortGroceriesFlat,
   DEFAULT_GROCERY_SORT_MODE,
@@ -72,7 +74,6 @@ import { ListGroup } from '@/components/ui/list-item';
 import { GroceryItemModal } from './grocery-item-modal';
 import { SectionSearchBar } from '@/components/section-search-bar';
 import { SegmentedControl } from '@/components/ui/segmented-control';
-import { useFuzzySearch } from '@/hooks/use-fuzzy-search';
 import { PopMenu, MenuItem, MenuLabel } from '../setup/pop-menu';
 import { memberLabel } from '../setup/member-label';
 import { getRegionProvider, groceryItems$, loyaltyCards$, sortLoyaltyCards, type LoyaltyCard, useReconnectSync, useStoreHelpers, useStoreLoaded, createPendingActionTracker, usePendingIds, createUndoBatchTracker } from '@homeup/core';
@@ -971,18 +972,9 @@ export default function GroceriesPage() {
       }));
   };
 
-  // Fuzzy search narrows the displayed items (name/notes — NOT aisle, which is a
-  // category filter). Empty query returns items unchanged (FLUX-110).
-  // "2 milk" searches for "milk"; the quantity rides along to the add panel.
-  const searchEntry = useMemo(() => parseGroceryEntry(search), [search]);
-  const fuzzyItems = useFuzzySearch(items, searchEntry.name, ['name', 'notes']);
-  // Naming an aisle ("dairy") also lists everything in it.
-  const searchedItems = useMemo(() => {
-    const aisles = groceryAislesMatching(searchEntry.name, customAisles);
-    if (aisles.length === 0) return fuzzyItems;
-    const seen = new Set(fuzzyItems.map((i) => i.id));
-    return [...fuzzyItems, ...items.filter((i) => aisles.includes(i.aisle) && !seen.has(i.id))];
-  }, [fuzzyItems, items, searchEntry.name, customAisles]);
+  // Fuzzy search on name and notes, plus everything in an aisle the query
+  // names (core useGrocerySearch, shared with the phone).
+  const { searchEntry, searchedItems } = useGrocerySearch(items, search, customAisles);
 
   // HOUP-317: One list's flat ordering — same search + To buy filter
   // contract as the aisle view (including the pendingIds grace window), then
@@ -1002,13 +994,12 @@ export default function GroceriesPage() {
   const bought = countBought(items);
   const haveCount = countHave(items);
 
-  // Items you'll actually buy (Needed + Got it) — "Have it" is excluded from totals/progress.
-  const buyableItems = items.filter((i) => i.status !== 'have');
+  // Items you'll actually buy (Needed + Got it); "Have it" is excluded from totals/progress.
+  const buyableItems = groceryBuyableItems(items);
 
   // Effective price = the item's own price, else the library's typical price for its name.
   const libMap = buildLibraryMap(library);
-  const effectivePriceCents = (item: GroceryItem): number | null =>
-    item.price_cents ?? resolveItemDefaults(item.name, libMap).priceCents;
+  const priceFor = (name: string) => resolveItemDefaults(name, libMap).priceCents;
 
   // Re-add suggestions (FLUX-207): 'have' items past shelf life.
   const reAddSuggestions = suggestReAdd(items, libMap);
@@ -1026,18 +1017,10 @@ export default function GroceriesPage() {
   };
 
   // Estimate = sum of unit prices, once per item (no quantity multiply, matching the session convention).
-  const sumEstimate = (list: GroceryItem[]) =>
-    list.reduce((sum, i) => sum + (effectivePriceCents(i) ?? 0), 0);
-  const countUnpriced = (list: GroceryItem[]) =>
-    list.filter((i) => effectivePriceCents(i) == null).length;
-
-  const totalEstimate = sumEstimate(buyableItems);
-  const unpricedCount = countUnpriced(buyableItems);
+  const { cents: totalEstimate, unpriced: unpricedCount } = groceryEstimate(buyableItems, priceFor);
 
   // Today's purchasing session (items marked Got it today).
-  const boughtToday = items.filter((i) => isBoughtToday(i));
-  const sessionSum = boughtToday.reduce((s, i) => s + (i.last_price ?? effectivePriceCents(i) ?? 0), 0);
-  const sessionUnpriced = boughtToday.filter((i) => (i.last_price ?? effectivePriceCents(i)) == null).length;
+  const { items: boughtToday, cents: sessionSum, unpriced: sessionUnpriced } = groceryTripTotals(items, priceFor);
 
   // Today's shop floats (ShopTrackingPill) and the collapsed bar carries the
   // cart total, so aisle headers stick to the very top, or just under the
@@ -1497,7 +1480,7 @@ export default function GroceriesPage() {
                 const aisleBought = aisleItems.filter((i) => i.status === 'bought').length;
                 const aisleBuyable = aisleNeeded + aisleBought; // exclude Have it
                 const isCustomAisle = customAisles.some((a) => a.name === aisle);
-                const aisleSubtotal = sumEstimate(aisleItems.filter((i) => i.status !== 'have'));
+                const aisleSubtotal = groceryEstimate(groceryBuyableItems(aisleItems), priceFor).cents;
 
                 // Filter (hide non-needed), then order Needed -> Got it -> Have it.
                 // HOUP-245: a just-checked-off item stays visible through its grace
