@@ -5,25 +5,15 @@
 // Household thread, your chats, open quick asks and earlier ones, each row a
 // three-slot line item (H6). Native twin:
 // apps/mobile/src/app/(tabs)/assistant/index.tsx.
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Archive, ChevronRight, Plus } from 'lucide-react';
 import {
-  AssistantApiError,
-  conversationTitle,
-  formatCents,
-  groupConversations,
-  minutesLeft,
-  onConversationsChanged,
   openAssistantPopup,
-  sectionHue,
   setAssistantPending,
-  setAssistantUnread,
-  timeAgo,
+  useAssistantSpace,
   type AssistantConversation,
-  type AssistantErrorCode,
-  type AssistantStatus,
 } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
 import { assistantApi } from '@/lib/assistant-client';
@@ -44,38 +34,14 @@ export default function AssistantPage() {
   const wide = useWideLayout();
   const shell = useDesktopShell();
   const { group, isOnline } = useDataCache();
-  const [status, setStatus] = useState<AssistantStatus | null>(null);
-  const [conversations, setConversations] = useState<AssistantConversation[] | null>(null);
-  const [archived, setArchived] = useState(0);
-  const [blocked, setBlocked] = useState<AssistantErrorCode | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    try {
-      const s = await assistantApi.status();
-      setStatus(s);
-      if (s.access === 'none') return setBlocked('assistant_requires_plus');
-      if (!s.ready) setBlocked('assistant_not_configured');
-      const { conversations: list, archived: archivedCount } = await assistantApi.conversationList();
-      setConversations(list);
-      setArchived(archivedCount);
-      setAssistantUnread(list.filter((c) => c.unread).length);
-      setAssistantPending(s.pending);
-      setError(null);
-    } catch (err) {
-      if (err instanceof AssistantApiError && err.code) setBlocked(err.code);
-      else setError(err instanceof Error ? err.message : 'Could not load the assistant.');
-    }
-  }, []);
+  const { status, archived, blocked, error, groups, caption, hardBlock, load } = useAssistantSpace(assistantApi, {
+    onStatus: (s) => setAssistantPending(s.pending),
+  });
 
   useEffect(() => {
     if (group?.id && isOnline) void load();
   }, [group?.id, isOnline, load]);
 
-  // An archive, delete or Undo anywhere (a row, the pop-up, a thread) reloads the list.
-  useEffect(() => onConversationsChanged(() => void load()), [load]);
-
-  const groups = useMemo(() => groupConversations(conversations ?? []), [conversations]);
 
   if (!group) return <div className="p-6 text-muted-foreground">No group selected</div>;
 
@@ -90,12 +56,6 @@ export default function AssistantPage() {
     onChanged: () => void load(),
   });
 
-  const caption = [
-    `${groups.chats.length} ${groups.chats.length === 1 ? 'chat' : 'chats'}`,
-    status && status.spentCents > 0 ? `${formatCents(status.spentCents)} this month` : null,
-  ]
-    .filter(Boolean)
-    .join(' · ');
 
   return (
     <div className={cn('mx-auto space-y-4 p-4 md:p-6 pb-24', wide ? 'max-w-[1400px] lg:px-8' : 'max-w-3xl')}>
@@ -118,7 +78,7 @@ export default function AssistantPage() {
         }
       />
 
-      {blocked === 'assistant_requires_plus' || blocked === 'assistant_not_configured' ? (
+      {hardBlock && blocked ? (
         <AssistantNotice code={blocked} />
       ) : (
         <>

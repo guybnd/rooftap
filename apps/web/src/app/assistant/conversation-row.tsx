@@ -10,12 +10,11 @@ import { toast } from 'sonner';
 import {
   archiveConversation,
   canArchiveConversation,
+  conversationRowMeta,
   conversationTitle,
   deleteConversation,
   dialog,
-  minutesLeft,
   sectionHue,
-  timeAgo,
   unarchiveConversation,
   useModules,
   type AssistantConversation,
@@ -48,16 +47,7 @@ export function ConversationRow({
   const canArchive = useModules().server('assistant.archive');
   const kind = conversation?.kind ?? 'household';
   const Icon = kind === 'household' ? Users : kind === 'quick' ? Zap : MessageCircle;
-  const left = conversation ? minutesLeft(conversation) : null;
-  const meta = current
-    ? 'Showing now'
-    : kind === 'household'
-      ? 'Everyone in the home'
-      : left != null && left > 0
-        ? `Open for ${left} min`
-        : conversation
-          ? timeAgo(conversation.last_active_at)
-          : null;
+  const meta = conversationRowMeta(conversation, current);
   const body = (
     <>
         <ListItemLeading>

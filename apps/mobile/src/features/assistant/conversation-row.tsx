@@ -10,11 +10,10 @@ import { LeadingTile, ListItem, ListItemContent, ListItemMeta, ListItemTitle, Li
 import {
   archiveConversation,
   canArchiveConversation,
+  conversationRowMeta,
   conversationTitle,
   deleteConversation,
-  minutesLeft,
   sectionHueSwatch,
-  timeAgo,
   unarchiveConversation,
   useModules,
   type AssistantConversation,
@@ -37,16 +36,7 @@ export function ConversationRow({
   const canArchive = useModules().server('assistant.archive') && canArchiveConversation(conversation);
   const kind = conversation?.kind ?? 'household';
   const Icon = kind === 'household' ? Users : kind === 'quick' ? Zap : MessageCircle;
-  const left = conversation ? minutesLeft(conversation) : null;
-  const meta = current
-    ? 'Showing now'
-    : kind === 'household'
-      ? 'Everyone in the home'
-      : left != null && left > 0
-        ? `Open for ${left} min`
-        : conversation
-          ? timeAgo(conversation.last_active_at)
-          : null;
+  const meta = conversationRowMeta(conversation, current);
   const row = (
     <ListItem onPress={onPress}>
       {kind === 'household' ? (

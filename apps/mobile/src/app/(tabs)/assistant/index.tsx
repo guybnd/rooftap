@@ -9,14 +9,8 @@ import { useFocusEffect, useRouter, type Href } from 'expo-router';
 import { Archive, ChevronRight, Plus, WifiOff } from 'lucide-react-native';
 import { Text, Button, HeroLede, ListGroup, ListItem, ListItemContent, ListItemMeta, ListItemTitle, ListItemTrailing, ScreenBackground } from '@homeup/ui';
 import {
-  AssistantApiError,
-  formatCents,
-  groupConversations,
-  onConversationsChanged,
-  setAssistantUnread,
+  useAssistantSpace,
   type AssistantConversation,
-  type AssistantErrorCode,
-  type AssistantStatus,
 } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
 import { NoGroupScreen } from '@/components/no-group-screen';
@@ -43,29 +37,8 @@ export default function AssistantScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { group, isOnline } = useDataCache();
-  const [status, setStatus] = React.useState<AssistantStatus | null>(null);
-  const [conversations, setConversations] = React.useState<AssistantConversation[]>([]);
-  const [archived, setArchived] = React.useState(0);
-  const [blocked, setBlocked] = React.useState<AssistantErrorCode | null>(null);
-  const [error, setError] = React.useState<string | null>(null);
+  const { status, archived, blocked, error, groups, caption, hardBlock, load } = useAssistantSpace(assistantApi);
   const [refreshing, setRefreshing] = React.useState(false);
-
-  const load = React.useCallback(async () => {
-    try {
-      const s = await assistantApi.status();
-      setStatus(s);
-      if (s.access === 'none') return setBlocked('assistant_requires_plus');
-      setBlocked(s.ready ? null : 'assistant_not_configured');
-      const { conversations: list, archived: archivedCount } = await assistantApi.conversationList();
-      setConversations(list);
-      setArchived(archivedCount);
-      setAssistantUnread(list.filter((c) => c.unread).length);
-      setError(null);
-    } catch (err) {
-      if (err instanceof AssistantApiError && err.code) setBlocked(err.code);
-      else setError(err instanceof Error ? err.message : 'Could not load the assistant.');
-    }
-  }, []);
 
   // Tabs stay mounted, so reload whenever the screen comes back into view.
   useFocusEffect(
@@ -74,10 +47,6 @@ export default function AssistantScreen() {
     }, [group?.id, isOnline, load])
   );
 
-  // An archive, delete or Undo anywhere (a swipe, the pop-up, a thread) reloads the list.
-  React.useEffect(() => onConversationsChanged(() => void load()), [load]);
-
-  const groups = React.useMemo(() => groupConversations(conversations), [conversations]);
 
   if (!group) return <NoGroupScreen />;
 
@@ -87,13 +56,6 @@ export default function AssistantScreen() {
     return true;
   };
 
-  const caption = [
-    `${groups.chats.length} ${groups.chats.length === 1 ? 'chat' : 'chats'}`,
-    status && status.spentCents > 0 ? `${formatCents(status.spentCents)} this month` : null,
-  ]
-    .filter(Boolean)
-    .join(' · ');
-  const hardBlock = blocked === 'assistant_requires_plus' || blocked === 'assistant_not_configured';
 
   return (
     <ScreenBackground>
@@ -132,7 +94,7 @@ export default function AssistantScreen() {
         </View>
         <HeroLede value={status?.pending ?? 0} label="waiting on your OK" caption={caption} />
 
-        {hardBlock ? (
+        {hardBlock && blocked ? (
           <AssistantNotice code={blocked} />
         ) : (
           <>

@@ -8,7 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, type Href } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
 import { ListGroup, ScreenBackground, Text } from '@homeup/ui';
-import { onConversationsChanged, type AssistantConversation } from '@homeup/core';
+import { useArchivedConversations } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
 import { assistantApi } from '@/features/assistant/assistant-api';
 import { ConversationRow } from '@/features/assistant/conversation-row';
@@ -17,22 +17,7 @@ export default function ArchivedChatsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { group, isOnline } = useDataCache();
-  const [list, setList] = React.useState<AssistantConversation[] | null>(null);
-  const [error, setError] = React.useState<string | null>(null);
-
-  const load = React.useCallback(async () => {
-    try {
-      setList(await assistantApi.archivedConversations());
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not load archived chats.');
-    }
-  }, []);
-
-  React.useEffect(() => {
-    if (group?.id && isOnline) void load();
-  }, [group?.id, isOnline, load]);
-  React.useEffect(() => onConversationsChanged(() => void load()), [load]);
+  const { list, error } = useArchivedConversations(assistantApi, !!group?.id && isOnline);
 
   return (
     <ScreenBackground>

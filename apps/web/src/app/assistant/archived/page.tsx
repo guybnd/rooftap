@@ -3,11 +3,10 @@
 // The chats this person archived. Each row opens its chat; the right-click
 // menu moves it back to the chats or deletes it. Talking in an archived chat
 // also moves it back. Native twin: apps/mobile/src/app/assistant/archived.tsx.
-import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
-import { onConversationsChanged, type AssistantConversation } from '@homeup/core';
+import { useArchivedConversations } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
 import { assistantApi } from '@/lib/assistant-client';
 import { navLinkClickHandler } from '@/lib/view-transitions';
@@ -17,22 +16,7 @@ import { ConversationRow } from '../conversation-row';
 export default function ArchivedChatsPage() {
   const router = useRouter();
   const { group, isOnline } = useDataCache();
-  const [list, setList] = useState<AssistantConversation[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    try {
-      setList(await assistantApi.archivedConversations());
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not load archived chats.');
-    }
-  }, []);
-
-  useEffect(() => {
-    if (group?.id && isOnline) void load();
-  }, [group?.id, isOnline, load]);
-  useEffect(() => onConversationsChanged(() => void load()), [load]);
+  const { list, error, load } = useArchivedConversations(assistantApi, !!group?.id && isOnline);
 
   return (
     <div className="mx-auto max-w-3xl space-y-4 p-4 pb-24 md:p-6">

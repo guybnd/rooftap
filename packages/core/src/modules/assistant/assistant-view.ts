@@ -4,7 +4,8 @@
 // links only), so web and native render the same reply the same way.
 
 import { isConversationOpen } from './assistant';
-import type { AssistantConversation } from './assistant-api';
+import type { AssistantConversation, AssistantStatus } from './assistant-api';
+import { timeAgo } from '../../relative-time';
 import { MCP_TOOLS } from '../../mcp-tools';
 import { getModule, type ModuleId } from '../../modules';
 
@@ -163,4 +164,46 @@ export function replyPreview(text: string, max = 140): string {
     .replace(/\s+/g, ' ')
     .trim();
   return plain.length > max ? `${plain.slice(0, max - 1).trimEnd()}…` : plain;
+}
+
+/**
+ * A chat row's meta line: "Showing now" in the pop-up's list for the one on
+ * show, the Household thread's audience, the time a quick ask stays open, or
+ * when it was last active.
+ */
+export function conversationRowMeta(
+  conversation: AssistantConversation | null,
+  current = false,
+  now: Date = new Date(),
+): string | null {
+  const kind = conversation?.kind ?? 'household';
+  if (current) return 'Showing now';
+  if (kind === 'household') return 'Everyone in the home';
+  const left = conversation ? minutesLeft(conversation, now) : null;
+  if (left != null && left > 0) return `Open for ${left} min`;
+  return conversation ? timeAgo(conversation.last_active_at) : null;
+}
+
+/** The Assistant space's Hero caption: how many chats, and this month's spend. */
+export function assistantSpaceCaption(chatCount: number, status: Pick<AssistantStatus, 'spentCents'> | null): string {
+  return [`${chatCount} ${chatCount === 1 ? 'chat' : 'chats'}`, status && status.spentCents > 0 ? `${formatCents(status.spentCents)} this month` : null]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+/** How many closed quick asks the pop-up lists; the Assistant space has the rest. */
+export const POPUP_EARLIER_SHOWN = 6;
+
+/** The pop-up's chat list: the Household thread with the kept chats, open quick asks, and the latest closed ones. */
+export function popupChatSections(groups: ConversationGroups): { label: string; rows: AssistantConversation[] }[] {
+  return [
+    { label: 'Chats', rows: [...(groups.household ? [groups.household] : []), ...groups.chats] },
+    { label: 'Quick asks', rows: groups.open },
+    { label: 'Earlier', rows: groups.earlier.slice(0, POPUP_EARLIER_SHOWN) },
+  ].filter((section) => section.rows.length > 0);
+}
+
+/** The pop-up's header: "Chats" over the list, the conversation's name, or "Ask Rooftap" for a new ask. */
+export function popupTitle(showChats: boolean, conversation: AssistantConversation | null, targetId: string): string {
+  return showChats ? 'Chats' : conversation ? conversationTitle(conversation) : targetId === 'new' ? 'Ask Rooftap' : '';
 }

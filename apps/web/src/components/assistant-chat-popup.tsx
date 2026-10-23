@@ -7,19 +7,18 @@
 // the + dot and shows the "Rooftap answered" toast, and reopening shows it. core's
 // openAssistantPopup() reaches this one host, mounted inside the app shell.
 // Native twin: apps/mobile/src/features/assistant/chat-popup.tsx.
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ChevronDown, Maximize2, MessagesSquare, SquarePen, Trash2 } from "lucide-react";
 import {
-  cachedConversations,
-  conversationTitle,
   deleteConversation,
-  groupConversations,
-  onConversationsChanged,
   openAssistantPopup,
-  onAssistantPopup,
+  popupTitle,
+  useAssistantPopupState,
+  usePopupChats,
+  usePopupThreadLifecycle,
   useAssistantPending,
   useAssistantThread,
   useModules,
@@ -40,50 +39,11 @@ import { PromptBadge } from "@/components/ui/prompt-badge";
 
 const popupToast = { error: (m: string) => toast.error(m), message: (m: string) => toast(m) };
 
-interface PopupState {
-  open: boolean;
-  /** Bumped to start a different conversation (remounts the thread). */
-  key: number;
-  target: ThreadTarget;
-  ask?: string;
-}
-
 export function AssistantChatPopup() {
   const modules = useModules();
   const { group } = useDataCache();
   const on = modules.isEnabled("assistant") && !!group?.id;
-  const [state, setState] = useState<PopupState>({ open: false, key: 0, target: { id: "new", kind: "quick" } });
-  // The conversation on show, so a request for it (or a plain reopen) resumes rather than restarts.
-  const current = useRef<AssistantConversation | null>(null);
-
-  useEffect(() => {
-    if (!on) return;
-    return onAssistantPopup((request) => {
-      setState((prev) => {
-        const shown = current.current;
-        if (request.conversationId) {
-          if (shown?.id === request.conversationId) return { ...prev, open: true, ask: undefined };
-          current.current = null;
-          return { open: true, key: prev.key + 1, target: { id: request.conversationId } };
-        }
-        // A quick ask that has since closed stays on show: its footer offers Continue or Start fresh.
-        if (request.ask || request.fresh) {
-          current.current = null;
-          return { open: true, key: prev.key + 1, target: { id: "new", kind: "quick" }, ask: request.ask };
-        }
-        return { ...prev, open: true };
-      });
-    });
-  }, [on]);
-
-  const minimize = useCallback(() => setState((prev) => ({ ...prev, open: false })), []);
-  const fresh = useCallback(() => {
-    current.current = null;
-    setState((prev) => ({ open: true, key: prev.key + 1, target: { id: "new", kind: "quick" } }));
-  }, []);
-  const remember = useCallback((c: AssistantConversation | null) => {
-    current.current = c;
-  }, []);
+  const { state, minimize, fresh, remember } = useAssistantPopupState(on);
 
   if (!on) return null;
   return (
@@ -130,22 +90,7 @@ function PopupThread({
   // A delete can be taken back on servers that have archiving.
   const canUndo = useModules().server("assistant.archive");
 
-  useEffect(() => onConversation(conversation), [conversation, onConversation]);
-
-  // An ask handed over (the capture sheet's box) goes out once.
-  const sentAsk = useRef(false);
-  useEffect(() => {
-    if (!ask || sentAsk.current) return;
-    sentAsk.current = true;
-    void send(ask);
-  }, [ask, send]);
-
-  // Reopening reads what landed while it was minimised (and clears the + dot), or retries a failed load.
-  const wasOpen = useRef(open);
-  useEffect(() => {
-    if (open && !wasOpen.current && (conversation || loadError)) void reload();
-    wasOpen.current = open;
-  }, [open, conversation, loadError, reload]);
+  usePopupThreadLifecycle({ open, ask, conversation, loadError, send, reload, onConversation });
 
   const expand = () => {
     if (!conversation) return;
@@ -166,7 +111,7 @@ function PopupThread({
     router.push("/assistant");
   };
 
-  const title = showChats ? "Chats" : conversation ? conversationTitle(conversation) : target.id === "new" ? "Ask Rooftap" : "";
+  const title = popupTitle(showChats, conversation, target.id);
   const iconButton =
     "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground";
 
@@ -219,34 +164,13 @@ function PopupThread({
   );
 }
 
-/** How many closed quick asks the pop-up lists; the Assistant space has the rest. */
-const EARLIER_SHOWN = 6;
-
 /**
  * The pop-up's list of chats: the Household thread, kept chats, open quick
  * asks and the latest closed ones, the same rows as the Assistant space.
  * Paints from the cache at once and refreshes from the server.
  */
 function PopupChats({ currentId, onPick, onAll }: { currentId: string | null; onPick: (id: string) => void; onAll: () => void }) {
-  const [list, setList] = useState(() => cachedConversations());
-  const [error, setError] = useState<string | null>(null);
-  const reload = useCallback(() => {
-    assistantApi
-      .conversations()
-      .then((rows) => {
-        setList(rows);
-        setError(null);
-      })
-      .catch((err) => setError(err instanceof Error ? err.message : "Could not load your chats."));
-  }, []);
-  useEffect(reload, [reload]);
-  useEffect(() => onConversationsChanged(reload), [reload]);
-  const groups = groupConversations(list);
-  const sections = [
-    { label: "Chats", rows: [...(groups.household ? [groups.household] : []), ...groups.chats] },
-    { label: "Quick asks", rows: groups.open },
-    { label: "Earlier", rows: groups.earlier.slice(0, EARLIER_SHOWN) },
-  ].filter((section) => section.rows.length > 0);
+  const { sections, error, reload } = usePopupChats(assistantApi);
   return (
     <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-3">
       {error && <p className="px-1 text-sm text-muted-foreground">{error}</p>}
