@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 import { adoptLegacyDocument, signedDocumentUrl, docTypeLabel, SIGNED_URL_TTL_SECONDS, type UnifiedDocument } from '@/lib/documents';
 import { PopMenu, MenuItem, MenuDivider } from '@/app/setup/pop-menu';
 import { useRowContextMenu, withRowMenu } from '@/components/ui/row-context-menu';
-import { reminderKey, createManualReminder, syncDocumentReminder, documentMetadataValue } from '@homeup/core';
+import { reminderKey, createManualReminder, syncDocumentReminder, documentMetadataValue, documentExpiryLabel, expiryDaysOf } from '@homeup/core';
 import { dialog } from '@homeup/core';
 import { memberLabel } from '@/app/setup/member-label';
 import { rowMotionClass, type RowMotion } from '@/components/documents/folder-browser';
@@ -21,45 +21,12 @@ import { DocumentEditModal } from '@/components/documents/document-edit-modal';
 import type { DocumentLink, DocumentSource, CostItem } from '@homeup/core';
 import { BookOpen, CalendarClock, CalendarPlus, Car, Check, Eye, FileText, FolderInput, HeartPulse, IdCard, Image as ImageIcon, Key, Landmark, ListChecks, MoreHorizontal, Pencil, Receipt, Share2, Shield, ShieldCheck, Signature, Trash2, Wrench, type LucideIcon } from 'lucide-react';
 
+// Only expired and soon take a status hue, as a word (H2).
+const EXPIRY_TONE_CLASS = { expired: 'text-destructive', soon: 'text-warning', later: undefined };
+
 export const SOURCE_LABEL: Record<DocumentSource, string> = {
   capture: 'Capture', cost: 'Costs', warranty: 'Warranties', grocery: 'Groceries', other: 'Other',
 };
-
-// "Expiring soon" window for the grouped section (FLUX-118).
-export const SOON_DAYS = 30;
-
-/** Whole days until a doc's expiry (negative = expired), or null when no expiry. */
-export function expiryDaysOf(d: UnifiedDocument): number | null {
-  return d.expiryDate ? Math.ceil((new Date(d.expiryDate).getTime() - Date.now()) / 86_400_000) : null;
-}
-
-/**
- * The row's expiry fragment (H6: relative when near, a short date when far,
- * never raw ISO). Only expired and soon take a status hue, as a word (H2).
- * Mirrors mobile's document-row.tsx.
- */
-export function expiryLabel(days: number, expiryDate: string): { text: string; className?: string } {
-  const date = new Date(`${expiryDate.slice(0, 10)}T00:00:00`);
-  if (days < 0) {
-    const ago = -days;
-    return {
-      text: ago <= SOON_DAYS
-        ? `expired ${ago}d ago`
-        : `expired ${date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}`,
-      className: 'text-destructive',
-    };
-  }
-  if (days === 0) return { text: 'expires today', className: 'text-warning' };
-  if (days === 1) return { text: 'expires tomorrow', className: 'text-warning' };
-  if (days <= SOON_DAYS) return { text: `expires in ${days}d`, className: 'text-warning' };
-  const sameYear = date.getFullYear() === new Date().getFullYear();
-  return {
-    text: `expires ${date.toLocaleDateString(
-      'en-US',
-      sameYear ? { month: 'short', day: 'numeric' } : { month: 'short', year: 'numeric' }
-    )}`,
-  };
-}
 
 // Hearth §6 Document row: the leading chip is the doc type, a glyph on a
 // neutral inset tile. Type is identity, not state, so it takes no hue (H2).
@@ -150,7 +117,7 @@ export function DocumentCard({
   // document with an expiry shows when it expires (warn < 30d), since that
   // is what it is filed for; otherwise how long ago it was added.
   const expiryDays = expiryDaysOf(doc);
-  const expiry = expiryDays != null && doc.expiryDate ? expiryLabel(expiryDays, doc.expiryDate) : null;
+  const expiry = expiryDays != null && doc.expiryDate ? documentExpiryLabel(expiryDays, doc.expiryDate) : null;
   const added = timeAgo(doc.createdAt);
   const TypeGlyph = DOC_TYPE_GLYPH[doc.docType] ?? FileText;
   const metaFields = metadataSummary(doc.docType, doc.metadata);
@@ -354,7 +321,7 @@ export function DocumentCard({
             {docTypeLabel(doc.docType)}
             {' · '}
             {expiry ? (
-              <span className={expiry.className}>{expiry.text}</span>
+              <span className={EXPIRY_TONE_CLASS[expiry.tone]}>{expiry.text}</span>
             ) : (
               (added ? added.replace(/^Just now$/, 'just now') : 'just now')
             )}

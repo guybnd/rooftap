@@ -1,8 +1,7 @@
 // HOUP-83: native Documents — offline-first list, capture, preview, edit.
 // Mirrors apps/web/src/app/documents/page.tsx's data path (documents$ +
-// listUnifiedDocuments read-merge) and filter/preset/grouping logic (reused
-// from @homeup/core's TYPE_FILTERS/SOON_DAYS/PRESETS/expiryDaysOf, moved
-// there in this same ticket). Faithful-but-focused per the approved plan:
+// listUnifiedDocuments read-merge) and its filter/sort/grouping logic, which
+// both share through @homeup/core's useDocumentListView. Faithful-but-focused per the approved plan:
 // capture now also routes Invoice→Costs and Grocery Bill→Groceries, plus
 // multi-file batch upload (HOUP-94), on top of the original Document/Photo/
 // Other flow.
@@ -24,65 +23,26 @@ import { FlashList, type FlashListRef, type ListRenderItem } from '@shopify/flas
 import { Check, FileText, FolderInput, FolderOpen, SearchX, Trash2, X } from 'lucide-react-native';
 import { Text, BottomSheet, Button, EmptyState, ListGroup, ListItem, ListItemContent, ListItemTitle, ListItemTrailing, ScreenBackground, cn, haptics, toast, type RowPos } from '@homeup/ui';
 import { DocumentsSectionLabel, FolderDeleteSheet, FolderNameSheet, FolderMoveSheet, FolderTile, MoveMotion, ROW_LEAVE_MS } from '@/components/documents/folder-ui';
-import { adoptLegacyDocument, createManualReminder, deleteDocument, deleteDocumentReminder, deleteLegacyDocument, documents$, useStoreHelpers, listCostItems, listDocumentTags, listLinksForGroup, listUnifiedDocuments, listDocumentFolders, createDocumentFolder, draftDocumentFolder, renameDocumentFolder, moveDocumentFolder, deleteDocumentFolder, foldersInParent, folderDescendantIds, documentsInFolder, documentExpiryCounts, documentListSections, isFilable, type DocumentFolder, PRESETS, reminderKey, sameSet, signedDocumentUrl, SIGNED_URL_TTL_SECONDS, SOON_DAYS, syncDocumentReminder, expiryDaysOf, useReconnectSync, useStoreLoaded, compareStrings, useModules, visibleDocumentLinks, documentLinkHref, type CostItem, type Document, type DocumentLink, type DocType, type UnifiedDocument, dialog } from '@homeup/core';
+import { adoptLegacyDocument, createManualReminder, deleteDocument, deleteDocumentReminder, deleteLegacyDocument, documents$, useStoreHelpers, listCostItems, listDocumentTags, listLinksForGroup, listUnifiedDocuments, listDocumentFolders, createDocumentFolder, draftDocumentFolder, renameDocumentFolder, moveDocumentFolder, deleteDocumentFolder, folderDescendantIds, documentCostIds, documentLinksByDoc, documentReminderMap, groupDocumentsByCost, useDocumentListView, isFilable, type DocumentFolder, type DocumentSort, reminderKey, signedDocumentUrl, SIGNED_URL_TTL_SECONDS, syncDocumentReminder, useReconnectSync, useStoreLoaded, useModules, visibleDocumentLinks, documentLinkHref, type CostItem, type Document, type DocumentLink, type UnifiedDocument, dialog } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
 import { NoGroupScreen } from '@/components/no-group-screen';
 import { getCurrentSupabaseClient } from '@/lib/supabase-client';
 import { useGroupTableRefetch } from '@/lib/use-group-table-realtime';
-// HOUP-121: not re-exported from the main `@homeup/core` barrel — it pulls in
-// React client hooks that break the barrel's server-side (route handler)
-// consumers — imported by direct path, same convention as apps/web/src/hooks/use-fuzzy-search.ts.
-import { useFuzzySearch } from '@homeup/core/src/hooks/use-fuzzy-search';
 import { DocumentRow } from '@/components/documents/document-row';
 import { DocumentCalendarFlow } from '@/features/calendar/document-calendar-flow';
 import { CaptureFlow } from '@/components/documents/capture-flow';
 import { DocumentEditSheet } from '@/components/documents/document-edit-sheet';
 import { DocumentPreview, isPdfFilename, openDocumentExternally } from '@/components/documents/document-preview';
-import { DocumentsListHeader, type ExpiryFilter } from '@/components/documents/list-header';
+import { DocumentsListHeader } from '@/components/documents/list-header';
 
-/** Reverse a `doc-reminder:<id>:expiry` household_tasks template_key into the document id. */
-function parseDocReminderKey(templateKey: string | null): string | null {
-  if (!templateKey?.startsWith('doc-reminder:')) return null;
-  const rest = templateKey.slice('doc-reminder:'.length);
-  const lastColon = rest.lastIndexOf(':');
-  return lastColon < 0 ? null : rest.slice(0, lastColon);
-}
-
-// Reorder a list so docs sharing a cost are adjacent; the order is the
-// pairing (mirrors apps/web/src/app/documents/page.tsx's groupByCost).
-function groupByCost(list: UnifiedDocument[], costIdByKey: Record<string, string>) {
-  const counts: Record<string, number> = {};
-  for (const d of list) {
-    const c = costIdByKey[d.key];
-    if (c) counts[c] = (counts[c] ?? 0) + 1;
-  }
-  const ordered: UnifiedDocument[] = [];
-  const placed = new Set<string>();
-  for (const d of list) {
-    if (placed.has(d.key)) continue;
-    ordered.push(d);
-    placed.add(d.key);
-    const c = costIdByKey[d.key];
-    if (c && counts[c] > 1) {
-      for (const o of list) {
-        if (!placed.has(o.key) && costIdByKey[o.key] === c) {
-          ordered.push(o);
-          placed.add(o.key);
-        }
-      }
-    }
-  }
-  return { ordered };
-}
-type SortKey = 'recent' | 'expiry' | 'name';
 /** A document or folder being filed, with where it sits now and its name. */
 type MoveTarget = { kind: 'document' | 'folder'; id: string; from: string | null; name: string };
-const SORT_OPTIONS: { value: SortKey; label: string }[] = [
+const SORT_OPTIONS: { value: DocumentSort; label: string }[] = [
   { value: 'recent', label: 'Newest' },
   { value: 'expiry', label: 'Soonest' },
   { value: 'name', label: 'A–Z' },
 ];
-const SORT_LABEL: Record<SortKey, string> = { recent: 'Newest', expiry: 'Soonest', name: 'A–Z' };
+const SORT_LABEL: Record<DocumentSort, string> = { recent: 'Newest', expiry: 'Soonest', name: 'A–Z' };
 
 // Folders and documents share one FlashList, so the row type is a union
 // rather than a second list stacked above the first. Each section opens with
@@ -147,20 +107,34 @@ export default function DocumentsSectionScreen() {
   const calendarOn = modules.feature('calendar.event-documents');
   const [calendarDoc, setCalendarDoc] = React.useState<UnifiedDocument | null>(null);
 
-  const [categoryFilters, setCategoryFilters] = React.useState<Set<DocType>>(new Set());
-  // The fourteen type chips fold behind "More types" (H: chrome shrinks);
-  // they stay open while a type outside the presets is the active filter.
-  const [typesExpanded, setTypesExpanded] = React.useState(false);
-  const presetActive = PRESETS.some((p) => sameSet(categoryFilters, p.types));
-  const typesOpen = typesExpanded || (categoryFilters.size > 0 && !presetActive);
-  const [expiryFilter, setExpiryFilter] = React.useState<ExpiryFilter>('all');
-  const [tagFilters, setTagFilters] = React.useState<string[]>([]);
-  const [sort, setSort] = React.useState<SortKey>('recent');
   const [sortSheetOpen, setSortSheetOpen] = React.useState(false);
-  const [search, setSearch] = React.useState('');
-
   const [folders, setFolders] = React.useState<DocumentFolder[]>([]);
   const [folderId, setFolderId] = React.useState<string | null>(null);
+  // Search, filters and sort, and the folders and sections they leave
+  // (shared with web's documents page).
+  const {
+    categoryFilters,
+    setCategoryFilters,
+    toggleCategory,
+    expiryFilter,
+    setExpiryFilter,
+    tagFilters,
+    setTagFilters,
+    toggleTagFilter,
+    sort,
+    setSort,
+    search,
+    setSearch,
+    setTypesExpanded,
+    typesOpen,
+    clearAllFilters,
+    browsing,
+    childFolders,
+    sections,
+    openFolder,
+    ledeDocs,
+    expiryCounts,
+  } = useDocumentListView(docs, folders, folderId);
   // What the move sheet is filing, and where it sits now. Kept after the
   // sheet closes so its title doesn't change mid-dismiss; moveOpen drives it.
   const [moving, setMoving] = React.useState<MoveTarget | null>(null);
@@ -190,15 +164,6 @@ export default function DocumentsSectionScreen() {
   const [editingDoc, setEditingDoc] = React.useState<Document | null>(null);
   const [previewingDoc, setPreviewingDoc] = React.useState<UnifiedDocument | null>(null);
 
-  const toggleCategory = (c: DocType) =>
-    setCategoryFilters((prev) => {
-      const next = new Set(prev);
-      if (next.has(c)) next.delete(c); else next.add(c);
-      return next;
-    });
-  const toggleTagFilter = (t: string) =>
-    setTagFilters((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
-
   const costNames = React.useMemo(() => Object.fromEntries(costItems.map((c) => [c.id, c.name])), [costItems]);
 
   const load = React.useCallback(async () => {
@@ -217,12 +182,7 @@ export default function DocumentsSectionScreen() {
     setCostItems(c);
     setGroupTags(tags);
     setFolders(f);
-    const map: Record<string, string> = {};
-    for (const r of (reminders.data ?? []) as { id: string; template_key: string | null }[]) {
-      const originId = parseDocReminderKey(r.template_key);
-      if (originId) map[originId] = r.id;
-    }
-    setReminderByDoc(map);
+    setReminderByDoc(documentReminderMap((reminders.data ?? []) as { id: string; template_key: string | null }[]));
     setLoading(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupId, nativeDocs, costsOn, groceriesOn]);
@@ -457,88 +417,9 @@ export default function DocumentsSectionScreen() {
     }, [folderId, folders, selecting])
   );
 
-  // Browsing means "no query, no filters": folders only structure the plain
-  // list. A search or filter looks across the whole tree instead, because
-  // finding nothing merely for standing in the wrong folder is worse than a
-  // flat result that spans folders.
-  const browsing =
-    search.trim() === '' && categoryFilters.size === 0 && tagFilters.length === 0 && expiryFilter === 'all';
-  // Memoized: a fresh array each render would defeat flatData's memo below.
-  const childFolders = React.useMemo(
-    () => (browsing ? foldersInParent(folders, folderId) : []),
-    [browsing, folders, folderId]
-  );
-
-  // Legacy documents have no folder_id, so they always read as root.
-  const scoped = browsing ? documentsInFolder(docs, folderId) : docs;
-
-  const filtered = scoped.filter((d) => {
-    if (categoryFilters.size > 0 && !categoryFilters.has(d.docType as DocType)) return false;
-    if (tagFilters.length > 0 && !tagFilters.every((t) => d.tags.includes(t))) return false;
-    if (expiryFilter !== 'all') {
-      const days = expiryDaysOf(d);
-      if (days == null) return false;
-      if (expiryFilter === 'expired' && days >= 0) return false;
-      if (expiryFilter === 'soon' && (days < 0 || days > SOON_DAYS)) return false;
-    }
-    return true;
-  });
-
-  const searchedDocs = useFuzzySearch(filtered, search, ['filename', 'title']);
-
-  const sortedDocs = React.useMemo(() => {
-    const arr = [...searchedDocs];
-    if (sort === 'name') {
-      arr.sort((a, b) => compareStrings(a.title || a.filename, b.title || b.filename));
-    } else if (sort === 'expiry') {
-      arr.sort((a, b) => {
-        const da = expiryDaysOf(a), db = expiryDaysOf(b);
-        if (da == null && db == null) return 0;
-        if (da == null) return 1;
-        if (db == null) return -1;
-        return da - db;
-      });
-    }
-    return arr;
-  }, [searchedDocs, sort]);
-
-  // "Expiring soon" leads the files only when the list isn't already
-  // filtered or sorted by expiry, where it would just repeat the list.
-  const showSoonGroup = expiryFilter === 'all' && sort !== 'expiry';
-  const sections = React.useMemo(() => documentListSections(sortedDocs, showSoonGroup), [sortedDocs, showSoonGroup]);
-
   // Links into a switched-off module don't render (and don't pair by cost).
-  const linksByDoc = React.useMemo(() => {
-    const m = new Map<string, DocumentLink[]>();
-    for (const l of visibleDocumentLinks(links, modules.feature)) {
-      const arr = m.get(l.document_id) ?? [];
-      arr.push(l);
-      m.set(l.document_id, arr);
-    }
-    return m;
-  }, [links, modules]);
-
-  const costIdByKey = React.useMemo(() => {
-    const m: Record<string, string> = {};
-    for (const d of docs) {
-      const dl = d.storeId ? (linksByDoc.get(d.storeId) ?? []) : [];
-      const cost = dl.find((l) => l.entity_type === 'cost_item');
-      if (cost) m[d.key] = cost.entity_id;
-    }
-    return m;
-  }, [docs, linksByDoc]);
-
-  // The Hero lede counts what the surface holds: every document at the top
-  // level (and while a search spans the tree), the open folder's whole
-  // subtree inside one. Its caption is that set's expiry state.
-  const openFolder = browsing && folderId !== null ? (folders.find((f) => f.id === folderId) ?? null) : null;
-  const ledeDocs = React.useMemo(() => {
-    if (!openFolder) return docs;
-    const subtree = folderDescendantIds(folders, openFolder.id);
-    subtree.add(openFolder.id);
-    return docs.filter((d) => d.folderId != null && subtree.has(d.folderId));
-  }, [docs, folders, openFolder]);
-  const expiryCounts = React.useMemo(() => documentExpiryCounts(ledeDocs), [ledeDocs]);
+  const linksByDoc = React.useMemo(() => documentLinksByDoc(visibleDocumentLinks(links, modules.feature)), [links, modules]);
+  const costIdByKey = React.useMemo(() => documentCostIds(docs, linksByDoc), [docs, linksByDoc]);
 
   const openLink = (link: Pick<DocumentLink, 'entity_type' | 'entity_id'>) => router.push(documentLinkHref(link) as Href);
 
@@ -816,7 +697,7 @@ export default function DocumentsSectionScreen() {
       }
     }
     for (const section of sections) {
-      const { ordered } = groupByCost(section.docs, costIdByKey);
+      const ordered = groupDocumentsByCost(section.docs, costIdByKey);
       rows.push({ kind: 'label', id: `label:${section.key}`, label: section.label, count: ordered.length, first: rows.length === 0 });
       ordered.forEach((doc, i) => rows.push({ kind: 'doc', id: doc.key, doc, pos: rowPos(i, ordered.length) }));
     }
@@ -926,15 +807,8 @@ export default function DocumentsSectionScreen() {
         browsing={browsing}
       />
     ),
-    [loading, ledeDocs.length, openFolder, docs.length, expiryCounts, search, expiryFilter, sort, categoryFilters, typesOpen, tagFilters, folders, folderId, browsing]
+    [loading, ledeDocs.length, openFolder, docs.length, expiryCounts, search, setSearch, expiryFilter, setExpiryFilter, sort, categoryFilters, setCategoryFilters, toggleCategory, typesOpen, setTypesExpanded, tagFilters, setTagFilters, toggleTagFilter, folders, folderId, browsing]
   );
-
-  const clearAllFilters = () => {
-    setSearch('');
-    setCategoryFilters(new Set());
-    setTagFilters([]);
-    setExpiryFilter('all');
-  };
 
   // Hearth §11 empty states: centered on the ground, one headline, one line.
   // "Add" already heads the screen (M1), so the first-run state points at it

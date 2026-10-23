@@ -52,7 +52,7 @@ import {
   type PortalChipDef,
 } from '@homeup/ui';
 import {
-  SOON_DAYS,
+  documentExpiryLabel,
   SOURCE_LABEL,
   docTypeLabel,
   expiryDaysOf,
@@ -95,34 +95,8 @@ const DOC_TYPE_GLYPH: Record<string, LucideIcon> = {
   other: FileText,
 };
 
-/**
- * The row's expiry fragment (H6: relative when near, a short date when far,
- * never raw ISO). Only expired and soon take a status hue, as a word (H2).
- * Mirrors web's page.tsx.
- */
-function expiryLabel(days: number, expiryDate: string): { text: string; className: string } {
-  const date = new Date(`${expiryDate.slice(0, 10)}T00:00:00`);
-  if (days < 0) {
-    const ago = -days;
-    return {
-      text: ago <= SOON_DAYS
-        ? `expired ${ago}d ago`
-        : `expired ${date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}`,
-      className: 'text-destructive',
-    };
-  }
-  if (days === 0) return { text: 'expires today', className: 'text-warning' };
-  if (days === 1) return { text: 'expires tomorrow', className: 'text-warning' };
-  if (days <= SOON_DAYS) return { text: `expires in ${days}d`, className: 'text-warning' };
-  const sameYear = date.getFullYear() === new Date().getFullYear();
-  return {
-    text: `expires ${date.toLocaleDateString(
-      'en-US',
-      sameYear ? { month: 'short', day: 'numeric' } : { month: 'short', year: 'numeric' }
-    )}`,
-    className: 'text-muted-foreground',
-  };
-}
+// Only expired and soon take a status hue, as a word (H2).
+const EXPIRY_TONE_CLASS = { expired: 'text-destructive', soon: 'text-warning', later: 'text-muted-foreground' };
 
 // HOUP-230/HOUP-198: matches task-row.tsx/setup-item-card.tsx's hold-to-edit
 // timing. This row has no SwipeActions to arbitrate against, so the fill is
@@ -182,7 +156,7 @@ export function DocumentRow({
 }: DocumentRowProps) {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const expiryDays = expiryDaysOf(doc);
-  const expiry = expiryDays != null && doc.expiryDate ? expiryLabel(expiryDays, doc.expiryDate) : null;
+  const expiry = expiryDays != null && doc.expiryDate ? documentExpiryLabel(expiryDays, doc.expiryDate) : null;
   const added = timeAgo(doc.createdAt);
   const TypeGlyph = DOC_TYPE_GLYPH[doc.docType] ?? FileText;
   // Footer: who filed it, and where it came from when that isn't a capture
@@ -271,7 +245,7 @@ export function DocumentRow({
         <ListItemMeta>
           <Text className="text-caption text-muted-foreground">{docTypeLabel(doc.docType)}</Text>
           {expiry ? (
-            <Text className={cn('text-caption', expiry.className)}>{expiry.text}</Text>
+            <Text className={cn('text-caption', EXPIRY_TONE_CLASS[expiry.tone])}>{expiry.text}</Text>
           ) : (
             <Text className="text-caption text-muted-foreground">
               {added ? added.replace(/^Just now$/, 'just now') : 'just now'}

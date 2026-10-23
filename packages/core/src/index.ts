@@ -83,6 +83,8 @@ export * from './modules/costs/to-sort';
 export * from './modules/costs/cost-month';
 export * from './modules/costs/cost-month-view';
 export * from './modules/documents/document-folders';
+export * from './modules/documents/document-list-view';
+export * from './modules/documents/use-document-list-view';
 export * from './modules/calendar/events';
 export * from './modules/calendar/event-tickets';
 export * from './modules/calendar/event-legs';
