@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createContext, useContext, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { putAll, getAll, setMeta, getMeta, STORES } from "@/lib/offline-store";
 import { readDataCacheSnapshot, writeDataCacheSnapshot } from "@/lib/legend/data-cache-snapshot";
@@ -365,9 +365,13 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
     return () => { supabase.removeChannel(channel); };
   }, [scheduleRefetch]);
 
-  return (
-    <DataCacheContext.Provider value={{ preliminaryScores, userSettings, group, groupMembers, memberProfiles, isGroupOwner, currentUserId, pendingInvitations, sentInvitations, loading, revalidating, isOnline, lastSyncedAt, refresh: fetchAll }}>
-      {children}
-    </DataCacheContext.Provider>
+  // The shell re-renders this provider on every navigation (it sits inside
+  // app-sidebar.tsx). A fresh value object each time re-rendered every
+  // useDataCache() consumer on the page with it, 300ms+ on Groceries,
+  // right as a tab switch started its slide. Same fix as native's HOUP-240.
+  const value = useMemo(
+    () => ({ preliminaryScores, userSettings, group, groupMembers, memberProfiles, isGroupOwner, currentUserId, pendingInvitations, sentInvitations, loading, revalidating, isOnline, lastSyncedAt, refresh: fetchAll }),
+    [preliminaryScores, userSettings, group, groupMembers, memberProfiles, isGroupOwner, currentUserId, pendingInvitations, sentInvitations, loading, revalidating, isOnline, lastSyncedAt, fetchAll]
   );
+  return <DataCacheContext.Provider value={value}>{children}</DataCacheContext.Provider>;
 }

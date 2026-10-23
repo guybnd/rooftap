@@ -722,6 +722,13 @@
     view-transition-name: route-content;
   }
 
+  /* A tab switch slides the page in empty and renders it meanwhile
+     (view-transitions.ts holdNavContent): the region's content is hidden
+     while held, then fills in as a cascade where it landed. */
+  html[data-nav-hold] .route-transition-region > * {
+    visibility: hidden;
+  }
+
   ::view-transition-group(root) {
     animation: none;
   }

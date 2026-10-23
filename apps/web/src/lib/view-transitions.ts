@@ -42,6 +42,121 @@ export function notifyRouteSettled(): void {
     pendingResolve = null;
     resolve();
   }
+  releaseNavHold?.();
+}
+
+// A tab switch's page held empty while it slides (see runNavTransition's
+// `holdUntilSlid`); releases it once the new route has committed.
+let releaseNavHold: (() => void) | null = null;
+
+// Shows the held page even if its route never reports in.
+const NAV_HOLD_MAX_MS = 3000;
+
+// The held page shows once both have happened: its route committed
+// (notifyRouteSettled) and its slide finished.
+let slideLanded: (() => void) | null = null;
+
+let holdId = 0;
+
+function holdNavContent(target: string | undefined): void {
+  const root = document.documentElement;
+  const id = ++holdId;
+  root.dataset.navHold = "";
+  const timer = setTimeout(() => show(), NAV_HOLD_MAX_MS);
+  let routed = false;
+  let landed = false;
+  slideLanded = () => {
+    landed = true;
+    if (routed) show();
+  };
+  releaseNavHold = () => {
+    // A route from an earlier, superseded tap may commit meanwhile.
+    if (target && window.location.pathname !== target) return;
+    routed = true;
+    if (landed) show();
+  };
+  const show = () => {
+    if (id !== holdId) return;
+    releaseNavHold = null;
+    slideLanded = null;
+    clearTimeout(timer);
+    delete root.dataset.navHold;
+    // Same task as the unhide, so nothing paints before the cascade holds it.
+    const region = document.querySelector<HTMLElement>(".route-transition-region");
+    if (region) revealCascade(region);
+  };
+}
+
+// Hearth §8.1 "Arrive": a page that lands after a tab switch fills in as a
+// cascade, its blocks fading and rising into place one after another from
+// the top, instead of appearing at once. Transform and opacity only, so it
+// stays smooth while the page is still settling.
+const ARRIVE_STEP_MS = 40;
+const ARRIVE_MAX_DELAY_MS = 360;
+const ARRIVE_MS = 260;
+const ARRIVE_RISE_PX = 10;
+const ARRIVE_MAX_BLOCKS = 16;
+
+/**
+ * The page's visible blocks in reading order: wrappers are walked through,
+ * and a tall plain container (a column, a grid) is split into its parts, so
+ * the cascade runs card by card, not page by page. Anything with its own
+ * surface (a card: background, border or shadow) arrives as one block.
+ */
+function arriveBlocks(root: HTMLElement): HTMLElement[] {
+  const viewW = window.innerWidth;
+  const viewH = window.innerHeight;
+  const shown = (el: Element) => {
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < viewH && r.right > 0 && r.left < viewW;
+  };
+  const surface = (el: Element) => {
+    const cs = getComputedStyle(el);
+    const bg = cs.backgroundColor;
+    return (
+      (!!bg && bg !== "transparent" && !/,\s*0\)$/.test(bg)) ||
+      cs.boxShadow !== "none" ||
+      parseFloat(cs.borderTopWidth) > 0 ||
+      parseFloat(cs.borderBottomWidth) > 0
+    );
+  };
+  const out: HTMLElement[] = [];
+  const visit = (node: HTMLElement, depth: number) => {
+    const kids = [...node.children].filter((k): k is HTMLElement => k instanceof HTMLElement && shown(k));
+    if (kids.length === 0 || depth > 16) {
+      out.push(node);
+      return;
+    }
+    if (kids.length === 1 && !surface(kids[0])) return visit(kids[0], depth + 1);
+    for (const k of kids) {
+      if (!surface(k) && k.children.length > 0 && k.getBoundingClientRect().height > viewH * 0.35) visit(k, depth + 1);
+      else out.push(k);
+    }
+  };
+  visit(root, 0);
+  return out
+    .map((el) => ({ el, r: el.getBoundingClientRect() }))
+    .sort((a, b) => Math.round(a.r.top / 24) - Math.round(b.r.top / 24) || a.r.left - b.r.left)
+    .map(({ el }) => el)
+    .slice(0, ARRIVE_MAX_BLOCKS);
+}
+
+function revealCascade(region: HTMLElement): void {
+  if (prefersStillMotion() || typeof region.animate !== "function") return;
+  arriveBlocks(region).forEach((el, i) => {
+    el.animate(
+      [
+        { opacity: 0, transform: `translateY(${ARRIVE_RISE_PX}px)` },
+        { opacity: 1, transform: "translateY(0)" },
+      ],
+      {
+        duration: ARRIVE_MS,
+        delay: Math.min(i * ARRIVE_STEP_MS, ARRIVE_MAX_DELAY_MS),
+        easing: "cubic-bezier(0.16, 1, 0.3, 1)",
+        fill: "backwards",
+      }
+    );
+  });
 }
 
 /**
@@ -52,13 +167,44 @@ export function notifyRouteSettled(): void {
  * transition on the sheet page-behind (separate compositing layer — no
  * competing transform on the same element, FLUX-1553 reground caveat).
  */
-export function runNavTransition(type: NavTransitionType, navigate: () => void): void {
+export function runNavTransition(
+  type: NavTransitionType,
+  navigate: () => void,
+  {
+    holdUntilSlid = false,
+    target,
+    onStart,
+  }: { holdUntilSlid?: boolean; target?: string; onStart?: () => void } = {}
+): void {
   if (!supportsViewTransitions() || prefersStillMotion()) {
     navigate();
     return;
   }
   const root = document.documentElement;
   root.dataset.navTransition = type;
+  if (holdUntilSlid) {
+    // A tab switch slides at once and renders the new page after: waiting
+    // for its render first froze the old page for 0.1-1s before anything
+    // moved, and the render landing mid-slide stalled the pebble and the
+    // glow. The page slides in empty over the ground, then fills in.
+    // `onStart` runs as the new state is captured, so chrome that follows
+    // the destination (the bar's pebble, the glow) moves with the slide.
+    // The route renders while the page slides (hidden), and shows when both
+    // are done.
+    const transition = document.startViewTransition(() => {
+      holdNavContent(target);
+      onStart?.();
+    });
+    activeTransition = transition;
+    void transition.ready.then(navigate, navigate);
+    void transition.finished.finally(() => {
+      if (activeTransition !== transition) return; // a later tap took over
+      delete root.dataset.navTransition;
+      activeTransition = null;
+      slideLanded?.();
+    });
+    return;
+  }
   const transition = document.startViewTransition(
     () =>
       new Promise<void>((resolve) => {

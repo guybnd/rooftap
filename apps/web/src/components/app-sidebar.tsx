@@ -39,6 +39,7 @@ import { SectionSwitcherGrid, SectionTabBar } from "@/components/section-switche
 import { useSectionSettings } from "@/lib/use-section";
 import { useOverdueTaskCount } from "@/hooks/use-overdue-task-count";
 import { useAnySheetOpen } from "@/hooks/use-sheet-gestures";
+import { flushSync } from "react-dom";
 import { runNavTransition, notifyRouteSettled } from "@/lib/view-transitions";
 import { CaptureProvider } from "@/components/capture/capture-context";
 import { CaptureSheet } from "@/components/capture/capture-sheet";
@@ -185,6 +186,7 @@ export function AppSidebar({ children }: { children: React.ReactNode }) {
   // back / portal).
   useEffect(() => {
     notifyRouteSettled();
+    setNavTarget(null);
   }, [pathname]);
 
   // A real navigation always supersedes the in-place menu state — whether the
@@ -196,7 +198,11 @@ export function AppSidebar({ children }: { children: React.ReactNode }) {
   }, [pathname]);
 
   const modules = useModules();
-  const currentSection = getSectionByPath(pathname);
+  // A tab switch starts its slide before the new route has rendered
+  // (runNavTransition's holdUntilSlid), so the bar, the subnav and the glow
+  // follow the section being switched to from the moment the slide starts.
+  const [navTarget, setNavTarget] = useState<string | null>(null);
+  const currentSection = (navTarget && sections.find((s) => s.id === navTarget)) || getSectionByPath(pathname);
   const CurrentSectionIcon = sectionIcons[currentSection.iconId];
   // FLUX-165: apply the user's saved section order first (single ordering point
   // for both the desktop grid and the mobile bar); unknown/new sections keep
@@ -293,7 +299,11 @@ export function AppSidebar({ children }: { children: React.ReactNode }) {
         sectionId
       );
       const type = travel > 0 ? "shift-forward" : travel < 0 ? "shift-back" : "crossfade";
-      runNavTransition(type, () => router.push(section.basePath));
+      runNavTransition(type, () => router.push(section.basePath), {
+        holdUntilSlid: true,
+        target: section.basePath,
+        onStart: () => flushSync(() => setNavTarget(sectionId)),
+      });
     }
   };
 
