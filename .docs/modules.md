@@ -48,6 +48,7 @@ Module ids reuse the existing section ids so `hidden_sections`, `section_order`,
 | `google-calendar` | Google Calendar sync | Off | `calendar` | `household` |
 | `shopper` | Shopper (watchlist, price history, deal rating) | Off | | `household`, `costs` |
 | `rewards` | Rewards (loyalty cards and memberships, their partner stores and perks, store lookup) | Off | | `groceries` |
+| `occasions` | Occasions (birthdays and other days, gift ideas, wishlists; an idea can be kept from members, enforced in RLS) | Off | | `shopper`, `costs` |
 | `assistant` | Assistant (quick asks, chats, the household thread; asks before changing anything) | Off | | `household`, `calendar`, `costs`, `groceries` |
 | `money-insights` | Money insights (the "Worth a look" card on Costs: price rises, subscriptions, plans ending, spending against its usual). Shows only on Costs, so it locks nothing | **On** | | `costs`, `shopper`, `household` |
 | `mcp` | MCP / agent access | Off | | all |
@@ -67,6 +68,7 @@ Known soft features to gate (each must check both modules):
 - Setup → Home Search: the chosen apartment as the home being set up.
 - Rewards ↔ Groceries: both show the household's `loyalty_cards` (the table syncs while either is on). Groceries' rewards sheet works with Rewards off; Rewards adds schemes, partner stores, perks and "Just me" cards.
 - Shopper → Tasks, Costs: "Plan to buy" writes a to-do (`shopper.tasks`) and a planned purchase cost (`shopper.costs`).
+- Occasions → Shopper, Costs: "Watch the price" on a gift idea adds a Shopper watch with the idea's `hidden_from` (`occasions.shopper`), and "In the budget" keeps a one-off Purchase line named "Gift" until the day has passed (`occasions.costs`). A watch kept from someone is hidden from them with its offers and price history, and Plan to buy on it writes "Buy a gift" and a "Gift" cost with no store.
 - Assistant → Tasks, Calendar, Costs, Groceries: the assistant only gets tools for modules that are on (the same gating as `/api/mcp`), so switching one off removes it from what the assistant can read or change.
 
 ## 4. Data model

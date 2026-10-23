@@ -30,6 +30,12 @@ export interface ShopperWant {
   bought_at: string | null;
   /** The Scout run it was watched from (HOUP-435), if any. */
   search_id?: string | null;
+  /**
+   * Members it is kept from: a watch made from a hidden gift idea (Occasions).
+   * The database hides it, its offers and its price history from them.
+   * Missing before 20261023100000_occasions.
+   */
+  hidden_from?: string[];
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -272,8 +278,19 @@ export function usualRange(stats: PriceStats | null): { from: number; to: number
   return { from: Math.round(stats.median * 0.95), to: Math.round(stats.median * 1.05) };
 }
 
-/** "Buy <title> at <store>", the to-do Plan to buy creates. */
-export function planToBuyTitle(want: Pick<ShopperWant, 'title'>, store: string | null): string {
+/** Whether a want is kept from someone (a surprise gift), so what it makes for everyone must not name it. */
+export function isKeptWant(want: Pick<ShopperWant, 'hidden_from'>): boolean {
+  return (want.hidden_from?.length ?? 0) > 0;
+}
+
+/** Whether a want is kept from this person: server code reading with the service role (no RLS) filters on it. */
+export function isKeptFrom(want: Pick<ShopperWant, 'hidden_from'>, userId: string): boolean {
+  return !!want.hidden_from?.includes(userId);
+}
+
+/** "Buy <title> at <store>", the to-do Plan to buy creates. A surprise says only "Buy a gift". */
+export function planToBuyTitle(want: Pick<ShopperWant, 'title' | 'hidden_from'>, store: string | null): string {
+  if (isKeptWant(want)) return 'Buy a gift';
   return store ? `Buy ${want.title} at ${store}` : `Buy ${want.title}`;
 }
 
@@ -326,7 +343,8 @@ export function buildPlanToBuyTask(input: {
   now?: Date;
 }): HouseholdTask {
   const now = (input.now ?? new Date()).toISOString();
-  const notes = [input.priceLabel, input.offer?.url].filter(Boolean).join('\n') || null;
+  // Tasks are not hidden per person, so a surprise's to-do carries no price or link.
+  const notes = isKeptWant(input.want) ? null : [input.priceLabel, input.offer?.url].filter(Boolean).join('\n') || null;
   return {
     id: input.id,
     group_id: input.want.group_id,
@@ -360,7 +378,8 @@ export function buildPlanToBuyCost(input: {
   return {
     id: input.id,
     group_id: input.want.group_id,
-    name: input.want.title,
+    // The budget is shared: a surprise shows as "Gift", with no store.
+    name: isKeptWant(input.want) ? 'Gift' : input.want.title,
     category: 'purchase',
     amount: input.offer?.price_cents ?? input.want.best_cents ?? input.want.budget_cents ?? 0,
     cadence: 'one_off',
@@ -368,7 +387,7 @@ export function buildPlanToBuyCost(input: {
     start_date: input.want.need_by ?? now.slice(0, 10),
     end_date: null,
     discount_end_date: null,
-    provider: input.offer?.store ?? null,
+    provider: isKeptWant(input.want) ? null : input.offer?.store ?? null,
     assigned_to: null,
     linked_section: 'shopper',
     notes: null,

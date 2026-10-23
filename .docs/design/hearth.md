@@ -39,7 +39,7 @@ Copy bans (app UI): no em-dash anywhere in UI copy; no emoji in chrome (grocery 
 | Danger (red) | `--destructive` | Overdue, over budget, tab badges, destructive text, the feed's "Earlier" header. A dot, a word, a value, a 3px meter. Never a filled block |
 | Section identity | `section-hues.ts` (`--hue-tile`, `--hue-glyph`, `--hue-glow` on web) | The section's leading tile and its glow. Nothing else |
 
-**Section hues (v2).** Home coral, Tasks lilac, Groceries mint, Costs sun, Calendar sky, Recipes peach, Setup rose, Home search teal, Checklists lime, Shopper orchid, Rewards fern, Assistant indigo, Documents and Profile slate. Each hue has a light and a dark swatch (tile fill, glyph, glow) so it holds on both grounds. Feed rows take the hue of the section that owns the item (`heroItemSectionId`): a cost reminder wears the Costs tile on Home, a viewing wears Home search's.
+**Section hues (v2).** Home coral, Tasks lilac, Groceries mint, Costs sun, Calendar sky, Recipes peach, Setup rose, Home search teal, Checklists lime, Shopper orchid, Rewards fern, Occasions cherry, Assistant indigo, Documents and Profile slate. Each hue has a light and a dark swatch (tile fill, glyph, glow) so it holds on both grounds. Feed rows take the hue of the section that owns the item (`heroItemSectionId`): a cost reminder wears the Costs tile on Home, a viewing wears Home search's.
 
 
 Retired patterns: whole-card ownership tints (`cardAccent` in `task-row.tsx`) and colored rails; priority pills using warning/destructive fills; filled resting-state pills ("Needed"); **v2:** per-type tint rings in feed rows (`TYPE_STYLE` / `HERO_TYPE_STYLE`), replaced by the section tile. Identity of *people* lives in the trailing avatar (accent ring = you; dashed amber empty seat = unassigned). Priority is a tinted word in meta, not a pill.
@@ -246,7 +246,7 @@ One light theme for e-paper phones, tablets and readers. E-paper redraws slowly 
 
 Two pastel pairs, picked by Guy on 2026-10-22 from the pastel theme proposals. They change colour, radius, the glow and one face. Layout and every H rule stay.
 
-- **Own hue sets.** Each pair wears its own swatches for the thirteen section hues (`HUE_SETS` in core `section-hues.ts`, hue scheme = the theme id). Sorbet pushes them to gummy chroma; Lavender softens them and moves Home from coral to orchid. `hueSchemeTone()` gives the ground (light or dark) wherever code needs it.
+- **Own hue sets.** Each pair wears its own swatches for the fourteen section hues (`HUE_SETS` in core `section-hues.ts`, hue scheme = the theme id). Sorbet pushes them to gummy chroma; Lavender softens them and moves Home from coral to orchid. `hueSchemeTone()` gives the ground (light or dark) wherever code needs it.
 - **Aura.** A fixed three-layer wash (`GLOW_AURA`) sits under the section glow and is the same on every section: pink, aqua and lemon for Sorbet, lilac, ice blue and pink for Lavender. It is still the surface's one decorative element. The glow runs louder here (`SECTION_GLOW_OPACITY`).
 - **Hero face (T1 deviation, signed off with the pick).** Only the Hero steps change face: Fredoka 700 for Sorbet, Fraunces 700 for Lavender. Web: `[data-theme^=...] .text-hero`. Native: the per-theme `--font-hero` var (`theme-vars.ts`), read by the `.text-hero*` utilities in the Tailwind preset. Display, Title and Body stay Bricolage and Geist.
 - **Sorbet's accent.** Mango is light, so `--primary-foreground` is dark ink. As text (link verbs) it is softer than coral; keep link verbs short and next to what they act on.

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Group, ShopperWant } from "@homeup/core";
+import { isKeptFrom, type Group, type ShopperWant } from "@homeup/core";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSessionUser } from "@/lib/supabase/session";
 import { requireModules } from "@/lib/server-modules";
@@ -24,7 +24,8 @@ export async function shopperRequest(wantId?: string | null): Promise<ShopperReq
   let want: ShopperWant | null = null;
   if (wantId) {
     const { data } = await admin.from("shopper_wants").select("*").eq("id", wantId).eq("deleted", false).maybeSingle();
-    if (!data) return { error: NextResponse.json({ error: "Not found" }, { status: 404 }) };
+    // A watch kept from this person (a surprise gift, Occasions) doesn't exist for them.
+    if (!data || isKeptFrom(data as ShopperWant, user.id)) return { error: NextResponse.json({ error: "Not found" }, { status: 404 }) };
     want = data as ShopperWant;
     groupId = want.group_id;
   }

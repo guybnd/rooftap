@@ -120,6 +120,16 @@ export const MODULE_FEATURES = {
     what: 'Asking the assistant to find something to buy, which starts a Scout search, and reading its picks in a chat.',
   },
 
+  // ── Occasions ────────────────────────────────────────────────────────────
+  'occasions.shopper': {
+    modules: ['occasions', 'shopper'],
+    what: '"Watch the price" on a gift idea, which adds a Shopper watch kept from the same people.',
+  },
+  'occasions.costs': {
+    modules: ['occasions', 'costs'],
+    what: 'A gift idea\'s Budget line, named "Gift" until the day has passed.',
+  },
+
   // ── Costs ────────────────────────────────────────────────────────────────
   'costs.from-groceries': {
     modules: ['costs', 'groceries'],

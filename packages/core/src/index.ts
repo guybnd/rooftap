@@ -35,6 +35,7 @@ export * from './modules/rewards/loyalty-cards';
 export * from './modules/recipes/recipes';
 export * from './modules/shopper/shopper';
 export * from './modules/rewards/rewards';
+export * from './modules/occasions/occasions';
 export * from './modules/shopper/shopper-sources';
 export * from './modules/shopper/shopper-relevance';
 export * from './modules/shopper/shopper-scout';
@@ -140,6 +141,7 @@ export * from './modules/checklists/use-add-checklist-to-task';
 export * from './data/use-entity-comments';
 export * from './modules/calendar/use-event-save';
 export * from './modules/rewards/use-rewards';
+export * from './modules/occasions/use-occasions';
 
 // hooks/use-debounce + hooks/use-fuzzy-search are deliberately NOT exported
 // here: they import React client hooks, and this barrel is also consumed by

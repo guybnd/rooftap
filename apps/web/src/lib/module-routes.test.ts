@@ -19,6 +19,7 @@ const EXPECTED: Record<string, string | null> = {
   recipes: "recipes",
   shopper: "shopper",
   rewards: "rewards",
+  occasions: "occasions",
   assistant: "assistant",
   costs: "costs",
   setup: "setup",

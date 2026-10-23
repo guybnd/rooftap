@@ -28,6 +28,7 @@ export const TAB_ROUTES = [
   '/recipes',
   '/shopper',
   '/rewards',
+  '/occasions',
   '/assistant',
   '/documents',
   '/appointments',

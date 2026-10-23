@@ -7,7 +7,8 @@ import type { ScreenId } from "./screens";
 // module-map-data.test.ts fails when a two-module feature has no line here,
 // or a line names a feature that does not join its two modules.
 
-export type MapModule = Exclude<ModuleId, "mcp" | "money-insights">;
+// Occasions isn't on the map yet: it needs its own spot and demo frames.
+export type MapModule = Exclude<ModuleId, "mcp" | "money-insights" | "occasions">;
 
 /** Short names: the map has no room for "Tasks & Reminders". */
 export const MAP_LABEL: Record<MapModule, string> = {

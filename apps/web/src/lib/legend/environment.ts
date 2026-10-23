@@ -44,8 +44,11 @@ const INDEXEDDB_TABLES = [
   'reward_schemes',             // Rewards module
   'reward_partners',            // Rewards module
   'reward_perks',               // Rewards module
+  'occasions',                  // Occasions module
+  'gift_ideas',                 // Occasions module
+  'wishlist_items',             // Occasions module
 ];
-const INDEXEDDB_VERSION = 8; // bumped for the Rewards tables (non-destructive upgrade)
+const INDEXEDDB_VERSION = 9; // bumped for the Occasions tables (non-destructive upgrade)
 
 let indexedDBPlugin: ReturnType<typeof observablePersistIndexedDB> | undefined;
 

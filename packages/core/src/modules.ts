@@ -25,6 +25,7 @@ export type ModuleId =
   | 'search'
   | 'shopper'
   | 'rewards'
+  | 'occasions'
   | 'assistant'
   | 'money-insights'
   | 'google-calendar'
@@ -140,6 +141,15 @@ export const MODULES: ModuleDef[] = [
     defaultEnabled: false,
     enhances: ['groceries'],
     minSchema: '20261021130000_rewards',
+  },
+  {
+    id: 'occasions',
+    label: 'Occasions',
+    description: 'Birthdays and other days, gift ideas and wishlists, with surprises kept from the person they are for.',
+    iconId: 'gift',
+    defaultEnabled: false,
+    enhances: ['shopper', 'costs'],
+    minSchema: '20261023100000_occasions',
   },
   {
     id: 'assistant',

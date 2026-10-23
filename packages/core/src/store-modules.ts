@@ -36,6 +36,9 @@ export const STORE_MODULES = {
   reward_schemes: ['rewards'],
   reward_partners: ['rewards'],
   reward_perks: ['rewards'],
+  occasions: ['occasions'],
+  gift_ideas: ['occasions'],
+  wishlist_items: ['occasions'],
   // Home Search: listings, agents, viewings and the listing checklist.
   apartments: ['search'],
   agents: ['search'],

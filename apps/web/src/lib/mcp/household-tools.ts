@@ -64,6 +64,7 @@ import {
   recipeNoteFor,
   stepsFromInstructions,
   uncheckItemPatch,
+  isKeptFrom,
 } from "@homeup/core";
 import type {
   HouseholdTask,
@@ -1818,6 +1819,8 @@ export function householdTools({
         .eq("deleted", false);
       if (error) return toolError(error.message);
       const rows = ((data ?? []) as ShopperWant[])
+        // The service role skips RLS: leave out watches kept from this person (Occasions).
+        .filter((w) => !isKeptFrom(w, userId))
         .filter((w) => (status ? w.status === status : w.status !== "bought"))
         .map((w) =>
           basic(w, [
