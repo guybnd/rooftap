@@ -9,6 +9,7 @@
 // notification or the list) paints at once and refreshes behind, instead of
 // a blank screen waiting on the network.
 
+import type { ProposalPick } from './proposal-picks';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { announceAnswer, setAssistantCounts, type AnsweredElsewhere } from './assistant-answers';
 import {
@@ -320,11 +321,11 @@ export function useAssistantThread(target: ThreadTarget, host: ThreadHost) {
   );
 
   const decide = useCallback(
-    async (messageId: string, decision: 'confirm' | 'decline') => {
+    async (messageId: string, decision: 'confirm' | 'decline', picks?: ProposalPick[]) => {
       const { api, toast } = hostRef.current;
       setDeciding(messageId);
       try {
-        const res = await api.decide(messageId, decision);
+        const res = await api.decide(messageId, decision, picks);
         setMessages((m) => [...m.map((x) => (x.id === messageId ? res.message : x)), ...(res.outcome ? [res.outcome] : [])]);
         refreshUnread();
       } catch (err) {

@@ -3,6 +3,7 @@
 // same-origin fetch; native: the server origin plus the Supabase session as
 // a Bearer token), so the request shapes can't drift between platforms.
 
+import type { ProposalPick } from './proposal-picks';
 import type {
   AssistantAccess,
   AssistantSettings,
@@ -259,10 +260,15 @@ export function createAssistantApi(call: AssistantCall, stream?: AssistantStream
       lastWaitMs = Date.now() - started;
       return res;
     },
-    decide: (messageId: string, decision: 'confirm' | 'decline') =>
+    /**
+     * `picks` makes only the kept rows (decision "pick"). A server older than
+     * picking answers 400 to it and changes nothing, so a partial pick never
+     * turns into "do all".
+     */
+    decide: (messageId: string, decision: 'confirm' | 'decline', picks?: ProposalPick[]) =>
       call<{ message: AssistantMessage; outcome: AssistantMessage | null }>(
         `/api/assistant/proposals/${encodeURIComponent(messageId)}`,
-        { method: 'POST', body: { decision } }
+        { method: 'POST', body: picks ? { decision: 'pick', picks } : { decision } }
       ),
     /** `models` is missing on servers older than the AI providers settings; the apps then show free-text model fields. */
     settings: () => call<{ settings: AssistantSettings; isOwner: boolean; models?: AiModelChoices }>('/api/assistant/settings'),

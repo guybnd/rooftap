@@ -15,8 +15,10 @@ import {
   formatMicros,
   parseReply,
   timeAgo,
+  useProposalPicks,
   type AssistantDraft,
   type AssistantMessage,
+  type ProposalPick,
   type ProposalState,
   type ReplySpan,
 } from '@homeup/core';
@@ -84,24 +86,90 @@ export function ProposalCard({
 }: {
   message: AssistantMessage;
   busy: boolean;
-  onDecide: (decision: 'confirm' | 'decline') => void;
+  onDecide: (decision: 'confirm' | 'decline', picks?: ProposalPick[]) => void;
 }) {
   const proposal = message.proposal;
+  const pick = useProposalPicks(proposal);
   if (!proposal || proposal.items.length === 0) return null;
   const pending = proposal.state === 'pending';
+  const { choices, ticks, keptCount } = pick;
   return (
     <div className="mt-2 overflow-hidden rounded-2xl bg-muted/40">
-      <div className="divide-y divide-border/60">
-        {proposal.items.map((item, i) => {
-          const Icon = sectionIconFor(item.module);
-          return (
-            <div key={i} className="flex min-h-[52px] items-center gap-3 px-3 py-2.5">
-              <LeadingTile sectionId={item.module} Icon={Icon} size="sm" />
-              <p className="min-w-0 flex-1 text-sm text-foreground">{item.summary}</p>
-            </div>
-          );
-        })}
-      </div>
+      {pending ? (
+        <div>
+          {choices.map((c, i) => {
+            const off = pick.isLeft(c.key);
+            const Icon = sectionIconFor(c.module);
+            // An entry's change is named once, above its first entry.
+            const caption = c.group !== null && c.group !== choices[i - 1]?.group;
+            const divider = i > 0 && (caption || c.group === null);
+            return (
+              <div key={c.key} className={cn(divider && 'border-t border-border/60')}>
+                {caption && (
+                  <div className="flex items-center gap-3 px-3 pt-2.5">
+                    <LeadingTile sectionId={c.module} Icon={Icon} size="sm" />
+                    <p className="min-w-0 flex-1 text-sm text-muted-foreground">{c.group}</p>
+                  </div>
+                )}
+                <label
+                  htmlFor={ticks ? `pick-${message.id}-${c.key}` : undefined}
+                  className={cn('flex min-h-[48px] items-center gap-3 px-3 py-2', ticks && !busy && 'cursor-pointer')}>
+                  {c.group === null ? <LeadingTile sectionId={c.module} Icon={Icon} size="sm" /> : <span className="w-7 shrink-0" />}
+                  {c.text !== null ? (
+                    <input
+                      value={pick.textFor(c.key, c.text)}
+                      onChange={(e) => pick.setText(c.key, e.target.value)}
+                      disabled={busy || off}
+                      aria-label="Name"
+                      maxLength={200}
+                      className={cn(
+                        'min-w-0 flex-1 rounded-md bg-transparent px-1 py-0.5 text-sm text-foreground outline-none hover:bg-muted focus:bg-muted',
+                        off && 'text-muted-foreground line-through'
+                      )}
+                    />
+                  ) : (
+                    <p className={cn('min-w-0 flex-1 text-sm text-foreground', off && 'text-muted-foreground line-through')}>{c.label}</p>
+                  )}
+                  {ticks && (
+                    <>
+                      <input
+                        id={`pick-${message.id}-${c.key}`}
+                        type="checkbox"
+                        checked={!off}
+                        disabled={busy}
+                        onChange={() => pick.toggle(c.key)}
+                        aria-label={`Include ${c.text ?? c.label}`}
+                        className="peer sr-only"
+                      />
+                      <span
+                        aria-hidden
+                        className={cn(
+                          'flex h-6 w-6 shrink-0 items-center justify-center rounded-full border peer-focus-visible:ring-2 peer-focus-visible:ring-ring',
+                          off ? 'border-border' : 'border-primary bg-primary'
+                        )}
+                      >
+                        {!off && <Check className="h-3.5 w-3.5 text-primary-foreground" />}
+                      </span>
+                    </>
+                  )}
+                </label>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="divide-y divide-border/60">
+          {proposal.items.map((item, i) => {
+            const Icon = sectionIconFor(item.module);
+            return (
+              <div key={i} className="flex min-h-[52px] items-center gap-3 px-3 py-2.5">
+                <LeadingTile sectionId={item.module} Icon={Icon} size="sm" />
+                <p className="min-w-0 flex-1 text-sm text-foreground">{item.summary}</p>
+              </div>
+            );
+          })}
+        </div>
+      )}
       <div className="flex items-center justify-end gap-2 px-3 pb-3 pt-1">
         {pending ? (
           <>
@@ -115,12 +183,12 @@ export function ProposalCard({
             </button>
             <button
               type="button"
-              disabled={busy}
-              onClick={() => onDecide('confirm')}
+              disabled={busy || keptCount === 0}
+              onClick={() => onDecide('confirm', pick.picks())}
               className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-primary px-3.5 text-sm font-medium text-primary-foreground hover:bg-primary/80 disabled:opacity-50"
             >
               <Check className="h-4 w-4" />
-              {proposal.items.length > 1 ? `Do all ${proposal.items.length}` : 'Do it'}
+              {pick.label}
             </button>
           </>
         ) : (
@@ -145,7 +213,7 @@ export function MessageBubble({
   showAuthor: boolean;
   showCost: boolean;
   busy: boolean;
-  onDecide: (messageId: string, decision: 'confirm' | 'decline') => void;
+  onDecide: (messageId: string, decision: 'confirm' | 'decline', picks?: ProposalPick[]) => void;
 }) {
   const user = message.role === 'user';
   // Older servers don't say whose a message is: every user message was the viewer's.
@@ -162,7 +230,7 @@ export function MessageBubble({
         )}
       >
         <ReplyText text={message.content} />
-        {!user && <ProposalCard message={message} busy={busy} onDecide={(d) => onDecide(message.id, d)} />}
+        {!user && <ProposalCard message={message} busy={busy} onDecide={(d, picks) => onDecide(message.id, d, picks)} />}
       </div>
       <p className="mt-1 px-1 text-[11px] text-muted-foreground tabular-nums">
         {timeAgo(message.created_at)}

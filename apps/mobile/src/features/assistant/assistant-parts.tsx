@@ -23,9 +23,11 @@ import {
   GHOST_REPLY_STAGGER_MS,
   formatMicros,
   parseReply,
+  useProposalPicks,
   timeAgo,
   type AssistantDraft,
   type AssistantMessage,
+  type ProposalPick,
   type ProposalState,
   type ReplySpan,
 } from '@homeup/core';
@@ -88,19 +90,76 @@ export function ProposalCard({
 }: {
   message: AssistantMessage;
   busy: boolean;
-  onDecide: (decision: 'confirm' | 'decline') => void;
+  onDecide: (decision: 'confirm' | 'decline', picks?: ProposalPick[]) => void;
 }) {
   const proposal = message.proposal;
+  const pick = useProposalPicks(proposal);
   if (!proposal || proposal.items.length === 0) return null;
   const pending = proposal.state === 'pending';
+  const { choices, ticks, keptCount } = pick;
   return (
     <View className="mt-2 overflow-hidden rounded-2xl bg-muted/40">
-      {proposal.items.map((item, i) => (
-        <View key={i} className={cn('min-h-[52px] flex-row items-center gap-3 px-3 py-2.5', i > 0 && 'border-t border-border/60')}>
-          <LeadingTile sectionId={item.module} Icon={sectionIconFor(item.module)} size="sm" />
-          <Text className="min-w-0 flex-1 text-sm text-foreground">{item.summary}</Text>
-        </View>
-      ))}
+      {pending
+        ? choices.map((c, i) => {
+            const off = pick.isLeft(c.key);
+            // An entry's change is named once, above its first entry.
+            const caption = c.group !== null && c.group !== choices[i - 1]?.group;
+            return (
+              <React.Fragment key={c.key}>
+                {caption && (
+                  <View className={cn('flex-row items-center gap-3 px-3 pt-2.5', i > 0 && 'border-t border-border/60')}>
+                    <LeadingTile sectionId={c.module} Icon={sectionIconFor(c.module)} size="sm" />
+                    <Text className="min-w-0 flex-1 text-sm text-muted-foreground">{c.group}</Text>
+                  </View>
+                )}
+                <Pressable
+                  disabled={busy || !ticks}
+                  onPress={() => pick.toggle(c.key)}
+                  accessibilityRole={ticks ? 'checkbox' : undefined}
+                  accessibilityState={ticks ? { checked: !off } : undefined}
+                  className={cn(
+                    'min-h-[48px] flex-row items-center gap-3 px-3 py-2',
+                    i > 0 && !caption && c.group === null && 'border-t border-border/60'
+                  )}
+                >
+                  {c.group === null ? (
+                    <LeadingTile sectionId={c.module} Icon={sectionIconFor(c.module)} size="sm" />
+                  ) : (
+                    <View style={{ width: 28 }} />
+                  )}
+                  {c.text !== null ? (
+                    <TextInput
+                      value={pick.textFor(c.key, c.text)}
+                      onChangeText={(t) => pick.setText(c.key, t)}
+                      editable={!busy && !off}
+                      accessibilityLabel="Name"
+                      className={cn('min-w-0 flex-1 py-0 text-sm text-foreground', off && 'text-muted-foreground line-through')}
+                    />
+                  ) : (
+                    <Text className={cn('min-w-0 flex-1 text-sm text-foreground', off && 'text-muted-foreground line-through')}>
+                      {c.label}
+                    </Text>
+                  )}
+                  {ticks && (
+                    <View
+                      className={cn(
+                        'h-6 w-6 items-center justify-center rounded-full border',
+                        off ? 'border-border' : 'border-primary bg-primary'
+                      )}
+                    >
+                      {!off && <Check size={14} className="text-primary-foreground" />}
+                    </View>
+                  )}
+                </Pressable>
+              </React.Fragment>
+            );
+          })
+        : proposal.items.map((item, i) => (
+            <View key={i} className={cn('min-h-[52px] flex-row items-center gap-3 px-3 py-2.5', i > 0 && 'border-t border-border/60')}>
+              <LeadingTile sectionId={item.module} Icon={sectionIconFor(item.module)} size="sm" />
+              <Text className="min-w-0 flex-1 text-sm text-foreground">{item.summary}</Text>
+            </View>
+          ))}
       <View className="flex-row items-center justify-end gap-2 px-3 pb-3 pt-1">
         {pending ? (
           <>
@@ -113,15 +172,16 @@ export function ProposalCard({
               <Text className="text-sm font-medium text-muted-foreground">Not now</Text>
             </Pressable>
             <Pressable
-              disabled={busy}
-              onPress={() => onDecide('confirm')}
+              disabled={busy || keptCount === 0}
+              onPress={() => onDecide('confirm', pick.picks())}
               accessibilityRole="button"
-              className={cn('h-11 flex-row items-center gap-1.5 rounded-xl bg-primary px-3.5 active:bg-primary/80', busy && 'opacity-50')}
+              className={cn(
+                'h-11 flex-row items-center gap-1.5 rounded-xl bg-primary px-3.5 active:bg-primary/80',
+                (busy || keptCount === 0) && 'opacity-50'
+              )}
             >
               <Check size={16} className="text-primary-foreground" />
-              <Text className="text-sm font-medium text-primary-foreground">
-                {proposal.items.length > 1 ? `Do all ${proposal.items.length}` : 'Do it'}
-              </Text>
+              <Text className="text-sm font-medium text-primary-foreground">{pick.label}</Text>
             </Pressable>
           </>
         ) : (
@@ -150,7 +210,7 @@ export function MessageBubble({
   showAuthor: boolean;
   showCost: boolean;
   busy: boolean;
-  onDecide: (messageId: string, decision: 'confirm' | 'decline') => void;
+  onDecide: (messageId: string, decision: 'confirm' | 'decline', picks?: ProposalPick[]) => void;
 }) {
   const user = message.role === 'user';
   // Older servers don't say whose a message is: every user message was the viewer's.
@@ -170,7 +230,7 @@ export function MessageBubble({
         )}
       >
         <ReplyText text={message.content} />
-        {!user && <ProposalCard message={message} busy={busy} onDecide={(d) => onDecide(message.id, d)} />}
+        {!user && <ProposalCard message={message} busy={busy} onDecide={(d, picks) => onDecide(message.id, d, picks)} />}
       </View>
       <Text className="mt-1 px-1 text-[11px] text-muted-foreground" style={{ fontVariant: ['tabular-nums'] }}>
         {timeAgo(message.created_at)}

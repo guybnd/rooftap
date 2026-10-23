@@ -11,6 +11,7 @@ import {
   buildAssistantSystemPrompt,
   checkBudget,
   costMicros,
+  applyProposalPicks,
   describeProposal,
   entitlementTier,
   getModule,
@@ -45,6 +46,7 @@ import {
   type CookSession,
   type Recipe,
   type RecipeIngredient,
+  type ProposalPick,
 } from "@homeup/core";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSessionUser } from "@/lib/supabase/session";
@@ -1008,17 +1010,29 @@ export type DecisionOutcome =
   | { ok: true; message: AssistantMessage; outcome: AssistantMessage | null }
   | { ok: false; status: number; error: string };
 
-export async function decideProposal(ctx: AssistantContext, messageId: string, decision: "confirm" | "decline"): Promise<DecisionOutcome> {
+/** `picks` (from the card's ticks) narrows a confirm to the kept rows; none kept counts as "not now". */
+export async function decideProposal(
+  ctx: AssistantContext,
+  messageId: string,
+  asked: "confirm" | "decline",
+  picks?: ProposalPick[]
+): Promise<DecisionOutcome> {
   const { data } = await ctx.admin.from("assistant_messages").select("*").eq("id", messageId).eq("group_id", ctx.groupId).maybeSingle();
   const row = data as MessageRow | null;
   if (!row || !(await findConversation(ctx, row.conversation_id))) return { ok: false, status: 404, error: "Not found" };
   if (row.proposal_state !== "pending") return { ok: false, status: 409, error: "Already decided." };
 
+  const stored = row.proposal?.items ?? [];
+  const chosen = asked === "confirm" && picks ? applyProposalPicks(stored, picks) : stored;
+  const decision = asked === "confirm" && chosen.length === 0 ? "decline" : asked;
+  // The card keeps what was actually done, so a partial yes reads as such later.
+  const proposal = chosen === stored || decision === "decline" ? row.proposal : { ...row.proposal, items: chosen };
+
   // Claim it first, so a double tap can't apply the same change twice.
   const next: ProposalState = decision === "confirm" ? "confirmed" : "declined";
   const { data: claimed } = await ctx.admin
     .from("assistant_messages")
-    .update({ proposal_state: next })
+    .update({ proposal_state: next, ...(proposal !== row.proposal ? { proposal } : {}) })
     .eq("id", messageId)
     .eq("proposal_state", "pending")
     .select("id");
@@ -1040,9 +1054,9 @@ export async function decideProposal(ctx: AssistantContext, messageId: string, d
   } else {
     const { tools } = await turnTools(ctx, settings, limits.readOnly);
     toolsMs = Date.now() - started;
-    const items = proposalItems(row);
+    const items = proposalItems({ ...row, proposal });
     const outcomes = await executeProposals(
-      (row.proposal?.items ?? []).map((p) => ({ toolCallId: p.toolCallId, tool: p.tool, module: p.module, args: p.args })),
+      chosen.map((p) => ({ toolCallId: p.toolCallId, tool: p.tool, module: p.module, args: p.args })),
       tools
     );
     runMs = Date.now() - started - toolsMs;
@@ -1074,7 +1088,7 @@ export async function decideProposal(ctx: AssistantContext, messageId: string, d
   ]);
   if (decision === "confirm") logTurnTiming({ conversation: row.conversation_id, confirm: true, totalMs: Date.now() - started, toolsMs, runMs });
 
-  const updated = toMessage({ ...row, proposal_state: next }, names, ctx.userId)!;
+  const updated = toMessage({ ...row, proposal, proposal_state: next }, names, ctx.userId)!;
   return { ok: true, message: updated, outcome: outcomeRow ? toMessage(outcomeRow as MessageRow, names, ctx.userId) : null };
 }
 

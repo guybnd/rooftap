@@ -62,7 +62,7 @@ export function ThreadMessages({ thread, className }: { thread: AssistantThread;
             showAuthor={kind === 'household'}
             showCost={showCost}
             busy={deciding === m.id}
-            onDecide={(mid, d) => void decide(mid, d)}
+            onDecide={(mid, d, picks) => void decide(mid, d, picks)}
           />
         ))
       )}
