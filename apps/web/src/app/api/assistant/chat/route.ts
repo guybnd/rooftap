@@ -4,6 +4,7 @@ import {
   SSE_PING,
   encodeSseEvent,
   isAssistantPhotoPathFor,
+  cleanScreenPath,
   parseCookAskContext,
   type AssistantStreamEvent,
   type ConversationKind,
@@ -38,7 +39,7 @@ function afterTurn(ctx: AssistantContext, out: Extract<ChatOutcome, { ok: true }
 
 export async function POST(request: Request) {
   const receivedAt = Date.now();
-  const body = (await request.json().catch(() => ({}))) as { text?: unknown; conversationId?: unknown; kind?: unknown; reopen?: unknown; lastWaitMs?: unknown; cook?: unknown; photos?: unknown };
+  const body = (await request.json().catch(() => ({}))) as { text?: unknown; conversationId?: unknown; kind?: unknown; reopen?: unknown; lastWaitMs?: unknown; cook?: unknown; screen?: unknown; photos?: unknown };
   const sentPhotos = Array.isArray(body.photos) ? body.photos : [];
   if (typeof body.text !== "string" || (!body.text.trim() && sentPhotos.length === 0)) return assistantErrorResponse(400, "text is required");
   if (body.text.length > 4000) return assistantErrorResponse(400, "That message is too long.");
@@ -57,6 +58,8 @@ export async function POST(request: Request) {
     lastWaitMs: typeof body.lastWaitMs === "number" && Number.isFinite(body.lastWaitMs) ? Math.round(body.lastWaitMs) : undefined,
     // Asked from cook mode (Recipes v2 R7): the recipe and step on screen.
     cook: parseCookAskContext(body.cook),
+    // Asked from the pop-up chat: the route of the screen behind it.
+    screen: cleanScreenPath(body.screen),
     photos: [...new Set(sentPhotos as string[])],
   };
 

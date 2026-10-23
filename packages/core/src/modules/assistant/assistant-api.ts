@@ -254,6 +254,8 @@ export function createAssistantApi(call: AssistantCall, stream?: AssistantStream
         reopen?: boolean;
         /** Asked from cook mode (Recipes v2 R7); older servers ignore it. */
         cook?: { recipeId: string; step: number; deviceId?: string | null };
+        /** The route of the screen behind the pop-up chat; older servers ignore it. */
+        screen?: string;
         /** Uploaded photos (uploadAssistantPhoto paths) for Rooftap to look at. */
         photos?: string[];
       },

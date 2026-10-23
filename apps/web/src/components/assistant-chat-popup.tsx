@@ -9,7 +9,7 @@
 // Native twin: apps/mobile/src/features/assistant/chat-popup.tsx.
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ChevronDown, Maximize2, MessagesSquare, SquarePen, Trash2 } from "lucide-react";
 import {
@@ -81,10 +81,17 @@ function PopupThread({
     openRef.current = open;
   }, [open]);
 
+  // The screen behind the chat, so "this" in a question can mean what is open.
+  const pathname = usePathname();
+  const pathRef = useRef(pathname);
+  useEffect(() => {
+    pathRef.current = pathname;
+  }, [pathname]);
   const thread = useAssistantThread(target, {
     api: assistantApi,
     presence: () => (document.visibilityState !== "visible" ? "background" : openRef.current ? "here" : "away"),
     toast: popupToast,
+    screen: () => pathRef.current,
   });
   const { conversation, loadError, send, reload } = thread;
   // A delete can be taken back on servers that have archiving.

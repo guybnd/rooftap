@@ -85,6 +85,7 @@ export * from './modules/assistant/assistant';
 export * from './ai-keys';
 export * from './ai-providers';
 export * from './modules/assistant/assistant-prompt';
+export * from './modules/assistant/assistant-screen';
 export * from './modules/assistant/assistant-api';
 export * from './modules/assistant/assistant-photos';
 export * from './modules/assistant/proposal-picks';

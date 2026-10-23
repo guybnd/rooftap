@@ -147,6 +147,8 @@ export interface ThreadHost {
   toast: { error: (message: string) => void; message: (message: string) => void };
   /** Cook mode's ask (Recipes v2 R7): the recipe and step on screen, read at each send. */
   cook?: () => { recipeId: string; step: number; deviceId?: string | null } | null;
+  /** The pop-up chat: the route of the screen behind it, read at each send. */
+  screen?: () => string | null;
 }
 
 /** A photo attached in the composer: its uploaded path, and the local picture shown while it sends. */
@@ -295,8 +297,17 @@ export function useAssistantThread(target: ThreadTarget, host: ThreadHost) {
       try {
         const pacer = createDraftPacer(setDraft);
         const cook = hostRef.current.cook?.() ?? undefined;
+        const screen = hostRef.current.screen?.() ?? undefined;
         const res = await api.send(
-          { text, conversationId: conversationIdRef.current, kind, reopen: resumedRef.current || undefined, ...(cook ? { cook } : {}), ...withPhotos },
+          {
+            text,
+            conversationId: conversationIdRef.current,
+            kind,
+            reopen: resumedRef.current || undefined,
+            ...(cook ? { cook } : {}),
+            ...(screen ? { screen } : {}),
+            ...withPhotos,
+          },
           (event) => pacer.push(event)
         );
         // A lead-in still on screen gets its moment before the stored reply replaces it.

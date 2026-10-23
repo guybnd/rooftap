@@ -6,6 +6,7 @@
 // adapted to one household app with per-module trust levels.
 
 import type { ConversationKind, MessageChannel, TrustLevel } from './assistant';
+import { screenPromptText } from './assistant-screen';
 
 export const ASSISTANT_PERSONA =
   "You are Rooftap, the household's assistant. You help the members of one home run it together: " +
@@ -90,6 +91,8 @@ export interface AssistantPromptInput {
   summary?: string | null;
   /** Asked from cook mode: the recipe and step on screen (recipes cook.ts cookingPromptText). */
   cooking?: string | null;
+  /** Asked from the pop-up chat: the route of the screen behind it (assistant-screen.ts). */
+  screen?: string | null;
 }
 
 /** Assembles the system prompt for one turn. Never empty. */
@@ -131,6 +134,8 @@ export function buildAssistantSystemPrompt(input: AssistantPromptInput): string 
     sections.push(`## Earlier in this conversation\n${input.summary.trim()}`);
   }
   if (input.cooking?.trim()) sections.push(input.cooking.trim());
+  const screen = screenPromptText(input.screen);
+  if (screen) sections.push(screen);
 
   return sections.join('\n\n');
 }

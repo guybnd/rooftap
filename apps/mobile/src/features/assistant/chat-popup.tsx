@@ -17,6 +17,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useSafeAreaFrame, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { usePathname } from 'expo-router';
 import { ChevronDown, Maximize2, MessagesSquare, SquarePen, Trash2 } from 'lucide-react-native';
 import {
   MOTION_DURATIONS_MS,
@@ -88,6 +89,12 @@ function PopupThread({
 }) {
   const { isOnline } = useDataCache();
   const openRoute = useOpenRoute();
+  // The screen behind the chat, so "this" in a question can mean what is open.
+  const pathname = usePathname();
+  const pathRef = React.useRef(pathname);
+  React.useEffect(() => {
+    pathRef.current = pathname;
+  }, [pathname]);
   const openRef = React.useRef(open);
   React.useEffect(() => {
     openRef.current = open;
@@ -97,6 +104,7 @@ function PopupThread({
     api: assistantApi,
     presence: () => (AppState.currentState !== 'active' ? 'background' : openRef.current ? 'here' : 'away'),
     toast: popupToast,
+    screen: () => pathRef.current,
   });
   const { conversation, loadError, send, reload } = thread;
   // A delete can be taken back on servers that have archiving.

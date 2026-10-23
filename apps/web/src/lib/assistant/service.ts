@@ -550,6 +550,8 @@ export interface ChatInput {
   onStream?: (event: TurnStreamEvent) => void;
   /** Asked from cook mode (Recipes v2 R7): the recipe and step on screen. */
   cook?: CookAskContext | null;
+  /** Asked from the pop-up chat: the route of the screen behind it (cleanScreenPath). */
+  screen?: string | null;
   /** Photos sent with the message: storage paths the caller checked belong to this person (isAssistantPhotoPathFor). */
   photos?: string[];
 }
@@ -761,6 +763,7 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
     channel: input.channel ?? "app",
     summary: conversation.summary,
     cooking,
+    screen: input.screen,
   }) + (photos.length || lookAgain ? PHOTO_PROMPT : "");
 
   const channel = input.channel ?? "app";

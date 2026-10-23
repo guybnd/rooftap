@@ -59,6 +59,11 @@ describe('buildAssistantSystemPrompt', () => {
     expect(prompt).toContain('which wait for their tap');
   });
 
+  it('adds the screen behind the pop-up chat only when there is one', () => {
+    expect(buildAssistantSystemPrompt({ ...base, screen: '/occasions' })).toContain('## On their screen');
+    expect(buildAssistantSystemPrompt(base)).not.toContain('## On their screen');
+  });
+
   it('says so when no modules are reachable', () => {
     expect(buildAssistantSystemPrompt({ ...base, modules: [] })).toContain('No parts of the app are available');
   });
