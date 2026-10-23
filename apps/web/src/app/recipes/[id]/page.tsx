@@ -13,7 +13,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { use$ } from '@legendapp/state/react';
-import { ArrowLeft, Pencil, Trash2, Plus, Check, RotateCcw, ShoppingCart, Users, Timer, Flame } from 'lucide-react';
+import { ArrowLeft, Pencil, Trash2, Plus, Check, RotateCcw, ShoppingCart, Users, Timer, Flame, ChefHat } from 'lucide-react';
 import { useDataCache } from '@/lib/data-cache';
 import { recipes$, recipeIngredients$, groceryItems$, useReconnectSync, useStoreHelpers, useStoreLoaded, useModules } from '@homeup/core';
 import { dialog } from '@homeup/core';
@@ -29,6 +29,9 @@ import {
   groceryStatusPatch,
   recipeCuisines,
   recipeSteps,
+  stepTimerStates,
+  useCookClock,
+  useCooks,
   trimQty,
 } from '@homeup/core';
 import { ProgressBar } from '@/components/ui/progress-bar';
@@ -37,6 +40,9 @@ import { navLinkClickHandler, clearPortalMorphOnSettle } from '@/lib/view-transi
 import { EntityPhotoThumbnail } from '@/components/documents/entity-photo-thumbnail';
 import { RecipeFormSheet } from '../recipe-form-sheet';
 import { RecipeSteps } from '../recipe-steps';
+import { CookCard } from '@/components/cook/cook-card';
+import { StepTimerChip } from '@/components/cook/step-timer-chip';
+import { askTimerNotificationPermission } from '@/components/cook/cook-alarms';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { IngredientQuickEditorSheet } from '../ingredient-quick-editor-sheet';
 import { useLongPress } from '@/hooks/use-long-press';
@@ -121,6 +127,15 @@ export default function RecipeDetailPage() {
   // screens show both side by side.
   const [pane, setPane] = useState<'ingredients' | 'steps'>('ingredients');
   const steps = useMemo(() => (recipe ? recipeSteps(recipe) : []), [recipe]);
+  // Recipes v2 R2: this recipe's running cook, if any, and a clock that ticks
+  // while it has timers.
+  const cooks = useCooks(group?.id, currentUserId);
+  const cook = cooks.cookForRecipe(recipeId);
+  const now = useCookClock(!!cook && cook.session.timers.length > 0);
+  const startCooking = () => {
+    cooks.start(recipeId);
+    setPane('steps');
+  };
 
   // ── Quick-editor sheet (FLUX-205 D5) — per-row descriptor/qty/unit edit +
   //    match picker. Same key-remount convention as RecipeFormSheet below: the
@@ -311,7 +326,13 @@ export default function RecipeDetailPage() {
             <button
               type="button"
               onClick={addMissing}
-              className="inline-flex h-11 items-center gap-1.5 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/80"
+              className={cn(
+                'inline-flex h-11 items-center gap-1.5 rounded-lg px-4 text-sm font-medium',
+                // H5: one primary action per layer; Start cooking takes it when offered.
+                cooks.enabled && steps.length > 0 && !cook
+                  ? 'border border-border bg-muted text-foreground hover:bg-accent'
+                  : 'bg-primary text-primary-foreground hover:bg-primary/80',
+              )}
             >
               <ShoppingCart className="h-4 w-4" />
               Add {missingCount} missing to groceries
@@ -323,6 +344,18 @@ export default function RecipeDetailPage() {
       {/* Hearth §13.7 "Desktop shell": on a wide screen the ingredients and
           the method sit side by side, the method holding still as you scroll. */}
       <div className={wide ? 'grid grid-cols-2 items-start gap-6' : 'space-y-4'}>
+      {cooks.enabled && steps.length > 0 && !cook && (
+        <button
+          type="button"
+          onClick={startCooking}
+          className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary text-sm font-medium text-primary-foreground hover:bg-primary/85"
+        >
+          <ChefHat className="h-4 w-4" />
+          Start cooking
+        </button>
+      )}
+      {cook && <CookCard cook={cook} cooks={cooks} now={now} />}
+
       {!wide && steps.length > 0 && (
         <SegmentedControl
           options={[
@@ -364,7 +397,34 @@ export default function RecipeDetailPage() {
       {(wide || pane === 'steps' || steps.length === 0) && (
       <div className={cn('space-y-4', wide && 'sticky top-4')}>
       {steps.length > 0 && (
-        <RecipeSteps steps={steps} ingredients={ingredients} onOpenIngredient={(ing) => openQuickEditor(ing, false)} />
+        <RecipeSteps
+          steps={steps}
+          ingredients={ingredients}
+          onOpenIngredient={(ing) => openQuickEditor(ing, false)}
+          currentStep={cook?.step ?? null}
+          renderTimer={
+            cooks.enabled
+              ? (t, stepIndex, timerIndex) => {
+                  const state = stepTimerStates(cook?.session ?? null, steps[stepIndex], stepIndex, now)[timerIndex];
+                  const timerId = state?.running?.timer.id;
+                  return (
+                    <StepTimerChip
+                      label={t.label}
+                      seconds={t.seconds}
+                      running={state?.running ?? null}
+                      onStart={() => {
+                        askTimerNotificationPermission();
+                        cooks.start(recipeId, { step: stepIndex, index: timerIndex });
+                      }}
+                      onPause={() => cook && timerId && cooks.pause(cook.session.id, timerId)}
+                      onResume={() => cook && timerId && cooks.resume(cook.session.id, timerId)}
+                      onDismiss={() => cook && timerId && cooks.stopTimer(cook.session.id, timerId)}
+                    />
+                  );
+                }
+              : undefined
+          }
+        />
       )}
 
       {/* Source photo (FLUX-202) */}

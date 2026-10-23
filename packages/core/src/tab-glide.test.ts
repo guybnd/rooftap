@@ -11,7 +11,7 @@ import {
   tabPebbleMetrics,
   tabTravelDirection,
 } from './tab-glide';
-import { motionEaseOut, navEase } from './tokens';
+import { ARRIVE, arriveDelayMs, motionEaseOut, navEase } from './tokens';
 
 const W = TAB_GLIDE_SIZE.width;
 const H = TAB_GLIDE_SIZE.height;
@@ -186,5 +186,15 @@ describe('glowDriftX', () => {
   it('rests in the corner for a section outside the order, or a single section', () => {
     expect(glowDriftX(order, 'settings')).toBe(GLOW_DRIFT_REST);
     expect(glowDriftX(['home'], 'home')).toBe(GLOW_DRIFT_REST);
+  });
+});
+
+describe('arriveDelayMs', () => {
+  it('staggers blocks 40ms apart and caps the wait', () => {
+    expect(arriveDelayMs(0)).toBe(0);
+    expect(arriveDelayMs(1)).toBe(ARRIVE.stepMs);
+    expect(arriveDelayMs(3)).toBe(3 * ARRIVE.stepMs);
+    expect(arriveDelayMs(40)).toBe(ARRIVE.maxSteps * ARRIVE.stepMs);
+    expect(arriveDelayMs(-2)).toBe(0);
   });
 });

@@ -63,6 +63,7 @@ export type GroceryItemsMatches = Expect<Equal<Matches<App.GroceryItem, 'grocery
 export type HouseholdTasksMatches = Expect<Equal<Matches<App.HouseholdTask, 'household_tasks'>, Ok>>;
 export type LoyaltyCardsMatches = Expect<Equal<Matches<App.LoyaltyCard, 'loyalty_cards'>, Ok>>;
 export type MealPlanEntriesMatches = Expect<Equal<Matches<App.MealPlanEntry, 'meal_plan_entries'>, Ok>>;
+export type CookSessionsMatches = Expect<Equal<Matches<App.CookSession, 'cook_sessions'>, Ok>>;
 export type RecipeIngredientsMatches = Expect<Equal<Matches<App.RecipeIngredient, 'recipe_ingredients'>, Ok>>;
 export type RecipesMatches = Expect<Equal<Matches<App.Recipe, 'recipes'>, Ok>>;
 export type RewardPartnersMatches = Expect<Equal<Matches<App.RewardPartner, 'reward_partners'>, Ok>>;

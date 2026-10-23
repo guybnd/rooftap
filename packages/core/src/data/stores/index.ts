@@ -18,6 +18,7 @@ export * from './grocery-items-store';
 export * from './household-tasks-store';
 export * from './loyalty-cards-store';
 export * from './meal-plan-store';
+export * from './cook-sessions-store';
 export * from './recipe-ingredients-store';
 export * from './recipes-store';
 export * from './saved-searches-store';

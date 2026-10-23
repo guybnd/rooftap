@@ -326,6 +326,7 @@ describe('server schema', () => {
       'weekly and monthly money summaries from the assistant',
       'moving a shop or one payment to another Costs category',
       'recipe steps with timers',
+      'cooking several recipes at once, with timers',
     ]);
 
     act(() => setServerSchema('20261020050000_mcp_oauth'));
@@ -371,6 +372,7 @@ describe('server schema', () => {
         'weekly and monthly money summaries from the assistant',
         'moving a shop or one payment to another Costs category',
         'recipe steps with timers',
+        'cooking several recipes at once, with timers',
       ]);
     } finally {
       delete mcp.minSchema;

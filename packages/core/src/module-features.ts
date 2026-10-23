@@ -119,6 +119,10 @@ export const MODULE_FEATURES = {
   },
 
   // Meal plan lives in Recipes, so each of its features names both.
+  'recipes.cook': {
+    modules: ['recipes'],
+    what: 'Running cooks: step timers, the cooking heads over every screen, and cook mode.',
+  },
   'recipes.meal-plan': {
     modules: ['recipes', 'meals'],
     what: 'The "This week" tab in Recipes, and the meal plan assistant tools.',

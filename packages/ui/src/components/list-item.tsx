@@ -23,6 +23,7 @@ import { shouldWrapTitleChildren } from '../lib/list-item-title';
 import { HoldFillOverlay } from '../primitives/hold-fill-overlay';
 import { useThemeMaterial } from '../theme/theme-provider';
 import { Pill } from './pill';
+import { ArriveView } from './arrive';
 
 // H4: the outer `ListGroup` owns the single border level per view; rows
 // inside it are never individually bordered cards.
@@ -80,7 +81,7 @@ function ListGroup({ className, style, children, bordered = true, ...props }: Li
   const items = React.Children.toArray(children);
   const material = useThemeMaterial();
   return (
-    <View
+    <ArriveView
       className={cn(bordered && 'overflow-hidden rounded-3xl border border-border/60 bg-card', className)}
       style={bordered ? [{ boxShadow: material.cardShadow }, style] : style}
       {...props}
@@ -91,7 +92,7 @@ function ListGroup({ className, style, children, bordered = true, ...props }: Li
           {child}
         </React.Fragment>
       ))}
-    </View>
+    </ArriveView>
   );
 }
 

@@ -105,6 +105,27 @@ export const MOTION_EASE = {
 } as const;
 
 /**
+ * Hearth §8.1 "Arrive": a page that lands after a tab switch fills in as a
+ * cascade, its blocks fading and rising into place one after another from
+ * the top. Web finds the blocks in the page; native's are its cards, list
+ * groups and Hero ledes, in mount order.
+ */
+export const ARRIVE = {
+  stepMs: 40,
+  durationMs: 260,
+  risePx: 10,
+  /** Blocks past this many arrive together with the last staggered one. */
+  maxSteps: 9,
+  /** How long after a page mounts a newly mounted block still joins the cascade. */
+  windowMs: 700,
+} as const;
+
+/** When the `index`th block of an arriving page starts, ms after it lands. */
+export function arriveDelayMs(index: number): number {
+  return Math.min(Math.max(index, 0), ARRIVE.maxSteps) * ARRIVE.stepMs;
+}
+
+/**
  * Hearth §8 "Pop out, pop in": a tapped suggestion chip swells to
  * `POP_OUT_SWELL` at fast (swift-out) and vanishes to `POP_OUT_SHRINK` at fast
  * (ease-in); the item is written once the chip has gone, so its row pops into

@@ -105,6 +105,10 @@ export const SERVER_FEATURES = {
     minSchema: '20261023160000_recipe_steps',
     label: 'recipe steps with timers',
   },
+  'recipes.cook': {
+    minSchema: '20261023170000_cook_sessions',
+    label: 'cooking several recipes at once, with timers',
+  },
 } as const satisfies Record<string, ServerFeatureDef>;
 
 export type ServerFeatureId = keyof typeof SERVER_FEATURES;

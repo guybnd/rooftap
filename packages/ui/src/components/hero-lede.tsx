@@ -7,6 +7,7 @@ import { Text, View, type ViewProps } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { MOTION_DURATIONS_MS, meterSegments } from '@homeup/core';
 import { cn } from '../lib/cn';
+import { ArriveView } from './arrive';
 
 const SWIFT_OUT = Easing.bezier(0.16, 1, 0.3, 1);
 
@@ -40,7 +41,7 @@ const TONE_CLASS: Record<NonNullable<HeroLedeProps['tone']>, string> = {
 export function HeroLede({ value, label, caption, size = 'section', meter, tone = 'neutral', layout = 'stacked', trailing, className, ...props }: HeroLedeProps) {
   if (layout === 'inline') {
     return (
-      <View className={cn('gap-2', className)} {...props}>
+      <ArriveView className={cn('gap-2', className)} {...props}>
         <View className="flex-row items-center gap-2.5">
           <Text
             accessibilityRole="header"
@@ -64,11 +65,11 @@ export function HeroLede({ value, label, caption, size = 'section', meter, tone 
           {trailing}
         </View>
         {meter && <SegmentMeter done={meter.done} total={meter.total} />}
-      </View>
+      </ArriveView>
     );
   }
   return (
-    <View className={cn('gap-2', className)} {...props}>
+    <ArriveView className={cn('gap-2', className)} {...props}>
       <View className="flex-row flex-wrap items-end gap-x-2.5">
         <Text
           accessibilityRole="header"
@@ -83,7 +84,7 @@ export function HeroLede({ value, label, caption, size = 'section', meter, tone 
       </View>
       {meter && <SegmentMeter done={meter.done} total={meter.total} />}
       {caption != null && <Text className="text-caption text-muted-foreground">{caption}</Text>}
-    </View>
+    </ArriveView>
   );
 }
 

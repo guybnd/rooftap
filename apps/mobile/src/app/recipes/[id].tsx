@@ -15,7 +15,7 @@ import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { use$ } from '@legendapp/state/react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ArrowLeft, Pencil, Trash2, Plus, Check, RotateCcw, ShoppingCart, Users, Timer, Flame } from 'lucide-react-native';
+import { ArrowLeft, Pencil, Trash2, Plus, Check, RotateCcw, ShoppingCart, Users, Timer, Flame, ChefHat } from 'lucide-react-native';
 import {
   Text,
   Button,
@@ -48,6 +48,9 @@ import {
   groceryStatusPatch,
   recipeCuisines,
   recipeSteps,
+  stepTimerStates,
+  useCookClock,
+  useCooks,
   trimQty,
   type GroceryItem,
   type Recipe,
@@ -59,6 +62,9 @@ import { NoGroupScreen } from '@/components/no-group-screen';
 import { RecipeFormSheet } from '@/features/recipes/recipe-form-sheet';
 import { IngredientQuickEditorSheet } from '@/features/recipes/ingredient-quick-editor-sheet';
 import { RecipeSteps } from '@/features/recipes/recipe-steps';
+import { CookCard } from '@/features/cook/cook-card';
+import { StepTimerChip } from '@/features/cook/step-timer-chip';
+import { askTimerNotificationPermission } from '@/features/cook/cook-alarms';
 import { useOpenRoute } from '@/lib/tab-routes';
 
 function nowISO(): string {
@@ -119,6 +125,16 @@ export default function RecipeDetailScreen() {
   // Recipes v2: ingredients and steps are two tabs.
   const [pane, setPane] = React.useState<'ingredients' | 'steps'>('ingredients');
   const steps = React.useMemo(() => (recipe ? recipeSteps(recipe) : []), [recipe]);
+  // Recipes v2 R2: this recipe's running cook, if any, and a clock that ticks
+  // while it has timers.
+  const cooks = useCooks(group?.id, currentUserId);
+  const cook = cooks.cookForRecipe(recipeId);
+  const now = useCookClock(!!cook && cook.session.timers.length > 0);
+  const startCooking = () => {
+    haptics.commit();
+    cooks.start(recipeId);
+    setPane('steps');
+  };
 
   const [quickEditorId, setQuickEditorId] = React.useState<string | null>(null);
   const [quickEditorOpen, setQuickEditorOpen] = React.useState(false);
@@ -318,16 +334,31 @@ export default function RecipeDetailScreen() {
                 )}
               </View>
             )}
-            {missingCount > 0 && (
-              <Button onPress={addMissing} className="h-11 self-start">
-                <ShoppingCart size={14} className="text-primary-foreground" />
-                <Text className="text-sm font-medium text-primary-foreground">
-                  Add {missingCount} missing to groceries
-                </Text>
-              </Button>
-            )}
+            {missingCount > 0 &&
+              // H5: one primary action per layer; Start cooking takes it when offered.
+              (cooks.enabled && steps.length > 0 && !cook ? (
+                <Button variant="outline" onPress={addMissing} className="h-11 self-start">
+                  <ShoppingCart size={14} className="text-foreground" />
+                  <Text className="text-sm font-medium text-foreground">Add {missingCount} missing to groceries</Text>
+                </Button>
+              ) : (
+                <Button onPress={addMissing} className="h-11 self-start">
+                  <ShoppingCart size={14} className="text-primary-foreground" />
+                  <Text className="text-sm font-medium text-primary-foreground">
+                    Add {missingCount} missing to groceries
+                  </Text>
+                </Button>
+              ))}
           </Card>
         )}
+
+        {cooks.enabled && steps.length > 0 && !cook && (
+          <Button onPress={startCooking} className="h-12 rounded-xl">
+            <ChefHat size={16} className="text-primary-foreground" />
+            <Text className="text-sm font-medium text-primary-foreground">Start cooking</Text>
+          </Button>
+        )}
+        {cook && <CookCard cook={cook} cooks={cooks} now={now} />}
 
         {steps.length > 0 && (
           <SegmentedControl
@@ -366,7 +397,34 @@ export default function RecipeDetailScreen() {
         )}
 
         {pane === 'steps' && steps.length > 0 && (
-          <RecipeSteps steps={steps} ingredients={ingredients} onOpenIngredient={(ing) => openQuickEditor(ing)} />
+          <RecipeSteps
+            steps={steps}
+            ingredients={ingredients}
+            onOpenIngredient={(ing) => openQuickEditor(ing)}
+            currentStep={cook?.step ?? null}
+            renderTimer={
+              cooks.enabled
+                ? (t, stepIndex, timerIndex) => {
+                    const state = stepTimerStates(cook?.session ?? null, steps[stepIndex], stepIndex, now)[timerIndex];
+                    const timerId = state?.running?.timer.id;
+                    return (
+                      <StepTimerChip
+                        label={t.label}
+                        seconds={t.seconds}
+                        running={state?.running ?? null}
+                        onStart={() => {
+                          askTimerNotificationPermission();
+                          cooks.start(recipeId, { step: stepIndex, index: timerIndex });
+                        }}
+                        onPause={() => cook && timerId && cooks.pause(cook.session.id, timerId)}
+                        onResume={() => cook && timerId && cooks.resume(cook.session.id, timerId)}
+                        onDismiss={() => cook && timerId && cooks.stopTimer(cook.session.id, timerId)}
+                      />
+                    );
+                  }
+                : undefined
+            }
+          />
         )}
 
         <RecipeFormSheet

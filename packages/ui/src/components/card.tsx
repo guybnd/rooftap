@@ -12,6 +12,7 @@ import * as React from 'react';
 import { Text, View, type TextProps, type ViewProps } from 'react-native';
 import { cn } from '../lib/cn';
 import { useThemeMaterial } from '../theme/theme-provider';
+import { ArriveView } from './arrive';
 
 export interface CardProps extends ViewProps {
   size?: 'default' | 'sm';
@@ -20,7 +21,7 @@ export interface CardProps extends ViewProps {
 function Card({ className, size = 'default', style, ...props }: CardProps) {
   const material = useThemeMaterial();
   return (
-    <View
+    <ArriveView
       className={cn(
         'flex flex-col gap-4 overflow-hidden rounded-xl border border-border/60 bg-card py-4',
         size === 'sm' && 'gap-3 py-3',

@@ -4,7 +4,9 @@
 // once that commit is done, so a tap sat still before anything moved. Now
 // the tap commits an empty page over the ground (the glow and texture
 // already sit behind every section root), the slide starts at once, and the
-// screen mounts when the slide lands, fading in on Hearth's `fast` step.
+// screen mounts when the slide lands. It fades in on Hearth's `fast` step
+// while its cards, list groups and Hero lede cascade in (Hearth's Arrive,
+// @homeup/ui ArriveView).
 //
 // The first section the app opens on mounts at once, and so does every
 // section under still motion: there is no slide to wait for. Later visits
@@ -12,7 +14,7 @@
 import * as React from 'react';
 import { Animated } from 'react-native';
 import { MOTION_DURATIONS_MS, useNavShiftMs } from '@homeup/core';
-import { useStillMotion } from '@homeup/ui';
+import { ArriveScope, useStillMotion } from '@homeup/ui';
 
 // Set once the app's first section root has mounted.
 let launched = false;
@@ -46,11 +48,19 @@ export function DeferredScene({ navigation, children }: { navigation: Transition
     };
   }, [ready, navigation, shiftMs]);
 
+  // Whether this mount arrives (a first visit that waited for its slide),
+  // fixed when the screen mounts.
+  const [arrives] = React.useState(() => !ready);
+
   React.useEffect(() => {
     if (!ready) return;
+    // The page fades in as a whole while its blocks cascade over it, so
+    // the parts that aren't blocks (stat rows, search, chips) and rows a
+    // list mounts a beat later come in softly too instead of popping.
     Animated.timing(fade, { toValue: 1, duration: MOTION_DURATIONS_MS.fast, useNativeDriver: true }).start();
   }, [ready, fade]);
 
   if (!ready) return null;
-  return <Animated.View style={{ flex: 1, opacity: fade }}>{children}</Animated.View>;
+  const body = arrives ? <ArriveScope>{children}</ArriveScope> : children;
+  return <Animated.View style={{ flex: 1, opacity: fade }}>{body}</Animated.View>;
 }

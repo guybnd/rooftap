@@ -28,6 +28,7 @@ export const STORE_MODULES = {
   recipes: ['recipes'],
   recipe_ingredients: ['recipes'],
   meal_plan_entries: ['meals'],
+  cook_sessions: ['recipes'],
   events: ['calendar'],
   documents: ['documents'],
   shopper_wants: ['shopper'],

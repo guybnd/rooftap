@@ -10,6 +10,7 @@
 
 import type { MouseEvent } from "react";
 import type { useRouter } from "next/navigation";
+import { ARRIVE, arriveDelayMs } from "@homeup/core";
 import { prefersStillMotion } from "./still-motion";
 
 export type NavTransitionType = "crossfade" | "shift-forward" | "shift-back" | "descend" | "back" | "portal";
@@ -91,10 +92,7 @@ function holdNavContent(target: string | undefined): void {
 // cascade, its blocks fading and rising into place one after another from
 // the top, instead of appearing at once. Transform and opacity only, so it
 // stays smooth while the page is still settling.
-const ARRIVE_STEP_MS = 40;
-const ARRIVE_MAX_DELAY_MS = 360;
-const ARRIVE_MS = 260;
-const ARRIVE_RISE_PX = 10;
+// Timing shared with native (core ARRIVE); at most this many blocks.
 const ARRIVE_MAX_BLOCKS = 16;
 
 /**
@@ -146,12 +144,12 @@ function revealCascade(region: HTMLElement): void {
   arriveBlocks(region).forEach((el, i) => {
     el.animate(
       [
-        { opacity: 0, transform: `translateY(${ARRIVE_RISE_PX}px)` },
+        { opacity: 0, transform: `translateY(${ARRIVE.risePx}px)` },
         { opacity: 1, transform: "translateY(0)" },
       ],
       {
-        duration: ARRIVE_MS,
-        delay: Math.min(i * ARRIVE_STEP_MS, ARRIVE_MAX_DELAY_MS),
+        duration: ARRIVE.durationMs,
+        delay: arriveDelayMs(i),
         easing: "cubic-bezier(0.16, 1, 0.3, 1)",
         fill: "backwards",
       }

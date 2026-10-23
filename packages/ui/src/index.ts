@@ -20,6 +20,7 @@ export * from './components/screen-background';
 export * from './components/section-screen';
 export * from './components/empty-state';
 export * from './components/button';
+export * from './components/arrive';
 export * from './components/card';
 export * from './components/text';
 export * from './components/input';

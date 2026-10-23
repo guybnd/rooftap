@@ -48,6 +48,7 @@ import { useAuthAutoRefresh } from '@/lib/use-auth-auto-refresh';
 import { useAuthGuard } from '@/lib/use-auth-guard';
 import { useModuleRouteGuard } from '@/lib/use-module-route-guard';
 import { usePushNotificationRouting } from '@/lib/use-push-notification-routing';
+import { CookAlarms } from '@/features/cook/cook-alarms';
 import { useUpdateToasts } from '@/lib/use-update-toasts';
 import { useWidgetSync } from '@/widgets/use-widget-sync';
 
@@ -158,6 +159,7 @@ function AppShell() {
                 <WidgetSync />
                 <UpdateToasts />
                 <AssistantAnswers />
+                <CookAlarms />
                 <ModuleRouteGuard />
                 <ShareIntentHandler />
                 <AnimatedSplashOverlay />

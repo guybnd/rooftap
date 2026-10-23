@@ -11,10 +11,12 @@ import { assistantConversationFromUrl, openAssistantPopup } from '@homeup/core';
 import { useOpenRoute } from './tab-routes';
 
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
+  handleNotification: async (notification) => ({
     shouldShowBanner: true,
     shouldShowList: true,
-    shouldPlaySound: false,
+    // A finished cooking timer (features/cook/cook-alarms.tsx) rings in the
+    // foreground too; other pushes stay quiet while the app is open.
+    shouldPlaySound: notification.request.content.data?.kind === 'cook-timer',
     shouldSetBadge: false,
   }),
 });
