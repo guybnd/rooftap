@@ -9,9 +9,10 @@ import { MCP_TOOLS } from '../../mcp-tools';
 import { getModule, type ModuleId } from '../../modules';
 
 /** Modules the assistant has tools for, in tool order, that are switched on. */
-export function assistantModules(enabled: ReadonlySet<string>): { id: ModuleId; label: string }[] {
+export function assistantModules(enabled: ReadonlySet<string>): { id: ModuleId; label: string; readOnly: boolean }[] {
   const ids = [...new Set(MCP_TOOLS.map((t) => t.module))].filter((id) => enabled.has(id));
-  return ids.map((id) => ({ id, label: getModule(id)?.label ?? id }));
+  // A module with lookups only (Documents, Home Search) has no trust to set.
+  return ids.map((id) => ({ id, label: getModule(id)?.label ?? id, readOnly: !MCP_TOOLS.some((t) => t.module === id && t.kind === 'write') }));
 }
 
 export interface ConversationGroups {

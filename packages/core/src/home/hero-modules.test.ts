@@ -16,6 +16,7 @@ import {
   isModuleEnabled,
   isModuleShown,
   nextUpItem,
+  nowCardTiming,
   unassignedCount,
   upcomingBills,
   whosOnHookBuckets,
@@ -289,5 +290,26 @@ describe('shortcuts', () => {
     expect(bills.map((b) => b.key)).not.toContain('far-due');
     const days = bills.map((b) => b.days);
     expect(days).toEqual([...days].sort((a, b) => a - b));
+  });
+});
+
+describe('nowCardTiming', () => {
+  it('reads overdue, now, next up and today', () => {
+    expect(nowCardTiming({ dueTime: '09:00', overdue: true }, NOON)).toEqual({
+      countdown: null,
+      dueSoon: false,
+      eyebrow: { text: 'Overdue', tone: 'danger' },
+    });
+    expect(nowCardTiming({ dueTime: '12:20', overdue: false }, NOON)).toEqual({
+      countdown: 'in 20m',
+      dueSoon: true,
+      eyebrow: { text: 'Now', tone: 'warning' },
+    });
+    expect(nowCardTiming({ dueTime: '15:00', overdue: false }, NOON)).toEqual({
+      countdown: 'in 3h',
+      dueSoon: false,
+      eyebrow: { text: 'Next up', tone: 'muted' },
+    });
+    expect(nowCardTiming({ dueTime: null, overdue: false }, NOON).eyebrow).toEqual({ text: 'Today', tone: 'muted' });
   });
 });

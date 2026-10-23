@@ -58,6 +58,9 @@ import {
   currencySymbol,
   scoutPrefillFromSetupItem,
   scoutPrefillHref,
+  setupCommentChipLabel,
+  setupPriceDelta,
+  setupPriceEdit,
   useModules,
 } from '@homeup/core';
 import { openDocumentExternally } from '@/components/documents/document-preview';
@@ -149,7 +152,7 @@ export function SetupItemCard({
   const store = stores.find((s) => s.id === item.store_id) ?? null;
   const priorityMeta = PRIORITY_META[item.priority];
 
-  const delta = item.est_price != null && item.actual_price != null ? item.actual_price - item.est_price : null;
+  const delta = setupPriceDelta(item);
 
   const openLink = () => {
     if (item.url) void Linking.openURL(item.url);
@@ -165,10 +168,8 @@ export function SetupItemCard({
   // apps/web/src/app/setup/setup-item-card.tsx) — empty commits null, an
   // unchanged value is a no-op.
   const commitPrice = (field: 'est_price' | 'actual_price', v: string) => {
-    const trimmed = v.trim();
-    const next = trimmed ? parseInt(trimmed, 10) : null;
-    if (next != null && Number.isNaN(next)) return;
-    if (next !== item[field]) onPatch(item.id, { [field]: next });
+    const next = setupPriceEdit(item[field], v);
+    if (next !== undefined) onPatch(item.id, { [field]: next });
   };
 
   // Hearth §6 portal contract: comments (opens in place), product link + linked
@@ -181,7 +182,7 @@ export function SetupItemCard({
       key: 'comments',
       icon: <MessageSquare size={13} className="text-muted-foreground" />,
       // PC: the chip names the noun it opens ("2 comments").
-      label: commentCount > 0 ? `${commentCount} comment${commentCount === 1 ? '' : 's'}` : 'Comments',
+      label: setupCommentChipLabel(commentCount),
       tone: 'neutral',
       onOpen: () => setShowComments((v) => !v),
     });

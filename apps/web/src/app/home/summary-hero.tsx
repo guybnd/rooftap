@@ -37,9 +37,8 @@ import {
   todayProgress,
   useModules,
   useMonthTotals,
-  coarseCountdown,
-  isCountdownDueSoon,
   isModuleShown,
+  nowCardTiming,
   unassignedCount,
   whosOnHookBuckets,
   type HeroModuleGroup,
@@ -247,17 +246,11 @@ export function SummaryHero({
   // One page per queued item: its section tile, what kind of "now" it is, and
   // a coarse countdown on a timed item, warning-tinted within the hour.
   const nowCards: NowCardPagerItem[] = nowQueue.map((item) => {
-    const countdown = item.dueTime && !item.overdue ? coarseCountdown(ctx.now, item.dueTime) : null;
-    const dueSoon = countdown ? isCountdownDueSoon(countdown) : false;
+    const { countdown, dueSoon, eyebrow } = nowCardTiming(item, ctx.now);
     const section = heroItemSectionId(item);
     const linkedId = item.checklistHref ? item.task?.linked_checklist_id : null;
     const checklist = linkedId ? checklistsById?.[linkedId] : undefined;
     const checklistItems = checklist ? (checklistItemsByChecklistId?.[checklist.id] ?? []) : [];
-    const eyebrow = item.overdue
-      ? { text: 'Overdue', tone: 'danger' as const }
-      : item.dueTime
-        ? { text: dueSoon ? 'Now' : 'Next up', tone: dueSoon ? ('warning' as const) : ('muted' as const) }
-        : { text: 'Today', tone: 'muted' as const };
     return {
       id: item.id,
       sectionId: section,

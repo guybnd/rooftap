@@ -101,14 +101,18 @@ export function AssistantSettings() {
             {reachable.map((m) => (
               <View key={m.id} className="gap-2 px-3.5 py-3">
                 <Text className="text-sm font-medium text-foreground">{m.label}</Text>
-                <SegmentedControl<TrustLevel>
-                  accessibilityLabel={`${m.label} access`}
-                  value={settings.trust[m.id as ModuleId] ?? DEFAULT_TRUST}
-                  options={TRUST_OPTIONS}
-                  onChange={(level) => {
-                    if (isOwner) void save({ trust: { [m.id]: level } });
-                  }}
-                />
+                {m.readOnly ? (
+                  <Text className="text-sm text-muted-foreground">Looks up only</Text>
+                ) : (
+                  <SegmentedControl<TrustLevel>
+                    accessibilityLabel={`${m.label} access`}
+                    value={settings.trust[m.id as ModuleId] ?? DEFAULT_TRUST}
+                    options={TRUST_OPTIONS}
+                    onChange={(level) => {
+                      if (isOwner) void save({ trust: { [m.id]: level } });
+                    }}
+                  />
+                )}
               </View>
             ))}
           </SettingsInset>

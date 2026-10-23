@@ -228,6 +228,27 @@ export function nextUpItem(todayItems: HeroItem[]): HeroItem | null {
   return todayItems.filter((i) => !i.done && i.dueTime).sort((a, b) => a.dueTime!.localeCompare(b.dueTime!))[0] ?? null;
 }
 
+export interface NowCardTiming {
+  /** "in 25m" / "in 3h" / "now" for today's timed item, else null (an overdue item's time is a past day's). */
+  countdown: string | null;
+  /** Due within the hour: the time reads in the warning hue. */
+  dueSoon: boolean;
+  /** The card's micro-label: what kind of "now" this is. */
+  eyebrow: { text: string; tone: 'muted' | 'warning' | 'danger' };
+}
+
+/** The Now card's eyebrow and countdown for one queued item. */
+export function nowCardTiming(item: Pick<HeroItem, 'dueTime' | 'overdue'>, now: Date): NowCardTiming {
+  const countdown = item.dueTime && !item.overdue ? coarseCountdown(now, item.dueTime) : null;
+  const dueSoon = countdown ? isCountdownDueSoon(countdown) : false;
+  const eyebrow: NowCardTiming['eyebrow'] = item.overdue
+    ? { text: 'Overdue', tone: 'danger' }
+    : item.dueTime
+      ? { text: dueSoon ? 'Now' : 'Next up', tone: dueSoon ? 'warning' : 'muted' }
+      : { text: 'Today', tone: 'muted' };
+  return { countdown, dueSoon, eyebrow };
+}
+
 type MemberProfiles = Record<string, { email: string; name: string | null; avatar: string | null }>;
 
 // Same label the apps show for an assignee, so the people line sorts the way it reads.

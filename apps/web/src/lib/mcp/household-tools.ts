@@ -11,6 +11,7 @@ import {
   type ModuleId,
 } from "@homeup/core";
 import { memberNames } from "@/lib/member-names";
+import { agendaExtras, moduleTools } from "./module-tools";
 import {
   aiBlockedMessage,
   parseScoutBrief,
@@ -963,7 +964,7 @@ export function householdTools({
     "get_agenda",
     {
       description:
-        "What's due across the household in the next days, in one answer: open to-dos due (and overdue ones), calendar events, and bills from Costs with their usual amount. Use it for \"what's due this week\". Parts whose module is off are left out. Amounts in cents.",
+        "What's due across the household in the next days, in one answer: open to-dos due (and overdue ones), calendar events, bills from Costs with their usual amount, bin nights (night_of is the evening they go out), Home care jobs due, and the planned dinners. Use it for \"what's due this week\" and \"what's on today\". Parts whose module is off are left out. Amounts in cents.",
       inputSchema: {
         days: z
           .number()
@@ -1040,6 +1041,7 @@ export function householdTools({
           }),
         );
       }
+      Object.assign(out, await agendaExtras({ admin, userId, groupId, enabled }, today, last));
       return { content: [{ type: "text", text: JSON.stringify(out) }] };
     },
   );
@@ -2696,6 +2698,8 @@ export function householdTools({
       }));
     },
   );
+
+  tools.push(...moduleTools({ admin, userId, groupId, enabled }));
 
   return tools;
 }

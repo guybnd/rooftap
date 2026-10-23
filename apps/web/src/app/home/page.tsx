@@ -15,33 +15,21 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { use$ } from '@legendapp/state/react';
 import { useDataCache } from '@/lib/data-cache';
 import { cn } from '@/lib/utils';
 import { toastItemAdded } from '@/lib/added-toast';
 import { toastUndoDelete } from '@/lib/undo-toast';
 import { useTaskSnoozeUndo } from '@/app/tasks/use-task-snooze-undo';
 import { useSectionSettings } from '@/lib/use-section';
-import { calculateScore, syncedGroupId, householdTasks$, groceryItems$, costItems$, setupItems$, checklists$, checklistItems$, appointments$, apartments$, groupEvents$, apartmentChecklistItems$, apartmentChecklistResponses$, useReconnectSync, useStoreHelpers, useEventSave, createUndoBatchTracker } from '@homeup/core';
+import { useHomeData, useStoreHelpers, useEventSave, createUndoBatchTracker } from '@homeup/core';
 import type {
   HouseholdTask,
-  GroceryItem,
-  CostItem,
-  SetupItem,
-  Checklist,
-  ChecklistTaskItem,
   GoogleCalendarEventWithAttribution,
-  Appointment,
   GroupEvent,
-  Apartment,
-  ApartmentWithScore,
-  ChecklistItem,
-  ChecklistResponse,
 } from '@homeup/core';
 import { useBins } from '@homeup/core';
-import { upcomingWindowDays, completion, completionLabel, hasVisibleReminders, hiddenWithDisabledModules, useModules, type TaskSnooze } from '@homeup/core';
+import { upcomingWindowDays, hasVisibleReminders, hiddenWithDisabledModules, useModules, type TaskSnooze } from '@homeup/core';
 import { ALL_CLEAR_MOMENT_STORAGE_KEY, HOME_LENS_META, earnedAllClear, heroItemOpenTarget, type HomeLensKey } from '@homeup/core';
-import { shopperWants$, shopperPriceSnapshots$, shopperShortcutValue, summarizeWants, type ShopperWant, type ShopperPriceSnapshot } from '@homeup/core';
 import { setGlowOverride } from '@/lib/glow-override';
 import { toastUndoAction } from '@/lib/undo-toast';
 import { EventModal } from '@/app/calendar/event-modal';
@@ -80,163 +68,32 @@ function HomeHub() {
   const { settings } = useSectionSettings();
   const router = useRouter();
   const modules = useModules();
-  // Modules (store-modules.ts): a switched-off module's stores open with no
-  // group id, so the hub neither syncs nor shows them.
-  const syncedGroup = (store$: { collection: string }) => syncedGroupId(store$, group?.id, modules.enabled);
-
-  // FLUX-150 slice 8: apartments/appointments now come from their own Legend
-  // stores rather than useDataCache(); the apartment score (needed to pick the
-  // hub tile's "top listing") is recomputed from the checklist stores the same
-  // way homesearch/page.tsx does.
-  const appointmentsStore$ = appointments$(syncedGroup(appointments$));
-  const apartmentsStore$ = apartments$(syncedGroup(apartments$));
-  const homeSearchChecklistItemsStore$ = apartmentChecklistItems$(syncedGroup(apartmentChecklistItems$));
-  const homeSearchChecklistResponsesStore$ = apartmentChecklistResponses$(syncedGroup(apartmentChecklistResponses$));
-  useReconnectSync(appointmentsStore$);
-  const eventsStore$ = groupEvents$(syncedGroup(groupEvents$));
-  useReconnectSync(eventsStore$);
-  const groupEvents = use$(() =>
-    Object.values(eventsStore$.get() ?? {}).filter((e): e is GroupEvent => !!e && !e.deleted)
-  );
-  useReconnectSync(apartmentsStore$);
-  useReconnectSync(homeSearchChecklistItemsStore$);
-  useReconnectSync(homeSearchChecklistResponsesStore$);
-  const appointments = use$(() =>
-    Object.values(appointmentsStore$.get() ?? {}).filter((a): a is Appointment => !!a && !a.deleted)
-  );
-  const rawApartments = use$(() =>
-    Object.values(apartmentsStore$.get() ?? {}).filter((a): a is Apartment => !!a && !a.deleted)
-  );
-  const homeSearchChecklistItems = use$(() =>
-    Object.values(homeSearchChecklistItemsStore$.get() ?? {}).filter((i): i is ChecklistItem => !!i && !i.deleted)
-  );
-  const homeSearchResponses = use$(() =>
-    Object.values(homeSearchChecklistResponsesStore$.get() ?? {}).filter((r): r is ChecklistResponse => !!r && !r.deleted)
-  );
-  const apartments = useMemo<ApartmentWithScore[]>(() => {
-    const responsesByApartment = new Map<string, Record<string, boolean | null>>();
-    for (const r of homeSearchResponses) {
-      if (!responsesByApartment.has(r.apartment_id)) responsesByApartment.set(r.apartment_id, {});
-      responsesByApartment.get(r.apartment_id)![r.checklist_item_id] = r.value;
-    }
-    return rawApartments.map((apt) => {
-      const resp = responsesByApartment.get(apt.id) ?? {};
-      const hasResponses = Object.keys(resp).length > 0;
-      return {
-        ...apt,
-        score: hasResponses ? calculateScore(homeSearchChecklistItems, resp) : null,
-      };
-    });
-  }, [rawApartments, homeSearchChecklistItems, homeSearchResponses]);
-
-  // ── Tasks store (already on home for hero) ────────────────────────────────
-  const tasks$ = householdTasks$(syncedGroup(householdTasks$));
-  useReconnectSync(tasks$);
-  const { writeRow: writeTask, patchRow: patchTask, softDeleteRow: softDeleteTask } = useStoreHelpers(tasks$, currentUserId);
+  // Home's section stores and what it derives from them (core useHomeData,
+  // shared with the phone): tasks, events, viewings and scored listings,
+  // costs, setup, groceries, the Shopper figure and the dated checklists.
+  const home = useHomeData(group?.id, modules.enabled);
+  const {
+    tasks,
+    appointments,
+    costItems: costItemsList,
+    groceryToBuyCount,
+    shopperShortcut,
+    setup: setupSummary,
+    checklistsById,
+    checklistItemsByChecklistId,
+    checklistByTaskId,
+  } = home;
+  const groupEvents = home.events;
+  const apartments = home.apartmentsWithScore;
+  const { writeRow: writeTask, patchRow: patchTask, softDeleteRow: softDeleteTask } = useStoreHelpers(home.stores.tasks$, currentUserId);
   const snoozeWithUndo = useTaskSnoozeUndo(patchTask);
-
-  const tasks = use$(() =>
-    Object.values(tasks$.get() ?? {}).filter((t): t is HouseholdTask => !!t && !t.deleted)
-  );
+  const { writeRow: writeCost } = useStoreHelpers(home.stores.costs$, currentUserId);
 
   // HOUP-245: delete-undo pill for the hero task list. No tick-off "linger"
   // tracker needed here — buildHeroItems (packages/core/src/hero.ts) already
   // keeps a task completed today visible (sunk to the bottom) rather than
   // hiding it immediately, so there's no hide-on-complete filter to delay.
   const undoBatchTracker = useMemo(() => createUndoBatchTracker<HouseholdTask>(() => {}), []);
-
-  // ── Groceries store ───────────────────────────────────────────────────────
-  const groceries$ = groceryItems$(syncedGroup(groceryItems$));
-  useReconnectSync(groceries$);
-
-  const groceryList = use$(() =>
-    Object.values(groceries$.get() ?? {}).filter((g): g is GroceryItem => !!g && !g.deleted)
-  );
-  // FLUX-255: summary-hero shoppingList module reads the live "needed" count.
-  const groceryToBuyCount = groceryList.filter((g) => g.status === 'needed').length;
-
-  // ── Shopper stores (HOUP-434): the Shopper shortcut's figure ─────────────
-  const shopperWantsStore$ = shopperWants$(syncedGroup(shopperWants$));
-  const shopperSnapsStore$ = shopperPriceSnapshots$(syncedGroup(shopperPriceSnapshots$));
-  useReconnectSync(shopperWantsStore$);
-  useReconnectSync(shopperSnapsStore$);
-  const shopperWantsList = use$(() =>
-    Object.values(shopperWantsStore$.get() ?? {}).filter((w): w is ShopperWant => !!w && !w.deleted && w.status === 'watching')
-  );
-  const shopperSnapsList = use$(() =>
-    Object.values(shopperSnapsStore$.get() ?? {}).filter((x): x is ShopperPriceSnapshot => !!x && !x.deleted)
-  );
-  const shopperShortcut = useMemo(
-    () => shopperShortcutValue(summarizeWants(shopperWantsList, shopperSnapsList, todayISO())),
-    [shopperWantsList, shopperSnapsList]
-  );
-
-  // ── Costs store ───────────────────────────────────────────────────────────
-  const costs$ = costItems$(syncedGroup(costItems$));
-  useReconnectSync(costs$);
-  const { writeRow: writeCost } = useStoreHelpers(costs$, currentUserId);
-
-  // FLUX-255: summary-hero budgetPulse/billsDue modules read the live cost items.
-  const costItemsList = use$(() =>
-    Object.values(costs$.get() ?? {}).filter((c): c is CostItem => !!c && !c.deleted)
-  );
-
-  // ── Setup store ───────────────────────────────────────────────────────────
-  const setup$ = setupItems$(syncedGroup(setupItems$));
-  useReconnectSync(setup$);
-
-  // FLUX-255: summary-hero setupProgress module reads the live done/total counts.
-  const setupSummary = use$(() => {
-    const items = Object.values(setup$.get() ?? {}).filter((i): i is SetupItem => !!i && !i.deleted);
-    return { done: items.filter((i) => i.status === 'installed').length, total: items.length };
-  });
-
-  // ── Checklists stores (FLUX-156: dated checklists surface as dashboard to-dos) ──
-  const checklistsStore$ = checklists$(syncedGroup(checklists$));
-  const checklistItemsStore$ = checklistItems$(syncedGroup(checklistItems$));
-  useReconnectSync(checklistsStore$);
-  useReconnectSync(checklistItemsStore$);
-
-  const checklists = use$(() =>
-    Object.values(checklistsStore$.get() ?? {}).filter((c): c is Checklist => !!c && !c.deleted)
-  );
-  const checklistTaskItems = use$(() =>
-    Object.values(checklistItemsStore$.get() ?? {}).filter((i): i is ChecklistTaskItem => !!i && !i.deleted)
-  );
-
-  // FLUX-1565: checklist id → checklist / items, for HeroTaskRow's inline
-  // expand panel (mirrors src/app/tasks/page.tsx:72-85).
-  const checklistsById = useMemo(() => {
-    const map: Record<string, Checklist> = {};
-    for (const cl of checklists) map[cl.id] = cl;
-    return map;
-  }, [checklists]);
-
-  const checklistItemsByChecklistId = useMemo(() => {
-    const map: Record<string, ChecklistTaskItem[]> = {};
-    for (const item of checklistTaskItems) {
-      (map[item.checklist_id] ??= []).push(item);
-    }
-    for (const list of Object.values(map)) list.sort((a, b) => a.order - b.order);
-    return map;
-  }, [checklistTaskItems]);
-
-  // task-id → { href, completionLabel } for dated checklists (drives the hero
-  // shortcut + live completion). Keyed by the checklist's linked_task_id.
-  const checklistByTaskId = useMemo(() => {
-    const map: Record<string, { href: string; completionLabel: string; completion: { done: number; total: number } }> = {};
-    for (const cl of checklists) {
-      if (!cl.linked_task_id) continue;
-      const its = checklistTaskItems.filter((i) => i.checklist_id === cl.id);
-      const { done, total } = completion(its);
-      map[cl.linked_task_id] = {
-        href: `/checklists/${cl.id}`,
-        completionLabel: completionLabel(its),
-        completion: { done, total },
-      };
-    }
-    return map;
-  }, [checklists, checklistTaskItems]);
 
   // ── Section visibility ────────────────────────────────────────────────────
   // A switched-off module counts as hidden for everyone (.docs/modules.md).

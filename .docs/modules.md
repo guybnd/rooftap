@@ -284,3 +284,28 @@ Each module's shared logic is in its own folder, `packages/core/src/modules/<id>
 - a feature in `module-features.ts` names both modules.
 
 So a new link between two modules needs a recorded reason, and that reason is also what the feature gate checks. The lint also fails on a folder under `modules/` that is not a module id. Code in the shared folders can import any module.
+
+## 14. What the Assistant can reach
+
+The Assistant and outside MCP clients use one set of household tools (`MCP_TOOLS` in `packages/core/src/mcp-tools.ts`, handlers in `apps/web/src/lib/mcp/`). A module without tools is invisible to the Assistant: it can only say that it cannot see that part of the app.
+
+`packages/core/src/assistant-reach.ts` records the decision for every module and every table:
+
+- `MODULES_WITHOUT_TOOLS` gives the reason for each module that has no tool. Every other module needs at least one tool.
+- `TABLE_REACH` names, for every table in `supabase/migrations`, the tools that read or change it, or one line on why it has none.
+
+`apps/web/src/lib/assistant-reach.test.ts` runs in the CI gate. It fails when:
+
+- a new table or a new module has no entry,
+- an entry names a tool that does not exist,
+- an entry names a table that no migration creates, or
+- a module listed without tools has gained some.
+
+So a feature that adds a module or a table must decide how the Assistant reaches it. Ask the same question about the other shared surfaces: the agenda (`get_agenda`), Home, the calendar and search. Add the feature to each one that people would expect it in.
+
+When you add a tool:
+
+1. Add it to `MCP_TOOLS` with its module and kind. The module gate, the MCP settings list and the Assistant trust setting all follow from that entry.
+2. Repeat the module's privacy rule in the handler. The handlers use the admin client, so row level security does not apply. Examples: private tasks and Setup items, "Just me" loyalty cards, and watches kept from a member.
+3. Give a write tool a line in `describeProposal` (`packages/core/src/modules/assistant/assistant-api.ts`) if the generic line does not say clearly what it changes.
+4. Update `TABLE_REACH`.

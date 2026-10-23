@@ -39,8 +39,6 @@ export type { HeroRange, HeroItemType, HeroItem };
 
 // Single source of truth for every hub tunable (FLUX-155 plan "Tunables").
 export const HUB = {
-  /** Needed-item count at/above which pressing Groceries navigates instead of expanding. */
-  GROCERY_EXPAND_THRESHOLD: 10,
   /** Max "suggest re-add" rows shown on the hub grocery card (FLUX-207) — kept tight so the card stays compact. */
   GROCERY_SUGGEST_CAP,
   /** How long a just-marked 'have' row lingers before fading out of the hub list. */

@@ -314,7 +314,46 @@ const MODULE_NOUN: Partial<Record<ModuleId, string>> = {
   recipes: 'Recipes',
   meals: 'the meal plan',
   shopper: 'Shopper',
+  rewards: 'Rewards',
+  bins: 'Bin night',
+  'home-care': 'Home care',
+  setup: 'Home Setup',
+  documents: 'Documents',
+  search: 'Home Search',
+  'money-insights': 'Money insights',
 };
+
+/** Lines for the newer modules' changes (module-tools.ts on the server), or null for another tool. */
+function moduleProposal(tool: string, args: Record<string, unknown>): string | null {
+  switch (tool) {
+    case 'add_reward_perk':
+      return `Save the perk ${quoted(args.title)} in Rewards`;
+    case 'mark_bins_out':
+      return args.out === false ? 'Mark the bins as not out yet' : 'Mark the bins as out';
+    case 'change_bin_collection':
+      return args.moved_to ? 'Move a bin collection to another day' : 'Mark a bin collection as cancelled';
+    case 'add_care_job':
+      return typeof args.title === 'string' && args.title.trim() ? `Add ${quoted(args.title)} to Home care` : 'Add a job to Home care';
+    case 'update_care_job': {
+      const action = { done: 'Mark a Home care job done', skip: 'Skip a Home care job this time', snooze: 'Snooze a Home care job', pause: 'Pause a Home care job', resume: 'Resume a Home care job', hide: 'Hide a Home care job' }[String(args.action)];
+      return action ?? 'Change a Home care job';
+    }
+    case 'watch_item':
+      return `Watch the price of ${quoted(args.title)} in Shopper`;
+    case 'update_watch_item':
+      if (args.remove === true) return 'Take an item off the Shopper watchlist';
+      return args.status === 'bought' ? 'Mark a watchlist item as bought' : 'Change an item on the Shopper watchlist';
+    case 'create_checklist':
+      return typeof args.title === 'string' && args.title.trim() ? `Start the checklist ${quoted(args.title)}` : 'Start a checklist from a template';
+    case 'save_recipe':
+      return `Save the recipe ${quoted(args.title)}`;
+    case 'update_setup_item':
+      if (args.status === 'installed') return 'Mark a Home Setup item as got';
+      return args.status === 'needed' ? 'Put a Home Setup item back on the list' : 'Change an item in Home Setup';
+    default:
+      return null;
+  }
+}
 
 /** "Thursday 30 Oct" for a YYYY-MM-DD night. */
 function mealNightName(dateISO: string): string {
@@ -360,8 +399,8 @@ export function describeProposal(tool: string, module: AssistantScope, args: Rec
   // The whole message, so the person sees exactly what leaves the household.
   if (tool === SEND_FEEDBACK_TOOL) return `Send this to the Rooftap team: ${quoted(args.message)}`;
   if (tool === 'start_scout') return `Ask Scout to find ${quoted(typeof args.text === 'string' ? scoutTitle({ text: args.text }) : null)}`;
-  const bank = bankProposal(tool, args);
-  if (bank) return bank;
+  const specific = bankProposal(tool, args) ?? moduleProposal(tool, args);
+  if (specific) return specific;
   if (tool === 'add_recipe_to_groceries') return "Add a recipe's ingredients to Groceries";
   if (tool === 'start_timer') {
     const minutes = typeof args.minutes === 'number' && args.minutes > 0 ? ` for ${Math.round(args.minutes)} min` : '';

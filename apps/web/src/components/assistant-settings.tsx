@@ -106,13 +106,17 @@ export function AssistantSettings() {
             {reachable.map((m) => (
               <div key={m.id} className="flex min-h-[52px] items-center gap-3 px-3.5 py-2.5">
                 <p className="min-w-0 flex-1 text-sm font-medium text-foreground">{m.label}</p>
-                <SegmentedControl<TrustLevel>
-                  ariaLabel={`${m.label} access`}
-                  size="sm"
-                  value={settings.trust[m.id as ModuleId] ?? DEFAULT_TRUST}
-                  options={TRUST_OPTIONS}
-                  onChange={(level) => isOwner && void save({ trust: { [m.id]: level } })}
-                />
+                {m.readOnly ? (
+                  <p className="text-sm text-muted-foreground">Looks up only</p>
+                ) : (
+                  <SegmentedControl<TrustLevel>
+                    ariaLabel={`${m.label} access`}
+                    size="sm"
+                    value={settings.trust[m.id as ModuleId] ?? DEFAULT_TRUST}
+                    options={TRUST_OPTIONS}
+                    onChange={(level) => isOwner && void save({ trust: { [m.id]: level } })}
+                  />
+                )}
               </div>
             ))}
           </SettingsInset>

@@ -16,7 +16,7 @@ import {
   scoutPrefillHref,
   useModules,
 } from '@homeup/core';
-import { dialog } from '@homeup/core';
+import { dialog, setupCommentChipLabel, setupPriceDelta, setupPriceEdit } from '@homeup/core';
 import { useRouter } from 'next/navigation';
 import {
   ExternalLink,
@@ -167,8 +167,11 @@ export function SetupItemCard({
   const handleFieldChange = (field: string, value: string) => {
     const payload: Record<string, unknown> = {};
     if (field === 'name') payload.name = value;
-    else if (field === 'est_price') payload.est_price = value ? parseInt(value, 10) : null;
-    else if (field === 'actual_price') payload.actual_price = value ? parseInt(value, 10) : null;
+    else if (field === 'est_price' || field === 'actual_price') {
+      const price = setupPriceEdit(item[field], value);
+      if (price === undefined) return;
+      payload[field] = price;
+    }
     else if (field === 'where_to_buy') payload.where_to_buy = value;
     else if (field === 'url') payload.url = value || null;
     onUpdate({ ...item, ...payload } as SetupItem);
@@ -222,8 +225,7 @@ export function SetupItemCard({
   const commentCount = commentSummary?.count ?? 0;
 
   // Over/under-budget delta, only when both prices are known.
-  const delta =
-    item.est_price != null && item.actual_price != null ? item.actual_price - item.est_price : null;
+  const delta = setupPriceDelta(item);
 
   const isInstalled = item.status === 'installed';
   const advanceStatus = () => {
@@ -291,7 +293,7 @@ export function SetupItemCard({
       key: 'comments',
       icon: <MessageSquare className="h-3.5 w-3.5" />,
       // PC: the chip names the noun it opens ("2 comments").
-      label: commentCount > 0 ? `${commentCount} comment${commentCount === 1 ? '' : 's'}` : 'Comments',
+      label: setupCommentChipLabel(commentCount),
       tone: 'neutral',
       onOpen: () => setShowComments((v) => !v),
     });

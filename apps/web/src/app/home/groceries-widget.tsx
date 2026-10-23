@@ -6,7 +6,7 @@
 // price, and edit modal — instead of a bespoke mini-row (FLUX-191). The card set the
 // tile shows (FLUX-194):
 //   • Needed 'essential' (starred) items — ALWAYS shown as cards.
-//   • Every needed item — when the list is small (< HUB.GROCERY_EXPAND_THRESHOLD),
+//   • Every needed item — when the list is small (< core HOME_GROCERY_EXPAND_THRESHOLD),
 //     so the whole shopping list is visible at a glance.
 //   • When the list is large, only the essential cards render, and the remaining
 //     needed items collapse to a compact chip summary + a link to /groceries.
@@ -21,7 +21,7 @@ import { ChevronRight, Plus, ShoppingCart, Star } from 'lucide-react';
 import { HOME_RE_ADD_CHIP_CAP, type Group, type GroceryItem } from '@homeup/core';
 import { dialog } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
-import { countNeeded, suggestReAdd, groceryItems$, useReconnectSync, useStoreHelpers, compareStrings, learnItemLibrary, resolveItemDefaults } from '@homeup/core';
+import { countNeeded, findGroceryByName, groceryNeededAgainPatch, homeGroceryRows, suggestReAdd, groceryItems$, useReconnectSync, useStoreHelpers, learnItemLibrary, resolveItemDefaults } from '@homeup/core';
 import { createClient } from '@/lib/supabase/client';
 import { toastUndoAction } from '@/lib/undo-toast';
 import { useSuggestDismiss } from '@/app/groceries/use-suggest-dismiss';
@@ -143,12 +143,12 @@ export function GroceriesWidget({
   const handleQuickAdd = (rawName: string) => {
     const name = rawName.trim();
     if (!name) return;
-    const existing = allItems.find((i) => i.name.toLowerCase() === name.toLowerCase());
+    const existing = findGroceryByName(allItems, name);
     if (existing) {
       // Re-flag an existing item to Needed instead of creating a duplicate.
       if (existing.status !== 'needed') {
         cancelLinger(existing.id);
-        patchItem(existing.id, { status: 'needed', last_purchased_at: null, status_changed_at: new Date().toISOString() });
+        patchItem(existing.id, groceryNeededAgainPatch(new Date().toISOString()));
       }
       return;
     }
@@ -188,30 +188,14 @@ export function GroceriesWidget({
   };
 
   // ── Which line-item cards the tile renders (FLUX-194) ─────────────────────────
-  // Small list (< threshold) → show every needed item. Large list → essentials
-  // only; the rest collapse to a chip summary below. Bought-today + lingering rows
-  // stay visible (undo window) whenever the full list is in view.
-  const showFullList = expanded || needed < HUB.GROCERY_EXPAND_THRESHOLD;
-  const cardItems = allItems
-    .filter((i) => {
-      if (lingerState[i.id]) return true; // lingering 'have' rows (mid fade-out)
-      if (i.status === 'needed') return i.is_essential || showFullList;
-      if (i.status === 'bought') return showFullList && i.last_purchased_at === today; // bought today
-      return false;
-    })
-    .sort((a, b) => {
-      // Needed essentials first, then other needed, then bought; alpha within.
-      const rank = (i: GroceryItem) =>
-        i.status === 'needed' ? (i.is_essential ? 0 : 1) : 2;
-      return rank(a) - rank(b) || compareStrings(a.name, b.name);
-    });
-  const cardIds = new Set(cardItems.map((i) => i.id));
-
-  // Needed items not surfaced as cards (only happens on a large list) → chip summary.
-  const overflowNames = allItems
-    .filter((i) => i.status === 'needed' && !cardIds.has(i.id))
-    .map((i) => i.name)
-    .sort();
+  // Core homeGroceryRows: a short list shows every needed item and today's
+  // buys; a long one shows the essentials and sums up the rest as chips.
+  // Lingering 'have' rows (mid fade-out) stay on the card.
+  const { showFullList, cardItems, overflowNames } = homeGroceryRows(allItems, {
+    expanded,
+    today,
+    lingering: new Set(Object.keys(lingerState)),
+  });
 
   const names = Array.from(new Set(allItems.map((i) => i.name))).sort();
 

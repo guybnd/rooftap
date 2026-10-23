@@ -6,22 +6,15 @@
 // Each reads its section's existing store/data without leaving the hub.
 
 import { useEffect, useState } from 'react';
-import { use$ } from '@legendapp/state/react';
 import { Hammer, LayoutDashboard, CalendarClock, Star, ShoppingBag, Sparkles } from 'lucide-react';
-import type { Group, SetupItem, ApartmentWithScore, Appointment, ShopperWant, ShopperPriceSnapshot } from '@homeup/core';
+import type { Group, ApartmentWithScore, Appointment } from '@homeup/core';
 import {
   formatRelativeDay,
-  setupItems$,
-  useReconnectSync,
-  summarize,
-  shopperWants$,
-  shopperPriceSnapshots$,
-  summarizeWants,
-  sortWatching,
-  isGoodNow,
+  homeSearchGlance,
+  useSetupTileSummary,
+  useShopperGlance,
   formatMoney,
   useHouseholdCurrency,
-  todayISO,
   DEAL_META,
   hitTarget,
   openAssistantPopup,
@@ -38,13 +31,8 @@ import { Sparkline } from '@/app/shopper/price-chart';
 
 // ── Home Setup ──────────────────────────────────────────────────────────────────
 export function SetupTile({ group }: { group: Group }) {
-  const items$ = setupItems$(group.id);
-  useReconnectSync(items$);
-  const items = use$(() =>
-    Object.values(items$.get() ?? {}).filter((i): i is SetupItem => !!i && !i.deleted)
-  );
-  const summary = summarize(items);
-  const done = summary.total - summary.outstanding;
+  const summary = useSetupTileSummary(group.id);
+  const { done } = summary;
 
   return (
     <HubTile href="/setup" ariaLabel="Home setup">
@@ -74,21 +62,12 @@ export function HomeSearchTile({
   apartments: ApartmentWithScore[];
   appointments: Appointment[];
 }) {
-  const now = Date.now();
-  const nextAppointment =
-    appointments
-      .filter((a) => a.status === 'scheduled' && new Date(a.scheduled_at).getTime() >= now)
-      .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime())[0] ?? null;
-
-  const topListing =
-    [...apartments]
-      .filter((a) => !a.archived)
-      .sort((a, b) => (b.score?.percentage ?? -1) - (a.score?.percentage ?? -1))[0] ?? null;
-
-  const apptWhen = nextAppointment ? new Date(nextAppointment.scheduled_at) : null;
-  const apptAddress = nextAppointment
-    ? apartments.find((ap) => ap.id === nextAppointment.apartment_id)?.address ?? 'Viewing'
-    : null;
+  const {
+    nextAppointment,
+    appointmentAt: apptWhen,
+    appointmentAddress: apptAddress,
+    topListing,
+  } = homeSearchGlance(apartments, appointments, Date.now());
 
   return (
     <HubTile href="/homesearch" ariaLabel="Home search">
@@ -131,19 +110,7 @@ export function HomeSearchTile({
 // watched item, good prices first, each opening its own page.
 export function ShopperTile({ group, expanded = false }: { group: Group; expanded?: boolean }) {
   const currency = useHouseholdCurrency();
-  const wants$ = shopperWants$(group.id);
-  const snaps$ = shopperPriceSnapshots$(group.id);
-  useReconnectSync(wants$);
-  useReconnectSync(snaps$);
-  const wants = use$(() =>
-    Object.values(wants$.get() ?? {}).filter((w): w is ShopperWant => !!w && !w.deleted && w.status === 'watching')
-  );
-  const snaps = use$(() =>
-    Object.values(snaps$.get() ?? {}).filter((s): s is ShopperPriceSnapshot => !!s && !s.deleted)
-  );
-  const rows = sortWatching(summarizeWants(wants, snaps, todayISO()));
-  const good = rows.filter(isGoodNow);
-  const top = good[0] ?? null;
+  const { rows, good, top } = useShopperGlance(group.id);
 
   if (expanded) {
     return (

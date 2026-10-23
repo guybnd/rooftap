@@ -20,9 +20,18 @@ import {
   type PickerOption,
 } from '@homeup/ui';
 import { STATUS_TEXT } from './setup-status';
-import { type SetupItem, type SetupStore, SETUP_STATUS_LABEL, currencySymbol } from '@homeup/core';
+import {
+  type SetupItem,
+  type SetupStore,
+  SETUP_STATUS_LABEL,
+  canSaveSetupItemForm,
+  currencySymbol,
+  isNewSetupRoom,
+  setupItemForm,
+  setupItemFromForm,
+  setupRoomOptions,
+} from '@homeup/core';
 import { StoreSelect } from './store-select';
-import { randomUUID } from '@/lib/uuid';
 import { sectionIconFor } from '@/lib/section-icons';
 
 // Hearth v2 (E1): the sheet header wears the section's identity tile.
@@ -41,7 +50,6 @@ interface SetupItemSheetProps {
   onStoreCreated?: (store: SetupStore) => void;
 }
 
-const DEFAULT_ROOMS = ['Kitchen', 'Bedroom', 'Bathroom', 'Living Room', 'Laundry', 'Outdoor', 'Garage'];
 
 const STATUS_OPTIONS = [
   { value: 'needed' as const, label: 'Needed' },
@@ -53,20 +61,6 @@ const PRIORITY_OPTIONS = [
   { value: 'medium' as const, label: 'Medium' },
   { value: 'high' as const, label: 'High' },
 ];
-
-function buildForm(item: SetupItem | undefined, defaultRoom: string) {
-  return {
-    name: item?.name ?? '',
-    room: item?.room ?? defaultRoom ?? '',
-    priority: item?.priority ?? 'medium',
-    status: item?.status ?? 'needed',
-    est_price: item?.est_price ?? null,
-    actual_price: item?.actual_price ?? null,
-    store_id: item?.store_id ?? null,
-    url: item?.url ?? '',
-    notes: item?.notes ?? '',
-  };
-}
 
 export function SetupItemSheet({
   open,
@@ -80,65 +74,32 @@ export function SetupItemSheet({
   onDelete,
   onStoreCreated,
 }: SetupItemSheetProps) {
-  const [form, setForm] = React.useState(() => buildForm(item, defaultRoom));
+  const [form, setForm] = React.useState(() => setupItemForm(item, defaultRoom));
 
   const roomOptions = React.useMemo<PickerOption[]>(() => {
-    const rooms = Array.from(new Set([...DEFAULT_ROOMS, ...existingRooms]));
-    return rooms.map((r) => ({ value: r, primary: r }));
+    return setupRoomOptions(existingRooms).map((r) => ({ value: r, primary: r }));
   }, [existingRooms]);
 
-  const [addingNewRoom, setAddingNewRoom] = React.useState(
-    !!item?.room && !roomOptions.some((o) => o.value === item.room)
-  );
+  const [addingNewRoom, setAddingNewRoom] = React.useState(() => isNewSetupRoom(item?.room, setupRoomOptions(existingRooms)));
 
   // Instance is reused across opens (stable `key` for blank adds) — re-seed
   // on every closed->open transition (FLUX-186 idiom, mirrors web).
   const wasOpen = React.useRef(open);
   React.useEffect(() => {
     if (open && !wasOpen.current) {
-      setForm(buildForm(item, defaultRoom));
-      setAddingNewRoom(!!item?.room && !roomOptions.some((o) => o.value === item.room));
+      setForm(setupItemForm(item, defaultRoom));
+      setAddingNewRoom(isNewSetupRoom(item?.room, roomOptions.map((o) => o.value)));
     }
     wasOpen.current = open;
   }, [open, item, defaultRoom, roomOptions]);
 
-  const canSubmit = form.name.trim().length > 0 && form.room.trim().length > 0;
+  const canSubmit = canSaveSetupItemForm(form);
 
   const handleSubmit = () => {
     if (!canSubmit) return;
-    const now = new Date().toISOString();
-    const payload = {
-      name: form.name.trim(),
-      room: form.room.trim(),
-      priority: form.priority,
-      status: form.status,
-      est_price: form.est_price,
-      actual_price: form.actual_price,
-      store_id: form.store_id,
-      url: form.url.trim() || null,
-      notes: form.notes.trim() || null,
-      group_id: groupId,
-    };
-
     // Offline-safe: build the row and hand it to onSave (-> writeRow), which
     // writes to the local store and syncs. No direct Supabase call here.
-    const saved: SetupItem = item?.id
-      ? { ...item, ...payload }
-      : {
-          id: randomUUID(),
-          ...payload,
-          where_to_buy: null,
-          assigned_to: null,
-          private: false,
-          template_key: null,
-          ai_suggestion: null,
-          sort_order: 0,
-          created_by: null,
-          created_at: now,
-          updated_at: now,
-          deleted: false,
-        };
-
+    const saved = setupItemFromForm(form, item, groupId);
     onSave(saved);
     onOpenChange(false);
   };

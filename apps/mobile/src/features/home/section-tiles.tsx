@@ -12,30 +12,20 @@
 import * as React from 'react';
 import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { use$ } from '@legendapp/state/react';
 import { Hammer, LayoutDashboard, CalendarClock, Star, ChevronRight, ShoppingBag, Sparkles } from 'lucide-react-native';
 import { Text, Card, LeadingTile, ListGroup } from '@homeup/ui';
 import { assistantApi } from '@/features/assistant/assistant-api';
 import { Sparkline } from '@/features/shopper/price-chart';
 import { WantRow } from '@/features/shopper/want-row';
 import {
-  summarize,
-  useReconnectSync,
-  setupItems$,
-  shopperWants$,
-  shopperPriceSnapshots$,
-  summarizeWants,
-  sortWatching,
-  isGoodNow,
   hitTarget,
   formatMoney,
-  todayISO,
   useHouseholdCurrency,
   DEAL_META,
-  type ShopperWant,
-  type ShopperPriceSnapshot,
+  homeSearchGlance,
+  useSetupTileSummary,
+  useShopperGlance,
   type Group,
-  type SetupItem,
   type Appointment,
   type ApartmentWithScore,
 } from '@homeup/core';
@@ -66,11 +56,8 @@ export function TileHeader({ Icon, sectionId, title, right }: { Icon: typeof Ham
 // ── Home Setup ──────────────────────────────────────────────────────────────────
 export function SetupTile({ group }: { group: Group }) {
   const router = useRouter();
-  const setup$ = setupItems$(group.id);
-  useReconnectSync(setup$);
-  const items = use$(() => Object.values(setup$.get() ?? {}).filter((i): i is SetupItem => !!i && !i.deleted));
-  const summary = summarize(items);
-  const done = summary.total - summary.outstanding;
+  const summary = useSetupTileSummary(group.id);
+  const { done } = summary;
 
   return (
     <View className="min-w-[47%] flex-1">
@@ -107,21 +94,12 @@ export function HomeSearchTile({
   appointments: Appointment[];
 }) {
   const router = useRouter();
-  const nowMs = Date.now();
-  const nextAppointment =
-    appointments
-      .filter((a) => a.status === 'scheduled' && new Date(a.scheduled_at).getTime() >= nowMs)
-      .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime())[0] ?? null;
-
-  const topListing =
-    [...apartments]
-      .filter((a) => !a.archived)
-      .sort((a, b) => (b.score?.percentage ?? -1) - (a.score?.percentage ?? -1))[0] ?? null;
-
-  const apptWhen = nextAppointment ? new Date(nextAppointment.scheduled_at) : null;
-  const apptAddress = nextAppointment
-    ? apartments.find((ap) => ap.id === nextAppointment.apartment_id)?.address ?? 'Viewing'
-    : null;
+  const {
+    nextAppointment,
+    appointmentAt: apptWhen,
+    appointmentAddress: apptAddress,
+    topListing,
+  } = homeSearchGlance(apartments, appointments, Date.now());
 
   return (
     <View className="min-w-[47%] flex-1">
@@ -173,19 +151,7 @@ export function HomeSearchTile({
 export function ShopperTile({ group, expanded = false }: { group: Group; expanded?: boolean }) {
   const router = useRouter();
   const currency = useHouseholdCurrency();
-  const wants$ = shopperWants$(group.id);
-  const snaps$ = shopperPriceSnapshots$(group.id);
-  useReconnectSync(wants$);
-  useReconnectSync(snaps$);
-  const wants = use$(() =>
-    Object.values(wants$.get() ?? {}).filter((w): w is ShopperWant => !!w && !w.deleted && w.status === 'watching')
-  );
-  const snaps = use$(() =>
-    Object.values(snaps$.get() ?? {}).filter((s): s is ShopperPriceSnapshot => !!s && !s.deleted)
-  );
-  const rows = sortWatching(summarizeWants(wants, snaps, todayISO()));
-  const good = rows.filter(isGoodNow);
-  const top = good[0] ?? null;
+  const { rows, good, top } = useShopperGlance(group.id);
 
   const counts =
     rows.length > 0 ? (

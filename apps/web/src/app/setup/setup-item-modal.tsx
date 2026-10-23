@@ -1,7 +1,17 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { type SetupItem, type SetupStore, SETUP_STATUS_LABEL, currencySymbol } from '@homeup/core';
+import {
+  type SetupItem,
+  type SetupStore,
+  SETUP_STATUS_LABEL,
+  canSaveSetupItemForm,
+  currencySymbol,
+  isNewSetupRoom,
+  setupItemForm,
+  setupItemFromForm,
+  setupRoomOptions,
+} from '@homeup/core';
 import { StoreSelect } from '@/components/store-select';
 import { ItemFormSheet, FormSection, FieldRow, DetailsDisclosure } from '@/components/ui/item-form-sheet';
 import { DragNumberField } from '@/components/ui/drag-number-field';
@@ -29,15 +39,6 @@ interface SetupItemModalProps {
   onStoreCreated?: (store: SetupStore) => void;
 }
 
-const DEFAULT_ROOMS = [
-  'Kitchen',
-  'Bedroom',
-  'Bathroom',
-  'Living Room',
-  'Laundry',
-  'Outdoor',
-  'Garage',
-];
 
 const STATUS_OPTIONS = [
   { value: 'needed' as const, label: 'Needed' },
@@ -45,42 +46,16 @@ const STATUS_OPTIONS = [
 ];
 
 export function SetupItemModal({ isOpen, item, groupId, existingRooms = [], stores = [], defaultRoom = '', onClose, onSave, onDelete, onStoreCreated }: SetupItemModalProps) {
-  const buildInitialForm = useCallback(
-    (): {
-      name: string;
-      room: string;
-      priority: Priority;
-      status: SetupItem['status'];
-      est_price: number | null;
-      actual_price: number | null;
-      store_id: string | null;
-      url: string;
-      notes: string;
-    } => ({
-      name: item?.name || '',
-      room: item?.room || defaultRoom || '',
-      priority: (item?.priority || 'medium') as Priority,
-      status: (item?.status || 'needed') as SetupItem['status'],
-      est_price: item?.est_price ?? null,
-      actual_price: item?.actual_price ?? null,
-      store_id: item?.store_id || null,
-      url: item?.url || '',
-      notes: item?.notes || '',
-    }),
-    [item, defaultRoom],
-  );
+  const buildInitialForm = useCallback(() => setupItemForm(item, defaultRoom), [item, defaultRoom]);
   const [formData, setFormData] = useState(buildInitialForm);
 
   // Merge default rooms with any custom rooms already in use (single room per item).
   const roomOptions = useMemo<PickerOption[]>(() => {
-    const rooms = Array.from(new Set([...DEFAULT_ROOMS, ...existingRooms]));
-    return rooms.map((r) => ({ value: r, primary: r }));
+    return setupRoomOptions(existingRooms).map((r) => ({ value: r, primary: r }));
   }, [existingRooms]);
 
   // Track whether the user is entering a brand-new room name.
-  const [addingNewRoom, setAddingNewRoom] = useState(
-    !!item?.room && !roomOptions.some((o) => o.value === item.room)
-  );
+  const [addingNewRoom, setAddingNewRoom] = useState(() => isNewSetupRoom(item?.room, setupRoomOptions(existingRooms)));
 
   // FLUX-186: instance is reused across opens (stable `key` for blank adds), so
   // re-seed the form on every closed→open transition — otherwise adding a second
@@ -89,48 +64,17 @@ export function SetupItemModal({ isOpen, item, groupId, existingRooms = [], stor
   useEffect(() => {
     if (isOpen && !wasOpen.current) {
       setFormData(buildInitialForm());
-      setAddingNewRoom(!!item?.room && !roomOptions.some((o) => o.value === item.room));
+      setAddingNewRoom(isNewSetupRoom(item?.room, roomOptions.map((o) => o.value)));
     }
     wasOpen.current = isOpen;
   }, [isOpen, buildInitialForm, item, roomOptions]);
 
   const handleSubmit = () => {
-    if (!formData.name.trim() || !formData.room.trim()) return;
-    const payload = {
-      name: formData.name,
-      room: formData.room,
-      priority: formData.priority,
-      status: formData.status,
-      est_price: formData.est_price,
-      actual_price: formData.actual_price,
-      store_id: formData.store_id,
-      url: formData.url || null,
-      notes: formData.notes,
-      group_id: groupId,
-    };
-
+    if (!canSaveSetupItemForm(formData)) return;
     // Offline-safe: build the row and hand it to onSave (→ writeRow), which
     // writes to IndexedDB and syncs. No direct Supabase here. writeRow stamps
     // created_by/timestamps for new rows.
-    const now = new Date().toISOString();
-    const saved: SetupItem = item?.id
-      ? { ...item, ...payload }
-      : {
-          id: crypto.randomUUID(),
-          ...payload,
-          where_to_buy: null,
-          assigned_to: null,
-          private: false,
-          template_key: null,
-          ai_suggestion: null,
-          sort_order: 0,
-          created_by: null,
-          created_at: now,
-          updated_at: now,
-          deleted: false,
-        };
-
-    onSave(saved);
+    onSave(setupItemFromForm(formData, item, groupId));
     onClose();
   };
 

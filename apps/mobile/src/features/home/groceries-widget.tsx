@@ -15,12 +15,14 @@ import { ChevronRight, Plus, ShoppingCart, Star } from 'lucide-react-native';
 import { Text, Card, IngredientNameInput, LeadingTile, haptics } from '@homeup/ui';
 import {
   countNeeded,
+  findGroceryByName,
+  groceryNeededAgainPatch,
+  homeGroceryRows,
   resolveItemDefaults,
   suggestReAdd,
   groceryItems$,
   useReconnectSync,
   useStoreHelpers,
-  compareStrings,
   HOME_RE_ADD_CHIP_CAP,
   todayISO,
   type GroceryItem,
@@ -34,10 +36,6 @@ import { useGroceryArchive } from '@/features/groceries/use-grocery-archive';
 import { useSuggestDismiss } from '@/features/groceries/use-suggest-dismiss';
 import { useGroceryUndo } from '@/features/groceries/use-grocery-undo';
 import { GroceryItemFormSheet } from '@/features/groceries/grocery-item-form-sheet';
-
-// Mirrors apps/web/src/app/home/hub-shared.tsx's HUB tunables (kept local —
-// those live in a web-only, JSX-adjacent module apps/mobile can't import).
-const GROCERY_EXPAND_THRESHOLD = 10;
 
 const HIDDEN = { display: 'none' } as const;
 
@@ -69,19 +67,11 @@ export function GroceriesWidget({
   const [editingItem, setEditingItem] = React.useState<GroceryItem | undefined>();
   const [quickAddDraft, setQuickAddDraft] = React.useState('');
 
-  const showFullList = expanded || needed < GROCERY_EXPAND_THRESHOLD;
-  const fullItems = React.useMemo(() => {
-    const today = todayISO();
-    return allItems
-      .filter((i) => i.status === 'needed' || (i.status === 'bought' && i.last_purchased_at === today))
-      .sort((a, b) => {
-        const rank = (i: GroceryItem) => (i.status === 'needed' ? (i.is_essential ? 0 : 1) : 2);
-        return rank(a) - rank(b) || compareStrings(a.name, b.name);
-      });
-  }, [allItems]);
-  const cardItems = React.useMemo(
-    () => (showFullList ? fullItems : fullItems.filter((i) => i.status === 'needed' && i.is_essential)),
-    [fullItems, showFullList]
+  // Core homeGroceryRows: a short list shows every needed item and today's
+  // buys; a long one shows the essentials and sums up the rest as chips.
+  const { showFullList, fullItems, cardItems, overflowNames } = React.useMemo(
+    () => homeGroceryRows(allItems, { expanded, today: todayISO() }),
+    [allItems, expanded]
   );
   const cardIds = React.useMemo(() => new Set(cardItems.map((i) => i.id)), [cardItems]);
   // Once Home has been filtered to Groceries, the full list stays mounted and
@@ -90,15 +80,6 @@ export function GroceriesWidget({
   const [keepFullMounted, setKeepFullMounted] = React.useState(false);
   if (expanded && !keepFullMounted) setKeepFullMounted(true);
   const renderedItems = showFullList || keepFullMounted ? fullItems : cardItems;
-
-  const overflowNames = React.useMemo(
-    () =>
-      allItems
-        .filter((i) => i.status === 'needed' && !cardIds.has(i.id))
-        .map((i) => i.name)
-        .sort(),
-    [allItems, cardIds]
-  );
 
   const suggestions = React.useMemo(() => {
     const seen = new Map<string, string>(); // lowercased → first-seen display form
@@ -129,10 +110,10 @@ export function GroceriesWidget({
     if (!name) return;
     haptics.commit();
     setQuickAddDraft('');
-    const existing = allItems.find((i) => i.name?.toLowerCase() === name.toLowerCase());
+    const existing = findGroceryByName(allItems, name);
     if (existing) {
       if (existing.status !== 'needed') {
-        patchRow(existing.id, { status: 'needed', last_purchased_at: null, status_changed_at: new Date().toISOString() });
+        patchRow(existing.id, groceryNeededAgainPatch(new Date().toISOString()));
       }
       return;
     }

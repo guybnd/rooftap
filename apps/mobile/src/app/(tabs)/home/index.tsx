@@ -27,7 +27,6 @@ import * as React from 'react';
 import { Image, Linking, Pressable, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useRouter, type Href } from 'expo-router';
-import { use$ } from '@legendapp/state/react';
 import {
   Settings2,
   Flame,
@@ -84,9 +83,7 @@ import {
   type HeroTypeFilter,
   buildHeroItems,
   completion,
-  completionLabel,
   computeAllClearStreak,
-  countNeeded,
   countdownDisplay,
   daysUntilLabel,
   formatMoney,
@@ -95,46 +92,15 @@ import {
   buildDayRibbon,
   skyHeadline,
   MOTION_DURATIONS_MS,
-  householdTasks$,
-  groupEvents$,
-  appointments$,
-  apartments$,
-  apartmentChecklistItems$,
-  apartmentChecklistResponses$,
-  calculateScore,
-  costItems$,
-  setupItems$,
-  groceryItems$,
-  shopperWants$,
-  shopperPriceSnapshots$,
-  summarizeWants,
-  shopperShortcutValue,
-  todayISO,
-  type ShopperWant,
-  type ShopperPriceSnapshot,
-  checklists$,
-  checklistItems$,
   hiddenWithDisabledModules,
   useModules,
   useBins,
   useMonthTotals,
   UpOverviewProvider,
-  syncedGroupId,
-  useReconnectSync,
   useEventSave,
   useStoreHelpers,
   type TaskSnooze,
   applyTaskCompletion,
-  type Appointment,
-  type Apartment,
-  type ApartmentWithScore,
-  type CostItem,
-  type Checklist,
-  type ChecklistTaskItem,
-  type ChecklistItem,
-  type ChecklistResponse,
-  type GroceryItem,
-  type SetupItem,
   type HeroItem,
   type HeroRange,
   type HouseholdTask,
@@ -148,12 +114,12 @@ import {
   heroItemOpenTarget,
   heroItemSectionId,
   pickNowQueue,
+  nowCardTiming,
+  useHomeData,
   todayProgress,
   budgetPulseTone as toneForBudget,
-  coarseCountdown,
   compareHeroItems,
   heroTips,
-  isCountdownDueSoon,
   isModuleShown,
   unassignedCount,
   upcomingBills,
@@ -265,13 +231,6 @@ function FeedHeader({ groupKey, label, onAdd }: { groupKey: string; label: strin
 /** Where a hub item opens on native: its task editor, a reminder's owner, or a viewing's listing. */
 type OpenHeroItem = (item: HeroItem) => void;
 
-/** The Now card's micro-label: what kind of "now" this is. */
-function nowEyebrow(item: HeroItem, dueSoon: boolean): { text: string; tone: 'muted' | 'warning' | 'danger' } {
-  if (item.overdue) return { text: 'Overdue', tone: 'danger' };
-  if (item.dueTime) return { text: dueSoon ? 'Now' : 'Next up', tone: dueSoon ? 'warning' : 'muted' };
-  return { text: 'Today', tone: 'muted' };
-}
-
 // HOUP-172 (item 4): hairline dividers between rows without ListGroup's own
 // border/rounding/shadow — the fused controls+list Card already owns the
 // single H4 border for this surface, so a nested ListGroup here would read
@@ -311,135 +270,33 @@ function HomeSectionBody() {
   const openRoute = useOpenRoute();
   const { group, currentUserId, groupMembers, memberProfiles, userSettings, loading: cacheLoading } = useDataCache();
   const modules = useModules();
-  // Modules (store-modules.ts): a switched-off module's stores open with no
-  // group id, so the hub neither syncs nor shows them.
-  const syncedGroup = (store$: { collection: string }) => syncedGroupId(store$, group?.id, modules.enabled);
 
   // ── Live section stores ───────────────────────────────────────────────────
-  // (HOUP-172: groceryItems$ is now also read here — just the store, for the
-  // hero's Groceries pulse tile count. GroceriesWidget still owns the full
-  // item list/lifecycle for its own card rendering.)
-  const tasks$ = householdTasks$(syncedGroup(householdTasks$));
-  const appts$ = appointments$(syncedGroup(appointments$));
-  const events$ = groupEvents$(syncedGroup(groupEvents$));
-  const apts$ = apartments$(syncedGroup(apartments$));
-  const costs$ = costItems$(syncedGroup(costItems$));
-  const setup$ = setupItems$(syncedGroup(setupItems$));
-  const groceries$ = groceryItems$(syncedGroup(groceryItems$));
-  useReconnectSync(tasks$);
-  useReconnectSync(appts$);
-  useReconnectSync(events$);
-  useReconnectSync(apts$);
-  useReconnectSync(costs$);
-  useReconnectSync(setup$);
-  useReconnectSync(groceries$);
-  // HOUP-434: the Shopper shortcut's figure (ShopperTile reads its own copy).
-  const shopperWantsStore$ = shopperWants$(syncedGroup(shopperWants$));
-  const shopperSnapsStore$ = shopperPriceSnapshots$(syncedGroup(shopperPriceSnapshots$));
-  useReconnectSync(shopperWantsStore$);
-  useReconnectSync(shopperSnapsStore$);
-
-  // HOUP-223: apartment score (feeds HomeSearchTile's "top listing" row) —
-  // same derivation as apps/mobile/src/app/(tabs)/homesearch/index.tsx and web's
-  // apps/web/src/app/home/page.tsx:73-87 (score only, no preliminary scores —
-  // this tile only needs the % match, not homesearch's fuller scoring UI).
-  const homeSearchChecklistItemsStore$ = apartmentChecklistItems$(syncedGroup(apartmentChecklistItems$));
-  const homeSearchChecklistResponsesStore$ = apartmentChecklistResponses$(syncedGroup(apartmentChecklistResponses$));
-  useReconnectSync(homeSearchChecklistItemsStore$);
-  useReconnectSync(homeSearchChecklistResponsesStore$);
-  const homeSearchChecklistItems = use$(() =>
-    Object.values(homeSearchChecklistItemsStore$.get() ?? {}).filter((i): i is ChecklistItem => !!i && !i.deleted)
-  );
-  const homeSearchResponses = use$(() =>
-    Object.values(homeSearchChecklistResponsesStore$.get() ?? {}).filter((r): r is ChecklistResponse => !!r && !r.deleted)
-  );
-
-  // HOUP-204: linked checklists — feeds the agenda TaskRow's inline
-  // "Checklist N/M" chip + panel, same derivation as apps/mobile/src/app/(tabs)/tasks/index.tsx
-  // (HOUP-123). Home's agenda never wired this, so a task's checklist chip
-  // was dark on the dashboard even though the identical row shows it on /tasks.
-  const checklistsStore$ = checklists$(syncedGroup(checklists$));
-  const checklistItemsStore$ = checklistItems$(syncedGroup(checklistItems$));
-  useReconnectSync(checklistsStore$);
-  useReconnectSync(checklistItemsStore$);
-
-  const checklists = use$(() =>
-    Object.values(checklistsStore$.get() ?? {}).filter((c): c is Checklist => !!c && !c.deleted)
-  );
-  const checklistTaskItems = use$(() =>
-    Object.values(checklistItemsStore$.get() ?? {}).filter((i): i is ChecklistTaskItem => !!i && !i.deleted)
-  );
-
-  const checklistsById = React.useMemo(() => {
-    const map: Record<string, Checklist> = {};
-    for (const cl of checklists) map[cl.id] = cl;
-    return map;
-  }, [checklists]);
-
-  const checklistItemsByChecklistId = React.useMemo(() => {
-    const map: Record<string, ChecklistTaskItem[]> = {};
-    for (const item of checklistTaskItems) {
-      (map[item.checklist_id] ??= []).push(item);
-    }
-    for (const list of Object.values(map)) list.sort((a, b) => a.order - b.order);
-    return map;
-  }, [checklistTaskItems]);
-
-  // HOUP-221: task-id -> checklist shortcut info (href/completionLabel/ratio)
-  // for dated checklists, mirrors apps/web/src/app/home/page.tsx:164-177 —
-  // feeds buildHeroItems below so agenda rows get the Checklist sourceLabel +
-  // inline completion meter apps/web/tasks/task-row.tsx's HeroTaskRow shows.
-  const checklistByTaskId = React.useMemo(() => {
-    const map: Record<string, { href: string; completionLabel: string; completion: { done: number; total: number } }> = {};
-    for (const cl of checklists) {
-      if (!cl.linked_task_id) continue;
-      const its = checklistTaskItems.filter((i) => i.checklist_id === cl.id);
-      const { done, total } = completion(its);
-      map[cl.linked_task_id] = {
-        href: `/checklists/${cl.id}`,
-        completionLabel: completionLabel(its),
-        completion: { done, total },
-      };
-    }
-    return map;
-  }, [checklists, checklistTaskItems]);
-
-  const tasks = use$(() => Object.values(tasks$.get() ?? {}).filter((t): t is HouseholdTask => !!t && !t.deleted));
-  const eventsList = use$(() => Object.values(events$.get() ?? {}).filter((e): e is GroupEvent => !!e && !e.deleted));
+  // Home's section stores and what it derives from them (core useHomeData,
+  // shared with web): tasks, events, viewings and scored listings, costs,
+  // setup, groceries, the Shopper figure and the dated checklists.
+  // GroceriesWidget and ShopperTile still read their own copies for their cards.
+  const home = useHomeData(group?.id, modules.enabled);
+  const {
+    tasks,
+    costItems: costItemsList,
+    setupItems: setupItemsList,
+    groceryToBuyCount,
+    shopperShortcut,
+    checklistsById,
+    checklistItemsByChecklistId,
+    checklistByTaskId,
+    apartmentsWithScore,
+  } = home;
+  const tasks$ = home.stores.tasks$;
+  const eventsList = home.events;
   // An event swiped off Home stays on the calendar (home-hidden-events.ts).
   const eventIds = React.useMemo(() => eventsList.map((e) => e.id), [eventsList]);
   const { hidden: hiddenEventIds, hide: hideEvent, unhide: unhideEvent } = useHomeHiddenEvents(eventIds);
   const homeEvents = React.useMemo(() => eventsList.filter((e) => !hiddenEventIds.has(e.id)), [eventsList, hiddenEventIds]);
-  const appointmentsList = use$(() => Object.values(appts$.get() ?? {}).filter((a): a is Appointment => !!a && !a.deleted));
-  const apartmentsList = use$(() => Object.values(apts$.get() ?? {}).filter((a): a is Apartment => !!a && !a.deleted));
-  const { writeRow: writeCost } = useStoreHelpers(costs$, currentUserId);
-  const costItemsList = use$(() => Object.values(costs$.get() ?? {}).filter((c): c is CostItem => !!c && !c.deleted));
-  const setupItemsList = use$(() => Object.values(setup$.get() ?? {}).filter((s): s is SetupItem => !!s && !s.deleted));
-  const groceryList = use$(() => Object.values(groceries$.get() ?? {}).filter((g): g is GroceryItem => !!g && !g.deleted));
-  const groceryToBuyCount = countNeeded(groceryList);
-  const shopperWantsList = use$(() =>
-    Object.values(shopperWantsStore$.get() ?? {}).filter((w): w is ShopperWant => !!w && !w.deleted && w.status === 'watching')
-  );
-  const shopperSnapsList = use$(() =>
-    Object.values(shopperSnapsStore$.get() ?? {}).filter((x): x is ShopperPriceSnapshot => !!x && !x.deleted)
-  );
-  const shopperShortcut = React.useMemo(
-    () => shopperShortcutValue(summarizeWants(shopperWantsList, shopperSnapsList, todayISO())),
-    [shopperWantsList, shopperSnapsList]
-  );
-
-  const apartmentsWithScore = React.useMemo<ApartmentWithScore[]>(() => {
-    const responsesByApartment = new Map<string, Record<string, boolean | null>>();
-    for (const r of homeSearchResponses) {
-      if (!responsesByApartment.has(r.apartment_id)) responsesByApartment.set(r.apartment_id, {});
-      responsesByApartment.get(r.apartment_id)![r.checklist_item_id] = r.value;
-    }
-    return apartmentsList.map((apt) => {
-      const resp = responsesByApartment.get(apt.id) ?? {};
-      const hasResponses = Object.keys(resp).length > 0;
-      return { ...apt, score: hasResponses ? calculateScore(homeSearchChecklistItems, resp) : null };
-    });
-  }, [apartmentsList, homeSearchChecklistItems, homeSearchResponses]);
+  const appointmentsList = home.appointments;
+  const apartmentsList = home.apartments;
+  const { writeRow: writeCost } = useStoreHelpers(home.stores.costs$, currentUserId);
 
   const { writeRow, patchRow, softDeleteRow } = useStoreHelpers(tasks$, currentUserId);
   const snoozeWithUndo = useTaskSnoozeUndo(patchRow);
@@ -1087,9 +944,7 @@ function HomeSectionBody() {
   // timed items (an overdue item's time is a past day's). A dated
   // checklist's to-do opens its list in place, with its own meter.
   const nowCards: NowCardPagerItem[] = nowQueue.map((item) => {
-    const countdown = item.dueTime && !item.overdue ? coarseCountdown(now, item.dueTime) : null;
-    const dueSoon = countdown ? isCountdownDueSoon(countdown) : false;
-    const eyebrow = nowEyebrow(item, dueSoon);
+    const { countdown, dueSoon, eyebrow } = nowCardTiming(item, now);
     const section = heroItemSectionId(item);
     const linkedId = taskChecklistsVisible && item.checklistHref ? item.task?.linked_checklist_id : null;
     const checklist = linkedId ? checklistsById[linkedId] : undefined;

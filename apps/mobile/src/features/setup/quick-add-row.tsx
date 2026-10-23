@@ -3,9 +3,8 @@
 import * as React from 'react';
 import { Pressable, TextInput, View } from 'react-native';
 import { Plus } from 'lucide-react-native';
-import type { SetupItem } from '@homeup/core';
+import { quickAddSetupItem, type SetupItem } from '@homeup/core';
 import { haptics } from '@homeup/ui';
-import { randomUUID } from '@/lib/uuid';
 
 interface QuickAddRowProps {
   groupId: string;
@@ -17,35 +16,12 @@ export function QuickAddRow({ groupId, room, onCreated }: QuickAddRowProps) {
   const [name, setName] = React.useState('');
 
   const create = () => {
-    const trimmed = name.trim();
-    if (!trimmed) return;
+    const row = quickAddSetupItem(groupId, room, name);
+    if (!row) return;
     haptics.commit();
-    // Offline-safe: build the row and hand it to onCreated (-> writeRow),
-    // which writes to the local store and syncs.
-    const now = new Date().toISOString();
-    onCreated({
-      id: randomUUID(),
-      group_id: groupId,
-      name: trimmed,
-      room: room === 'Other' ? '' : room,
-      priority: 'medium',
-      status: 'needed',
-      est_price: null,
-      actual_price: null,
-      where_to_buy: null,
-      store_id: null,
-      url: null,
-      notes: null,
-      assigned_to: null,
-      private: false,
-      template_key: null,
-      ai_suggestion: null,
-      sort_order: 0,
-      created_by: null,
-      created_at: now,
-      updated_at: now,
-      deleted: false,
-    });
+    // Offline-safe: hand the row to onCreated (-> writeRow), which writes to
+    // the local store and syncs; writeRow stamps created_by.
+    onCreated(row);
     setName('');
   };
 

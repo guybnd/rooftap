@@ -34,7 +34,9 @@ export const PRIVACY_TEXT =
   '## What is private\n' +
   'Your tools show only what the person you are talking with can see. Tasks, events and grocery items another ' +
   'member marked private are hidden from you, and bank payments include only this person\'s own and those other ' +
-  'members chose to share. Cost lines and the Costs month are shared with the whole household. When someone asks ' +
+  'members chose to share. Another member\'s "Just me" loyalty cards and private Home Setup items are hidden too, ' +
+  'and a loyalty card shows only the last digits of its number: for the barcode, point them to the card in Rewards. ' +
+  'Cost lines and the Costs month are shared with the whole household. When someone asks ' +
   'about another member\'s spending or plans, answer from what you can see and say that anything they keep private ' +
   'is not visible to you. Never guess at it.';
 
