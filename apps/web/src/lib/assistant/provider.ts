@@ -1,6 +1,8 @@
 import {
   AI_CATALOG,
   AI_SETTINGS_KEY,
+  EMPTY_AI_SERVER_SETTINGS,
+  aiModelTakesPhotos,
   allAiModels,
   cleanAiServerSettings,
   householdAiModels,
@@ -83,6 +85,13 @@ export interface AssistantBrain {
   extraPrices?: Record<string, { input: number; output: number }>;
   /** Quick asks run here when the quick model is on another provider or key. */
   quickBrain?: AssistantBrain;
+  /** The operator's settings, for whether a model on this provider can look at photos. */
+  settings?: AiServerSettings;
+}
+
+/** Whether this brain's `model` can look at photos sent in a chat (core aiModelTakesPhotos). */
+export function brainTakesPhotos(brain: Pick<AssistantBrain, "provider" | "settings">, model: string): boolean {
+  return aiModelTakesPhotos(brain.settings ?? EMPTY_AI_SERVER_SETTINGS, brain.provider, model);
 }
 
 type Lookup = (key: string) => Promise<string | undefined>;
@@ -216,8 +225,8 @@ interface Side {
   keySource: "household" | "server";
 }
 
-function toBrain(side: Side, quickModel: string, extraPrices: AssistantBrain["extraPrices"]): AssistantBrain {
-  return { provider: side.provider, connection: side.connection, chatModel: side.model, quickModel, free: side.free, keySource: side.keySource, extraPrices };
+function toBrain(side: Side, quickModel: string, extraPrices: AssistantBrain["extraPrices"], settings: AiServerSettings): AssistantBrain {
+  return { provider: side.provider, connection: side.connection, chatModel: side.model, quickModel, free: side.free, keySource: side.keySource, extraPrices, settings };
 }
 
 /**
@@ -300,8 +309,8 @@ export async function resolveAssistantBrain(input: BrainInput): Promise<Assistan
     quick.keySource === chat.keySource &&
     quick.connection.baseURL === chat.connection.baseURL &&
     quick.connection.apiKey === chat.connection.apiKey;
-  const brain = toBrain(chat, sameConnection ? quick.model : chat.model, extraPrices);
-  if (!sameConnection) brain.quickBrain = toBrain(quick, quick.model, extraPrices);
+  const brain = toBrain(chat, sameConnection ? quick.model : chat.model, extraPrices, settings);
+  if (!sameConnection) brain.quickBrain = toBrain(quick, quick.model, extraPrices, settings);
   return brain;
 }
 

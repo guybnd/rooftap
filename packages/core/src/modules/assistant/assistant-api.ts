@@ -26,6 +26,7 @@ import {
 import { createAssistantStreamReader, type AssistantStreamEvent } from './assistant-stream';
 import { scoutTitle } from '../shopper/shopper-scout';
 import { SEND_FEEDBACK_TOOL } from './feedback';
+import { FILE_PHOTO_TOOL, type AssistantPhoto, type AssistantPhotoSlot } from './assistant-photos';
 
 export interface AssistantConversation {
   id: string;
@@ -63,6 +64,8 @@ export interface AssistantMessage {
   proposal: { items: ProposalItem[]; state: ProposalState } | null;
   /** Spend for this reply in micro-dollars, when known. */
   cost_micros: number | null;
+  /** Photos sent with a person's message. Missing from servers before chat photos. */
+  photos?: AssistantPhoto[];
 }
 
 export interface AssistantMemory {
@@ -83,6 +86,8 @@ export interface AssistantStatus {
   isOwner: boolean;
   /** Conversations with something this person hasn't read. Missing from servers before assistant_reads. */
   unread?: number;
+  /** The household's model can look at photos, so the composer offers to attach one. Missing from servers before chat photos. */
+  photos?: boolean;
 }
 
 /** One person's say over "it answered" pushes (assistant_notify_prefs). */
@@ -145,7 +150,8 @@ export type AssistantErrorCode =
   | 'assistant_requires_plus'
   | 'assistant_not_configured'
   | 'assistant_budget_reached'
-  | 'assistant_conversation_closed';
+  | 'assistant_conversation_closed'
+  | 'assistant_photos_unsupported';
 
 export class AssistantApiError extends Error {
   constructor(
@@ -248,6 +254,8 @@ export function createAssistantApi(call: AssistantCall, stream?: AssistantStream
         reopen?: boolean;
         /** Asked from cook mode (Recipes v2 R7); older servers ignore it. */
         cook?: { recipeId: string; step: number; deviceId?: string | null };
+        /** Uploaded photos (uploadAssistantPhoto paths) for Rooftap to look at. */
+        photos?: string[];
       },
       onEvent?: (event: AssistantProgressEvent) => void
     ) => {
@@ -260,6 +268,8 @@ export function createAssistantApi(call: AssistantCall, stream?: AssistantStream
       lastWaitMs = Date.now() - started;
       return res;
     },
+    /** A one-time upload slot for a chat photo, under this person's household. */
+    photoSlot: (mimeType: string) => call<AssistantPhotoSlot>('/api/assistant/photos', { method: 'POST', body: { mimeType } }),
     /**
      * `picks` makes only the kept rows (decision "pick"). A server older than
      * picking answers 400 to it and changes nothing, so a partial pick never
@@ -354,6 +364,8 @@ function moduleProposal(tool: string, args: Record<string, unknown>): string | n
       return typeof args.title === 'string' && args.title.trim() ? `Start the checklist ${quoted(args.title)}` : 'Start a checklist from a template';
     case 'save_recipe':
       return `Save the recipe ${quoted(args.title)}`;
+    case FILE_PHOTO_TOOL:
+      return typeof args.title === 'string' && args.title.trim() ? `File the photo as ${quoted(args.title)} in Documents` : 'File the photo in Documents';
     case 'update_setup_item':
       if (args.status === 'installed') return 'Mark a Home Setup item as got';
       return args.status === 'needed' ? 'Put a Home Setup item back on the list' : 'Change an item in Home Setup';

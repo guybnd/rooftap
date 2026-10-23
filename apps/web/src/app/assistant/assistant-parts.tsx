@@ -7,7 +7,7 @@
 // apps/mobile/src/features/assistant/assistant-parts.tsx.
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
-import { ArrowUp, Check, X } from 'lucide-react';
+import { ArrowUp, Check, ImageOff, ImagePlus, Loader2, X } from 'lucide-react';
 import {
   GHOST_REPLY_GROW_MS,
   GHOST_REPLY_LINES,
@@ -15,9 +15,13 @@ import {
   formatMicros,
   parseReply,
   timeAgo,
+  useComposerPhotos,
   useProposalPicks,
   type AssistantDraft,
   type AssistantMessage,
+  type AssistantPhoto,
+  type OutgoingPhoto,
+  type PickedPhoto,
   type ProposalPick,
   type ProposalState,
   type ReplySpan,
@@ -25,6 +29,9 @@ import {
 import { cn } from '@/lib/utils';
 import { sectionIconFor } from '@/lib/section-icons';
 import { LeadingTile } from '@/components/ui/leading-tile';
+import { toast } from 'sonner';
+import { assistantApi } from '@/lib/assistant-client';
+import { createClient } from '@/lib/supabase/client';
 
 function Spans({ spans }: { spans: ReplySpan[] }) {
   return (
@@ -229,7 +236,8 @@ export function MessageBubble({
           mine ? 'rounded-2xl rounded-br-md bg-muted px-3.5 py-2.5' : user ? 'rounded-2xl rounded-bl-md bg-muted/50 px-3.5 py-2.5' : 'w-full px-1'
         )}
       >
-        <ReplyText text={message.content} />
+        {message.photos?.length ? <MessagePhotos photos={message.photos} spaced={!!message.content} /> : null}
+        {message.content ? <ReplyText text={message.content} /> : null}
         {!user && <ProposalCard message={message} busy={busy} onDecide={(d, picks) => onDecide(message.id, d, picks)} />}
       </div>
       <p className="mt-1 px-1 text-[11px] text-muted-foreground tabular-nums">
@@ -237,6 +245,27 @@ export function MessageBubble({
         {message.channel === 'telegram' ? ' · Telegram' : ''}
         {showCost && message.cost_micros != null ? ` · ${formatMicros(message.cost_micros)}` : ''}
       </p>
+    </div>
+  );
+}
+
+/** Photos sent with a message: each opens full size; one past the keep time says so. */
+function MessagePhotos({ photos, spaced }: { photos: AssistantPhoto[]; spaced: boolean }) {
+  return (
+    <div className={cn('flex flex-wrap justify-end gap-1.5', spaced && 'mb-2')}>
+      {photos.map((p, i) =>
+        p.url ? (
+          <a key={i} href={p.url} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-xl">
+            {/* eslint-disable-next-line @next/next/no-img-element -- a short-lived signed link, not a static asset */}
+            <img src={p.url} alt={`Photo ${i + 1}`} className="h-36 max-w-[14rem] object-cover" />
+          </a>
+        ) : (
+          <div key={i} className="flex h-20 w-28 flex-col items-center justify-center gap-1 rounded-xl bg-background/60 text-muted-foreground">
+            <ImageOff className="h-4 w-4" />
+            <span className="text-[11px]">No longer kept</span>
+          </div>
+        )
+      )}
     </div>
   );
 }
@@ -273,12 +302,22 @@ export function Thinking({ draft }: { draft?: AssistantDraft | null }) {
   );
 }
 
+/** A picked or pasted file, as the shared photo tray takes it. */
+function pickedFrom(file: File): PickedPhoto {
+  return { preview: URL.createObjectURL(file), mimeType: file.type, size: file.size, read: async () => file };
+}
+
+function imageFiles(list: FileList | null | undefined): File[] {
+  return Array.from(list ?? []).filter((f) => f.type.startsWith('image/'));
+}
+
 export function Composer({
   placeholder,
   disabled,
   busy,
   autoFocus,
   maxLength = 4000,
+  photos: allowPhotos = false,
   onSend,
 }: {
   placeholder: string;
@@ -286,10 +325,20 @@ export function Composer({
   busy?: boolean;
   autoFocus?: boolean;
   maxLength?: number;
-  onSend: (text: string) => Promise<boolean> | boolean;
+  /** Offer to attach photos (pick, paste or drop), when the household's model can look at them. */
+  photos?: boolean;
+  onSend: (text: string, photos: OutgoingPhoto[]) => Promise<boolean> | boolean;
 }) {
   const [text, setText] = useState('');
+  const [dragging, setDragging] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const tray = useComposerPhotos({
+    api: assistantApi,
+    supabase: allowPhotos ? createClient() : null,
+    onError: (m) => toast.error(m),
+    onRelease: (preview) => URL.revokeObjectURL(preview),
+  });
 
   useEffect(() => {
     const el = ref.current;
@@ -298,47 +347,129 @@ export function Composer({
     el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
   }, [text]);
 
+  const canSend = !disabled && !busy && !tray.uploading && (!!text.trim() || tray.outgoing.length > 0);
+
   const submit = async () => {
     const value = text.trim();
-    if (!value || disabled || busy) return;
+    if (!canSend) return;
+    const outgoing = tray.outgoing;
+    const taken = tray.take();
     setText('');
-    if (!(await onSend(value))) setText(value);
+    if (!(await onSend(value, outgoing))) {
+      setText(value);
+      tray.restore(taken);
+    }
+  };
+
+  const attach = (files: File[]) => {
+    if (!allowPhotos || disabled || files.length === 0) return;
+    tray.add(files.map(pickedFrom));
   };
 
   return (
     <form
-      className="flex items-end gap-2 rounded-3xl border border-border/60 bg-card p-1.5 pl-4 shadow-[var(--card-shadow)]"
+      className={cn(
+        'rounded-3xl border border-border/60 bg-card p-1.5 shadow-[var(--card-shadow)]',
+        !allowPhotos && 'pl-4',
+        dragging && 'ring-2 ring-ring'
+      )}
       onSubmit={(e) => {
         e.preventDefault();
         void submit();
       }}
+      onDragOver={(e) => {
+        if (!allowPhotos || !e.dataTransfer.types.includes('Files')) return;
+        e.preventDefault();
+        setDragging(true);
+      }}
+      onDragLeave={() => setDragging(false)}
+      onDrop={(e) => {
+        if (!allowPhotos) return;
+        e.preventDefault();
+        setDragging(false);
+        attach(imageFiles(e.dataTransfer.files));
+      }}
     >
-      <textarea
-        ref={ref}
-        rows={1}
-        value={text}
-        autoFocus={autoFocus}
-        disabled={disabled}
-        maxLength={maxLength}
-        placeholder={placeholder}
-        aria-label={placeholder}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-            e.preventDefault();
-            void submit();
-          }
-        }}
-        className="min-h-10 flex-1 resize-none bg-transparent py-2 text-[15px] text-foreground outline-none placeholder:text-muted-foreground disabled:opacity-50"
-      />
-      <button
-        type="submit"
-        aria-label="Send"
-        disabled={disabled || busy || !text.trim()}
-        className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/80 disabled:opacity-40"
-      >
-        <ArrowUp className="h-5 w-5" />
-      </button>
+      {tray.photos.length > 0 && (
+        <div className="flex gap-2 overflow-x-auto px-2.5 pb-1.5 pt-1">
+          {tray.photos.map((p) => (
+            <div key={p.key} className="relative shrink-0">
+              {/* eslint-disable-next-line @next/next/no-img-element -- a local preview of the picked file */}
+              <img src={p.preview} alt="" className={cn('size-16 rounded-xl object-cover', (!p.path || p.failed) && 'opacity-50')} />
+              {!p.path && !p.failed && (
+                <Loader2 aria-label="Uploading" className="absolute inset-0 m-auto h-5 w-5 animate-spin text-foreground" />
+              )}
+              <button
+                type="button"
+                onClick={() => tray.remove(p.key)}
+                aria-label="Remove photo"
+                className="absolute -right-1.5 -top-1.5 inline-flex size-6 items-center justify-center rounded-full bg-foreground text-background"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="flex items-end gap-2">
+        {allowPhotos && (
+          <>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              multiple
+              hidden
+              onChange={(e) => {
+                attach(imageFiles(e.target.files));
+                e.target.value = '';
+              }}
+            />
+            <button
+              type="button"
+              aria-label="Attach a photo"
+              disabled={disabled || tray.full}
+              onClick={() => fileRef.current?.click()}
+              className="inline-flex size-10 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40"
+            >
+              <ImagePlus className="h-5 w-5" />
+            </button>
+          </>
+        )}
+        <textarea
+          ref={ref}
+          rows={1}
+          value={text}
+          autoFocus={autoFocus}
+          disabled={disabled}
+          maxLength={maxLength}
+          placeholder={placeholder}
+          aria-label={placeholder}
+          onChange={(e) => setText(e.target.value)}
+          onPaste={(e) => {
+            const files = imageFiles(e.clipboardData.files);
+            if (allowPhotos && files.length) {
+              e.preventDefault();
+              attach(files);
+            }
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+              e.preventDefault();
+              void submit();
+            }
+          }}
+          className="min-h-10 flex-1 resize-none bg-transparent py-2 text-[15px] text-foreground outline-none placeholder:text-muted-foreground disabled:opacity-50"
+        />
+        <button
+          type="submit"
+          aria-label="Send"
+          disabled={!canSend}
+          className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/80 disabled:opacity-40"
+        >
+          <ArrowUp className="h-5 w-5" />
+        </button>
+      </div>
     </form>
   );
 }

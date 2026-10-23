@@ -149,7 +149,14 @@ export interface ThreadHost {
   cook?: () => { recipeId: string; step: number; deviceId?: string | null } | null;
 }
 
-function pendingMessage(text: string): AssistantMessage {
+/** A photo attached in the composer: its uploaded path, and the local picture shown while it sends. */
+export interface OutgoingPhoto {
+  path: string;
+  preview?: string | null;
+}
+
+/** Shows the message going out at once, with the composer's own pictures of its photos. */
+function pendingMessage(text: string, photos: readonly OutgoingPhoto[]): AssistantMessage {
   return {
     id: `local-${Date.now()}`,
     role: 'user',
@@ -160,6 +167,7 @@ function pendingMessage(text: string): AssistantMessage {
     created_at: new Date().toISOString(),
     proposal: null,
     cost_micros: null,
+    ...(photos.length ? { photos: photos.map((p) => ({ url: p.preview ?? null })) } : {}),
   };
 }
 
@@ -185,6 +193,8 @@ export function useAssistantThread(target: ThreadTarget, host: ThreadHost) {
   // Why the last load failed (offline, timed out), offered with Try again.
   const [loadError, setLoadError] = useState<string | null>(null);
   const [showCost, setShowCost] = useState(false);
+  // The household's model can look at photos (older servers never say so).
+  const [photos, setPhotos] = useState(false);
   // A closed quick ask the person chose to carry on: the next send reopens it.
   const [resumed, setResumed] = useState(false);
   const resumedRef = useRef(false);
@@ -257,6 +267,10 @@ export function useAssistantThread(target: ThreadTarget, host: ThreadHost) {
       .settings()
       .then((s) => setShowCost(s.settings.showCostPerReply))
       .catch(() => {});
+    hostRef.current.api
+      .status()
+      .then((s) => setPhotos(s.photos === true))
+      .catch(() => {});
   }, [reload]);
 
   // The household thread is a chat room: while it is on screen, what other members write shows up.
@@ -270,18 +284,19 @@ export function useAssistantThread(target: ThreadTarget, host: ThreadHost) {
   }, [householdId, reload]);
 
   const send = useCallback(
-    async (text: string) => {
+    async (text: string, photos: readonly OutgoingPhoto[] = []) => {
       const { api, toast } = hostRef.current;
-      const local = pendingMessage(text);
+      const local = pendingMessage(text, photos);
       setMessages((m) => [...m, local]);
       setSending(true);
       sendingRef.current = true;
       setThinking(wantsAssistantReply(kind, 'app', text));
+      const withPhotos = photos.length ? { photos: photos.map((p) => p.path) } : {};
       try {
         const pacer = createDraftPacer(setDraft);
         const cook = hostRef.current.cook?.() ?? undefined;
         const res = await api.send(
-          { text, conversationId: conversationIdRef.current, kind, reopen: resumedRef.current || undefined, ...(cook ? { cook } : {}) },
+          { text, conversationId: conversationIdRef.current, kind, reopen: resumedRef.current || undefined, ...(cook ? { cook } : {}), ...withPhotos },
           (event) => pacer.push(event)
         );
         // A lead-in still on screen gets its moment before the stored reply replaces it.
@@ -307,7 +322,9 @@ export function useAssistantThread(target: ThreadTarget, host: ThreadHost) {
         return true;
       } catch (err) {
         setMessages((m) => m.filter((x) => x.id !== local.id));
-        if (err instanceof AssistantApiError && err.code) setBlocked(err.code);
+        // A model that can't take photos is a line, not a wall: the chat carries on without them.
+        if (err instanceof AssistantApiError && err.code === 'assistant_photos_unsupported') toast.error(err.message);
+        else if (err instanceof AssistantApiError && err.code) setBlocked(err.code);
         else toast.error(errorText(err, 'Could not send that.'));
         return false;
       } finally {
@@ -379,7 +396,7 @@ export function useAssistantThread(target: ThreadTarget, host: ThreadHost) {
   // Closed: a quick ask past its idle time, unless the person chose to carry on.
   const closed = !!conversation && !resumed && !isConversationOpen(conversation.kind, conversation.closes_at);
 
-  return { conversation, messages, kind, loading, loadError, sending, thinking, draft, deciding, blocked, showCost, closed, resumed, send, decide, togglePin, remove, reload, resume };
+  return { conversation, messages, kind, loading, loadError, sending, thinking, draft, deciding, blocked, showCost, photos, closed, resumed, send, decide, togglePin, remove, reload, resume };
 }
 
 export type AssistantThread = ReturnType<typeof useAssistantThread>;

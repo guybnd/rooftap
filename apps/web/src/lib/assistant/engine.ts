@@ -1,5 +1,5 @@
 import { extractMemoryMarkers, toolStatus, visibleDraftText } from "@homeup/core";
-import type { ChatMessage, LlmClient, ToolCall } from "./llm";
+import type { ChatImage, ChatMessage, LlmClient, ToolCall } from "./llm";
 import type { AssistantTool } from "./tools";
 
 // HOUP-442: one assistant turn. Sends the conversation to the model, runs
@@ -27,6 +27,8 @@ export interface TurnInput {
   /** Earlier messages in the context window, oldest first. */
   history: ChatMessage[];
   userText: string;
+  /** Photos sent with the message, for the model to look at. */
+  userImages?: ChatImage[];
   tools: AssistantTool[];
   maxSteps?: number;
   /**
@@ -137,7 +139,10 @@ export async function runAssistantTurn(input: TurnInput): Promise<TurnResult> {
   const maxSteps = input.maxSteps ?? MAX_STEPS;
   const byName = new Map(input.tools.map((t) => [t.name, t]));
   const specs = input.tools.map(({ name, description, parameters }) => ({ name, description, parameters }));
-  const conversation: ChatMessage[] = [...input.history, { role: "user", content: input.userText }];
+  const conversation: ChatMessage[] = [
+    ...input.history,
+    { role: "user", content: input.userText, ...(input.userImages?.length ? { images: input.userImages } : {}) },
+  ];
   const result: TurnResult = { reply: "", memories: [], messages: [], proposals: [], inputTokens: 0, outputTokens: 0, steps: 0, ran: [], timing: { llmMs: [], tools: [] } };
 
   const out: CallOut = {

@@ -26,6 +26,10 @@ const COPY: Record<AssistantErrorCode, { title: string; description: string }> =
     title: 'This quick ask has closed',
     description: 'Start a new one from the Assistant.',
   },
+  assistant_photos_unsupported: {
+    title: "This model can't look at photos",
+    description: 'An owner can pick a model that reads photos in Settings > Assistant.',
+  },
 };
 
 export function AssistantNotice({ code }: { code: AssistantErrorCode }) {

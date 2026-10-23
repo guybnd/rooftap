@@ -204,3 +204,25 @@ describe("withFallbackModel", () => {
     expect(isProviderBusy(new Error("Anthropic request failed (400): bad"))).toBe(false);
   });
 });
+
+describe("photos on the wire", () => {
+  const msg: ChatMessage = { role: "user", content: "file this", images: [{ mimeType: "image/jpeg", data: "QUJD" }] };
+  it("sends OpenAI-style providers a data URL after the text", () => {
+    const out = toOpenAIMessages("s", [msg]);
+    expect(out[1]).toEqual({
+      role: "user",
+      content: [
+        { type: "text", text: "file this" },
+        { type: "image_url", image_url: { url: "data:image/jpeg;base64,QUJD" } },
+      ],
+    });
+  });
+
+  it("sends Anthropic an image block before the text", () => {
+    const out = toAnthropicMessages([msg]);
+    expect(out[0].content).toEqual([
+      { type: "image", source: { type: "base64", media_type: "image/jpeg", data: "QUJD" } },
+      { type: "text", text: "file this" },
+    ]);
+  });
+});

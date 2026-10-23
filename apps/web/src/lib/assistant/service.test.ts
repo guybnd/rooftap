@@ -239,3 +239,23 @@ describe("foldOlderMessages", () => {
     expect(updates).toEqual([]);
   });
 });
+
+describe("toHistory with photos", () => {
+  const path = "g/2026-10-23/u-1.jpg";
+  it("notes each photo by its path, and adds the images it is given", () => {
+    const image = { mimeType: "image/jpeg", data: "AAAA" };
+    const history = toHistory(
+      [row({ id: "m1", role: "user", content: "", photos: [path] }), row({ id: "m2", role: "user", content: "and this", photos: [path, path] })],
+      undefined,
+      undefined,
+      new Map([["m2", [image, image]]])
+    );
+    expect(history[0]).toEqual({ role: "user", content: `[sent a photo: ${path}]` });
+    expect(history[1]).toEqual({ role: "user", content: `and this\n[sent 2 photos: ${path}, ${path}]`, images: [image, image] });
+  });
+
+  it("shows a photo as a link on the message, or none once it is gone", () => {
+    const m = toMessage(row({ role: "user", content: "", photos: [path, "gone.jpg"] }), new Map(), undefined, new Map([[path, "https://x/signed"]]));
+    expect(m?.photos).toEqual([{ url: "https://x/signed" }, { url: null }]);
+  });
+});

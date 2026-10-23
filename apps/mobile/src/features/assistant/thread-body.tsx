@@ -117,6 +117,7 @@ export function ThreadFooter({
             disabled={offline || blocked === 'assistant_requires_plus' || (blocked === 'assistant_not_configured' && kind !== 'household')}
             busy={sending}
             autoFocus={autoFocus || thread.resumed}
+            photos={thread.photos}
             onSend={send}
           />
           {left != null && left > 0 && (

@@ -38,6 +38,8 @@ export interface AiCatalogModel {
   output: number;
   /** Can do AI reads: structured output from text and photos with this provider's read client. */
   reads: boolean;
+  /** false: can't look at photos in Assistant chats. Missing means it can (every verified model so far). */
+  photos?: boolean;
   note?: string;
 }
 
@@ -124,6 +126,8 @@ export interface AiCustomProvider {
   baseURL: string;
   /** false: the assistant never asks it to stream replies (HOUP-509). Missing means try, falling back when it can't. */
   stream?: boolean;
+  /** true: its models can look at photos in Assistant chats (the operator's "Reads photos" switch). Missing means they can't. */
+  photos?: boolean;
 }
 
 /** A model the operator added by hand, on a built-in or custom provider. */
@@ -213,7 +217,7 @@ export function cleanAiServerSettings(raw: unknown): AiServerSettings {
     const label = typeof o.label === 'string' ? o.label.trim().slice(0, 40) : '';
     const baseURL = cleanUrl(o.baseURL);
     if (!PROVIDER_ID.test(id) || isBuiltInProvider(id) || !label || !baseURL || custom.some((x) => x.id === id)) continue;
-    custom.push({ id, label, baseURL, ...(o.stream === false ? { stream: false } : {}) });
+    custom.push({ id, label, baseURL, ...(o.stream === false ? { stream: false } : {}), ...(o.photos === true ? { photos: true } : {}) });
   }
   const providers = new Set<string>([...Object.keys(AI_CATALOG), ...custom.map((c) => c.id)]);
 
@@ -422,6 +426,33 @@ export function withCustomProviderStream(settings: AiServerSettings, id: string,
       return stream ? rest : { ...rest, stream: false };
     }),
   };
+}
+
+/** Says whether a custom provider's models can look at photos in Assistant chats. */
+export function withCustomProviderPhotos(settings: AiServerSettings, id: string, photos: boolean): AiServerSettings {
+  return {
+    ...settings,
+    custom: settings.custom.map((c) => {
+      if (c.id !== id) return c;
+      const { photos: _old, ...rest } = c;
+      return photos ? { ...rest, photos: true } : rest;
+    }),
+  };
+}
+
+/**
+ * Whether a model can look at photos sent in an Assistant chat. Verified
+ * models can (unless the catalog says otherwise), a custom provider's
+ * models can when the operator switched "Reads photos" on, and any other
+ * model (one added by hand on a built-in provider, or an older environment
+ * setting) is taken not to, since Rooftap can't vouch for it.
+ */
+export function aiModelTakesPhotos(settings: AiServerSettings, provider: string, model: string): boolean {
+  if (isBuiltInProvider(provider)) {
+    const known = AI_CATALOG[provider].models.find((m) => m.id === model);
+    return !!known && known.photos !== false;
+  }
+  return settings.custom.find((c) => c.id === provider)?.photos === true;
 }
 
 /** Removes a custom provider, its models, and any pick that named them. */

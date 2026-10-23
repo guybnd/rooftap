@@ -43,6 +43,7 @@ const ROUTES: Record<string, RouteRule> = {
   "assistant/memories": { auth: "session", module: "assistant" },
   "assistant/memories/[id]": { auth: "session", module: "assistant" },
   "assistant/notify-prefs": { auth: "session", module: "assistant" },
+  "assistant/photos": { auth: "session", module: "assistant" },
   "assistant/proposals/[id]": { auth: "session", module: "assistant" },
   "assistant/settings": { auth: "session", module: "assistant" },
   "assistant/status": { auth: "session", module: "assistant" },

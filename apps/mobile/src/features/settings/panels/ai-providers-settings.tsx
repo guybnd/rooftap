@@ -15,6 +15,7 @@ import {
   splitModelIds,
   withCustomProvider,
   withCustomProviderStream,
+  withCustomProviderPhotos,
   withDefault,
   withExtraModel,
   withOfferedAll,
@@ -161,6 +162,7 @@ export function AiProvidersSettings() {
                 </Button>
               </View>
               {!p.builtIn && (
+                <>
                 <View className="min-h-11 flex-row items-center justify-between gap-3">
                   <View className="min-w-0 flex-1">
                     <Text className="text-sm text-foreground">Stream replies</Text>
@@ -173,6 +175,19 @@ export function AiProvidersSettings() {
                     onChange={(on) => void saveSettings(withCustomProviderStream(settings, p.id, on))}
                   />
                 </View>
+                <View className="min-h-11 flex-row items-center justify-between gap-3">
+                  <View className="min-w-0 flex-1">
+                    <Text className="text-sm text-foreground">Reads photos</Text>
+                    <Text className="text-xs text-muted-foreground">Lets people send photos in Assistant chats. Turn on only if its models can look at images.</Text>
+                  </View>
+                  <Switch
+                    label={`${p.label} reads photos`}
+                    checked={settings.custom.find((c) => c.id === p.id)?.photos === true}
+                    disabled={busy === 'settings'}
+                    onChange={(on) => void saveSettings(withCustomProviderPhotos(settings, p.id, on))}
+                  />
+                </View>
+                </>
               )}
             </View>
           ))}

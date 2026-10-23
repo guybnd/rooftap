@@ -21,8 +21,14 @@ export interface ToolCall {
   extra?: Record<string, unknown>;
 }
 
+/** A photo for the model to look at, as base64 (the server has already shrunk it). */
+export interface ChatImage {
+  mimeType: string;
+  data: string;
+}
+
 export type ChatMessage =
-  | { role: "user"; content: string }
+  | { role: "user"; content: string; images?: ChatImage[] }
   | { role: "assistant"; content: string; toolCalls?: ToolCall[] }
   | { role: "tool"; toolCallId: string; name: string; content: string };
 
@@ -177,8 +183,19 @@ export function portableSchema(schema: unknown): unknown {
 export function toOpenAIMessages(system: string, messages: ChatMessage[]): OpenAI.Chat.Completions.ChatCompletionMessageParam[] {
   const out: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [{ role: "system", content: system }];
   for (const m of messages) {
-    if (m.role === "user") out.push({ role: "user", content: m.content });
-    else if (m.role === "tool") out.push({ role: "tool", tool_call_id: m.toolCallId, content: m.content });
+    if (m.role === "user") {
+      out.push(
+        m.images?.length
+          ? {
+              role: "user",
+              content: [
+                { type: "text", text: m.content },
+                ...m.images.map((i) => ({ type: "image_url" as const, image_url: { url: `data:${i.mimeType};base64,${i.data}` } })),
+              ],
+            }
+          : { role: "user", content: m.content }
+      );
+    } else if (m.role === "tool") out.push({ role: "tool", tool_call_id: m.toolCallId, content: m.content });
     else
       out.push({
         role: "assistant",
@@ -315,6 +332,7 @@ type AnthropicBlock = (
   | { type: "text"; text: string }
   | { type: "tool_use"; id: string; name: string; input: Record<string, unknown> }
   | { type: "tool_result"; tool_use_id: string; content: string }
+  | { type: "image"; source: { type: "base64"; media_type: string; data: string } }
 ) & { cache_control?: typeof EPHEMERAL };
 
 interface AnthropicMessage {
@@ -332,7 +350,12 @@ export function toAnthropicMessages(messages: ChatMessage[]): AnthropicMessage[]
     else out.push({ role, content: blocks });
   };
   for (const m of messages) {
-    if (m.role === "user") push("user", [{ type: "text", text: m.content }]);
+    if (m.role === "user")
+      push("user", [
+        // Photos first, then the words about them, as Anthropic suggests.
+        ...(m.images ?? []).map((i) => ({ type: "image" as const, source: { type: "base64" as const, media_type: i.mimeType, data: i.data } })),
+        { type: "text", text: m.content },
+      ]);
     else if (m.role === "tool") push("user", [{ type: "tool_result", tool_use_id: m.toolCallId, content: m.content }]);
     else
       push("assistant", [

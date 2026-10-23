@@ -1,5 +1,13 @@
 import { NextResponse, after } from "next/server";
-import { SSE_PING, encodeSseEvent, parseCookAskContext, type AssistantStreamEvent, type ConversationKind } from "@homeup/core";
+import {
+  MAX_ASSISTANT_PHOTOS,
+  SSE_PING,
+  encodeSseEvent,
+  isAssistantPhotoPathFor,
+  parseCookAskContext,
+  type AssistantStreamEvent,
+  type ConversationKind,
+} from "@homeup/core";
 import { assistantErrorResponse, assistantRequest, runChat, type AssistantContext, type ChatOutcome } from "@/lib/assistant/service";
 import { notifyHousehold, notifyIfAway } from "@/lib/assistant/reads";
 
@@ -30,11 +38,15 @@ function afterTurn(ctx: AssistantContext, out: Extract<ChatOutcome, { ok: true }
 
 export async function POST(request: Request) {
   const receivedAt = Date.now();
-  const body = (await request.json().catch(() => ({}))) as { text?: unknown; conversationId?: unknown; kind?: unknown; reopen?: unknown; lastWaitMs?: unknown; cook?: unknown };
-  if (typeof body.text !== "string" || !body.text.trim()) return assistantErrorResponse(400, "text is required");
+  const body = (await request.json().catch(() => ({}))) as { text?: unknown; conversationId?: unknown; kind?: unknown; reopen?: unknown; lastWaitMs?: unknown; cook?: unknown; photos?: unknown };
+  const sentPhotos = Array.isArray(body.photos) ? body.photos : [];
+  if (typeof body.text !== "string" || (!body.text.trim() && sentPhotos.length === 0)) return assistantErrorResponse(400, "text is required");
   if (body.text.length > 4000) return assistantErrorResponse(400, "That message is too long.");
+  if (sentPhotos.length > MAX_ASSISTANT_PHOTOS) return assistantErrorResponse(400, `Up to ${MAX_ASSISTANT_PHOTOS} photos at a time.`);
   const ctx = await assistantRequest();
   if ("error" in ctx) return ctx.error;
+  // Only photos this person uploaded for this household (from /api/assistant/photos).
+  if (!sentPhotos.every((p) => isAssistantPhotoPathFor(p, ctx.groupId, ctx.userId))) return assistantErrorResponse(400, "That photo can't be sent.");
   const kind = typeof body.kind === "string" && KINDS.has(body.kind as ConversationKind) ? (body.kind as ConversationKind) : "quick";
   const input = {
     text: body.text,
@@ -45,6 +57,7 @@ export async function POST(request: Request) {
     lastWaitMs: typeof body.lastWaitMs === "number" && Number.isFinite(body.lastWaitMs) ? Math.round(body.lastWaitMs) : undefined,
     // Asked from cook mode (Recipes v2 R7): the recipe and step on screen.
     cook: parseCookAskContext(body.cook),
+    photos: [...new Set(sentPhotos as string[])],
   };
 
   if (!request.headers.get("accept")?.includes("text/event-stream")) {

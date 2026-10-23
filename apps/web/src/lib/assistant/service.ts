@@ -47,14 +47,18 @@ import {
   type Recipe,
   type RecipeIngredient,
   type ProposalPick,
+  type EntitlementTier,
+  assistantPhotoKeepDays,
 } from "@homeup/core";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSessionUser } from "@/lib/supabase/session";
 import { getEnabledModules } from "@/lib/server-modules";
 import { billingMode } from "@/lib/billing";
 import { TurnTimeoutError, executeProposals, failureReason, runAssistantTurn, type Proposal, type TurnStreamEvent } from "./engine";
-import { isProviderBusy, llmClient, withFallbackModel, type ChatMessage, type LlmClient } from "./llm";
-import { SERVER_BRAIN_KEYS, resolveAssistantBrain, resolveBackupBrain, type AssistantBrain } from "./provider";
+import { isProviderBusy, llmClient, withFallbackModel, type ChatImage, type ChatMessage, type LlmClient } from "./llm";
+import { SERVER_BRAIN_KEYS, brainTakesPhotos, resolveAssistantBrain, resolveBackupBrain, type AssistantBrain } from "./provider";
+import { loadKeptPhotos, photoUrls, preparePhotos, sweepOldPhotos } from "./photos";
+import { photoTool } from "./photo-tool";
 import { resolveServerKeys } from "@/lib/admin-config";
 import { householdKeys } from "@/lib/ai/household-keys";
 import { assistantTools } from "./tools";
@@ -78,6 +82,8 @@ export interface AssistantContext {
   isOwner: boolean;
   enabled: Set<ModuleId>;
   access: AssistantAccess;
+  /** The household's plan, for how long chat photos are kept. Missing in older callers: free. */
+  tier?: EntitlementTier;
 }
 
 export function assistantErrorResponse(status: number, error: string, code?: AssistantErrorCode) {
@@ -118,8 +124,9 @@ export async function assistantContextFor(
     admin.from("group_entitlements").select("*").eq("group_id", membership.group_id).maybeSingle(),
   ]);
   if (!enabled.has("assistant")) return { error: "Not found", status: 404 };
-  const access = assistantAccess(entitlementTier(ent as GroupEntitlements | null), billingMode());
-  return { admin, userId, groupId: membership.group_id, isOwner: membership.role === "owner", enabled, access };
+  const tier = entitlementTier(ent as GroupEntitlements | null);
+  const access = assistantAccess(tier, billingMode());
+  return { admin, userId, groupId: membership.group_id, isOwner: membership.role === "owner", enabled, access, tier };
 }
 
 /**
@@ -139,7 +146,9 @@ async function turnTools(
   );
   const homeAssistant = await homeAssistantTools(ctx.admin, ctx.groupId, { readOnly });
   const feedback = feedbackTool(ctx.admin, ctx.userId, ctx.groupId);
-  return { tools: [...household, ...(homeAssistant?.tools ?? []), feedback], homeAssistant };
+  // Filing a chat photo in Documents, so it outlives the chat's keep time.
+  const filing = ctx.enabled.has("documents") && !readOnly ? photoTool(ctx.admin, ctx.userId, ctx.groupId, trustFor(settings.trust, "documents")) : null;
+  return { tools: [...household, ...(homeAssistant?.tools ?? []), feedback, ...(filing ? [filing] : [])], homeAssistant };
 }
 
 /** The cook mode section of the prompt: the recipe, its steps and the person's timers on it. */
@@ -194,6 +203,8 @@ interface MessageRow {
   channel: MessageChannel;
   cost_micros: number | null;
   created_at: string;
+  /** Storage paths of photos sent with it (20261023210000); undefined before that migration. */
+  photos?: string[] | null;
 }
 
 export function toConversation(row: ConversationRow, pending = 0, unread = false): AssistantConversation {
@@ -220,8 +231,11 @@ function proposalItems(row: MessageRow): ProposalItem[] {
 }
 
 /** A stored row as the apps see it, or null for rows they don't show (tool output, tool-call steps). */
-/** A stored message for the app; `viewerId` marks which ones the person looking wrote. */
-export function toMessage(row: MessageRow, names: Map<string, string>, viewerId?: string): AssistantMessage | null {
+/**
+ * A stored message for the app; `viewerId` marks which ones the person
+ * looking wrote, and `urls` (photoUrls) holds links to its photos.
+ */
+export function toMessage(row: MessageRow, names: Map<string, string>, viewerId?: string, urls?: Map<string, string>): AssistantMessage | null {
   if (row.role === "tool") return null;
   if (row.role === "assistant" && row.tool_calls && !row.content) return null;
   return {
@@ -234,7 +248,32 @@ export function toMessage(row: MessageRow, names: Map<string, string>, viewerId?
     created_at: row.created_at,
     proposal: row.proposal && row.proposal_state ? { items: proposalItems(row), state: row.proposal_state } : null,
     cost_micros: row.cost_micros,
+    ...(row.photos?.length ? { photos: row.photos.map((p) => ({ url: urls?.get(p) ?? null })) } : {}),
   };
+}
+
+/** Links to every photo on these rows, for toMessage. */
+export function rowPhotoUrls(admin: SupabaseClient, rows: readonly MessageRow[]): Promise<Map<string, string>> {
+  return photoUrls(admin, rows.flatMap((r) => r.photos ?? []));
+}
+
+/**
+ * The note the model reads for a message's photos, naming each by its
+ * storage path so file_photo can find it (also after the photo itself has
+ * left the context).
+ */
+export function photoNote(paths: readonly string[]): string {
+  return paths.length === 1 ? `[sent a photo: ${paths[0]}]` : `[sent ${paths.length} photos: ${paths.join(", ")}]`;
+}
+
+/** A person's message as the model reads it: its text, with a note when photos came with it. */
+export function withPhotoNote(text: string, paths: readonly string[] | null | undefined): string {
+  if (!paths?.length) return text;
+  return text ? `${text}\n${photoNote(paths)}` : photoNote(paths);
+}
+
+function userText(row: Pick<MessageRow, "content" | "photos">): string {
+  return withPhotoNote(row.content, row.photos);
 }
 
 /**
@@ -244,15 +283,18 @@ export function toMessage(row: MessageRow, names: Map<string, string>, viewerId?
  * user message, since the model only answers when tagged. `max` keeps the
  * newest messages, still starting at a user message.
  */
-export function toHistory(rows: MessageRow[], names?: Map<string, string>, max?: number): ChatMessage[] {
+export function toHistory(rows: MessageRow[], names?: Map<string, string>, max?: number, images?: Map<string, ChatImage[]>): ChatMessage[] {
   const out: ChatMessage[] = [];
   for (const row of rows) {
+    const seen = images?.get(row.id);
     if (row.role === "user" && names) {
-      const line = `${(row.user_id && names.get(row.user_id)) || "Someone"}: ${row.content}`;
+      const line = `${(row.user_id && names.get(row.user_id)) || "Someone"}: ${userText(row)}`;
       const last = out[out.length - 1];
-      if (last?.role === "user") last.content = `${last.content}\n${line}`;
-      else out.push({ role: "user", content: line });
-    } else if (row.role === "user") out.push({ role: "user", content: row.content });
+      if (last?.role === "user") {
+        last.content = `${last.content}\n${line}`;
+        if (seen?.length) last.images = [...(last.images ?? []), ...seen];
+      } else out.push({ role: "user", content: line, ...(seen?.length ? { images: seen } : {}) });
+    } else if (row.role === "user") out.push({ role: "user", content: userText(row), ...(seen?.length ? { images: seen } : {}) });
     else if (row.role === "assistant") {
       const calls = Array.isArray(row.tool_calls) ? (row.tool_calls as { id: string; name: string; args: Record<string, unknown> }[]) : undefined;
       out.push({ role: "assistant", content: row.content, ...(calls?.length ? { toolCalls: calls } : {}) });
@@ -486,7 +528,9 @@ export async function conversationMessages(ctx: AssistantContext, conversationId
     ctx.admin.from("assistant_messages").select("*").eq("conversation_id", conversationId).eq("group_id", ctx.groupId).order("created_at", { ascending: true }).limit(500),
     memberNames(ctx.admin, ctx.groupId),
   ]);
-  return ((data ?? []) as MessageRow[]).flatMap((r) => toMessage(r, names, ctx.userId) ?? []);
+  const rows = (data ?? []) as MessageRow[];
+  const urls = await rowPhotoUrls(ctx.admin, rows);
+  return rows.flatMap((r) => toMessage(r, names, ctx.userId, urls) ?? []);
 }
 
 // ── A turn ────────────────────────────────────────────────────────────────
@@ -506,6 +550,8 @@ export interface ChatInput {
   onStream?: (event: TurnStreamEvent) => void;
   /** Asked from cook mode (Recipes v2 R7): the recipe and step on screen. */
   cook?: CookAskContext | null;
+  /** Photos sent with the message: storage paths the caller checked belong to this person (isAssistantPhotoPathFor). */
+  photos?: string[];
 }
 
 export type ChatOutcome =
@@ -563,6 +609,15 @@ export interface ChatDeps {
  * platform cuts the request off with a bare 504.
  */
 export const TURN_ANSWER_BY_MS = 35_000;
+
+const PHOTO_MISSING = "A photo didn't finish uploading. Attach it again.";
+
+/** Added to the system prompt when photos are in play. */
+export const PHOTO_PROMPT =
+  "\n\nPhotos: the person can send photos, such as receipts, bills, letters, bin calendars, recipe pages, products and documents. " +
+  "Read them carefully and use your tools to put what they show where it belongs (a receipt becomes a cost, a recipe page a saved recipe, a product a Shopper watch, collection days the bin schedule). " +
+  "If it isn't clear what they want done with a photo, say what you see and ask. " +
+  "Chat photos are deleted after a while; when a photo is worth keeping (a receipt, warranty, letter or document), offer to file it in Documents with file_photo.";
 export const TURN_GIVE_UP_MS = 52_000;
 
 function logTurnTiming(t: Record<string, unknown>) {
@@ -571,8 +626,12 @@ function logTurnTiming(t: Record<string, unknown>) {
 
 export async function runChat(ctx: AssistantContext, input: ChatInput, deps: ChatDeps = {}): Promise<ChatOutcome> {
   const text = input.text.trim();
-  if (!text) return { ok: false, status: 400, error: "Say something first." };
+  const photos = input.photos ?? [];
+  if (!text && !photos.length) return { ok: false, status: 400, error: "Say something first." };
   const started = Date.now();
+  // Photos are fetched and shrunk while everything else is read.
+  const preparing = photos.length ? preparePhotos(ctx.admin, photos) : Promise.resolve(null);
+  preparing.catch(() => {});
   // Everything a turn needs before the model runs is read in two parallel
   // rounds, not one query after another: each read is a database round trip.
   const loadingSettings = loadSettings(ctx.admin, ctx.groupId);
@@ -590,12 +649,29 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
   const roomKind = input.conversationId ? found?.kind : input.kind;
   if (roomKind === "household" && !wantsAssistantReply("household", input.channel ?? "app", text)) {
     if (input.conversationId && !found) return { ok: false, status: 404, error: "Not found" };
-    return postToHousehold(ctx, found ?? (await householdThread(ctx)), text, input.channel ?? "app", deps.now ?? new Date());
+    if (photos.length && !(await preparing)) return { ok: false, status: 400, error: PHOTO_MISSING };
+    return postToHousehold(ctx, found ?? (await householdThread(ctx)), text, input.channel ?? "app", deps.now ?? new Date(), photos);
   }
   if (!brain) return { ok: false, status: 503, error: "No AI model is set up on this server yet.", code: "assistant_not_configured" };
   const budget = budgetFor(usage, ctx.userId, settings, limits.budgetCents, ctx.access, brain.keySource);
   if (budget.action === "stop") {
     return { ok: false, status: 402, error: "This month's assistant budget is used up.", code: "assistant_budget_reached" };
+  }
+
+  // Which model answers, decided before anything is written: a turn with
+  // photos needs one that can look at them.
+  const turnKind: ConversationKind = found?.kind ?? (input.kind === "household" ? "household" : input.kind === "chat" ? "chat" : "quick");
+  const useCheap = budget.action === "cheap" || turnKind === "quick";
+  // The quick model may live on another provider or key (brain.quickBrain).
+  let active = useCheap && brain.quickBrain ? brain.quickBrain : brain;
+  let other = useCheap ? brain : brain.quickBrain ?? brain;
+  let chosenModel = useCheap ? active.quickModel : brain.chatModel;
+  let otherModel = useCheap ? brain.chatModel : other.quickModel;
+  if (photos.length && !brainTakesPhotos(active, chosenModel)) {
+    if (!brainTakesPhotos(other, otherModel)) {
+      return { ok: false, status: 400, error: "The household's AI model can't look at photos. Send it as words, or pick a model that reads photos in Settings > Assistant.", code: "assistant_photos_unsupported" };
+    }
+    [active, other, chosenModel, otherModel] = [other, active, otherModel, chosenModel];
   }
   const readMs = Date.now() - started;
 
@@ -620,7 +696,7 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
   } else if (input.kind === "household") {
     conversation = await householdThread(ctx);
   } else {
-    conversation = await startConversation(ctx, input.kind === "chat" ? "chat" : "quick", text, settings.quickAskIdleMinutes);
+    conversation = await startConversation(ctx, input.kind === "chat" ? "chat" : "quick", text || "Photo", settings.quickAskIdleMinutes);
   }
 
   const [{ data: recent }, { data: memoryRows }, names, timeZone, cooking] = await Promise.all([
@@ -638,7 +714,24 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
     markConversationRead(ctx, conversation.id, { at: now }),
   ]);
   const household = conversation.kind === "household";
-  const history = toHistory(((recent ?? []) as MessageRow[]).reverse(), household ? names : undefined, settings.contextMessages * 3);
+  const rows = ((recent ?? []) as MessageRow[]).reverse();
+  // Photos from one of the last two messages people sent go to the model
+  // again, so a follow-up about them ("also add the tip") still works;
+  // older ones are only a note, to keep each turn's cost down.
+  const lookAgain = brainTakesPhotos(active, chosenModel)
+    ? rows.filter((r) => r.role === "user").slice(-2).reverse().find((r) => r.photos?.length)
+    : undefined;
+  const [seenAgain, images] = await Promise.all([
+    lookAgain ? loadKeptPhotos(ctx.admin, lookAgain.photos!) : Promise.resolve([]),
+    preparing,
+  ]);
+  if (photos.length && !images) return { ok: false, status: 400, error: PHOTO_MISSING };
+  const history = toHistory(
+    rows,
+    household ? names : undefined,
+    settings.contextMessages * 3,
+    lookAgain && seenAgain.length ? new Map([[lookAgain.id, seenAgain]]) : undefined
+  );
 
   const contextMs = Date.now() - started - readMs;
   const { tools, homeAssistant, ms: toolsMs } = await gathering;
@@ -668,20 +761,17 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
     channel: input.channel ?? "app",
     summary: conversation.summary,
     cooking,
-  });
+  }) + (photos.length || lookAgain ? PHOTO_PROMPT : "");
 
-  const useCheap = budget.action === "cheap" || conversation.kind === "quick";
-  // The quick model may live on another provider or key (brain.quickBrain).
-  const active = useCheap && brain.quickBrain ? brain.quickBrain : brain;
-  const other = useCheap ? brain : brain.quickBrain ?? brain;
-  const chosenModel = useCheap ? active.quickModel : brain.chatModel;
-  const otherModel = useCheap ? brain.chatModel : other.quickModel;
   const channel = input.channel ?? "app";
   // A busy model (the provider's 503 after its own retries) hands the turn to
   // the household's other model, or to another provider the server has a key for.
   const llm = withFallbackModel(
     deps.llm ?? llmClient(active.connection),
-    other === active
+    // A turn with photos only falls back to a model that can see them.
+    photos.length && !brainTakesPhotos(other, otherModel)
+      ? null
+      : other === active
       ? otherModel !== chosenModel
         ? otherModel
         : async () => {
@@ -694,7 +784,7 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
   // The person's message is saved while the model works on it.
   const savingUser = ctx.admin
     .from("assistant_messages")
-    .insert({ conversation_id: conversation.id, group_id: ctx.groupId, user_id: ctx.userId, role: "user", content: text, channel })
+    .insert({ conversation_id: conversation.id, group_id: ctx.groupId, user_id: ctx.userId, role: "user", content: text, channel, ...(photos.length ? { photos } : {}) })
     .select("*")
     .single()
     // A query builder only runs once something awaits it; start it now.
@@ -703,13 +793,15 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
   let turn;
   try {
     // In the household thread the model sees who is asking, like the messages before.
-    const userText = household ? `${names.get(ctx.userId) ?? "Someone"}: ${text}` : text;
+    const said = withPhotoNote(text, photos);
+    const userText = household ? `${names.get(ctx.userId) ?? "Someone"}: ${said}` : said;
     turn = await runAssistantTurn({
       llm,
       model: chosenModel,
       system,
       history,
       userText,
+      ...(images?.length ? { userImages: images } : {}),
       tools,
       deadline: { answerBy: started + TURN_ANSWER_BY_MS, giveUpAt: started + TURN_GIVE_UP_MS },
       onEvent: (e) => console.info(`[assistant] step ${JSON.stringify({ conversation: conversation.id, ...e })}`),
@@ -826,7 +918,8 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
     ctx.access,
     active.keySource
   );
-  const messages = [userRow as MessageRow, replyRow as MessageRow].flatMap((r) => (r ? toMessage(r, names, ctx.userId) ?? [] : []));
+  const urls = photos.length ? await photoUrls(ctx.admin, photos) : undefined;
+  const messages = [userRow as MessageRow, replyRow as MessageRow].flatMap((r) => (r ? toMessage(r, names, ctx.userId, urls) ?? [] : []));
   return {
     ok: true,
     conversation: toConversation({ ...conversation, ...touched }, pending.get(conversation.id) ?? 0),
@@ -834,7 +927,8 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
     posted: household && channel === "app" ? messages[0] : undefined,
     budget: after.status,
     afterReply: () =>
-      foldOlderMessages(ctx, conversation, {
+      Promise.all([
+        foldOlderMessages(ctx, conversation, {
         llm: deps.llm ?? llmClient((brain.quickBrain ?? brain).connection),
         model: (brain.quickBrain ?? brain).quickModel,
         window: settings.contextMessages * 3,
@@ -842,6 +936,11 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
         feature: channel === "telegram" ? "telegram" : conversation.kind,
         names,
       }).catch((e) => console.error("[assistant] summary fold failed", e)),
+        // Photos past the household's keep time go, a day at a time.
+        sweepOldPhotos(ctx.admin, ctx.groupId, assistantPhotoKeepDays(ctx.tier ?? "free")).catch((e) =>
+          console.error("[assistant] photo sweep failed", e)
+        ),
+      ]).then(() => undefined),
   };
 }
 
@@ -851,12 +950,13 @@ async function postToHousehold(
   conversation: ConversationRow,
   text: string,
   channel: MessageChannel,
-  now: Date
+  now: Date,
+  photos: readonly string[] = []
 ): Promise<ChatOutcome> {
   const [{ data: row, error }, names] = await Promise.all([
     ctx.admin
       .from("assistant_messages")
-      .insert({ conversation_id: conversation.id, group_id: ctx.groupId, user_id: ctx.userId, role: "user", content: text, channel })
+      .insert({ conversation_id: conversation.id, group_id: ctx.groupId, user_id: ctx.userId, role: "user", content: text, channel, ...(photos.length ? { photos } : {}) })
       .select("*")
       .single(),
     memberNames(ctx.admin, ctx.groupId),
@@ -872,7 +972,7 @@ async function postToHousehold(
     // Their own message is never news to them.
     markConversationRead(ctx, conversation.id, { at: new Date(touched.last_active_at) }),
   ]);
-  const message = toMessage(row as MessageRow, names, ctx.userId)!;
+  const message = toMessage(row as MessageRow, names, ctx.userId, photos.length ? await photoUrls(ctx.admin, photos) : undefined)!;
   return {
     ok: true,
     conversation: toConversation({ ...conversation, ...touched }, pending.get(conversation.id) ?? 0),

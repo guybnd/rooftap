@@ -4,7 +4,10 @@
 // its rows follow the three-slot line item (H6).
 // Web twin: apps/web/src/app/assistant/assistant-parts.tsx.
 import * as React from 'react';
-import { Linking, Pressable, TextInput, View } from 'react-native';
+import { ActivityIndicator, Image, Linking, Pressable, TextInput, View } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system/legacy';
+import { decode } from 'base64-arraybuffer';
 import Animated, {
   Easing,
   cancelAnimation,
@@ -15,15 +18,31 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useRouter, type Href } from 'expo-router';
-import { ArrowUp, Check, X } from 'lucide-react-native';
-import { Text, LeadingTile, cn, useStillMotion } from '@homeup/ui';
+import { ArrowUp, Camera, Check, ImageOff, ImagePlus, Images, X } from 'lucide-react-native';
+import {
+  BottomSheet,
+  ListGroup,
+  ListItem,
+  ListItemContent,
+  ListItemTitle,
+  Text,
+  LeadingTile,
+  cn,
+  toast,
+  useStillMotion,
+} from '@homeup/ui';
 import {
   GHOST_REPLY_GROW_MS,
   GHOST_REPLY_LINES,
   GHOST_REPLY_STAGGER_MS,
   formatMicros,
   parseReply,
+  MAX_ASSISTANT_PHOTOS,
+  useComposerPhotos,
   useProposalPicks,
+  type AssistantPhoto,
+  type OutgoingPhoto,
+  type PickedPhoto,
   timeAgo,
   type AssistantDraft,
   type AssistantMessage,
@@ -32,6 +51,8 @@ import {
   type ReplySpan,
 } from '@homeup/core';
 import { sectionIconFor } from '@/lib/section-icons';
+import { getBoundSupabaseClient } from '@/lib/supabase-client';
+import { assistantApi } from './assistant-api';
 
 function Spans({ spans }: { spans: ReplySpan[] }) {
   const router = useRouter();
@@ -229,7 +250,8 @@ export function MessageBubble({
               : 'w-full px-1'
         )}
       >
-        <ReplyText text={message.content} />
+        {message.photos?.length ? <MessagePhotos photos={message.photos} spaced={!!message.content} /> : null}
+        {message.content ? <ReplyText text={message.content} /> : null}
         {!user && <ProposalCard message={message} busy={busy} onDecide={(d, picks) => onDecide(message.id, d, picks)} />}
       </View>
       <Text className="mt-1 px-1 text-[11px] text-muted-foreground" style={{ fontVariant: ['tabular-nums'] }}>
@@ -237,6 +259,32 @@ export function MessageBubble({
         {message.channel === 'telegram' ? ' · Telegram' : ''}
         {showCost && message.cost_micros != null ? ` · ${formatMicros(message.cost_micros)}` : ''}
       </Text>
+    </View>
+  );
+}
+
+/** Photos sent with a message: each opens full size; one past the keep time says so. */
+function MessagePhotos({ photos, spaced }: { photos: AssistantPhoto[]; spaced: boolean }) {
+  return (
+    <View className={cn('flex-row flex-wrap justify-end gap-1.5', spaced && 'mb-2')}>
+      {photos.map((p, i) =>
+        p.url ? (
+          <Pressable
+            key={i}
+            onPress={() => p.url?.startsWith('http') && void Linking.openURL(p.url)}
+            accessibilityRole="imagebutton"
+            accessibilityLabel={`Photo ${i + 1}`}
+            className="overflow-hidden rounded-xl"
+          >
+            <Image source={{ uri: p.url }} style={{ width: 144, height: 144 }} resizeMode="cover" />
+          </Pressable>
+        ) : (
+          <View key={i} className="h-20 w-28 items-center justify-center gap-1 rounded-xl bg-background/60">
+            <ImageOff size={16} className="text-muted-foreground" />
+            <Text className="text-[11px] text-muted-foreground">No longer kept</Text>
+          </View>
+        )
+      )}
     </View>
   );
 }
@@ -290,12 +338,62 @@ export function Thinking({ draft }: { draft?: AssistantDraft | null }) {
   );
 }
 
+/** Picks photos with the system picker; empty when cancelled. Throws a line to show when access is refused. */
+async function pickPhotos(source: 'camera' | 'library', room: number): Promise<PickedPhoto[]> {
+  const perm =
+    source === 'camera' ? await ImagePicker.requestCameraPermissionsAsync() : await ImagePicker.requestMediaLibraryPermissionsAsync();
+  if (!perm.granted) {
+    throw new Error(source === 'camera' ? 'Rooftap needs the camera to take a photo. Allow it in your phone settings.' : 'Rooftap needs your photos to attach one. Allow it in your phone settings.');
+  }
+  const result =
+    source === 'camera'
+      ? await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.8 })
+      : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8, allowsMultipleSelection: room > 1, selectionLimit: room });
+  if (result.canceled) return [];
+  return (result.assets ?? []).map((asset) => ({
+    preview: asset.uri,
+    mimeType: asset.mimeType ?? 'image/jpeg',
+    size: asset.fileSize ?? null,
+    read: async () => decode(await FileSystem.readAsStringAsync(asset.uri, { encoding: FileSystem.EncodingType.Base64 })),
+  }));
+}
+
+/** Where a photo comes from: the camera or the photo library. */
+function PhotoSourceSheet({ open, onOpenChange, onPick }: { open: boolean; onOpenChange: (open: boolean) => void; onPick: (source: 'camera' | 'library') => void }) {
+  const choose = (source: 'camera' | 'library') => {
+    onOpenChange(false);
+    onPick(source);
+  };
+  return (
+    <BottomSheet open={open} onOpenChange={onOpenChange} className="pb-6">
+      <View className="gap-3 px-4">
+        <Text className="text-micro-label uppercase text-muted-foreground">Add a photo</Text>
+        <ListGroup>
+          <ListItem className="items-center gap-3" onPress={() => choose('camera')} accessibilityRole="button" accessibilityLabel="Take a photo">
+            <Camera size={20} className="text-muted-foreground" />
+            <ListItemContent>
+              <ListItemTitle>Take a photo</ListItemTitle>
+            </ListItemContent>
+          </ListItem>
+          <ListItem className="items-center gap-3" onPress={() => choose('library')} accessibilityRole="button" accessibilityLabel="Choose from your photos">
+            <Images size={20} className="text-muted-foreground" />
+            <ListItemContent>
+              <ListItemTitle>Choose from your photos</ListItemTitle>
+            </ListItemContent>
+          </ListItem>
+        </ListGroup>
+      </View>
+    </BottomSheet>
+  );
+}
+
 export function Composer({
   placeholder,
   disabled,
   busy,
   autoFocus,
   maxLength = 4000,
+  photos: allowPhotos = false,
   onSend,
 }: {
   placeholder: string;
@@ -303,40 +401,95 @@ export function Composer({
   busy?: boolean;
   autoFocus?: boolean;
   maxLength?: number;
-  onSend: (text: string) => Promise<boolean> | boolean;
+  /** Offer to attach photos, when the household's model can look at them. */
+  photos?: boolean;
+  onSend: (text: string, photos: OutgoingPhoto[]) => Promise<boolean> | boolean;
 }) {
   const [text, setText] = React.useState('');
-  const canSend = !disabled && !busy && !!text.trim();
+  const [choosing, setChoosing] = React.useState(false);
+  const tray = useComposerPhotos({
+    api: assistantApi,
+    supabase: allowPhotos ? getBoundSupabaseClient() ?? null : null,
+    onError: (m) => toast.error(m),
+  });
+  const canSend = !disabled && !busy && !tray.uploading && (!!text.trim() || tray.outgoing.length > 0);
 
   const submit = async () => {
     const value = text.trim();
-    if (!value || disabled || busy) return;
+    if (!canSend) return;
+    const outgoing = tray.outgoing;
+    const taken = tray.take();
     setText('');
-    if (!(await onSend(value))) setText(value);
+    if (!(await onSend(value, outgoing))) {
+      setText(value);
+      tray.restore(taken);
+    }
+  };
+
+  const pick = async (source: 'camera' | 'library') => {
+    try {
+      const picked = await pickPhotos(source, MAX_ASSISTANT_PHOTOS - tray.photos.length);
+      if (picked.length) tray.add(picked);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not open the photos.');
+    }
   };
 
   return (
-    <View className="flex-row items-end gap-2 rounded-3xl border border-border/60 bg-card p-1.5 pl-4">
-      <TextInput
-        value={text}
-        onChangeText={setText}
-        multiline
-        autoFocus={autoFocus}
-        editable={!disabled}
-        maxLength={maxLength}
-        placeholder={placeholder}
-        accessibilityLabel={placeholder}
-        className="max-h-40 min-h-10 flex-1 py-2 text-body text-foreground placeholder:text-muted-foreground"
-      />
-      <Pressable
-        onPress={() => void submit()}
-        disabled={!canSend}
-        accessibilityRole="button"
-        accessibilityLabel="Send"
-        className={cn('size-10 items-center justify-center rounded-full bg-primary', !canSend && 'opacity-40')}
-      >
-        <ArrowUp size={20} className="text-primary-foreground" />
-      </Pressable>
+    <View className={cn('rounded-3xl border border-border/60 bg-card p-1.5', !allowPhotos && 'pl-4')}>
+      {tray.photos.length > 0 && (
+        <View className="flex-row gap-2 px-2.5 pb-1.5 pt-1">
+          {tray.photos.map((p) => (
+            <View key={p.key}>
+              <Image source={{ uri: p.preview }} style={{ width: 64, height: 64, borderRadius: 12, opacity: !p.path || p.failed ? 0.5 : 1 }} />
+              {!p.path && !p.failed && <ActivityIndicator style={{ position: 'absolute', top: 22, left: 22 }} />}
+              <Pressable
+                onPress={() => tray.remove(p.key)}
+                accessibilityRole="button"
+                accessibilityLabel="Remove photo"
+                hitSlop={8}
+                className="absolute -right-1.5 -top-1.5 size-6 items-center justify-center rounded-full bg-foreground"
+              >
+                <X size={14} className="text-background" />
+              </Pressable>
+            </View>
+          ))}
+        </View>
+      )}
+      <View className="flex-row items-end gap-2">
+        {allowPhotos && (
+          <Pressable
+            onPress={() => setChoosing(true)}
+            disabled={disabled || tray.full}
+            accessibilityRole="button"
+            accessibilityLabel="Attach a photo"
+            className={cn('size-10 items-center justify-center rounded-full', (disabled || tray.full) && 'opacity-40')}
+          >
+            <ImagePlus size={20} className="text-muted-foreground" />
+          </Pressable>
+        )}
+        <TextInput
+          value={text}
+          onChangeText={setText}
+          multiline
+          autoFocus={autoFocus}
+          editable={!disabled}
+          maxLength={maxLength}
+          placeholder={placeholder}
+          accessibilityLabel={placeholder}
+          className="max-h-40 min-h-10 flex-1 py-2 text-body text-foreground placeholder:text-muted-foreground"
+        />
+        <Pressable
+          onPress={() => void submit()}
+          disabled={!canSend}
+          accessibilityRole="button"
+          accessibilityLabel="Send"
+          className={cn('size-10 items-center justify-center rounded-full bg-primary', !canSend && 'opacity-40')}
+        >
+          <ArrowUp size={20} className="text-primary-foreground" />
+        </Pressable>
+      </View>
+      {allowPhotos && <PhotoSourceSheet open={choosing} onOpenChange={setChoosing} onPick={(source) => void pick(source)} />}
     </View>
   );
 }
