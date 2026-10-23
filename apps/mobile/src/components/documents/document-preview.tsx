@@ -24,9 +24,11 @@ export async function openDocumentExternally(
   supabase: SupabaseClient,
   storagePath: string,
   bucket: string
-): Promise<void> {
+): Promise<boolean> {
   const url = await signedDocumentUrl(supabase, storagePath, SIGNED_URL_TTL_SECONDS, bucket);
-  if (url) await WebBrowser.openBrowserAsync(url);
+  if (!url) return false;
+  await WebBrowser.openBrowserAsync(url);
+  return true;
 }
 
 interface DocumentPreviewProps {

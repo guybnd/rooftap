@@ -163,6 +163,9 @@ export default function DocumentsSectionScreen() {
   const [captureOpen, setCaptureOpen] = React.useState(false);
   const [editingDoc, setEditingDoc] = React.useState<Document | null>(null);
   const [previewingDoc, setPreviewingDoc] = React.useState<UnifiedDocument | null>(null);
+  // The row a PDF is opening from: fetching its link takes a moment, so the
+  // row shows a spinner until the viewer is up.
+  const [openingKey, setOpeningKey] = React.useState<string | null>(null);
 
   const costNames = React.useMemo(() => Object.fromEntries(costItems.map((c) => [c.id, c.name])), [costItems]);
 
@@ -667,7 +670,16 @@ export default function DocumentsSectionScreen() {
 
   const preview = async (doc: UnifiedDocument) => {
     if (isPdfFilename(doc.filename)) {
-      await openDocumentExternally(getCurrentSupabaseClient(), doc.storagePath, doc.bucket);
+      if (openingKey) return;
+      setOpeningKey(doc.key);
+      try {
+        const opened = await openDocumentExternally(getCurrentSupabaseClient(), doc.storagePath, doc.bucket);
+        if (!opened) toast.error("Couldn't open that file");
+      } catch {
+        toast.error("Couldn't open that file");
+      } finally {
+        setOpeningKey(null);
+      }
     } else {
       setPreviewingDoc(doc);
     }
@@ -742,6 +754,7 @@ export default function DocumentsSectionScreen() {
             memberProfiles={memberProfiles}
             reminderTaskId={d.storeId ? (reminderByDoc[d.storeId] ?? null) : null}
             onPreview={preview}
+            opening={openingKey === d.key}
             onEdit={openEdit}
             onDelete={remove}
             onDeleteLegacy={removeLegacy}
@@ -761,7 +774,7 @@ export default function DocumentsSectionScreen() {
       );
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [flatData, linksByDoc, costNames, memberProfiles, reminderByDoc, folders, docs, reminderLinkOn, calendarOn, leavingKey, receivingFolderId, selecting, selectedKeys]
+    [flatData, linksByDoc, costNames, memberProfiles, reminderByDoc, folders, docs, reminderLinkOn, calendarOn, leavingKey, receivingFolderId, selecting, selectedKeys, openingKey]
   );
 
   // Stable memoized element (never an inline `() => <Header/>` closure) so the

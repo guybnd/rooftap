@@ -8,7 +8,7 @@
 // same menu; their first action adopts them into the store. The menu's Select
 // starts the screen's select mode, where a tap ticks the row instead.
 import * as React from 'react';
-import { Pressable, View } from 'react-native';
+import { ActivityIndicator, Pressable, View } from 'react-native';
 import {
   BookOpen,
   CalendarClock,
@@ -103,6 +103,9 @@ const EXPIRY_TONE_CLASS = { expired: 'text-destructive', soon: 'text-warning', l
 // driven straight off ListItem's own onPressIn/onPressOut — no Pan-gesture
 // conflict to route around (see HOUP-198's task-row.tsx header comment).
 const LONG_PRESS_MS = 500;
+// Only a quick tap opens the file. A press held past this, then let go
+// before the menu arms, was a hold that changed its mind: it does nothing.
+const TAP_MAX_MS = 300;
 
 interface DocumentRowProps {
   doc: UnifiedDocument;
@@ -129,6 +132,8 @@ interface DocumentRowProps {
   /** Select mode: a tap or a hold ticks the row instead of opening it. */
   selecting?: boolean;
   selected?: boolean;
+  /** The file is opening (its link is being fetched): the type tile shows a spinner. */
+  opening?: boolean;
   onToggleSelect?: (doc: UnifiedDocument) => void;
 }
 
@@ -152,6 +157,7 @@ export function DocumentRow({
   onSelect,
   selecting = false,
   selected = false,
+  opening = false,
   onToggleSelect,
 }: DocumentRowProps) {
   const [menuOpen, setMenuOpen] = React.useState(false);
@@ -171,6 +177,10 @@ export function DocumentRow({
     .filter(Boolean)
     .join(' · ');
   const holdFill = useHoldFill(LONG_PRESS_MS);
+  // Set when a hold opened the menu, so the lift that ends the same press
+  // never also opens the file.
+  const heldRef = React.useRef(false);
+  const pressedAtRef = React.useRef(0);
 
   // PC5: reminder + cost-link chips navigate away from Documents (to Tasks /
   // Costs / Groceries / Setup / Calendar), so they carry the "portal leaves
@@ -205,10 +215,15 @@ export function DocumentRow({
       className="items-start"
       // In select mode a tap or a hold ticks the row; the menu waits until
       // selecting ends.
-      onPress={() => (selecting ? onToggleSelect?.(doc) : onPreview(doc))}
+      onPress={() => {
+        if (heldRef.current) return;
+        if (selecting) onToggleSelect?.(doc);
+        else if (Date.now() - pressedAtRef.current <= TAP_MAX_MS) onPreview(doc);
+      }}
       // Legacy files get the same hold-to-edit menu: the screen adopts one into
       // the store the first time an action needs a store row.
       onLongPress={() => {
+        heldRef.current = true;
         if (selecting) {
           onToggleSelect?.(doc);
           return;
@@ -216,10 +231,14 @@ export function DocumentRow({
         haptics.commit();
         setMenuOpen(true);
       }}
-      onPressIn={selecting ? undefined : holdFill.start}
+      onPressIn={() => {
+        heldRef.current = false;
+        pressedAtRef.current = Date.now();
+        if (!selecting) holdFill.start();
+      }}
       onPressOut={selecting ? undefined : holdFill.stop}
       holdProgress={selecting ? undefined : holdFill.progress}
-      accessibilityState={selecting ? { selected } : undefined}
+      accessibilityState={selecting ? { selected } : opening ? { busy: true } : undefined}
     >
       <ListItemLeading>
         {/* Select mode swaps the type tile for its tick, same place and size
@@ -234,6 +253,8 @@ export function DocumentRow({
             >
               {selected && <Check size={12} className="text-primary-foreground" />}
             </View>
+          ) : opening ? (
+            <ActivityIndicator size="small" accessibilityLabel="Opening" />
           ) : (
             <TypeGlyph size={16} className="text-muted-foreground" />
           )}
