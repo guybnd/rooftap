@@ -407,6 +407,8 @@ export async function watchPick(admin: SupabaseClient, pick: ShopperPick, search
       notes: pick.why || null,
       status: "watching",
       search_id: search.id,
+      // A search kept from someone gives a watch kept from them too.
+      ...(search.hidden_from?.length ? { hidden_from: search.hidden_from } : {}),
       created_by: userId,
     })
     .select("*")
@@ -419,7 +421,8 @@ export async function watchPick(admin: SupabaseClient, pick: ShopperPick, search
 /**
  * Saves a new run as running and carries the research on after the response
  * (Next's after(); outside a request, such as the Telegram poller, it just
- * runs in the background). A refined run names its thread's first run.
+ * runs in the background). A refined run names its thread's first run and
+ * is kept from the same people (hiddenFrom).
  */
 export async function startScoutRun(
   admin: SupabaseClient,
@@ -427,7 +430,12 @@ export async function startScoutRun(
   userId: string,
   brief: ScoutBrief,
   brain: AssistantBrain,
-  { id, threadId = null, deps }: { id?: string; threadId?: string | null; deps?: ScoutDeps } = {},
+  {
+    id,
+    threadId = null,
+    hiddenFrom = [],
+    deps,
+  }: { id?: string; threadId?: string | null; hiddenFrom?: readonly string[]; deps?: ScoutDeps } = {},
 ): Promise<ShopperSearch | null> {
   const { data, error } = await admin
     .from("shopper_searches")
@@ -439,6 +447,7 @@ export async function startScoutRun(
       key_source: brain.keySource,
       created_by: userId,
       ...(threadId ? { thread_id: threadId } : {}),
+      ...(hiddenFrom.length ? { hidden_from: [...hiddenFrom] } : {}),
     })
     .select("*")
     .single();

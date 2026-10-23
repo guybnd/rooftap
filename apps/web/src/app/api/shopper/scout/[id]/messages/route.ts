@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { aiBlockedMessage, parseScoutFollowUp, PLUS_SCOUT_RUNS_PER_MONTH, scoutAsksUsed, scoutBriefChanges, scoutLatestRun, scoutRefineLine, SCOUT_THREAD_MAX_ASKS, type ScoutMessage } from "@homeup/core";
+import { aiBlockedMessage, isKeptFrom, parseScoutFollowUp, PLUS_SCOUT_RUNS_PER_MONTH, scoutAsksUsed, scoutBriefChanges, scoutLatestRun, scoutRefineLine, SCOUT_THREAD_MAX_ASKS, type ScoutMessage } from "@homeup/core";
 import { AiBlockedError, aiBlockedResponse } from "@/lib/ai/access";
 import { llmClient } from "@/lib/assistant/llm";
 import { shopperRequest } from "@/lib/shopper/route-helpers";
@@ -23,7 +23,7 @@ export async function POST(request: Request, { params }: Params) {
   if ("error" in req) return req.error;
 
   const thread = await readThread(req.admin, id);
-  if (!thread || threadRoot(thread).group_id !== req.group.id) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!thread || threadRoot(thread).group_id !== req.group.id || isKeptFrom(threadRoot(thread), req.userId)) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const root = threadRoot(thread);
   if (scoutAsksUsed(thread.messages) >= SCOUT_THREAD_MAX_ASKS) {
     return NextResponse.json({ error: "This search has had a lot of questions. Start a new Scout search to keep going." }, { status: 429 });
@@ -74,7 +74,7 @@ export async function POST(request: Request, { params }: Params) {
     return NextResponse.json({ messages: [asked, answer].filter(Boolean) });
   }
   const previous = (scoutLatestRun(thread) ?? root).brief;
-  const run = await startScoutRun(req.admin, req.group, req.userId, outcome.brief, forRun.brain, { threadId: root.id });
+  const run = await startScoutRun(req.admin, req.group, req.userId, outcome.brief, forRun.brain, { threadId: root.id, hiddenFrom: root.hidden_from ?? [] });
   if (!run) {
     const answer = await save({ role: "scout", text: "I couldn't start the new search. Try again." });
     return NextResponse.json({ messages: [asked, answer].filter(Boolean) });

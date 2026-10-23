@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isKeptFrom } from "@homeup/core";
 import { shopperRequest } from "@/lib/shopper/route-helpers";
 import { readRun } from "@/lib/shopper/scout";
 import { readThread } from "@/lib/shopper/scout-thread";
@@ -19,7 +20,8 @@ export async function GET(_request: Request, { params }: Params) {
   const req = await shopperRequest();
   if ("error" in req) return req.error;
   const [run, thread] = await Promise.all([readRun(req.admin, id), readThread(req.admin, id).catch(() => null)]);
-  if (!run.search || run.search.group_id !== req.group.id) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  // A search kept from this person (a present for them) doesn't exist for them.
+  if (!run.search || run.search.group_id !== req.group.id || isKeptFrom(run.search, req.userId)) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json({ ...run, thread });
 }
 
@@ -33,8 +35,8 @@ export async function PATCH(request: Request, { params }: Params) {
   const req = await shopperRequest();
   if ("error" in req) return req.error;
   // Deleted rows still count here, so a delete can be taken back.
-  const { data: run } = await req.admin.from("shopper_searches").select("id, group_id, thread_id").eq("id", id).maybeSingle();
-  if (!run || run.group_id !== req.group.id) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const { data: run } = await req.admin.from("shopper_searches").select("id, group_id, thread_id, hidden_from").eq("id", id).maybeSingle();
+  if (!run || run.group_id !== req.group.id || isKeptFrom(run, req.userId)) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const rootId = (run.thread_id as string | null) ?? (run.id as string);
   const { error } = await req.admin
     .from("shopper_searches")

@@ -30,6 +30,7 @@ import {
   householdCurrency,
   instantiateTemplate,
   instructionsFromSteps,
+  cleanKeepFrom,
   isKeptFrom,
   isSouthernHemisphere,
   liveCareJobs,
@@ -568,7 +569,7 @@ export function moduleTools({ admin, userId, groupId, enabled, shared = false }:
     "watch_item",
     {
       description:
-        "Shopper: add something to the watchlist so Rooftap checks its price every day and says when it reaches the target. Use it for \"tell me when X drops under $Y\". Amounts in cents. status idea keeps it on the list without price checks. Use start_scout instead when they want someone to research what to buy.",
+        "Shopper: add something to the watchlist so Rooftap checks its price every day and says when it reaches the target. Use it for \"tell me when X drops under $Y\". Amounts in cents. status idea keeps it on the list without price checks. keep_from_user_ids keeps it (and its prices) from those members, for a present; not in the household's shared chat. Use start_scout instead when they want someone to research what to buy.",
       inputSchema: {
         title: z.string().min(1).max(200),
         query: z.string().max(200).optional().describe("What to search the stores for, when it differs from the title."),
@@ -577,9 +578,14 @@ export function moduleTools({ admin, userId, groupId, enabled, shared = false }:
         need_by: ISO_DATE.optional(),
         notes: z.string().max(1000).optional(),
         status: z.enum(["watching", "idea"]).optional(),
+        keep_from_user_ids: z.array(z.string()).max(20).optional(),
       },
     },
-    async ({ title, query, target_cents, budget_cents, need_by, notes, status }, gid) => {
+    async ({ title, query, target_cents, budget_cents, need_by, notes, status, keep_from_user_ids }, gid) => {
+      if (shared && keep_from_user_ids?.length) return fail("Surprises can't be planned in the household chat, where everyone reads it. Ask in a private chat.");
+      const { data: members } = await admin.from("group_members").select("user_id").eq("group_id", gid);
+      const keepFrom = cleanKeepFrom(keep_from_user_ids, ((members ?? []) as { user_id: string }[]).map((m) => m.user_id), userId);
+      if (!keepFrom) return fail("Someone in keep_from_user_ids is not in this household");
       const wants = await liveRows<ShopperWant>(admin, "shopper_wants", gid);
       const dupe = wants.find((w) => !keptHere(w) && w.status !== "bought" && norm(w.title) === norm(title));
       if (dupe) return fail(`${dupe.title} is already on the watchlist (id ${dupe.id}); use update_watch_item.`);
@@ -593,6 +599,7 @@ export function moduleTools({ admin, userId, groupId, enabled, shared = false }:
         status: status ?? "watching",
         need_by: need_by ?? null,
         notes: notes?.trim() || null,
+        ...(keepFrom.length ? { hidden_from: keepFrom } : {}),
         created_by: userId,
         deleted: false,
       };

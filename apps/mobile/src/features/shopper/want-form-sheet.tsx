@@ -15,16 +15,20 @@ import {
   Input,
   SegmentedControl,
   DateScrollField,
+  Text,
 } from '@homeup/ui';
 import {
   SHOPPER_WANT_STATUSES,
   buildShopperWant,
+  keptFromLabel,
   currencySymbol,
   parsePriceInput,
   type ShopperWant,
   type ShopperWantStatus,
 } from '@homeup/core';
 import { randomUUID } from '@/lib/uuid';
+import { useDataCache } from '@/lib/data-cache';
+import { KeepFromField } from './keep-from-field';
 
 const SHOPPER_SECTION = { id: 'shopper', Icon: ShoppingBag };
 
@@ -63,6 +67,11 @@ export function WantFormSheet({
   const [needBy, setNeedBy] = React.useState(want?.need_by ?? '');
   const [notes, setNotes] = React.useState(want?.notes ?? '');
   const [status, setStatus] = React.useState<ShopperWantStatus>(want?.status ?? 'watching');
+  const [hiddenFrom, setHiddenFrom] = React.useState<string[]>([]);
+  const { memberProfiles } = useDataCache();
+  // Who an existing watch is kept from is set when it's made: hiding it later
+  // would leave a copy on their device.
+  const kept = want ? keptFromLabel(want.hidden_from, memberProfiles) : null;
   const symbol = currencySymbol(currency);
 
   const submit = () => {
@@ -97,6 +106,7 @@ export function WantFormSheet({
           needBy: fields.need_by,
           notes: fields.notes,
           status: status === 'bought' ? 'watching' : status,
+          hiddenFrom,
           createdBy: null,
         }),
         true,
@@ -154,7 +164,9 @@ export function WantFormSheet({
         <FieldRow label="Notes">
           <Input value={notes} onChangeText={setNotes} placeholder="Optional" multiline numberOfLines={2} />
         </FieldRow>
+        {!!kept && <Text className="text-xs text-muted-foreground">{kept}</Text>}
       </FormSection>
+      {!want && <KeepFromField value={hiddenFrom} onChange={setHiddenFrom} />}
     </ItemFormSheet>
   );
 }

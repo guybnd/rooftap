@@ -21,6 +21,7 @@ import {
   type ScoutWhere,
 } from '@homeup/core';
 import { randomUUID } from '@/lib/uuid';
+import { KeepFromField } from './keep-from-field';
 import { ShopperApiError, startScout } from './shopper-api';
 
 const SCOUT_SECTION = { id: 'shopper', Icon: Sparkles };
@@ -45,6 +46,7 @@ export function ScoutBriefSheet({
   const [upTo, setUpTo] = React.useState(prefill?.upTo ?? '');
   const [needBy, setNeedBy] = React.useState<NeedBy>('none');
   const [where, setWhere] = React.useState<ScoutWhere[]>(['nearby', 'online']);
+  const [hiddenFrom, setHiddenFrom] = React.useState<string[]>([]);
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<{ message: string; needsKey: boolean } | null>(null);
   const symbol = currencySymbol(currency);
@@ -64,7 +66,7 @@ export function ScoutBriefSheet({
         budget_max_cents: parsePriceInput(upTo),
         need_by: days == null ? null : addDaysISO(todayISO(), days),
         where,
-      });
+      }, hiddenFrom);
       onOpenChange(false);
       router.push(`/shopper/scout/${id}` as Href);
     } catch (err) {
@@ -153,6 +155,7 @@ export function ScoutBriefSheet({
           <Text className="text-xs text-muted-foreground">Uses your household&apos;s AI key or Plus. Takes about a minute.</Text>
         )}
       </FormSection>
+      <KeepFromField value={hiddenFrom} onChange={setHiddenFrom} />
     </ItemFormSheet>
   );
 }

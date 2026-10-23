@@ -5,6 +5,7 @@ import {
   giftIdeaCardView,
   giftIdeaRowMenu,
   ideaForLabel,
+  previewRows,
   ideaRowMeta,
   nextOccasion,
   occasionFocusView,
@@ -120,5 +121,13 @@ describe('gift idea card', () => {
     const back = giftIdeaRowMenu(tickets, { onStatus }).actions.find((a) => a && a.id === 'unbuy');
     (back as { run: () => void }).run();
     expect(onStatus).toHaveBeenLastCalledWith('idea');
+  });
+});
+
+describe('previewRows', () => {
+  it('folds a long list and never hides a single row behind Show all', () => {
+    expect(previewRows([1, 2, 3, 4, 5, 6], 4, false)).toEqual({ shown: [1, 2, 3, 4], more: 2 });
+    expect(previewRows([1, 2, 3, 4, 5], 4, false)).toEqual({ shown: [1, 2, 3, 4, 5], more: 0 });
+    expect(previewRows([1, 2, 3, 4, 5, 6], 4, true).more).toBe(0);
   });
 });

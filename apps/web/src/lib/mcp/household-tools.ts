@@ -99,6 +99,7 @@ import {
   recipeNoteFor,
   stepsFromInstructions,
   uncheckItemPatch,
+  cleanKeepFrom,
   isKeptFrom,
   buildGiftIdea,
   buildOccasion,
@@ -2503,7 +2504,7 @@ export function householdTools({
     "start_scout",
     {
       description:
-        "Shopper: start a Scout search, an AI researcher that checks the household's price sources and comes back with up to three picks in about a minute. Use it when someone asks you to find, research or shop for something to buy. Budget in whole currency units. Tell them it's researching and link the run (link field) so they can open it; they get a notification when it's done. Read the picks later with get_scout_run.",
+        "Shopper: start a Scout search, an AI researcher that checks the household's price sources and comes back with up to three picks in about a minute. Use it when someone asks you to find, research or shop for something to buy. Budget in whole currency units. Tell them it's researching and link the run (link field) so they can open it; they get a notification when it's done. Read the picks later with get_scout_run. keep_from_user_ids keeps the search, its picks and any watch made from it from those members, for a present; not in the household's shared chat.",
       inputSchema: {
         text: z
           .string()
@@ -2517,10 +2518,16 @@ export function householdTools({
           .regex(/^\d{4}-\d{2}-\d{2}$/)
           .optional(),
         where: z.array(z.enum(["nearby", "online", "secondhand"])).optional(),
+        keep_from_user_ids: z.array(z.string()).max(20).optional(),
       },
     },
-    async ({ text, budget_max, budget_min, need_by, where }) => {
+    async ({ text, budget_max, budget_min, need_by, where, keep_from_user_ids }) => {
       if (!groupId) return toolError("No household.");
+      if (shared && keep_from_user_ids?.length) {
+        return toolError("Surprises can't be planned in the household chat, where everyone reads it. Ask in a private chat.");
+      }
+      const keepFrom = cleanKeepFrom(keep_from_user_ids, (await occasionsContext(groupId)).memberIds, userId);
+      if (!keepFrom) return toolError("Someone in keep_from_user_ids is not in this household");
       const parsed = parseScoutBrief({
         text,
         budget_max_cents: budget_max ? Math.round(budget_max * 100) : null,
@@ -2548,6 +2555,7 @@ export function householdTools({
         userId,
         parsed.brief,
         decided.brain,
+        { hiddenFrom: keepFrom },
       );
       if (!run) return toolError("Could not start Scout.");
       return {
@@ -2579,19 +2587,21 @@ export function householdTools({
       if (!runId) {
         const { data } = await admin
           .from("shopper_searches")
-          .select("id")
+          .select("id, hidden_from")
           .eq("group_id", groupId)
           .eq("deleted", false)
           .order("created_at", { ascending: false })
-          .limit(1);
-        runId = (data?.[0] as { id: string } | undefined)?.id ?? null;
+          .limit(20);
+        // The service role skips RLS: skip searches kept from this person
+        // (or, in the shared chat, from anyone).
+        runId = ((data ?? []) as { id: string; hidden_from?: string[] }[]).find((r) => !keptHere(r))?.id ?? null;
       }
       if (!runId) return toolError("No Scout searches yet.");
       const thread = await readThread(admin, runId);
       const latest = thread ? scoutLatestRun(thread) : null;
-      if (!thread || !latest || latest.group_id !== groupId)
+      const root = thread?.runs.find((r) => !r.thread_id) ?? latest;
+      if (!thread || !latest || !root || latest.group_id !== groupId || keptHere(root))
         return toolError("Scout search not found.");
-      const root = thread.runs.find((r) => !r.thread_id) ?? latest;
       const picks = thread.picks
         .filter((p) => p.search_id === latest.id)
         .map((p) =>

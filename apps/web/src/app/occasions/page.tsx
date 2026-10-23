@@ -7,8 +7,9 @@
 // database drops it), so on their own day a member sees only their wishlist.
 // Native twin: apps/mobile/src/app/(tabs)/occasions/index.tsx.
 import { useCallback, useState } from 'react';
-import { Gift, Plus } from 'lucide-react';
+import { ChevronDown, Gift, Plus } from 'lucide-react';
 import {
+  OCCASIONS_PREVIEW,
   confirmRemoveIdea,
   formatMoney,
   giftIdeaRowMenu,
@@ -20,6 +21,7 @@ import {
   occasionWhenLabel,
   setIdeaStatus,
   takenBy,
+  useListPreviews,
   useModules,
   useOccasions,
   useOccasionsScreen,
@@ -47,6 +49,7 @@ import { WishFormSheet } from './wish-form-sheet';
 const MICRO = 'px-1 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground';
 
 type MemberProfiles = Record<string, { email: string; name: string | null; avatar: string | null }>;
+type Previews = ReturnType<typeof useListPreviews>;
 
 export default function OccasionsPage() {
   const { group, groupMembers, memberProfiles, currentUserId, isOnline, loading: cacheLoading } = useDataCache();
@@ -61,6 +64,7 @@ export default function OccasionsPage() {
   const [editingWish, setEditingWish] = useState<{ id: string | null } | null>(null);
   const [openIdea, setOpenIdea] = useState<string | null>(null);
   const closeIdea = useCallback(() => setOpenIdea(null), []);
+  const previews = useListPreviews();
 
   if (cacheLoading || (!api.loaded && api.occasions.length === 0)) return <div className="p-6 text-muted-foreground">Loading…</div>;
   if (!group || !currentUserId) return <div className="p-6 text-muted-foreground">No group selected</div>;
@@ -68,6 +72,8 @@ export default function OccasionsPage() {
   const editingOccasionRow = editingOccasion?.id ? api.occasionById.get(editingOccasion.id) : undefined;
   const editingIdeaRow = editingIdea?.id ? api.ideas.find((i) => i.id === editingIdea.id) : undefined;
   const editingWishRow = editingWish?.id ? api.wishlist.find((w) => w.id === editingWish.id) : undefined;
+  const occasionRows = previews.rows('occasions', api.occasions, OCCASIONS_PREVIEW.occasions);
+  const mineRows = previews.rows('mine', mine, OCCASIONS_PREVIEW.wishes);
   const ideaOccasion = editingIdea ? (editingIdea.occasionId ? api.occasionById.get(editingIdea.occasionId) ?? null : null) : null;
 
   return (
@@ -112,6 +118,7 @@ export default function OccasionsPage() {
                 onAddIdea={() => setEditingIdea({ id: null, occasionId: focus.id })}
                 onOpenIdea={(idea) => setOpenIdea(idea.id)}
                 onEditIdea={(idea) => setEditingIdea({ id: idea.id, occasionId: idea.occasion_id })}
+                previews={previews}
               />
             )}
 
@@ -119,7 +126,7 @@ export default function OccasionsPage() {
               <div className="space-y-1.5">
                 <p className={MICRO}>Occasions</p>
                 <ListGroup>
-                  {api.occasions.map((o) => (
+                  {occasionRows.shown.map((o) => (
                     <ListItem key={o.id} asChild className={cn('cursor-pointer hover:bg-muted/50', focus?.id === o.id && 'bg-muted/40')}>
                       <button type="button" onClick={() => setFocusId(o.id)} className="text-left" aria-current={focus?.id === o.id ? 'true' : undefined}>
                         <LeadingTile sectionId="occasions" Icon={Gift} size="md" />
@@ -135,6 +142,7 @@ export default function OccasionsPage() {
                       </button>
                     </ListItem>
                   ))}
+                  <ShowAllRow rows={occasionRows} onToggle={() => previews.toggle('occasions')} />
                 </ListGroup>
               </div>
             )}
@@ -147,7 +155,7 @@ export default function OccasionsPage() {
                 <span className="px-1 text-[11px] text-muted-foreground">Everyone can see this</span>
               </div>
               <ListGroup>
-                {mine.map((w) => (
+                {mineRows.shown.map((w) => (
                   <ListItem key={w.id} asChild className="cursor-pointer hover:bg-muted/50">
                     <button type="button" onClick={() => setEditingWish({ id: w.id })} className="text-left">
                       <ListItemContent>
@@ -164,6 +172,7 @@ export default function OccasionsPage() {
                     </button>
                   </ListItem>
                 ))}
+                <ShowAllRow rows={mineRows} onToggle={() => previews.toggle('mine')} />
                 <ListItem asChild className="cursor-pointer hover:bg-muted/50">
                   <button type="button" onClick={() => setEditingWish({ id: null })} className="text-left text-primary">
                     <Plus className="size-[18px] shrink-0" />
@@ -176,7 +185,7 @@ export default function OccasionsPage() {
             </div>
 
             {othersLists.map(([userId, items]) => (
-              <OtherWishlist key={userId} userId={userId} items={items} api={api} me={currentUserId} profiles={memberProfiles} />
+              <OtherWishlist key={userId} userId={userId} items={items} api={api} me={currentUserId} profiles={memberProfiles} previews={previews} />
             ))}
           </div>
         </div>
@@ -256,6 +265,7 @@ function FocusBlock({
   onAddIdea,
   onOpenIdea,
   onEditIdea,
+  previews,
 }: {
   occasion: Occasion;
   api: OccasionsApi;
@@ -265,8 +275,10 @@ function FocusBlock({
   onAddIdea: () => void;
   onOpenIdea: (idea: GiftIdea) => void;
   onEditIdea: (idea: GiftIdea) => void;
+  previews: Previews;
 }) {
   const { own, ideas, allKept, heading, head } = occasionFocusView(occasion, api.ideas, me, profiles);
+  const ideaRows = previews.rows(`ideas:${occasion.id}`, ideas, OCCASIONS_PREVIEW.ideas);
 
   return (
     <div className="space-y-1.5">
@@ -286,7 +298,7 @@ function FocusBlock({
           {head && (
             <div className="px-3.5 py-2 text-xs text-muted-foreground">{head}</div>
           )}
-          {ideas.map((idea) => (
+          {ideaRows.shown.map((idea) => (
             <IdeaRow
               key={idea.id}
               idea={idea}
@@ -296,6 +308,7 @@ function FocusBlock({
               onEdit={() => onEditIdea(idea)}
             />
           ))}
+          <ShowAllRow rows={ideaRows} onToggle={() => previews.toggle(`ideas:${occasion.id}`)} />
           <ListItem asChild className="cursor-pointer hover:bg-muted/50">
             <button type="button" onClick={onAddIdea} className="text-left text-primary">
               <Plus className="size-[18px] shrink-0" />
@@ -366,6 +379,21 @@ function IdeaRow({
   );
 }
 
+/** The fold under a long list: "Show 3 more", then "Show less". */
+function ShowAllRow({ rows, onToggle }: { rows: { more: number; open: boolean; foldable: boolean }; onToggle: () => void }) {
+  if (!rows.foldable) return null;
+  return (
+    <ListItem asChild className="cursor-pointer hover:bg-muted/50">
+      <button type="button" onClick={onToggle} aria-expanded={rows.open} className="text-left text-primary">
+        <ChevronDown className={cn('size-[18px] shrink-0 transition-transform', rows.open && 'rotate-180')} />
+        <ListItemContent className="self-center">
+          <ListItemTitle>{rows.open ? 'Show less' : `Show ${rows.more} more`}</ListItemTitle>
+        </ListItemContent>
+      </button>
+    </ListItem>
+  );
+}
+
 /** Another member's wishlist, with "I'll get this" on each wish nobody has taken. */
 function OtherWishlist({
   userId,
@@ -373,19 +401,22 @@ function OtherWishlist({
   api,
   me,
   profiles,
+  previews,
 }: {
   userId: string;
   items: WishlistItem[];
   api: OccasionsApi;
   me: string;
   profiles: MemberProfiles;
+  previews: Previews;
 }) {
   const name = memberFirstName(userId, profiles);
+  const rows = previews.rows(`wishes:${userId}`, items, OCCASIONS_PREVIEW.wishes);
   return (
     <div className="space-y-1.5">
       <p className={MICRO}>{name}&apos;s wishlist</p>
       <ListGroup>
-        {items.map((w) => {
+        {rows.shown.map((w) => {
           const taken = takenBy(w, api.ideas);
           const meta = wishMeta(w);
           return (
@@ -422,6 +453,7 @@ function OtherWishlist({
             </ListItem>
           );
         })}
+        <ShowAllRow rows={rows} onToggle={() => previews.toggle(`wishes:${userId}`)} />
       </ListGroup>
       <p className="px-1 text-[11px] text-muted-foreground">{name} won&apos;t see who is getting what.</p>
     </div>

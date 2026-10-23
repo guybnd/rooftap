@@ -121,6 +121,10 @@ export const SERVER_FEATURES = {
     minSchema: '20261023200000_occasions_on_calendar',
     label: 'choosing which occasions show on the calendar',
   },
+  'shopper.keep-from': {
+    minSchema: '20261023220000_scout_keep_from',
+    label: 'keeping Scout searches and watches from someone',
+  },
 } as const satisfies Record<string, ServerFeatureDef>;
 
 export type ServerFeatureId = keyof typeof SERVER_FEATURES;

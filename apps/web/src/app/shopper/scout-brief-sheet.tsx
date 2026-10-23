@@ -26,6 +26,7 @@ import { Input } from '@/components/ui/input';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { ShopperApiError, startScout } from '@/lib/shopper-api';
 import { cn } from '@/lib/utils';
+import { KeepFromField } from './keep-from-field';
 
 const SCOUT_SECTION = { id: 'shopper', Icon: Sparkles };
 const WHERE: ScoutWhere[] = ['nearby', 'online', 'secondhand'];
@@ -49,6 +50,7 @@ export function ScoutBriefSheet({
   const [upTo, setUpTo] = useState(prefill?.upTo ?? '');
   const [needBy, setNeedBy] = useState<NeedBy>('none');
   const [where, setWhere] = useState<ScoutWhere[]>(['nearby', 'online']);
+  const [hiddenFrom, setHiddenFrom] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<{ message: string; needsKey: boolean } | null>(null);
   const symbol = currencySymbol(currency);
@@ -68,7 +70,7 @@ export function ScoutBriefSheet({
         budget_max_cents: parsePriceInput(upTo),
         need_by: days == null ? null : addDaysISO(todayISO(), days),
         where,
-      });
+      }, hiddenFrom);
       onClose();
       router.push(`/shopper/scout/${id}`);
     } catch (err) {
@@ -157,6 +159,7 @@ export function ScoutBriefSheet({
           <p className="text-xs text-muted-foreground">Uses your household&apos;s AI key or Plus. Takes about a minute.</p>
         )}
       </FormSection>
+      <KeepFromField value={hiddenFrom} onChange={setHiddenFrom} />
     </ItemFormSheet>
   );
 }

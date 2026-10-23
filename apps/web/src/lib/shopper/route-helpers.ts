@@ -38,3 +38,9 @@ export async function shopperRequest(wantId?: string | null): Promise<ShopperReq
   if (!group) return { error: NextResponse.json({ error: "Not found" }, { status: 404 }) };
   return { admin, userId: user.id, group: group as Group, want };
 }
+
+/** The household's member ids, for checking who a search or watch is kept from. */
+export async function groupMemberIds(admin: SupabaseClient, groupId: string): Promise<string[]> {
+  const { data } = await admin.from("group_members").select("user_id").eq("group_id", groupId);
+  return ((data ?? []) as { user_id: string }[]).map((m) => m.user_id);
+}

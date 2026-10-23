@@ -48,6 +48,12 @@ export interface ShopperSearch {
   thread_id?: string | null;
   /** When the household archived it (null or absent when not, or on servers before archiving). */
   archived_at?: string | null;
+  /**
+   * Members it is kept from: the database hides the run, its picks and its
+   * messages from them, and watches made from it inherit the list.
+   * Missing before 20261023220000_scout_keep_from.
+   */
+  hidden_from?: string[];
   deleted: boolean;
 }
 

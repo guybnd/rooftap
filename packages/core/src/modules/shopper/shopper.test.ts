@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildShopperWant,
+  cleanKeepFrom,
   dailyLows,
   dealVerdict,
   isGoodNow,
@@ -327,5 +329,21 @@ describe('priceChartScale', () => {
 
   it('labels a day without a UTC shift', () => {
     expect(priceDayLabel('2026-10-01')).toMatch(/1/);
+  });
+});
+
+describe('keeping a watch or search from someone', () => {
+  const members = ['me', 'tegan', 'sam'];
+  it('keeps household members only, never yourself, each once', () => {
+    expect(cleanKeepFrom(undefined, members, 'me')).toEqual([]);
+    expect(cleanKeepFrom(['tegan', 'tegan', 'me'], members, 'me')).toEqual(['tegan']);
+    expect(cleanKeepFrom(['stranger'], members, 'me')).toBeNull();
+    expect(cleanKeepFrom('tegan', members, 'me')).toBeNull();
+  });
+
+  it('puts the list on a new watch only when there is one', () => {
+    const base = { id: 'w', groupId: 'g', title: 'Robe', createdBy: 'me' };
+    expect(buildShopperWant({ ...base, hiddenFrom: ['tegan'] }).hidden_from).toEqual(['tegan']);
+    expect('hidden_from' in buildShopperWant(base)).toBe(false);
   });
 });

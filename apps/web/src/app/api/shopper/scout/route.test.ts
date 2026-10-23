@@ -17,6 +17,7 @@ const admin = {
 };
 vi.mock("@/lib/shopper/route-helpers", () => ({
   shopperRequest: async () => ({ admin, userId: "u1", group: { id: "g1" }, want: null }),
+  groupMemberIds: async () => ["u1", "u2"],
 }));
 
 let decided: unknown = { brain: { keySource: "household" } };
@@ -26,10 +27,18 @@ const completeScout = vi.fn();
 vi.mock("@/lib/shopper/scout", () => ({
   scoutBrain: async () => decided,
   hasOfferSources: async () => sources,
-  startScoutRun: async (a: typeof admin, group: { id: string }, userId: string, brief: unknown, brain: { keySource: string }, opts: { id?: string } = {}) => {
+  startScoutRun: async (a: typeof admin, group: { id: string }, userId: string, brief: unknown, brain: { keySource: string }, opts: { id?: string; hiddenFrom?: string[] } = {}) => {
     const { data } = await a
       .from()
-      .insert({ ...(opts.id ? { id: opts.id } : {}), group_id: group.id, brief, status: "running", key_source: brain.keySource, created_by: userId })
+      .insert({
+        ...(opts.id ? { id: opts.id } : {}),
+        group_id: group.id,
+        brief,
+        status: "running",
+        key_source: brain.keySource,
+        created_by: userId,
+        ...(opts.hiddenFrom?.length ? { hidden_from: opts.hiddenFrom } : {}),
+      })
       .select()
       .single();
     afterMock(() => completeScout(data));
@@ -75,6 +84,13 @@ describe("POST /api/shopper/scout", () => {
     expect(completeScout).not.toHaveBeenCalled();
     await afterMock.mock.calls[0][0]();
     expect(completeScout).toHaveBeenCalledOnce();
+  });
+
+  it("keeps the run from household members only, never from yourself", async () => {
+    expect((await post({ text: "A robe", hidden_from: ["stranger"] })).status).toBe(400);
+    expect(inserted).toEqual([]);
+    expect((await post({ text: "A robe", hidden_from: ["u2", "u1"] })).status).toBe(202);
+    expect(inserted[0]).toMatchObject({ hidden_from: ["u2"] });
   });
 
   it("ignores an id that isn't a uuid", async () => {

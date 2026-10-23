@@ -288,6 +288,18 @@ export function isKeptFrom(want: Pick<ShopperWant, 'hidden_from'>, userId: strin
   return !!want.hidden_from?.includes(userId);
 }
 
+/**
+ * Who a new watch or Scout search is kept from, from a request: household
+ * members only, never yourself (you would lose it too), each once. Null when
+ * the list names someone outside the household or isn't a list of ids.
+ */
+export function cleanKeepFrom(raw: unknown, memberIds: readonly string[], me: string): string[] | null {
+  if (raw == null) return [];
+  if (!Array.isArray(raw) || raw.some((id) => typeof id !== 'string')) return null;
+  const ids = [...new Set(raw as string[])].filter((id) => id !== me);
+  return ids.every((id) => memberIds.includes(id)) ? ids : null;
+}
+
 /** "Buy <title> at <store>", the to-do Plan to buy creates. A surprise says only "Buy a gift". */
 export function planToBuyTitle(want: Pick<ShopperWant, 'title' | 'hidden_from'>, store: string | null): string {
   if (isKeptWant(want)) return 'Buy a gift';
@@ -305,6 +317,8 @@ export function buildShopperWant(input: {
   needBy?: string | null;
   notes?: string | null;
   status?: ShopperWantStatus;
+  /** Members it is kept from (a present for them); omitted when nobody. */
+  hiddenFrom?: readonly string[];
   createdBy: string | null;
   now?: Date;
 }): ShopperWant {
@@ -323,6 +337,7 @@ export function buildShopperWant(input: {
     best_store: null,
     last_checked_at: null,
     bought_at: null,
+    ...(input.hiddenFrom?.length ? { hidden_from: [...input.hiddenFrom] } : {}),
     created_by: input.createdBy,
     created_at: now,
     updated_at: now,

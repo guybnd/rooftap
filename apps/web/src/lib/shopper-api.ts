@@ -81,8 +81,10 @@ export async function lookupWhenSynced(wantId: string, tries = 4): Promise<Shopp
 // HOUP-435: Scout. Starting a run answers at once; the research carries on
 // on the server and lands in the synced run and pick tables.
 
-export async function startScout(id: string, brief: ScoutBrief): Promise<ShopperSearch> {
-  return (await call<{ search: ShopperSearch }>("/api/shopper/scout", { method: "POST", body: JSON.stringify({ id, ...brief }) })).search;
+/** `hiddenFrom`: members the search is kept from (a present for them). */
+export async function startScout(id: string, brief: ScoutBrief, hiddenFrom: readonly string[] = []): Promise<ShopperSearch> {
+  const body = { id, ...brief, ...(hiddenFrom.length ? { hidden_from: hiddenFrom } : {}) };
+  return (await call<{ search: ShopperSearch }>("/api/shopper/scout", { method: "POST", body: JSON.stringify(body) })).search;
 }
 
 export function scoutRun(id: string): Promise<{ search: ShopperSearch | null; picks: ShopperPick[]; thread?: ScoutThread | null }> {

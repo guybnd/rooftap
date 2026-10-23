@@ -258,3 +258,12 @@ export function giftIdeaRowMenu(
     ],
   };
 }
+
+/** How many rows each Occasions list shows before "Show all" (Guy: the screen opened into one long list). */
+export const OCCASIONS_PREVIEW = { ideas: 4, occasions: 4, wishes: 3 } as const;
+
+/** The first `limit` rows unless the list is open, and how many are folded away. */
+export function previewRows<T>(rows: readonly T[], limit: number, open: boolean): { shown: readonly T[]; more: number } {
+  if (open || rows.length <= limit + 1) return { shown: rows, more: 0 };
+  return { shown: rows.slice(0, limit), more: rows.length - limit };
+}

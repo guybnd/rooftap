@@ -1,5 +1,5 @@
 import { after, NextResponse } from "next/server";
-import type { ShopperPick } from "@homeup/core";
+import { isKeptFrom, type ShopperPick } from "@homeup/core";
 import { runLookup } from "@/lib/shopper/lookup";
 import { shopperRequest } from "@/lib/shopper/route-helpers";
 import { readRun, watchPick } from "@/lib/shopper/scout";
@@ -25,7 +25,7 @@ export async function POST(request: Request, { params }: Params) {
   const pick = data as ShopperPick | null;
   if (!pick || pick.group_id !== req.group.id) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const { search } = await readRun(req.admin, pick.search_id);
-  if (!search) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!search || isKeptFrom(search, req.userId)) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   try {
     const want = await watchPick(req.admin, pick, search, req.userId);

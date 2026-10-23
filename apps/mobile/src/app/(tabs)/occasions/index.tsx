@@ -7,7 +7,7 @@
 import * as React from 'react';
 import { ActivityIndicator, Linking, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Gift, Plus, WifiOff } from 'lucide-react-native';
+import { ChevronDown, Gift, Plus, WifiOff } from 'lucide-react-native';
 import {
   Button,
   EmptyState,
@@ -24,6 +24,7 @@ import {
 } from '@homeup/ui';
 import {
   MOTION_DURATIONS_MS,
+  OCCASIONS_PREVIEW,
   confirmRemoveIdea,
   formatMoney,
   giftIdeaRowMenu,
@@ -35,6 +36,7 @@ import {
   occasionWhenLabel,
   setIdeaStatus,
   takenBy,
+  useListPreviews,
   useModules,
   useOccasions,
   useOccasionsScreen,
@@ -53,6 +55,7 @@ import { OccasionFormSheet } from '@/features/occasions/occasion-form-sheet';
 import { WishFormSheet } from '@/features/occasions/wish-form-sheet';
 
 type MemberProfiles = Record<string, { email: string; name: string | null; avatar: string | null }>;
+type Previews = ReturnType<typeof useListPreviews>;
 
 /**
  * One sheet's mount and open state, kept apart so its exit animation can play
@@ -93,6 +96,7 @@ export default function OccasionsScreen() {
   const wishSheet = useSheetState<{ id: string | null }>();
   const ideaCard = useSheetState<{ id: string }>();
   const rowMenu = useRowMenuSheet();
+  const previews = useListPreviews();
 
   if (cacheLoading || (!api.loaded && api.occasions.length === 0)) {
     return (
@@ -106,6 +110,8 @@ export default function OccasionsScreen() {
   const editingOccasion = occasionSheet.value?.id ? api.occasionById.get(occasionSheet.value.id) : undefined;
   const editingIdea = ideaSheet.value?.id ? api.ideas.find((i) => i.id === ideaSheet.value?.id) : undefined;
   const ideaOccasion = ideaSheet.value?.occasionId ? api.occasionById.get(ideaSheet.value.occasionId) ?? null : null;
+  const occasionRows = previews.rows('occasions', api.occasions, OCCASIONS_PREVIEW.occasions);
+  const mineRows = previews.rows('mine', mine, OCCASIONS_PREVIEW.wishes);
   const editingWish = wishSheet.value?.id ? api.wishlist.find((w) => w.id === wishSheet.value?.id) : undefined;
 
   return (
@@ -162,6 +168,7 @@ export default function OccasionsScreen() {
                     }),
                   )
                 }
+                previews={previews}
               />
             )}
 
@@ -169,7 +176,7 @@ export default function OccasionsScreen() {
               <View className="gap-1.5">
                 <Text className="px-1 text-micro-label uppercase text-muted-foreground">Occasions</Text>
                 <ListGroup>
-                  {api.occasions.map((o) => (
+                  {occasionRows.shown.map((o) => (
                     <ListItem
                       key={o.id}
                       onPress={() => setFocusId(o.id)}
@@ -189,6 +196,7 @@ export default function OccasionsScreen() {
                       <Text className="shrink-0 text-sm tabular-nums text-muted-foreground">{occasionWhenLabel(o, today)}</Text>
                     </ListItem>
                   ))}
+                  <ShowAllRow rows={occasionRows} onToggle={() => previews.toggle('occasions')} />
                 </ListGroup>
               </View>
             )}
@@ -199,7 +207,7 @@ export default function OccasionsScreen() {
                 <Text className="text-[11px] text-muted-foreground">Everyone can see this</Text>
               </View>
               <ListGroup>
-                {mine.map((w) => (
+                {mineRows.shown.map((w) => (
                   <ListItem key={w.id} onPress={() => wishSheet.show({ id: w.id })} accessibilityRole="button">
                     <ListItemContent>
                       <ListItemTitle numberOfLines={1}>{w.title}</ListItemTitle>
@@ -214,6 +222,7 @@ export default function OccasionsScreen() {
                     {!!w.price_cents && <Text className="shrink-0 text-sm tabular-nums text-muted-foreground">{formatMoney(w.price_cents)}</Text>}
                   </ListItem>
                 ))}
+                <ShowAllRow rows={mineRows} onToggle={() => previews.toggle('mine')} />
                 <ListItem onPress={() => wishSheet.show({ id: null })} accessibilityRole="button">
                   <Plus size={18} className="shrink-0 text-primary" />
                   <ListItemContent>
@@ -224,7 +233,7 @@ export default function OccasionsScreen() {
             </View>
 
             {othersLists.map(([userId, items]) => (
-              <OtherWishlist key={userId} userId={userId} items={items} api={api} me={currentUserId} profiles={memberProfiles} />
+              <OtherWishlist key={userId} userId={userId} items={items} api={api} me={currentUserId} profiles={memberProfiles} previews={previews} />
             ))}
           </>
         )}
@@ -307,6 +316,7 @@ function FocusBlock({
   onAddIdea,
   onOpenIdea,
   onHoldIdea,
+  previews,
 }: {
   occasion: Occasion;
   api: OccasionsApi;
@@ -317,8 +327,10 @@ function FocusBlock({
   onOpenIdea: (idea: GiftIdea) => void;
   /** A long press: the row menu, with Edit. */
   onHoldIdea: (idea: GiftIdea) => void;
+  previews: Previews;
 }) {
   const { own, ideas, allKept, heading, head } = occasionFocusView(occasion, api.ideas, me, profiles);
+  const ideaRows = previews.rows(`ideas:${occasion.id}`, ideas, OCCASIONS_PREVIEW.ideas);
 
   return (
     <View className="gap-1.5">
@@ -338,7 +350,7 @@ function FocusBlock({
       ) : (
         <ListGroup>
           {!!head && <Text className="px-3.5 py-2 text-xs text-muted-foreground">{head}</Text>}
-          {ideas.map((idea) => (
+          {ideaRows.shown.map((idea) => (
             <ListItem key={idea.id} onPress={() => onOpenIdea(idea)} onLongPress={() => onHoldIdea(idea)} accessibilityRole="button">
               <ListItemContent>
                 <ListItemTitle numberOfLines={1}>{idea.title}</ListItemTitle>
@@ -350,6 +362,7 @@ function FocusBlock({
               </ListItemContent>
             </ListItem>
           ))}
+          <ShowAllRow rows={ideaRows} onToggle={() => previews.toggle(`ideas:${occasion.id}`)} />
           <ListItem onPress={onAddIdea} accessibilityRole="button">
             <Plus size={18} className="shrink-0 text-primary" />
             <ListItemContent>
@@ -362,6 +375,19 @@ function FocusBlock({
   );
 }
 
+/** The fold under a long list: "Show 3 more", then "Show less". */
+function ShowAllRow({ rows, onToggle }: { rows: { more: number; open: boolean; foldable: boolean }; onToggle: () => void }) {
+  if (!rows.foldable) return null;
+  return (
+    <ListItem onPress={onToggle} accessibilityRole="button" accessibilityState={{ expanded: rows.open }}>
+      <ChevronDown size={18} className="shrink-0 text-primary" style={rows.open ? { transform: [{ rotate: '180deg' }] } : undefined} />
+      <ListItemContent>
+        <ListItemTitle className="text-primary">{rows.open ? 'Show less' : `Show ${rows.more} more`}</ListItemTitle>
+      </ListItemContent>
+    </ListItem>
+  );
+}
+
 /** Another member's wishlist, with "I'll get this" on each wish nobody has taken. */
 function OtherWishlist({
   userId,
@@ -369,19 +395,22 @@ function OtherWishlist({
   api,
   me,
   profiles,
+  previews,
 }: {
   userId: string;
   items: WishlistItem[];
   api: OccasionsApi;
   me: string;
   profiles: MemberProfiles;
+  previews: Previews;
 }) {
   const name = memberFirstName(userId, profiles);
+  const rows = previews.rows(`wishes:${userId}`, items, OCCASIONS_PREVIEW.wishes);
   return (
     <View className="gap-1.5">
       <Text className="px-1 text-micro-label uppercase text-muted-foreground">{name}&apos;s wishlist</Text>
       <ListGroup>
-        {items.map((w) => {
+        {rows.shown.map((w) => {
           const taken = takenBy(w, api.ideas);
           const meta = wishMeta(w);
           return (
@@ -417,6 +446,7 @@ function OtherWishlist({
             </ListItem>
           );
         })}
+        <ShowAllRow rows={rows} onToggle={() => previews.toggle(`wishes:${userId}`)} />
       </ListGroup>
       <Text className="px-1 text-[11px] text-muted-foreground">{name} won&apos;t see who is getting what.</Text>
     </View>

@@ -10,6 +10,7 @@ import {
   SHOPPER_WANT_STATUSES,
   buildShopperWant,
   currencySymbol,
+  keptFromLabel,
   parsePriceInput,
   type ShopperWant,
   type ShopperWantStatus,
@@ -17,6 +18,8 @@ import {
 import { ItemFormSheet, FormSection, FieldRow } from '@/components/ui/item-form-sheet';
 import { Input } from '@/components/ui/input';
 import { SegmentedControl } from '@/components/ui/segmented-control';
+import { useDataCache } from '@/lib/data-cache';
+import { KeepFromField } from './keep-from-field';
 
 const SHOPPER_SECTION = { id: 'shopper', Icon: ShoppingBag };
 
@@ -55,6 +58,11 @@ export function WantFormSheet({
   const [needBy, setNeedBy] = useState(want?.need_by ?? '');
   const [notes, setNotes] = useState(want?.notes ?? '');
   const [status, setStatus] = useState<ShopperWantStatus>(want?.status ?? 'watching');
+  const [hiddenFrom, setHiddenFrom] = useState<string[]>([]);
+  const { memberProfiles } = useDataCache();
+  // Who an existing watch is kept from is set when it's made: hiding it later
+  // would leave a copy on their device.
+  const kept = want ? keptFromLabel(want.hidden_from, memberProfiles) : null;
   const symbol = currencySymbol(currency);
 
   const submit = () => {
@@ -89,6 +97,7 @@ export function WantFormSheet({
           needBy: fields.need_by,
           notes: fields.notes,
           status: status === 'bought' ? 'watching' : status,
+          hiddenFrom,
           createdBy: null,
         }),
         true,
@@ -166,7 +175,9 @@ export function WantFormSheet({
             className="w-full rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm dark:bg-input/30"
           />
         </FieldRow>
+        {kept && <p className="text-xs text-muted-foreground">{kept}</p>}
       </FormSection>
+      {!want && <KeepFromField value={hiddenFrom} onChange={setHiddenFrom} />}
     </ItemFormSheet>
   );
 }

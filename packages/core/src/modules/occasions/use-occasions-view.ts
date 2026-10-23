@@ -24,7 +24,7 @@ import {
   type OccasionKind,
   type WishlistItem,
 } from './occasions';
-import { giftIdeaCardView, nextOccasion, occasionsLede, othersWishlists } from './occasions-view';
+import { giftIdeaCardView, nextOccasion, occasionsLede, othersWishlists, previewRows } from './occasions-view';
 import type { OccasionsApi } from './use-occasions';
 
 /**
@@ -362,5 +362,28 @@ export function useGiftIdeaCard(input: {
     },
     setInBudget: (on: boolean) => features.costs && save({}, { inBudget: on }),
     watchPrice: () => features.shopper && !want && save({}, { watch: true }),
+  };
+}
+
+/**
+ * Which Occasions lists are open past their preview. `rows(key, list, limit)`
+ * gives the rows to draw and how many "Show all" would add; `toggle(key)`
+ * opens or folds a list.
+ */
+export function useListPreviews() {
+  const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set());
+  return {
+    rows: <T,>(key: string, list: readonly T[], limit: number) => ({
+      ...previewRows(list, limit, open.has(key)),
+      open: open.has(key),
+      /** Long enough to fold: draw the Show all / Show less row. */
+      foldable: previewRows(list, limit, false).more > 0,
+    }),
+    toggle: (key: string) =>
+      setOpen((prev) => {
+        const next = new Set(prev);
+        if (!next.delete(key)) next.add(key);
+        return next;
+      }),
   };
 }
