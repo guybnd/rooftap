@@ -1,12 +1,26 @@
 'use client';
 
 // One night of the meal plan, as a bottom sheet (M4): pick a recipe, a quick
-// label (Leftovers, Out) or a few words, and who cooks. Every choice applies
-// at once, no Save. Native twin: apps/mobile/src/features/recipes/meal-night-sheet.tsx.
+// label (Leftovers, Out) or a few words, and who cooks. Once a night has a
+// recipe, the list adds more dishes (a main plus sides and a dessert) and the
+// sheet stays open; each dish's role chip cycles Main, Side, Dessert. Every
+// choice applies at once, no Save. Native twin:
+// apps/mobile/src/features/recipes/meal-night-sheet.tsx.
 
 import { useMemo, useState } from 'react';
-import { Check } from 'lucide-react';
-import { formatMealMinutes, MEAL_QUICK_LABELS, mealNightLabel, methodMeta, recipeMinutes, type MealPick, type Recipe } from '@homeup/core';
+import { Check, X } from 'lucide-react';
+import {
+  formatMealMinutes,
+  MEAL_QUICK_LABELS,
+  MEAL_ROLE_LABEL,
+  MEAL_ROLES,
+  mealNightLabel,
+  methodMeta,
+  recipeMinutes,
+  type MealPick,
+  type MealRole,
+  type Recipe,
+} from '@homeup/core';
 import { BottomSheet } from '@/components/ui/bottom-sheet';
 import { Input } from '@/components/ui/input';
 import { ListGroup, ListItem, ListItemContent, ListItemLeading, ListItemMeta, ListItemTitle, ListItemTrailing } from '@/components/ui/list-item';
@@ -23,6 +37,10 @@ export function MealNightSheet({
   onPick,
   onCook,
   onClear,
+  dishes = [],
+  onAddDish,
+  onRemoveDish,
+  onDishRole,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -35,6 +53,11 @@ export function MealNightSheet({
   onPick: (pick: MealPick) => void;
   onCook: (userId: string | null) => void;
   onClear?: () => void;
+  /** The night's dishes; with onAddDish set, the recipe list adds to them. */
+  dishes?: { id: string; recipeId: string; title: string; role: MealRole; time: string | null }[];
+  onAddDish?: (recipeId: string) => void;
+  onRemoveDish?: (entryId: string) => void;
+  onDishRole?: (entryId: string, role: MealRole) => void;
 }) {
   const [query, setQuery] = useState('');
   const [other, setOther] = useState('');
@@ -51,6 +74,16 @@ export function MealNightSheet({
     onOpenChange(false);
     setQuery('');
     setOther('');
+  };
+
+  // Several dishes: once the night has a recipe, the list adds and removes dishes.
+  const stacking = !!onAddDish && dishes.length > 0;
+  const dishFor = (recipeId: string) => dishes.find((d) => d.recipeId === recipeId);
+  const tapRecipe = (recipeId: string) => {
+    if (!stacking) return pick({ recipeId });
+    const on = dishFor(recipeId);
+    if (on) onRemoveDish?.(on.id);
+    else onAddDish?.(recipeId);
   };
 
   return (
@@ -109,6 +142,43 @@ export function MealNightSheet({
             <Input value={other} onChange={(e) => setOther(e.target.value)} placeholder="Something else, like Dinner at Jess's" aria-label="Something else" maxLength={60} />
           </form>
 
+          {stacking && (
+            <ListGroup className="mx-4 mb-2" aria-label="Dishes">
+              {dishes.map((d) => (
+                <ListItem key={d.id} className="items-center">
+                  <ListItemContent>
+                    <ListItemTitle>
+                      <span className="truncate">{d.title}</span>
+                    </ListItemTitle>
+                    {d.time && <ListItemMeta className="tabular-nums">{d.time}</ListItemMeta>}
+                  </ListItemContent>
+                  <ListItemTrailing className="gap-1">
+                    <button
+                      type="button"
+                      onClick={() => onDishRole?.(d.id, MEAL_ROLES[(MEAL_ROLES.indexOf(d.role) + 1) % MEAL_ROLES.length])}
+                      aria-label={`${d.title} is the ${MEAL_ROLE_LABEL[d.role].toLowerCase()}, change`}
+                      className={cn(CHIP, CHIP_OFF)}
+                    >
+                      {MEAL_ROLE_LABEL[d.role]}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onRemoveDish?.(d.id)}
+                      aria-label={`Take ${d.title} off this night`}
+                      className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </ListItemTrailing>
+                </ListItem>
+              ))}
+            </ListGroup>
+          )}
+
+          {stacking && (
+            <p className="px-4 pb-1 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">Add a dish</p>
+          )}
+
           {recipes.length > 8 && (
             <div className="px-4 pb-2">
               <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search recipes" aria-label="Search recipes" />
@@ -118,11 +188,11 @@ export function MealNightSheet({
           <div ref={contentRef} className="max-h-[45vh] overflow-y-auto px-1.5">
             <ListGroup className="border-0 bg-transparent shadow-none" role="list" aria-label="Recipes">
               {shown.map((r) => {
-                const on = current.recipeId === r.id;
+                const on = stacking ? !!dishFor(r.id) : current.recipeId === r.id;
                 const time = formatMealMinutes(recipeMinutes(r));
                 return (
                   <ListItem key={r.id} asChild className="cursor-pointer items-center rounded-lg text-left hover:bg-muted/50">
-                    <button type="button" onClick={() => pick({ recipeId: r.id })} aria-pressed={on}>
+                    <button type="button" onClick={() => tapRecipe(r.id)} aria-pressed={on}>
                       <ListItemLeading className="h-8 w-8 rounded-xl bg-muted text-base">{methodMeta(r.method).emoji}</ListItemLeading>
                       <ListItemContent>
                         <ListItemTitle className={on ? 'font-semibold' : undefined}>
@@ -146,7 +216,7 @@ export function MealNightSheet({
           </div>
 
           {onClear && (
-            <div className="px-4 pt-2">
+            <div className="flex items-center justify-between px-4 pt-2">
               <button
                 type="button"
                 onClick={() => {
@@ -157,6 +227,15 @@ export function MealNightSheet({
               >
                 Clear this night
               </button>
+              {stacking && (
+                <button
+                  type="button"
+                  onClick={() => onOpenChange(false)}
+                  className="inline-flex min-h-11 items-center px-2 text-sm font-medium text-primary"
+                >
+                  Done
+                </button>
+              )}
             </div>
           )}
         </>

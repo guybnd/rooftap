@@ -44,6 +44,7 @@ export function RecipeRow({
   ingredients,
   groceryItems,
   groceriesLinked,
+  staples,
   onPress,
 }: {
   recipe: Recipe;
@@ -51,11 +52,13 @@ export function RecipeRow({
   groceryItems: GroceryItem[];
   /** recipes.groceries: the have/need fill and "Can make now" only show while it's on. */
   groceriesLinked: boolean;
+  /** Household staples (useRecipeMatch): count as have. */
+  staples?: ReadonlySet<string>;
   onPress: () => void;
 }) {
   const meta = methodMeta(recipe.method);
-  const { have, total } = recipeHaveCount(ingredients, groceryItems);
-  const ready = groceriesLinked && canBeMade(ingredients, groceryItems);
+  const { have, total } = recipeHaveCount(ingredients, groceryItems, staples);
+  const ready = groceriesLinked && canBeMade(ingredients, groceryItems, staples);
   // Plain meta words (pill shape is reserved for tappable chips, PC1): the
   // method when one is set, then the cuisines. Same line on web.
   const kind = [...(recipe.method ? [meta.label] : []), ...recipeCuisines(recipe).map(capitalize)].join(', ');

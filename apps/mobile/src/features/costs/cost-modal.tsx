@@ -22,10 +22,11 @@ import {
   CADENCE_LABEL,
   CATEGORY_META,
   formatMoney,
-  withPriceChange,
+  costFormFrom,
+  costNeedsReminderSync,
+  costRowFromForm,
   useCostCategoryChoices,
   syncCostReminders,
-  todayISO,
   useModules,
   type CostCadence,
   type CostCategory,
@@ -64,24 +65,9 @@ interface CostModalProps {
   onSave: (item: CostItem) => void;
 }
 
-function buildInitialForm(item: CostItem | undefined, defaultName: string | undefined, defaultStartDate?: string, defaultCategory?: CostCategory) {
-  return {
-    name: item?.name ?? defaultName ?? '',
-    // FLUX-182 parity: new costs default to a one-off Purchase, matching web.
-    category: item?.category ?? defaultCategory ?? 'purchase',
-    amount: item ? item.amount / 100 : null,
-    cadence: item?.cadence ?? 'one_off',
-    isEstimate: item?.is_estimate ?? false,
-    provider: item?.provider ?? '',
-    startDate: item?.start_date ?? defaultStartDate ?? '',
-    endDate: item?.end_date ?? '',
-    discountEndDate: item?.discount_end_date ?? '',
-    notes: item?.notes ?? '',
-  };
-}
 
 export function CostModal({ open, item, groupId, currentUserId, defaultName, defaultStartDate, defaultCategory, onArchive, onClose, onSave }: CostModalProps) {
-  const [form, setForm] = React.useState(() => buildInitialForm(item, defaultName, defaultStartDate, defaultCategory));
+  const [form, setForm] = React.useState(() => costFormFrom(item, { name: defaultName, category: defaultCategory, startDate: defaultStartDate }));
   // A new price from a date on, for a recurring cost (core costPriceOn).
   const [priceFrom, setPriceFrom] = React.useState('');
   const [newPrice, setNewPrice] = React.useState<number | null>(null);
@@ -105,45 +91,19 @@ export function CostModal({ open, item, groupId, currentUserId, defaultName, def
   const save = () => {
     if (!canSave) return;
 
-    const payload = {
-      group_id: groupId,
-      name: form.name.trim(),
-      category: form.category,
-      amount: Math.round((form.amount ?? 0) * 100),
-      cadence: form.cadence,
-      is_estimate: form.isEstimate,
-      // Match web: a one-off still uses `start_date` as its occurrence anchor,
-      // while contract-only expiry fields clear when the item no longer recurs.
-      start_date: form.startDate || (item?.id ? null : todayISO()),
-      end_date: isRecurring ? form.endDate || null : null,
-      discount_end_date: isRecurring ? form.discountEndDate || null : null,
-      provider: form.provider.trim() || null,
-      notes: form.notes.trim() || null,
-      ...(isRecurring && priceFrom && newPrice != null && Number.isFinite(newPrice)
-        ? { price_changes: withPriceChange(item?.price_changes ?? [], priceFrom, Math.round(newPrice * 100)) }
-        : {}),
-    };
-
-    const saved: CostItem = item?.id
-      ? { ...item, ...payload }
-      : {
-          id: randomUUID(),
-          ...payload,
-          assigned_to: null,
-          linked_section: null,
-          sort_order: 0,
-          created_by: currentUserId,
-          deleted: false,
-          created_at: null as unknown as string,
-          updated_at: null as unknown as string,
-        };
+    const saved = costRowFromForm(form, {
+      item,
+      groupId,
+      priceChange: { from: priceFrom, dollars: newPrice },
+      fresh: { id: randomUUID(), createdBy: currentUserId, stamp: null },
+    });
 
     onSave(saved);
     onClose();
 
     // Hearth E1-E4/M3: reminder sync is a side-effect of the committed save,
     // and remains fire-and-forget so the local write is never blocked offline.
-    if (saved.end_date || saved.discount_end_date || item?.end_date || item?.discount_end_date) {
+    if (costNeedsReminderSync(saved, item)) {
       try {
         void syncCostReminders(saved, getCurrentSupabaseClient()).catch(() => {});
       } catch {
@@ -159,7 +119,7 @@ export function CostModal({ open, item, groupId, currentUserId, defaultName, def
         {form.name || 'Edit cost'}
       </Text>
       <Text className="shrink-0 text-sm font-semibold text-foreground" style={{ fontVariant: ['tabular-nums'] }}>
-        {form.isEstimate ? '~' : ''}
+        {form.is_estimate ? '~' : ''}
         {form.amount != null ? `${currencySymbol()}${form.amount.toFixed(2)}` : `${currencySymbol()}0.00`}
       </Text>
     </>
@@ -187,13 +147,13 @@ export function CostModal({ open, item, groupId, currentUserId, defaultName, def
           action={
             <Pressable
               accessibilityRole="switch"
-              accessibilityState={{ checked: form.isEstimate }}
+              accessibilityState={{ checked: form.is_estimate }}
               accessibilityLabel="Estimate"
-              onPress={() => setForm((f) => ({ ...f, isEstimate: !f.isEstimate }))}
+              onPress={() => setForm((f) => ({ ...f, is_estimate: !f.is_estimate }))}
               hitSlop={8}
             >
-              <Text className={cn('text-xs font-medium', form.isEstimate ? 'text-primary' : 'text-muted-foreground')}>
-                {form.isEstimate ? 'Estimate' : 'Exact'}
+              <Text className={cn('text-xs font-medium', form.is_estimate ? 'text-primary' : 'text-muted-foreground')}>
+                {form.is_estimate ? 'Estimate' : 'Exact'}
               </Text>
             </Pressable>
           }
@@ -248,7 +208,7 @@ export function CostModal({ open, item, groupId, currentUserId, defaultName, def
           costItemId={item.id}
           category={form.category as CostCategory}
           amountCents={Math.round((form.amount ?? 0) * 100)}
-          estimate={form.isEstimate}
+          estimate={form.is_estimate}
           onAmount={(cents) => setForm((f) => ({ ...f, amount: cents / 100 }))}
           line={item}
           onMerged={onClose}
@@ -301,41 +261,41 @@ export function CostModal({ open, item, groupId, currentUserId, defaultName, def
               <FieldRow
                 label="Contract start"
                 action={
-                  form.startDate ? (
-                    <Button size="xs" variant="ghost" onPress={() => setForm((f) => ({ ...f, startDate: '' }))}>
+                  form.start_date ? (
+                    <Button size="xs" variant="ghost" onPress={() => setForm((f) => ({ ...f, start_date: '' }))}>
                       Clear
                     </Button>
                   ) : undefined
                 }
               >
-                <DateScrollField value={form.startDate} onChange={(startDate) => setForm((f) => ({ ...f, startDate }))} />
+                <DateScrollField value={form.start_date} onChange={(v) => setForm((f) => ({ ...f, start_date: v }))} />
               </FieldRow>
 
               <FieldRow
                 label="Contract end"
                 action={
-                  form.endDate ? (
-                    <Button size="xs" variant="ghost" onPress={() => setForm((f) => ({ ...f, endDate: '' }))}>
+                  form.end_date ? (
+                    <Button size="xs" variant="ghost" onPress={() => setForm((f) => ({ ...f, end_date: '' }))}>
                       Clear
                     </Button>
                   ) : undefined
                 }
               >
-                <DateScrollField value={form.endDate} onChange={(endDate) => setForm((f) => ({ ...f, endDate }))} />
+                <DateScrollField value={form.end_date} onChange={(v) => setForm((f) => ({ ...f, end_date: v }))} />
               </FieldRow>
 
               <FieldRow
                 label="Discount / intro-rate ends"
                 hint={reminderInTasks ? 'A reminder will appear in Tasks before this date.' : "You'll get a reminder before this date."}
                 action={
-                  form.discountEndDate ? (
-                    <Button size="xs" variant="ghost" onPress={() => setForm((f) => ({ ...f, discountEndDate: '' }))}>
+                  form.discount_end_date ? (
+                    <Button size="xs" variant="ghost" onPress={() => setForm((f) => ({ ...f, discount_end_date: '' }))}>
                       Clear
                     </Button>
                   ) : undefined
                 }
               >
-                <DateScrollField value={form.discountEndDate} onChange={(discountEndDate) => setForm((f) => ({ ...f, discountEndDate }))} />
+                <DateScrollField value={form.discount_end_date} onChange={(v) => setForm((f) => ({ ...f, discount_end_date: v }))} />
               </FieldRow>
             </FormSection>
           )}

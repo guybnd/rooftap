@@ -24,7 +24,8 @@ import {
   buildRecipeIngredient,
   itemMatchLibrary,
   instructionsFromSteps,
-  rankItemMatches,
+  scannedItemName,
+  stapleKeys,
   methodFields,
   stepsFromParsed,
   uploadDocument,
@@ -81,6 +82,9 @@ export interface CaptureRecipeFromPhotoArgs {
   /** Active grocery items + existing recipe ingredients — for name canonicalization. */
   groceryItems: GroceryItem[];
   existingIngredients: RecipeIngredient[];
+  /** Household staples and taught names (useRecipeMatch); defaults when omitted. */
+  staples?: ReadonlySet<string>;
+  aliases?: ReadonlyMap<string, string>;
   /** The server has the `recipes.steps` column (server feature), so keep the parsed timers and links. */
   withSteps?: boolean;
 }
@@ -99,6 +103,8 @@ export async function captureRecipeFromPhoto({
   source,
   groceryItems,
   existingIngredients,
+  staples,
+  aliases,
   withSteps = false,
 }: CaptureRecipeFromPhotoArgs): Promise<CaptureRecipeResult | null> {
   const picked = await pickPhoto(source);
@@ -130,12 +136,14 @@ export async function captureRecipeFromPhoto({
   // Auto-link only the tiers safe to accept silently (exact norm /
   // singular-plural) — snap to the library entry's own display form.
   // Anything fuzzier (or no match) keeps Gemini's `item` guess as-is, a
-  // fresh canonical name the review sheet offers as an unconfirmed suggestion.
-  const itemNameFor = (candidateItem: string): string => {
-    const top = rankItemMatches(candidateItem, libraryNames)[0];
-    if (top && (top.tier === 'exact' || top.tier === 'plural')) return top.name;
-    return candidateItem.trim();
+  // fresh canonical name the match step asks about. A name the household
+  // taught (an alias from an earlier "Same") links silently too.
+  const ctx = {
+    library: libraryNames,
+    staples: staples ?? stapleKeys([]),
+    aliases: aliases ?? new Map<string, string>(),
   };
+  const itemNameFor = (candidateItem: string, line: string): string => scannedItemName(candidateItem, ctx, line);
 
   const recipe = buildRecipe({
     groupId,
@@ -161,7 +169,7 @@ export async function captureRecipeFromPhoto({
         recipeId: recipe.id,
         groupId,
         name: ing.name,
-        itemName: itemNameFor(ing.item || ing.name),
+        itemName: itemNameFor(ing.item || ing.name, ing.name),
         quantity: ing.quantity ?? null,
         unit: ing.unit ?? null,
         position,

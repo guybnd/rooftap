@@ -27,6 +27,8 @@ export const STORE_MODULES = {
   checklist_template_items: ['checklists'],
   recipes: ['recipes'],
   recipe_ingredients: ['recipes'],
+  recipe_staples: ['recipes'],
+  ingredient_aliases: ['recipes'],
   meal_plan_entries: ['meals'],
   cook_sessions: ['recipes'],
   events: ['calendar'],

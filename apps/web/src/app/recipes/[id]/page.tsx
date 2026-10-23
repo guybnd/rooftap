@@ -13,7 +13,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { use$ } from '@legendapp/state/react';
-import { ArrowLeft, Pencil, Trash2, Plus, Check, RotateCcw, ShoppingCart, Users, Timer, Flame, ChefHat } from 'lucide-react';
+import { ArrowLeft, Pencil, Trash2, Plus, Check, RotateCcw, ShoppingCart, Users, Timer, Flame, ChefHat, Play } from 'lucide-react';
 import { useDataCache } from '@/lib/data-cache';
 import { recipes$, recipeIngredients$, groceryItems$, useReconnectSync, useStoreHelpers, useStoreLoaded, useModules } from '@homeup/core';
 import { dialog } from '@homeup/core';
@@ -23,6 +23,8 @@ import {
   matchIngredientToGrocery,
   ingredientMatchKey,
   recipeHaveCount,
+  useRecipeMatch,
+  isStaple,
   canBeMade,
   recipeNoteFor,
   buildNeededGroceryItem,
@@ -32,6 +34,7 @@ import {
   stepTimerStates,
   useCookClock,
   useCooks,
+  cookModeHref,
   trimQty,
 } from '@homeup/core';
 import { ProgressBar } from '@/components/ui/progress-bar';
@@ -94,6 +97,9 @@ export default function RecipeDetailPage() {
   const { writeRow: writeIngredient, patchRow: patchIngredient, softDeleteRow: softDeleteIngredient } =
     useStoreHelpers(ings$, currentUserId);
   const { writeRow: writeGrocery, patchRow: patchGrocery } = useStoreHelpers(items$, currentUserId);
+  // Recipes v2 R5: staples are always in stock and never go on the list.
+  const { staples } = useRecipeMatch(group?.id, currentUserId);
+  const staple = (ing: RecipeIngredient) => isStaple(ingredientMatchKey(ing), staples) || isStaple(ing.name, staples);
   const storeLoaded = useStoreLoaded(...(groceriesLinked ? [recs$, ings$, items$] : [recs$, ings$]));
 
   const recipe = use$(() => {
@@ -187,7 +193,7 @@ export default function RecipeDetailPage() {
   const addMissing = () => {
     for (const ing of ingredients) {
       const match = matchIngredientToGrocery(ingredientMatchKey(ing), groceryItems);
-      if (match?.status === 'have') continue;
+      if (match?.status === 'have' || staple(ing)) continue;
       addIngredientToList(ing);
     }
   };
@@ -236,10 +242,10 @@ export default function RecipeDetailPage() {
     );
 
   const meta = methodMeta(recipe.method);
-  const { have, total } = recipeHaveCount(ingredients, groceryItems);
-  const ready = groceriesLinked && canBeMade(ingredients, groceryItems);
+  const { have, total } = recipeHaveCount(ingredients, groceryItems, staples);
+  const ready = groceriesLinked && canBeMade(ingredients, groceryItems, staples);
   const missingCount = groceriesLinked
-    ? ingredients.filter((ing) => matchIngredientToGrocery(ingredientMatchKey(ing), groceryItems)?.status !== 'have').length
+    ? ingredients.filter((ing) => !staple(ing) && matchIngredientToGrocery(ingredientMatchKey(ing), groceryItems)?.status !== 'have').length
     : 0;
 
   const kind = [...(recipe.method ? [meta.label] : []), ...recipeCuisines(recipe).map(capitalize)].join(', ');
@@ -265,6 +271,15 @@ export default function RecipeDetailPage() {
         <h1 ref={titleRef} className="line-clamp-2 min-w-0 flex-1 text-2xl font-bold leading-tight text-foreground">
           {recipe.title}
         </h1>
+        {steps.length > 0 && (
+          <Link
+            href={cookModeHref(recipe.id)}
+            className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-primary hover:bg-muted"
+          >
+            <Play className="h-4 w-4" />
+            Cook mode
+          </Link>
+        )}
         <button
           type="button"
           onClick={() => setIsEditOpen(true)}

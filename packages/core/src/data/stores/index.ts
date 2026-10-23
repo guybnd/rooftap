@@ -28,3 +28,4 @@ export * from './rewards-stores';
 export * from './occasions-stores';
 export * from './care-jobs-store';
 export * from './bins-stores';
+export * from './recipe-match-stores';

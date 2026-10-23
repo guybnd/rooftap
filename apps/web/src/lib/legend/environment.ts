@@ -52,8 +52,10 @@ const INDEXEDDB_TABLES = [
   'bin_plans',                  // Bin night module
   'care_jobs',                  // Home care module
   'meal_plan_entries',          // Meal plan (Recipes' This week)
+  'recipe_staples',             // Recipes scan match
+  'ingredient_aliases',         // Recipes scan match
 ];
-const INDEXEDDB_VERSION = 11; // bumped for the Home care and meal plan tables (non-destructive upgrade)
+const INDEXEDDB_VERSION = 12; // bumped for the scan match tables (non-destructive upgrade)
 
 let indexedDBPlugin: ReturnType<typeof observablePersistIndexedDB> | undefined;
 

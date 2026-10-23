@@ -49,6 +49,7 @@ import { useAuthGuard } from '@/lib/use-auth-guard';
 import { useModuleRouteGuard } from '@/lib/use-module-route-guard';
 import { usePushNotificationRouting } from '@/lib/use-push-notification-routing';
 import { CookAlarms } from '@/features/cook/cook-alarms';
+import { CookHeadsHost } from '@/features/cook/cook-heads-host';
 import { useUpdateToasts } from '@/lib/use-update-toasts';
 import { useWidgetSync } from '@/widgets/use-widget-sync';
 
@@ -91,6 +92,12 @@ function useShowTabBar(): boolean {
 
 function RouteTabBar() {
   return useShowTabBar() ? <PrimaryTabBar /> : null;
+}
+
+// Recipes v2 R3: cooking heads float over every signed-in screen.
+function RouteCookHeads() {
+  const shown = useShowTabBar();
+  return shown ? <CookHeadsHost bottomInset={TAB_BAR_CONTENT_HEIGHT} /> : null;
 }
 
 function RouteToastHost() {
@@ -169,6 +176,7 @@ function AppShell() {
                     (src/app/(tabs)/_layout.tsx); detail screens push here. */}
                 <Stack screenOptions={{ headerShown: false }} />
                 <RouteTabBar />
+                <RouteCookHeads />
                 <CaptureSheet />
                 {/* The pop-up chat that grows out of the + (features/assistant/chat-popup.tsx). */}
                 <AssistantChatPopup />

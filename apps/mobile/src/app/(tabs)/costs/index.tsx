@@ -19,7 +19,6 @@ import {
   costSectionSuggestions,
   formatMoney,
   setupItems$,
-  todayISO,
   useReconnectSync,
   useStoreHelpers,
   useStoreLoaded,
@@ -38,6 +37,10 @@ import {
   type CostCategory,
   type CostItem,
   type SetupItem,
+  newCostLine,
+  rentCostLine,
+  setupCostLine,
+  type NewCostLine,
 } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
 import { NoGroupScreen } from '@/components/no-group-screen';
@@ -236,37 +239,19 @@ function CostsScreenBody() {
     setupEnabled: suggestSetup,
   });
 
-  const addLine = (line: Partial<CostItem> & Pick<CostItem, 'name' | 'category' | 'amount' | 'cadence'>) => {
+  const addLine = (line: NewCostLine) => {
     if (!group?.id) return;
-    const isOneOffActual = line.cadence === 'one_off' && !(line.is_estimate ?? false);
-    writeRow({
-      id: randomUUID(),
-      group_id: group.id,
-      is_estimate: false,
-      start_date: isOneOffActual ? todayISO() : null,
-      end_date: null,
-      discount_end_date: null,
-      provider: null,
-      assigned_to: null,
-      linked_section: null,
-      notes: null,
-      sort_order: 0,
-      created_by: currentUserId,
-      deleted: false,
-      created_at: null as unknown as string,
-      updated_at: null as unknown as string,
-      ...line,
-    });
+    writeRow(newCostLine(line, { id: randomUUID(), groupId: group.id, createdBy: currentUserId }));
   };
 
   const addRentLine = () => {
     if (!rentWeeklyCents) return;
-    addLine({ name: 'Rent', category: 'rent', amount: rentWeeklyCents, cadence: 'weekly', linked_section: 'home_search' });
+    addLine(rentCostLine(rentWeeklyCents));
   };
 
   const addSetupLine = () => {
     if (!setupTotalCents) return;
-    addLine({ name: 'Home setup', category: 'moving', amount: setupTotalCents, cadence: 'one_off', is_estimate: true, linked_section: 'home_setup' });
+    addLine(setupCostLine(setupTotalCents));
   };
 
   if (cacheLoading || (!storeLoaded && items.length === 0)) {

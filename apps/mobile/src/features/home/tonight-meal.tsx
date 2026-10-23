@@ -9,8 +9,9 @@ import { todayISO, useModules, useTonightMeal } from '@homeup/core';
 import { sectionIconFor } from '@/lib/section-icons';
 
 export function TonightMeal({ groupId, style }: { groupId: string | null | undefined; style?: StyleProp<ViewStyle> }) {
-  const on = useModules().feature('hub.meals');
-  const tonight = useTonightMeal(groupId, on, todayISO());
+  const modules = useModules();
+  const on = modules.feature('hub.meals');
+  const tonight = useTonightMeal(groupId, on, todayISO(), modules.server('meals.multi-dish'));
   const router = useRouter();
   if (!tonight) return null;
   return (

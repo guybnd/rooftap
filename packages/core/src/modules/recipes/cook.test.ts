@@ -106,3 +106,15 @@ describe('helpers', () => {
     expect(cookInitials('  ')).toBe('?');
   });
 });
+
+describe('head dock', () => {
+  it('snaps to the nearest edge and stays clear of the bars', async () => {
+    const { snapHeadDock, parseHeadDock, overStopTarget, DEFAULT_HEAD_DOCK } = await import('./cook');
+    expect(snapHeadDock(50, 400, 400, 800)).toEqual({ side: 'left', y: 0.5 });
+    expect(snapHeadDock(390, 790, 400, 800)).toEqual({ side: 'right', y: 0.78 });
+    expect(parseHeadDock('{"side":"left","y":0.2}')).toEqual({ side: 'left', y: 0.2 });
+    expect(parseHeadDock('junk')).toEqual(DEFAULT_HEAD_DOCK);
+    expect(overStopTarget(200, 700, 400, 800, 36)).toBe(true);
+    expect(overStopTarget(200, 400, 400, 800, 36)).toBe(false);
+  });
+});

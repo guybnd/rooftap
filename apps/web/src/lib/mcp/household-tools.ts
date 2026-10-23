@@ -53,15 +53,22 @@ import {
 import { loadMealWeek, personTimeZone, todayIn } from "@/lib/meal-plan-server";
 import {
   buildMealPlanEntry,
+  planMealNight,
   isNightPlanned,
-  mealEntriesByDate,
+  mealDishesByDate,
   mealNightHint,
+  mealRole,
   mealNightLabel,
   mealWeekRangeLabel,
   mealWeekStart,
   recipeMinutes,
   weekShopping,
   type MealPlanEntry,
+  aliasMap,
+  isStaple,
+  stapleKeys,
+  type IngredientAlias,
+  type RecipeStaple,
 } from "@homeup/core";
 import {
   buildChecklistItem,
@@ -1434,11 +1441,24 @@ export function householdTools({
     },
   );
 
+  // Recipes scan match: the household's staples (never on the list) and the
+  // names it taught the match step, so the tools agree with the app.
+  const loadRecipeMatch = async () => {
+    const [{ data: stapleRows }, { data: aliasRows }] = await Promise.all([
+      admin.from("recipe_staples").select("*").eq("group_id", groupId).eq("deleted", false),
+      admin.from("ingredient_aliases").select("*").eq("group_id", groupId).eq("deleted", false),
+    ]);
+    return {
+      staples: stapleKeys((stapleRows ?? []) as RecipeStaple[]),
+      aliases: aliasMap((aliasRows ?? []) as IngredientAlias[]),
+    };
+  };
+
   tool(
     "add_recipe_to_groceries",
     {
       description:
-        "Put a recipe's ingredients on the grocery list. Ingredients already on the list as needed, or in stock (have or bought), are left alone unless include_stocked is true; the result says which were added and which were skipped.",
+        "Put a recipe's ingredients on the grocery list. Ingredients already on the list as needed, or in stock (have or bought), are left alone unless include_stocked is true. Household staples (salt, oil and the like) never go on the list. The result says which were added and which were skipped.",
       inputSchema: {
         recipe_id: z.string(),
         include_stocked: z.boolean().optional(),
@@ -1477,10 +1497,17 @@ export function householdTools({
         (groceryRows ?? []) as GroceryItem[],
         userId,
       );
+      const { staples, aliases } = await loadRecipeMatch();
       const added: string[] = [];
       const skipped: { name: string; reason: string }[] = [];
       for (const ing of ingredients) {
-        const key = ingredientMatchKey(ing);
+        const own = ingredientMatchKey(ing);
+        if (isStaple(own, staples) || isStaple(ing.name, staples)) {
+          skipped.push({ name: own, reason: "staple" });
+          continue;
+        }
+        // A name the household taught ("arborio rice" is our "Risotto rice").
+        const key = aliases.get(norm(own)) ?? own;
         const match = matchIngredientToGrocery(key, groceries);
         if (match?.status === "needed") {
           skipped.push({ name: key, reason: "already on the list" });
@@ -1528,15 +1555,16 @@ export function householdTools({
   );
 
   // ── Meal plan (Recipes > This week) ─────────────────────────────────────────
-  // So "what's for dinner" and "put the curry on Thursday" work. A night is
-  // one row; the newest live row wins (mealEntriesByDate), and set_meal
-  // edits that row and tidies older ones away.
+  // So "what's for dinner" and "put the curry on Thursday with rice" work. A
+  // night holds several dishes, one row each (a main plus sides and a
+  // dessert), or one row with a label (mealDishesByDate). set_meal edits the
+  // night and tidies away rows the night doesn't show.
 
   tool(
     "get_meal_plan",
     {
       description:
-        "The household's dinner plan for one week (Monday to Sunday): each night's recipe (with recipe_id and minutes) or label (Out, Leftovers, free text), who cooks (cook_user_id), and calendar hints for busy evenings. today is the person's date. With Groceries on, missing lists ingredients of the planned recipes from today on that are not on the shopping list or in stock; add them with add_recipe_to_groceries. Defaults to this week; pass any date in another week to read that one.",
+        "The household's dinner plan for one week (Monday to Sunday). Each night has dishes (recipe_id, title, role main, side or dessert, minutes) or a label (Out, Leftovers, free text), who cooks (cook_user_id), and calendar hints for busy evenings. today is the person's date. With Groceries on, each night has to_buy (its ingredients not on the list or in stock), and missing lists ingredients of the planned recipes from today on that are not on the shopping list or in stock; add them with add_recipe_to_groceries. Defaults to this week; pass any date in another week to read that one.",
       inputSchema: {
         date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe("Any YYYY-MM-DD in the week to read; this week when left out."),
       },
@@ -1547,31 +1575,38 @@ export function householdTools({
       const timeZone = await personTimeZone(admin, userId);
       const today = todayIn(timeZone);
       const week = await loadMealWeek(admin, { userId, groupId, weekStart: mealWeekStart(date ?? today), timeZone, enabled });
-      const byDate = mealEntriesByDate(week.entries);
+      const dishesByDate = mealDishesByDate(week.entries);
+      const staples = enabled.has("groceries") ? (await loadRecipeMatch()).staples : undefined;
+      const shoppingFor = (entries: MealPlanEntry[], fromDate: string) =>
+        weekShopping({
+          entries,
+          fromDate,
+          recipesById: week.recipesById,
+          ingredientsByRecipe: week.ingredientsByRecipe,
+          groceryItems: week.groceryItems,
+          staples,
+        });
       const nights = week.weekDates.map((d) => {
-        const entry = byDate.get(d);
-        const recipe = entry?.recipe_id ? week.recipesById.get(entry.recipe_id) : undefined;
-        const planned = isNightPlanned(entry, week.recipesById);
+        const rows = dishesByDate.get(d) ?? [];
+        const entry = rows[0];
+        const dishes = rows.flatMap((e) => {
+          const recipe = e.recipe_id ? week.recipesById.get(e.recipe_id) : undefined;
+          return recipe ? [{ recipe_id: recipe.id, title: recipe.title, role: mealRole(e), minutes: recipeMinutes(recipe) }] : [];
+        });
+        const planned = dishes.length > 0 || isNightPlanned(entry, week.recipesById);
         const hint = enabled.has("calendar") ? mealNightHint(d, week.agenda, planned) : null;
         return {
           date: d,
           weekday: mealNightLabel(d).weekday,
-          ...(recipe ? { recipe_id: recipe.id, title: recipe.title, minutes: recipeMinutes(recipe) } : {}),
-          ...(!recipe && entry?.label ? { label: entry.label } : {}),
+          ...(dishes.length ? { dishes } : {}),
+          ...(!dishes.length && entry?.label ? { label: entry.label } : {}),
           ...(entry?.cook_user_id ? { cook_user_id: entry.cook_user_id } : {}),
           ...(entry?.note ? { note: entry.note } : {}),
+          ...(enabled.has("groceries") && dishes.length && d >= today ? { to_buy: shoppingFor(rows, d).missing.length } : {}),
           ...(hint ? { hint } : {}),
         };
       });
-      const shopping = enabled.has("groceries")
-        ? weekShopping({
-            entries: byDate.values(),
-            fromDate: today,
-            recipesById: week.recipesById,
-            ingredientsByRecipe: week.ingredientsByRecipe,
-            groceryItems: week.groceryItems,
-          })
-        : null;
+      const shopping = enabled.has("groceries") ? shoppingFor([...dishesByDate.values()].flat(), today) : null;
       return {
         content: [
           {
@@ -1594,17 +1629,20 @@ export function householdTools({
     "set_meal",
     {
       description:
-        "Plan one night's dinner: pass recipe_id (from get_recipes) for a recipe, or label for a night without one (Out, Leftovers, or a few words). cook_user_id says who cooks (a member's user id; null clears it). clear true empties the night. Fields left out keep their value.",
+        "Plan one night's dinner. A night holds several dishes (a main plus sides and a dessert) or one label. recipe_id (from get_recipes) sets the main dish and keeps the sides; with add true it adds the recipe as another dish instead (role side by default, or main when the night has none). role (main, side, dessert) sets that recipe's role on the night. remove_recipe_id takes one dish off. label (Out, Leftovers, or a few words) replaces the whole night. cook_user_id says who cooks the night (a member's user id; null clears it). clear true empties the night. Fields left out keep their value.",
       inputSchema: {
         date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
         recipe_id: z.string().optional(),
+        add: z.boolean().optional().describe("Add recipe_id as another dish instead of replacing the main."),
+        role: z.enum(["main", "side", "dessert"]).optional().describe("The role of recipe_id on the night."),
+        remove_recipe_id: z.string().optional().describe("Take this recipe's dish off the night."),
         label: z.string().max(60).optional(),
         cook_user_id: z.string().nullable().optional(),
         note: z.string().max(200).nullable().optional(),
         clear: z.boolean().optional(),
       },
     },
-    async ({ date, recipe_id, label, cook_user_id, note, clear }) => {
+    async ({ date, recipe_id, add, role, remove_recipe_id, label, cook_user_id, note, clear }) => {
       if (!groupId) return noGroupError();
       if (!enabled.has("recipes")) return toolError("The Recipes module is off for this household");
       if (recipe_id) {
@@ -1624,31 +1662,58 @@ export function householdTools({
         .eq("deleted", false);
       if (error) return toolError(error.message);
       const existing = (rows ?? []) as MealPlanEntry[];
-      const current = mealEntriesByDate(existing).get(date);
-      const stale = existing.filter((e) => e.id !== current?.id).map((e) => e.id);
-      if (clear) {
-        const ids = existing.map((e) => e.id);
-        if (ids.length) {
-          const { error: delError } = await admin.from("meal_plan_entries").update({ deleted: true }).eq("group_id", groupId).in("id", ids);
-          if (delError) return toolError(delError.message);
-        }
-        return { content: [{ type: "text", text: JSON.stringify({ ok: true, date, cleared: true }) }] };
-      }
-      if (!recipe_id && !label?.trim() && !current) return toolError("Pass recipe_id or label");
-      const patch: Partial<MealPlanEntry> = {
-        ...(recipe_id ? { recipe_id, label: null } : {}),
-        ...(!recipe_id && label?.trim() ? { recipe_id: null, label: label.trim() } : {}),
+      const plan = planMealNight(existing, date, {
+        recipeId: recipe_id ?? null,
+        add: !!add,
+        role: role ?? null,
+        removeRecipeId: remove_recipe_id ?? null,
+        label: label ?? null,
+        clear: !!clear,
+      });
+      if ("error" in plan) return toolError(plan.error);
+      const dishes = plan.inserts.length + plan.keep.length;
+      const shared: Partial<MealPlanEntry> = {
         ...(cook_user_id !== undefined ? { cook_user_id } : {}),
-        ...(note !== undefined ? { note } : {}),
       };
-      const { error: writeError } = current
-        ? await admin.from("meal_plan_entries").update(patch).eq("id", current.id).eq("group_id", groupId)
-        : await admin.from("meal_plan_entries").insert({
-            ...buildMealPlanEntry({ groupId, date, recipeId: recipe_id ?? null, label: label ?? null, cookUserId: cook_user_id ?? null, note: note ?? null, createdBy: userId }),
-          });
-      if (writeError) return toolError(writeError.message);
-      if (stale.length) await admin.from("meal_plan_entries").update({ deleted: true }).eq("group_id", groupId).in("id", stale);
-      return { content: [{ type: "text", text: JSON.stringify({ ok: true, date }) }] };
+      for (const [id, patch] of plan.updates) {
+        const { error: writeError } = await admin
+          .from("meal_plan_entries")
+          .update({ ...patch, ...shared, ...(note !== undefined && id === plan.first ? { note } : {}) })
+          .eq("id", id)
+          .eq("group_id", groupId);
+        if (writeError) return toolError(writeError.message);
+      }
+      if (Object.keys(shared).length) {
+        const untouched = plan.keep.filter((id) => !plan.updates.has(id));
+        if (untouched.length) await admin.from("meal_plan_entries").update(shared).eq("group_id", groupId).in("id", untouched);
+      }
+      if (note !== undefined && plan.first && !plan.updates.has(plan.first)) {
+        await admin.from("meal_plan_entries").update({ note }).eq("id", plan.first).eq("group_id", groupId);
+      }
+      const cook = cook_user_id !== undefined ? cook_user_id : existing.find((e) => plan.keep.includes(e.id))?.cook_user_id ?? null;
+      if (plan.inserts.length) {
+        const { error: insertError } = await admin.from("meal_plan_entries").insert(
+          plan.inserts.map((ins, i) =>
+            buildMealPlanEntry({
+              groupId,
+              date,
+              recipeId: ins.recipeId,
+              label: ins.label,
+              role: ins.role,
+              position: ins.position,
+              cookUserId: cook,
+              note: i === 0 && !plan.first ? note ?? null : null,
+              createdBy: userId,
+            }),
+          ),
+        );
+        if (insertError) return toolError(insertError.message);
+      }
+      if (plan.remove.length) {
+        const { error: delError } = await admin.from("meal_plan_entries").update({ deleted: true }).eq("group_id", groupId).in("id", plan.remove);
+        if (delError) return toolError(delError.message);
+      }
+      return { content: [{ type: "text", text: JSON.stringify({ ok: true, date, ...(clear ? { cleared: true } : { dishes }) }) }] };
     }
   );
 

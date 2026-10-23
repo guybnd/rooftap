@@ -18,7 +18,7 @@ import { toast } from 'sonner';
 import { Plus, ChefHat, Camera, ImagePlus, Loader2 } from 'lucide-react';
 import { useDataCache } from '@/lib/data-cache';
 import { createClient } from '@/lib/supabase/client';
-import { dialog, recipes$, recipeIngredients$, groceryItems$, useReconnectSync, useStoreHelpers, useStoreLoaded, useModules } from '@homeup/core';
+import { dialog, recipes$, recipeIngredients$, groceryItems$, useReconnectSync, useStoreHelpers, useStoreLoaded, useModules, useRecipeMatch } from '@homeup/core';
 import type { GroceryItem, Recipe, RecipeIngredient } from '@homeup/core';
 import {
   RECIPE_METHODS,
@@ -28,12 +28,14 @@ import {
   buildNeededGroceryItem,
   groceryStatusPatch,
   recipeCuisines,
+  ingredientMatchKey,
 } from '@homeup/core';
 import { captureRecipeFromPhoto, discardRecipeDraftPhoto } from '@/lib/recipe-capture';
 import { HeroLede } from '@/components/ui/hero-lede';
 import { SectionSearchBar } from '@/components/section-search-bar';
 import { useFuzzySearch } from '@/hooks/use-fuzzy-search';
 import { RecipeFormSheet } from './recipe-form-sheet';
+import { ScanMatchSheet } from './scan-match-sheet';
 import { RecipeRow } from './recipe-row';
 import { OfflineHint } from '@/components/offline-hint';
 import { cn } from '@/lib/utils';
@@ -75,6 +77,9 @@ export default function RecipesPage() {
   const { writeRow: writeIngredient, patchRow: patchIngredient, softDeleteRow: softDeleteIngredient } =
     useStoreHelpers(ings$, currentUserId);
   const { writeRow: writeGrocery, patchRow: patchGrocery } = useStoreHelpers(items$, currentUserId);
+  // Recipes v2 R5: staples and taught names for the match step after a scan.
+  const match = useRecipeMatch(group?.id, currentUserId);
+  const staples = groceriesLinked ? match.staples : undefined;
   const storeLoaded = useStoreLoaded(...(groceriesLinked ? [recs$, ings$, items$] : [recs$, ings$]));
 
   const allRecipes = use$(() =>
@@ -120,6 +125,8 @@ export default function RecipesPage() {
   const canMakeOnly = groceriesLinked && canMakeOnlyPicked;
   // null = closed; {} = "New recipe"; {recipe} = edit / draft review.
   const [sheetState, setSheetState] = useState<{ recipe?: Recipe } | null>(null);
+  // The scanned draft whose match step is open; the review sheet follows it.
+  const [matchFor, setMatchFor] = useState<Recipe | null>(null);
   const [scanning, setScanning] = useState(false);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -132,10 +139,10 @@ export default function RecipesPage() {
         if (selectedCuisines.size && !recipeCuisines(r).some((c) => selectedCuisines.has(c))) return false;
         // Unset method filters as "other".
         if (selectedMethods.size && !selectedMethods.has(r.method ?? 'other')) return false;
-        if (canMakeOnly && !canBeMade(ingredientsByRecipe.get(r.id) ?? [], groceryItems)) return false;
+        if (canMakeOnly && !canBeMade(ingredientsByRecipe.get(r.id) ?? [], groceryItems, staples)) return false;
         return true;
       }),
-    [searched, selectedCuisines, selectedMethods, canMakeOnly, ingredientsByRecipe, groceryItems],
+    [searched, selectedCuisines, selectedMethods, canMakeOnly, ingredientsByRecipe, groceryItems, staples],
   );
 
   // Hearth v2 (Pulse): the Hero caption's "can make now" fragment, from the
@@ -143,9 +150,9 @@ export default function RecipesPage() {
   const canMakeCount = useMemo(
     () =>
       groceriesLinked
-        ? recipes.filter((r) => canBeMade(ingredientsByRecipe.get(r.id) ?? [], groceryItems)).length
+        ? recipes.filter((r) => canBeMade(ingredientsByRecipe.get(r.id) ?? [], groceryItems, staples)).length
         : 0,
-    [groceriesLinked, recipes, ingredientsByRecipe, groceryItems],
+    [groceriesLinked, recipes, ingredientsByRecipe, groceryItems, staples],
   );
 
   const toggleIn = (set: Set<string>, setter: (s: Set<string>) => void, value: string) => {
@@ -233,6 +240,36 @@ export default function RecipesPage() {
     patchIngredient(ingredient.id, { item_name: trimmedName });
   };
 
+  // ── Recipes v2 R5: the match step's writes ─────────────────────────────────
+  const sameItem = (ingredient: RecipeIngredient, itemName: string) => {
+    match.remember(ingredientMatchKey(ingredient), itemName);
+    patchIngredient(ingredient.id, { item_name: itemName });
+  };
+  const ownItem = (ingredient: RecipeIngredient) => {
+    const key = ingredientMatchKey(ingredient);
+    match.remember(key, key);
+  };
+  const addScannedToList = (ingredient: RecipeIngredient, name: string) => {
+    if (!group?.id || !matchFor) return;
+    writeGrocery(
+      buildNeededGroceryItem({
+        groupId: group.id,
+        name,
+        recipeNote: recipeNoteFor(ingredient, matchFor.title),
+        recipeSourceId: matchFor.id,
+        createdBy: currentUserId ?? null,
+        quantity: ingredient.quantity,
+        unit: ingredient.unit,
+      }),
+    );
+    if (ingredient.item_name !== name) patchIngredient(ingredient.id, { item_name: name });
+  };
+  const finishMatch = () => {
+    const recipe = matchFor;
+    setMatchFor(null);
+    if (recipe) openReview(recipe);
+  };
+
   const handleFilePicked = async (file: File | undefined) => {
     if (!file || !group || !isOnline) return;
     setScanning(true);
@@ -244,11 +281,16 @@ export default function RecipesPage() {
         file,
         groceryItems,
         existingIngredients: allIngredients,
+        staples: match.staples,
+        aliases: match.aliases,
         withSteps: modules.server('recipes.steps'),
       });
       writeRecipe(recipe);
       ingredients.forEach(writeIngredient);
-      openReview(recipe);
+      // The match step first, while Groceries is linked: it shows what the
+      // scan matched and asks about the doubtful ones.
+      if (groceriesLinked && ingredients.length > 0) setMatchFor(recipe);
+      else openReview(recipe);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not scan that photo.');
       openNew();
@@ -454,6 +496,7 @@ export default function RecipesPage() {
               ingredients={ingredientsByRecipe.get(r.id) ?? []}
               groceryItems={groceryItems}
               groceriesLinked={groceriesLinked}
+              staples={staples}
               onEdit={() => openReview(r)}
               onDelete={() => void deleteRecipe(r)}
             />
@@ -477,7 +520,27 @@ export default function RecipesPage() {
         onRemoveIngredientRow={sheetState?.recipe?.draft ? softDeleteIngredient : undefined}
         onToggleGroceryItemStatus={sheetState?.recipe?.draft && groceriesLinked ? toggleGroceryItemStatus : undefined}
         onCreateGroceryItemForIngredient={sheetState?.recipe?.draft && groceriesLinked ? createGroceryItemForIngredient : undefined}
+        staples={match.staples}
+        aliases={match.aliases}
+        onRemember={sheetState?.recipe?.draft && groceriesLinked ? match.remember : undefined}
       />
+
+      {matchFor && (
+        <ScanMatchSheet
+          open
+          onDone={finishMatch}
+          ingredients={ingredientsByRecipe.get(matchFor.id) ?? []}
+          groceryItems={groceryItems}
+          allIngredients={allIngredients}
+          context={match.context}
+          canRemember={match.canRemember}
+          staplesShown={match.staplesShown}
+          onSame={sameItem}
+          onNew={ownItem}
+          onSetStaple={match.setStaple}
+          onAddToList={addScannedToList}
+        />
+      )}
 
       {/* Hidden file inputs for "Scan a recipe" — camera uses the rear camera on mobile. */}
       <input

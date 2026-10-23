@@ -74,20 +74,17 @@ import {
 import {
   CADENCE_LABEL,
   CATEGORY_META,
-  daysBetweenISO,
   formatMoney,
-  isOneOff,
   listDocumentsForEntity,
-  nextOccurrence,
-  parseLocalDateOnly,
   timeAgo,
-  toISODate,
-  todayISO,
   syncCostReminders,
   type StepBackResult,
   useEntityCommentCount,
   useModules,
   useCostBankLink,
+  costRowDateLabel,
+  expiryLabel,
+  soonestCostExpiry,
   useCostActual,
   useCostCategoryChoices,
   monthLabel,
@@ -230,34 +227,8 @@ export function CategoryChip({ category }: { category: CostCategory }) {
   );
 }
 
-// H6: a cost's date as a relative day, never "7 Oct" or raw ISO. Same grammar
-// as the task row's due label and web's costDateLabel (apps/web/src/app/costs/
-// cost-dates.ts): Today / Tomorrow / Yesterday, a short weekday inside the
-// coming week, then "Oct 25".
-function relativeOccurrenceLabel(d: Date): string {
-  const diff = daysBetweenISO(todayISO(), toISODate(d));
-  if (diff === 0) return 'Today';
-  if (diff === 1) return 'Tomorrow';
-  if (diff === -1) return 'Yesterday';
-  if (diff > 1 && diff < 7) return d.toLocaleDateString('en-US', { weekday: 'short' });
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
-
-/** The row's status fragment for a contract or discount ending within 30 days (mirrors web). */
-function expiryFragment(item: CostItem): { text: string; overdue: boolean } | null {
-  const candidates: { kind: 'Contract' | 'Discount'; date: string }[] = [];
-  if (item.end_date) candidates.push({ kind: 'Contract', date: item.end_date });
-  if (item.discount_end_date) candidates.push({ kind: 'Discount', date: item.discount_end_date });
-  if (candidates.length === 0) return null;
-  candidates.sort((a, b) => a.date.localeCompare(b.date));
-  const { kind, date } = candidates[0];
-  const days = daysBetweenISO(todayISO(), date);
-  if (days > 30) return null;
-  if (days < 0) return { text: `${kind} ended ${Math.abs(days)}d ago`, overdue: true };
-  if (days === 0) return { text: `${kind} ends today`, overdue: false };
-  return { text: `${kind} ends in ${days}d`, overdue: false };
-}
-
+// H6: the row's date is relative, never "7 Oct" or raw ISO (core
+// costs/cost-dates.ts, shared with web).
 export function CostRow({
   item,
   groupId,
@@ -334,20 +305,10 @@ export function CostRow({
   // occurrence; falling back to "added {relative}" from created_at when there's
   // no start_date (or an ended recurring cost's occurrence resolves to null).
   // Both null-guarded — local-first inserts can lack a date.
-  const dateLabel = (() => {
-    if (item.start_date) {
-      const occurrence = isOneOff(item)
-        ? parseLocalDateOnly(item.start_date)
-        : nextOccurrence(item, new Date(new Date().getFullYear(), new Date().getMonth(), 1));
-      if (occurrence) return relativeOccurrenceLabel(occurrence);
-    }
-    if (item.created_at) {
-      const rel = timeAgo(item.created_at);
-      if (rel) return `added ${rel}`;
-    }
-    return null;
-  })();
-  const expiry = expiryFragment(item);
+  const dateLabel = costRowDateLabel(item);
+  const soonest = soonestCostExpiry(item);
+  // A contract or discount ending within 30 days (or already ended).
+  const expiry = soonest && soonest.days <= 30 ? { text: expiryLabel(soonest.kind, soonest.days), overdue: soonest.days < 0 } : null;
   const paidAgo = bankLink?.lastPaidAt ? timeAgo(bankLink.lastPaidAt) : null;
 
   // Portals (PC1-7): attachments + comments both "open in place" (neutral

@@ -93,6 +93,8 @@ export interface UseCooks {
   addMinute: (cookId: string, timerId: string) => void;
   stopTimer: (cookId: string, timerId: string) => void;
   finish: (cookId: string) => void;
+  /** Undo a finish, while the store still holds the row. */
+  restore: (cookId: string) => void;
 }
 
 export function useCooks(groupId: string | null | undefined, userId: string | null | undefined): UseCooks {
@@ -201,5 +203,6 @@ export function useCooks(groupId: string | null | undefined, userId: string | nu
       setTimers(cookId, (timers, now) => addTimerMinute(timers, timerId, cookDeviceId(), now)),
     stopTimer: (cookId, timerId) => setTimers(cookId, (timers) => stopTimer(timers, timerId)),
     finish: (cookId) => softDeleteRow(cookId),
+    restore: (cookId) => patchRow(cookId, { deleted: false }),
   };
 }

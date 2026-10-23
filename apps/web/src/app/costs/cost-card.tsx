@@ -5,10 +5,9 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
 import type { CostItem, CostCadence, CostCategory, GroupMember } from '@homeup/core';
-import { CATEGORY_META, CADENCE_LABEL, formatMoney, isOneOff, nextOccurrence, parseLocalDateOnly, daysUntilISO, useEntityCommentCount, type StepBackResult, currencySymbol } from '@homeup/core';
+import { CATEGORY_META, CADENCE_LABEL, costRowDateLabel, expiryLabel, soonestCostExpiry, formatMoney, useEntityCommentCount, type StepBackResult, currencySymbol } from '@homeup/core';
 import { monthLabel, timeAgo, useCostActual, useCostBankLink, useCostCategoryChoices } from '@homeup/core';
 import { CATEGORY_ICON, CategoryGlyph } from './category-glyph';
-import { costDateLabel, expiryLabel } from './cost-dates';
 import { EditableText } from '@/components/ui/editable-text';
 import {
   ListItem,
@@ -43,7 +42,7 @@ import { findReminderTaskId, reminderKey, useModules } from '@homeup/core';
 import { useLongPress as useSharedLongPress, HOLD_FILL_DELAY_MS } from '@/hooks/use-long-press';
 import { DragNumberField } from '@/components/ui/drag-number-field';
 import { SegmentedControl, type SegmentOption } from '@/components/ui/segmented-control';
-import { SearchablePicker, type PickerOption } from '@/components/ui/searchable-picker';
+import { SearchablePicker,} from '@/components/ui/searchable-picker';
 
 // FLUX-198: elements that own their own pointer interaction never start a hold
 // (mirrors groceries' NO_HOLD — buttons/inputs/links/the category+cadence chips).
@@ -211,15 +210,7 @@ export function CostCard({
   const estimatePartial = !!estimateStepBack && !estimateCovered && estimateStepBack.act > 0;
 
   // Soonest relevant expiry for the at-a-glance reminder hint.
-  const expiry = (() => {
-    const candidates: { label: 'Contract' | 'Discount'; date: string }[] = [];
-    if (item.end_date) candidates.push({ label: 'Contract', date: item.end_date });
-    if (item.discount_end_date) candidates.push({ label: 'Discount', date: item.discount_end_date });
-    if (candidates.length === 0) return null;
-    candidates.sort((a, b) => a.date.localeCompare(b.date));
-    const soonest = candidates[0];
-    return { ...soonest, days: daysUntilISO(soonest.date) };
-  })();
+  const expiry = soonestCostExpiry(item);
 
   const iconBtn =
     'flex items-center justify-center h-8 w-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted flex-shrink-0 transition-colors';
@@ -287,19 +278,7 @@ export function CostCard({
   // when there's no start_date at all. Both dates are null-guarded — local-first
   // inserts can have created_at null until server sync — so a row with neither
   // renders no fragment.
-  const dateLabel = (() => {
-    if (item.start_date) {
-      const occurrence = isOneOff(item)
-        ? parseLocalDateOnly(item.start_date)
-        : nextOccurrence(item, new Date(new Date().getFullYear(), new Date().getMonth(), 1));
-      if (occurrence) return costDateLabel(occurrence);
-    }
-    if (item.created_at) {
-      const rel = timeAgo(item.created_at);
-      if (rel) return `added ${rel}`;
-    }
-    return null;
-  })();
+  const dateLabel = costRowDateLabel(item);
 
   // Meta grammar (Hearth §6, H6): at most two fragments, so one middle dot.
   // A contract or discount ending within 30 days (or already ended) is the
@@ -326,7 +305,7 @@ export function CostCard({
   } else if (expirySoon) {
     metaParts.push(
       <span key="expiry" className={cn('shrink-0 tabular-nums', expiry.days < 0 ? 'text-destructive' : 'text-warning')}>
-        {expiryLabel(expiry.label, expiry.days)}
+        {expiryLabel(expiry.kind, expiry.days)}
       </span>
     );
   } else if (paidAgo) {

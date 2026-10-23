@@ -33,6 +33,7 @@ export * from './modules/groceries/grocery-icons';
 export * from './modules/groceries/grocery-sessions';
 export * from './modules/rewards/loyalty-cards';
 export * from './modules/recipes/recipes';
+export * from './modules/recipes/scan-match';
 export * from './modules/recipes/steps';
 export * from './modules/recipes/cook';
 export * from './modules/recipes/use-cooks';
@@ -98,6 +99,8 @@ export * from './modules/costs/to-sort';
 export * from './modules/costs/cost-month';
 export * from './modules/costs/cost-month-view';
 export * from './modules/costs/use-money-view';
+export * from './modules/costs/cost-form';
+export * from './modules/costs/cost-dates';
 export * from './modules/documents/document-folders';
 export * from './modules/documents/document-list-view';
 export * from './modules/documents/use-document-list-view';
@@ -154,6 +157,7 @@ export * from './modules/calendar/use-event-save';
 export * from './modules/rewards/use-rewards';
 export * from './modules/occasions/use-occasions';
 export * from './modules/bins/use-bins';
+export * from './modules/recipes/use-recipe-match';
 
 // hooks/use-debounce + hooks/use-fuzzy-search are deliberately NOT exported
 // here: they import React client hooks, and this barrel is also consumed by

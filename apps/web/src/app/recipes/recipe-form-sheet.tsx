@@ -29,8 +29,8 @@ import {
   itemMatchLibrary,
   ingredientStatus,
   ingredientMatchKey,
-  rankItemMatches,
-  norm,
+  ingredientScanMatch,
+  stapleKeys,
   buildRecipe,
   buildRecipeIngredient,
   recipeCuisines,
@@ -40,7 +40,6 @@ import {
   methodFields,
   suggestedTimer,
   useModules,
-  type ScoredMatch,
   type StepFormRow,
   type RecipeStepTimer,
 } from '@homeup/core';
@@ -61,23 +60,35 @@ import { cn } from '@/lib/utils';
 // and won't reactively reflect a quick-editor's direct store write.
 type ReviewState =
   | { kind: 'silent' }
-  | { kind: 'suggestion'; candidate: ScoredMatch }
-  | { kind: 'new' };
+  | { kind: 'suggestion'; candidate: { name: string } }
+  | { kind: 'new' }
+  | { kind: 'staple' };
 
 function computeReviewState(
   ing: RecipeIngredient,
   groceryItems: GroceryItem[],
   allIngredients: RecipeIngredient[],
+  staples: ReadonlySet<string>,
+  aliases: ReadonlyMap<string, string>,
 ): ReviewState {
-  const candidates = rankItemMatches(ingredientMatchKey(ing), itemMatchLibrary(groceryItems, allIngredients));
-  if (candidates.length === 0) return { kind: 'new' };
-  const top = candidates[0];
-  const alreadyLinked = norm(top.name) === norm(ing.item_name ?? '');
-  if (top.tier === 'exact' || top.tier === 'plural' || alreadyLinked) return { kind: 'silent' };
-  return { kind: 'suggestion', candidate: top };
+  // Recipes v2 R5: the same classifier as the match step, so staples and
+  // taught names agree with it.
+  const m = ingredientScanMatch(ing, { library: itemMatchLibrary(groceryItems, allIngredients), staples, aliases });
+  if (m.kind === 'staple') return { kind: 'staple' };
+  if (m.kind === 'matched') return { kind: 'silent' };
+  if (m.kind === 'check') return { kind: 'suggestion', candidate: { name: m.item } };
+  return { kind: 'new' };
 }
 
+const DEFAULT_STAPLE_KEYS = stapleKeys([]);
+const NO_ALIASES: ReadonlyMap<string, string> = new Map();
+
 interface RecipeFormSheetProps {
+  /** Household staples and taught names (useRecipeMatch). Defaults when omitted. */
+  staples?: ReadonlySet<string>;
+  aliases?: ReadonlyMap<string, string>;
+  /** Draft review: Accept or Reject teaches future scans (alias, item). */
+  onRemember?: (alias: string, itemName: string) => void;
   isOpen: boolean;
   /** Present in edit mode. */
   recipe?: Recipe;
@@ -146,6 +157,9 @@ export function RecipeFormSheet({
   onRemoveIngredientRow,
   onToggleGroceryItemStatus,
   onCreateGroceryItemForIngredient,
+  staples = DEFAULT_STAPLE_KEYS,
+  aliases = NO_ALIASES,
+  onRemember,
 }: RecipeFormSheetProps) {
   const buildInitial = useCallback(() => {
     const rows: Row[] = (ingredients ?? [])
@@ -254,14 +268,24 @@ export function RecipeFormSheet({
     if (Object.keys(rowPatch).length) setRow(row.key, rowPatch);
   };
 
-  const acceptSuggestion = (id: string, candidateName: string) =>
+  const liveKey = (id: string) => {
+    const live = (ingredients ?? []).find((i) => i.id === id);
+    return live ? ingredientMatchKey(live) : null;
+  };
+  const acceptSuggestion = (id: string, candidateName: string) => {
+    const key = liveKey(id);
+    if (key) onRemember?.(key, candidateName);
     patchIngredientAndRow(id, { item_name: candidateName });
-  const rejectSuggestion = (id: string) =>
+  };
+  const rejectSuggestion = (id: string) => {
+    const key = liveKey(id);
+    if (key) onRemember?.(key, key);
     setDismissedSuggestions((prev) => {
       const next = new Set(prev);
       next.add(id);
       return next;
     });
+  };
 
   // Rows currently in the unconfirmed-suggestion state (not yet accepted/rejected
   // this session) — drives the "N suggested matches to review" banner. Save is
@@ -270,7 +294,7 @@ export function RecipeFormSheet({
     ? form.rows.filter((row) => {
         if (!row.id || dismissedSuggestions.has(row.id)) return false;
         const live = (ingredients ?? []).find((i) => i.id === row.id);
-        return !!live && computeReviewState(live, groceryItems, allIngredients).kind === 'suggestion';
+        return !!live && computeReviewState(live, groceryItems, allIngredients, staples, aliases).kind === 'suggestion';
       }).length
     : 0;
 
@@ -475,7 +499,7 @@ export function RecipeFormSheet({
           {form.rows.map((row) => {
             const liveIngredient = isDraftReview && row.id ? (ingredients ?? []).find((i) => i.id === row.id) : undefined;
             const rejected = !!row.id && dismissedSuggestions.has(row.id);
-            const rawState = liveIngredient ? computeReviewState(liveIngredient, groceryItems, allIngredients) : null;
+            const rawState = liveIngredient ? computeReviewState(liveIngredient, groceryItems, allIngredients, staples, aliases) : null;
             // A rejected suggestion falls back to being treated as new/unlinked.
             const reviewState: ReviewState | null =
               rawState?.kind === 'suggestion' && rejected ? { kind: 'new' } : rawState;
@@ -549,6 +573,10 @@ export function RecipeFormSheet({
                       </button>
                     </div>
                   </div>
+                )}
+
+                {reviewState?.kind === 'staple' && onCreateGroceryItemForIngredient && (
+                  <p className="mt-2 text-xs text-muted-foreground">Staple, never added to the list</p>
                 )}
 
                 {/* Modules: "new item" means not on the shopping list yet, so it needs

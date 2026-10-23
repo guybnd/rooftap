@@ -359,6 +359,8 @@ export function describeProposal(tool: string, module: AssistantScope, args: Rec
   if (tool === 'set_meal') {
     const night = typeof args.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(args.date) ? ` for ${mealNightName(args.date)}` : '';
     if (args.clear === true) return `Clear the dinner${night} on the meal plan`;
+    if (typeof args.remove_recipe_id === 'string' && !args.recipe_id) return `Take a dish off the dinner${night} on the meal plan`;
+    if (args.add === true) return `Add a dish to the dinner${night} on the meal plan`;
     if (typeof args.label === 'string' && args.label.trim() && !args.recipe_id) return `Put ${quoted(args.label)}${night} on the meal plan`;
     return `Plan a dinner${night} on the meal plan`;
   }

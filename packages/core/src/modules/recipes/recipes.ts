@@ -8,6 +8,7 @@
 
 import type { GroceryItem, Recipe, RecipeIngredient, RecipeMethod, RecipeSourceType } from '../../types';
 import { envRandomUUID } from '../../data/store-environment';
+import { isStaple } from './scan-match';
 
 // ── Name normalisation ─────────────────────────────────────────────────────────
 // The recipe↔grocery match is name-based (decision 2). Replicated here rather than
@@ -134,30 +135,45 @@ export interface HaveCount {
   total: number;
 }
 
+/** A staple (salt, oil) is always in stock, so it counts as "have". */
+function stapleIngredient(ing: RecipeIngredient, staples: ReadonlySet<string> | undefined): boolean {
+  return !!staples && staples.size > 0 && (isStaple(ingredientMatchKey(ing), staples) || isStaple(ing.name, staples));
+}
+
 /**
  * How many of a recipe's ingredients you already "have" (presence-based: the
- * matched grocery item is status==='have'). Guards zero-ingredient recipes.
+ * matched grocery item is status==='have', or the ingredient is a household
+ * staple). Guards zero-ingredient recipes.
  */
 export function recipeHaveCount(
   ingredients: RecipeIngredient[],
   items: GroceryItem[],
+  staples?: ReadonlySet<string>,
 ): HaveCount {
   const live = ingredients.filter((i) => !i.deleted);
   const have = live.filter(
-    (ing) => matchIngredientToGrocery(ingredientMatchKey(ing), items)?.status === 'have',
+    (ing) =>
+      stapleIngredient(ing, staples) || matchIngredientToGrocery(ingredientMatchKey(ing), items)?.status === 'have',
   ).length;
   return { have, total: live.length };
 }
 
 /**
  * A recipe can be made right now iff it has at least one ingredient and EVERY
- * ingredient's matched item is status==='have' (strict all-have; threshold mode
- * is a v2 follow-up). Zero-ingredient recipes are excluded.
+ * ingredient's matched item is status==='have' or a staple (strict all-have;
+ * threshold mode is a v2 follow-up). Zero-ingredient recipes are excluded.
  */
-export function canBeMade(ingredients: RecipeIngredient[], items: GroceryItem[]): boolean {
+export function canBeMade(
+  ingredients: RecipeIngredient[],
+  items: GroceryItem[],
+  staples?: ReadonlySet<string>,
+): boolean {
   const live = ingredients.filter((i) => !i.deleted);
   if (live.length === 0) return false;
-  return live.every((ing) => matchIngredientToGrocery(ingredientMatchKey(ing), items)?.status === 'have');
+  return live.every(
+    (ing) =>
+      stapleIngredient(ing, staples) || matchIngredientToGrocery(ingredientMatchKey(ing), items)?.status === 'have',
+  );
 }
 
 /**

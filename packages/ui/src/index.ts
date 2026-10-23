@@ -31,6 +31,7 @@ export * from './components/section-search-bar';
 export * from './components/progress-bar';
 export * from './components/list-item';
 export * from './components/portal-chip';
+export * from './components/cook-heads';
 export * from './components/checklist-panel';
 export * from './components/checklist-item-list';
 export * from './components/entity-comments';

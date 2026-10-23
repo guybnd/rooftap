@@ -16,8 +16,9 @@ import { navLinkClickHandler } from '@/lib/view-transitions';
 const HREF = '/recipes?tab=week';
 
 export function TonightMeal({ groupId }: { groupId: string }) {
-  const on = useModules().feature('hub.meals');
-  const tonight = useTonightMeal(groupId, on, todayISO());
+  const modules = useModules();
+  const on = modules.feature('hub.meals');
+  const tonight = useTonightMeal(groupId, on, todayISO(), modules.server('meals.multi-dish'));
   const router = useRouter();
   if (!tonight) return null;
   return (

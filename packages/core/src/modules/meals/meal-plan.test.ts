@@ -4,9 +4,12 @@ import {
   buildMealPlanEntry,
   cookName,
   cleanMealDraft,
+  dishesMinutes,
+  dishesTitle,
   draftableNights,
   formatMealMinutes,
   groceriesGoingOff,
+  mealDishesByDate,
   mealDraftPrompt,
   mealEntriesByDate,
   mealNightHint,
@@ -14,6 +17,9 @@ import {
   mealWeekName,
   mealWeekRangeLabel,
   mealWeekStart,
+  nextDishPosition,
+  nextDishRole,
+  planMealNight,
   shadowedMealEntries,
   tonightLine,
   weekShopping,
@@ -68,7 +74,10 @@ function entry(date: string, fields: Partial<MealPlanEntry> = {}): MealPlanEntry
 
 const curry = recipe('curry', 'Thai green curry', [10, 25]);
 const pizza = recipe('pizza', 'Homemade pizza', [40, 30]);
-const recipesById = new Map([curry, pizza].map((r) => [r.id, r]));
+const rice = recipe('rice', 'Jasmine rice', [5, 15]);
+const salad = recipe('salad', 'Garden salad', [10, null]);
+const tart = recipe('tart', 'Lemon tart', [30, 45]);
+const recipesById = new Map([curry, pizza, rice, salad, tart].map((r) => [r.id, r]));
 
 describe('the week', () => {
   it('starts on the Monday on or before a date', () => {
@@ -93,20 +102,102 @@ describe('the week', () => {
 });
 
 describe('mealEntriesByDate', () => {
-  it('keeps the newest live dinner row per night', () => {
+  it('keeps the newest live dinner row per night on a server without several dishes', () => {
     const old = entry('2026-10-27', { id: 'a', recipe_id: 'curry', updated_at: '2026-10-27T09:00:00Z' });
     const newer = entry('2026-10-27', { id: 'b', label: 'Out', updated_at: '2026-10-27T11:00:00Z' });
     const gone = entry('2026-10-27', { id: 'c', recipe_id: 'pizza', updated_at: '2026-10-27T12:00:00Z', deleted: true });
     const lunch = entry('2026-10-27', { id: 'd', slot: 'lunch', updated_at: '2026-10-27T13:00:00Z' });
-    const byDate = mealEntriesByDate([old, newer, gone, lunch]);
+    const byDate = mealEntriesByDate([old, newer, gone, lunch], 'dinner', false);
     expect(byDate.get('2026-10-27')?.id).toBe('b');
-    expect(shadowedMealEntries([old, newer, gone, lunch], '2026-10-27').map((e) => e.id)).toEqual(['a']);
+    expect(shadowedMealEntries([old, newer, gone, lunch], '2026-10-27', 'dinner', false).map((e) => e.id)).toEqual(['a']);
+  });
+
+  it('shows the main first, recipes over a label, and a recipe added twice once', () => {
+    const side = entry('2026-10-27', { id: 's', recipe_id: 'rice', role: 'side', position: 1 });
+    const main = entry('2026-10-27', { id: 'm', recipe_id: 'curry', role: null, position: 0 });
+    const dessert = entry('2026-10-27', { id: 'd', recipe_id: 'tart', role: 'dessert', position: 2 });
+    const label = entry('2026-10-27', { id: 'l', label: 'Out', updated_at: '2026-10-27T12:00:00Z' });
+    const twice = entry('2026-10-27', { id: 't', recipe_id: 'rice', role: 'side', position: 3 });
+    const rows = [dessert, side, label, main, twice];
+    expect(mealDishesByDate(rows).get('2026-10-27')?.map((e) => e.id)).toEqual(['m', 's', 'd']);
+    expect(mealEntriesByDate(rows).get('2026-10-27')?.id).toBe('m');
+    expect(shadowedMealEntries(rows, '2026-10-27').map((e) => e.id).sort()).toEqual(['l', 't']);
+  });
+
+  it('keeps the newest label on a night without recipes', () => {
+    const a = entry('2026-10-27', { id: 'a', label: 'Out', updated_at: '2026-10-27T09:00:00Z' });
+    const b = entry('2026-10-27', { id: 'b', label: 'Leftovers', updated_at: '2026-10-27T11:00:00Z' });
+    expect(mealDishesByDate([a, b]).get('2026-10-27')?.map((e) => e.id)).toEqual(['b']);
   });
 
   it('drops a label when the night has a recipe', () => {
     const e = buildMealPlanEntry({ groupId: 'g', date: '2026-10-27', recipeId: 'curry', label: 'Out', createdBy: 'u' });
     expect(e.label).toBeNull();
     expect(e.slot).toBe('dinner');
+  });
+});
+
+describe('several dishes', () => {
+  const main = entry('2026-10-27', { id: 'm', recipe_id: 'curry', role: 'main', position: 0 });
+  const side = entry('2026-10-27', { id: 's', recipe_id: 'rice', role: 'side', position: 1 });
+  const salad2 = entry('2026-10-27', { id: 'g', recipe_id: 'salad', role: 'side', position: 2 });
+  const sweet = entry('2026-10-27', { id: 't', recipe_id: 'tart', role: 'dessert', position: 3 });
+
+  it('names the night by its main and what comes with it', () => {
+    expect(dishesTitle([main], recipesById)).toBe('Thai green curry');
+    expect(dishesTitle([main, side], recipesById)).toBe('Thai green curry + Jasmine rice');
+    expect(dishesTitle([main, side, salad2], recipesById)).toBe('Thai green curry + 2 sides');
+    expect(dishesTitle([main, side, sweet], recipesById)).toBe('Thai green curry + 2 more');
+    expect(dishesTitle([entry('2026-10-27', { label: 'Out' })], recipesById)).toBeNull();
+  });
+
+  it('times the night by its longest dish', () => {
+    expect(dishesMinutes([main, side, sweet], recipesById)).toBe(75);
+    expect(dishesMinutes([entry('2026-10-27', { label: 'Out' })], recipesById)).toBeNull();
+  });
+
+  it('adds a main to an empty night, then sides after the last dish', () => {
+    expect(nextDishRole([])).toBe('main');
+    expect(nextDishRole([side])).toBe('main');
+    expect(nextDishRole([main, side])).toBe('side');
+    expect(nextDishPosition([main, side])).toBe(2);
+  });
+
+  it('plans set_meal edits as row writes', () => {
+    const base = { recipeId: null, add: false, role: null, removeRecipeId: null, label: null, clear: false };
+    const rows = [main, side];
+
+    const added = planMealNight(rows, '2026-10-27', { ...base, recipeId: 'salad', add: true });
+    expect('error' in added ? null : added.inserts).toEqual([{ recipeId: 'salad', label: null, role: 'side', position: 2 }]);
+
+    const swapped = planMealNight(rows, '2026-10-27', { ...base, recipeId: 'pizza' });
+    expect('error' in swapped ? null : [...swapped.updates]).toEqual([['m', { recipe_id: 'pizza', label: null }]]);
+
+    // The side becomes the main: its old row goes.
+    const promoted = planMealNight(rows, '2026-10-27', { ...base, recipeId: 'rice' });
+    expect('error' in promoted ? null : promoted.remove).toEqual(['s']);
+
+    const removedMain = planMealNight(rows, '2026-10-27', { ...base, removeRecipeId: 'curry' });
+    expect('error' in removedMain ? null : { remove: removedMain.remove, updates: [...removedMain.updates] }).toEqual({
+      remove: ['m'],
+      updates: [['s', { role: 'main' }]],
+    });
+
+    const out = planMealNight(rows, '2026-10-27', { ...base, label: 'Out' });
+    expect('error' in out ? null : { remove: out.remove, updates: [...out.updates], keep: out.keep }).toEqual({
+      remove: ['s'],
+      updates: [['m', { recipe_id: null, label: 'Out', role: null, position: 0 }]],
+      keep: ['m'],
+    });
+
+    const cleared = planMealNight(rows, '2026-10-27', { ...base, clear: true });
+    expect('error' in cleared ? null : cleared.remove.sort()).toEqual(['m', 's']);
+
+    const fresh = planMealNight([], '2026-10-27', { ...base, recipeId: 'curry', add: true });
+    expect('error' in fresh ? null : fresh.inserts).toEqual([{ recipeId: 'curry', label: null, role: 'main', position: 0 }]);
+
+    expect(planMealNight(rows, '2026-10-27', { ...base, removeRecipeId: 'pizza' })).toEqual({ error: 'That recipe is not on this night' });
+    expect(planMealNight([], '2026-10-27', base)).toEqual({ error: 'Pass recipe_id or label' });
   });
 });
 
@@ -217,6 +308,13 @@ describe('tonightLine', () => {
       time: null,
     });
     expect(tonightLine([entry('2026-10-28', { recipe_id: 'curry' })], recipesById, '2026-10-27')).toBeNull();
+    expect(
+      tonightLine(
+        [entry('2026-10-27', { recipe_id: 'curry', role: 'main' }), entry('2026-10-27', { recipe_id: 'tart', role: 'dessert', position: 1 })],
+        recipesById,
+        '2026-10-27',
+      ),
+    ).toMatchObject({ title: 'Tonight: Thai green curry + Lemon tart', time: '1 h 15 min' });
     expect(tonightLine([entry('2026-10-27', { recipe_id: 'deleted-recipe' })], recipesById, '2026-10-27')).toBeNull();
   });
 });

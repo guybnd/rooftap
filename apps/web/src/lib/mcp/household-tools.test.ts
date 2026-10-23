@@ -42,7 +42,7 @@ type Row = Record<string, unknown>;
 function fakeAdmin(tables: Record<string, Row[]>) {
   function builder(table: string) {
     const filters: ((r: Row) => boolean)[] = [];
-    let op: { kind: "select" } | { kind: "update"; patch: Row } | { kind: "insert"; row: Row } = { kind: "select" };
+    let op: { kind: "select" } | { kind: "update"; patch: Row } | { kind: "insert"; row: Row | Row[] } = { kind: "select" };
     const rows = () => (tables[table] ??= []).filter((r) => filters.every((f) => f(r)));
     const b = {
       select: () => b,
@@ -53,9 +53,9 @@ function fakeAdmin(tables: Record<string, Row[]>) {
       lt: (k: string, v: string) => (filters.push((r) => String(r[k]) < v), b),
       maybeSingle: () => Promise.resolve({ data: rows()[0] ?? null, error: null }),
       update: (patch: Row) => ((op = { kind: "update", patch }), b),
-      insert: (row: Row) => ((op = { kind: "insert", row }), b),
+      insert: (row: Row | Row[]) => ((op = { kind: "insert", row }), b),
       then: (resolve: (v: { data: Row[] | null; error: null }) => unknown) => {
-        if (op.kind === "insert") (tables[table] ??= []).push(op.row);
+        if (op.kind === "insert") (tables[table] ??= []).push(...(Array.isArray(op.row) ? op.row : [op.row]));
         if (op.kind === "update") for (const r of rows()) Object.assign(r, (op as { patch: Row }).patch);
         return Promise.resolve({ data: op.kind === "select" ? rows() : null, error: null }).then(resolve);
       },
@@ -110,6 +110,20 @@ describe("recipe tools", () => {
     expect(added).toMatchObject({ status: "needed", recipe_note: "for Lasagna", recipe_source_id: "r1", group_id: "g1" });
   });
 
+  it("leaves staples off the list and follows a taught name", async () => {
+    const tables = base();
+    (tables.recipe_ingredients as Row[]).push(
+      { id: "i9", recipe_id: "r1", group_id: "g1", name: "sea salt", item_name: "Salt", quantity: null, unit: null, position: 8, deleted: false },
+      { id: "i10", recipe_id: "r1", group_id: "g1", name: "2 cups arborio rice", item_name: "arborio rice", quantity: 2, unit: "cup", position: 9, deleted: false },
+    );
+    (tables as Record<string, Row[]>).ingredient_aliases = [
+      { id: "a1", group_id: "g1", alias: "arborio rice", item_name: "Risotto rice", deleted: false, updated_at: "2026-10-23T00:00:00Z" },
+    ];
+    const { body } = await run(tables, "add_recipe_to_groceries", { recipe_id: "r1" });
+    expect(body.added).toEqual(["lasagna sheets", "Risotto rice"]);
+    expect(body.skipped).toContainEqual({ name: "Salt", reason: "staple" });
+  });
+
   it("refuses a recipe from another household", async () => {
     const { res } = await run(base(), "add_recipe_to_groceries", { recipe_id: "r2" });
     expect(res.isError).toBe(true);
@@ -122,6 +136,7 @@ describe("meal plan tools", () => {
     recipes: [
       { id: "r1", group_id: "g1", title: "Lasagna", cuisines: [], prep_minutes: 20, cook_minutes: 40, draft: false, deleted: false },
       { id: "r2", group_id: "g2", title: "Other house soup", cuisines: [], draft: false, deleted: false },
+      { id: "r3", group_id: "g1", title: "Garlic bread", cuisines: [], prep_minutes: 5, cook_minutes: 10, draft: false, deleted: false },
     ],
     recipe_ingredients: [
       { id: "i1", recipe_id: "r1", group_id: "g1", name: "mince", item_name: null, position: 0, deleted: false },
@@ -156,9 +171,33 @@ describe("meal plan tools", () => {
     const { body } = await run(tables, "get_meal_plan", {});
     expect(body.today).toBe(today);
     expect(body.nights).toHaveLength(7);
-    expect(body.nights.find((n: Row) => n.date === today)).toMatchObject({ recipe_id: "r1", title: "Lasagna", minutes: 60 });
+    expect(body.nights.find((n: Row) => n.date === today)).toMatchObject({
+      dishes: [{ recipe_id: "r1", title: "Lasagna", role: "main", minutes: 60 }],
+      to_buy: 1,
+    });
     expect(body.missing).toEqual([{ name: "lasagna sheets", recipe_id: "r1" }]);
     expect(body.already_on_list).toBe(1);
+  });
+
+  it("adds a side, swaps the main, and takes a dish off", async () => {
+    const tables = base();
+    await run(tables, "set_meal", { date: today, recipe_id: "r1", cook_user_id: "u2" });
+    await run(tables, "set_meal", { date: today, recipe_id: "r3", add: true });
+    const live = () => tables.meal_plan_entries.filter((e) => !e.deleted);
+    expect(live()).toHaveLength(2);
+    expect(live().find((e) => e.recipe_id === "r3")).toMatchObject({ role: "side", position: 1, cook_user_id: "u2" });
+    let { body } = await run(tables, "get_meal_plan", {});
+    expect(body.nights.find((n: Row) => n.date === today).dishes.map((d: Row) => [d.title, d.role])).toEqual([
+      ["Lasagna", "main"],
+      ["Garlic bread", "side"],
+    ]);
+    await run(tables, "set_meal", { date: today, remove_recipe_id: "r1" });
+    expect(live()).toHaveLength(1);
+    expect(live()[0]).toMatchObject({ recipe_id: "r3", role: "main" });
+    await run(tables, "set_meal", { date: today, recipe_id: "r1", add: true, role: "main" });
+    await run(tables, "set_meal", { date: today, recipe_id: "r3", role: "side" });
+    ({ body } = await run(tables, "get_meal_plan", {}));
+    expect(body.nights.find((n: Row) => n.date === today).dishes.map((d: Row) => d.title)).toEqual(["Lasagna", "Garlic bread"]);
   });
 
   it("is off with Recipes off", async () => {

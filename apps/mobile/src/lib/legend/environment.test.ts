@@ -3,7 +3,7 @@
 // import time (NetInfo, AppState, expo-sqlite/kv-store's SQLiteStorage,
 // expo-crypto, the Legend SQLite persist plugin, and the native Supabase
 // client binding) are mocked below — no device/simulator needed.
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const netInfoListeners = new Set<(state: { isConnected: boolean | null }) => void>();
 const appStateListeners = new Set<(state: string) => void>();
@@ -64,6 +64,14 @@ function fireAppState(state: string) {
 }
 
 describe('nativeStoreEnvironment', () => {
+  // The first import of environment.ts transforms its whole dependency chain
+  // (@homeup/core, supabase-js, Legend-State). On a busy CI runner that alone
+  // can pass the 15 s test timeout, so pay it once here with its own budget;
+  // later imports after vi.resetModules() reuse the transform cache.
+  beforeAll(async () => {
+    await import('./environment');
+  }, 120_000);
+
   beforeEach(() => {
     vi.resetModules();
     netInfoListeners.clear();

@@ -2,11 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import type { CostItem, CostCadence, CostCategory } from '@homeup/core';
+import type { CostItem, CostCategory } from '@homeup/core';
 import { dialog } from '@homeup/core';
-import { CATEGORY_META, currencySymbol, formatMoney, withPriceChange } from '@homeup/core';
+import { CATEGORY_META, costFormFrom, costNeedsReminderSync, costRowFromForm, currencySymbol, formatMoney } from '@homeup/core';
 import { syncCostReminders, useCostCategoryChoices, useModules } from '@homeup/core';
-import { todayISO } from '@/app/tasks/moving-tasks';
 import { ItemFormSheet, FormSection, FieldRow, DetailsDisclosure } from '@/components/ui/item-form-sheet';
 import { DragNumberField } from '@/components/ui/drag-number-field';
 import { SegmentedControl } from '@/components/ui/segmented-control';
@@ -48,19 +47,7 @@ const CADENCE_OPTIONS = [
 
 export function CostModal({ isOpen, item, groupId, defaultCategory, defaultName, defaultStartDate, onClose, onSave, onDelete, onArchive }: CostModalProps) {
   const buildInitialForm = useCallback(
-    () => ({
-      name: item?.name ?? defaultName ?? '',
-      // FLUX-182: new costs default to a one-off Purchase.
-      category: (item?.category ?? defaultCategory ?? 'purchase') as CostCategory,
-      amount: item ? item.amount / 100 : null,
-      cadence: (item?.cadence ?? 'one_off') as CostCadence,
-      is_estimate: item?.is_estimate ?? false,
-      provider: item?.provider ?? '',
-      start_date: item?.start_date ?? defaultStartDate ?? '',
-      end_date: item?.end_date ?? '',
-      discount_end_date: item?.discount_end_date ?? '',
-      notes: item?.notes ?? '',
-    }),
+    () => costFormFrom(item, { name: defaultName, category: defaultCategory, startDate: defaultStartDate }),
     [item, defaultCategory, defaultName, defaultStartDate],
   );
   const [form, setForm] = useState(buildInitialForm);
@@ -98,52 +85,15 @@ export function CostModal({ isOpen, item, groupId, defaultCategory, defaultName,
 
   const handleSubmit = () => {
     if (!form.name.trim()) return;
-    const payload = {
-      name: form.name.trim(),
-      category: form.category,
-      amount: Math.round((form.amount ?? 0) * 100),
-      cadence: form.cadence,
-      is_estimate: form.is_estimate,
-      // FLUX-184: don't persist stale contract expiry dates when the cadence
-      // is one-off — the Contract group is hidden in that case, and leaving
-      // the old values in place would silently keep a renewal reminder alive
-      // for a cost that no longer recurs. Only the genuinely contract-only
-      // fields are cleared: `start_date` doubles as the occurrence date that
-      // anchors a one-off in the projection (and grocery-actual accounting),
-      // and `provider` is the retailer on grocery lines — both must survive
-      // the switch.
-      provider: form.provider.trim() || null,
-      // FLUX-1575: a brand-new cost with no explicit date defaults to today
-      // (the date it was actually added) instead of null — undated one-offs
-      // are invisible to the "This Month" filter and the chart/category
-      // projections. Editing an existing item still allows clearing the date.
-      start_date: form.start_date || (item?.id ? null : todayISO()),
-      end_date: isRecurring ? form.end_date || null : null,
-      discount_end_date: isRecurring ? form.discount_end_date || null : null,
-      notes: form.notes.trim() || null,
-      group_id: groupId,
-      ...(isRecurring && priceFrom && newPrice != null && Number.isFinite(newPrice)
-        ? { price_changes: withPriceChange(item?.price_changes ?? [], priceFrom, Math.round(newPrice * 100)) }
-        : {}),
-    };
-
     // Offline-safe: build the row and hand it to onSave (→ writeRow), which
     // writes to IndexedDB and syncs. No direct Supabase here, so it works
     // offline. writeRow stamps created_by/timestamps for new rows.
-    const now = new Date().toISOString();
-    const saved: CostItem = item?.id
-      ? { ...item, ...payload }
-      : {
-          id: crypto.randomUUID(),
-          ...payload,
-          assigned_to: null,
-          linked_section: null,
-          sort_order: 0,
-          created_by: null,
-          created_at: now,
-          updated_at: now,
-          deleted: false,
-        };
+    const saved = costRowFromForm(form, {
+      item,
+      groupId,
+      priceChange: { from: priceFrom, dollars: newPrice },
+      fresh: { id: crypto.randomUUID(), createdBy: null, stamp: new Date().toISOString() },
+    });
 
     onSave(saved);
     onClose();
@@ -156,7 +106,7 @@ export function CostModal({ isOpen, item, groupId, defaultCategory, defaultName,
     // FLUX-184: also fire when the cost *previously* had expiry dates (e.g.
     // switching to one-off just cleared them) — syncCostReminders deletes the
     // stale reminder when a date is now null, but only if it actually runs.
-    if (saved.end_date || saved.discount_end_date || item?.end_date || item?.discount_end_date) {
+    if (costNeedsReminderSync(saved, item)) {
       void syncCostReminders(saved, createClient()).catch(() => {});
     }
   };

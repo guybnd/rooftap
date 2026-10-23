@@ -1,6 +1,6 @@
 // Meal plan: Recipes' "This week" tab on the phone. One row per night (Hearth
 // §6 line item); tap a night to pick a recipe, Leftovers, Out or a few words,
-// and who cooks. Draft my week (Assistant on) asks the server to plan the
+// and who cooks, then add more dishes for the night (a main plus sides). Draft my week (Assistant on) asks the server to plan the
 // empty nights around what goes off in Groceries and busy evenings in
 // Calendar; the draft shows in place of the week until it is kept or
 // dropped. Web twin: apps/web/src/app/recipes/meal-week.tsx. Shared logic:
@@ -29,6 +29,7 @@ import {
   cookName,
   formatMealMinutes,
   mealNightLabel,
+  mealNightMeta,
   mealWeekName,
   mealWeekRangeLabel,
   mealWeekStart,
@@ -63,10 +64,11 @@ export function MealWeek({
   const groceriesLinked = modules.feature('meals.groceries');
   const calendarLinked = modules.feature('meals.calendar');
   const canDraft = modules.feature('meals.assistant-draft');
+  const multiDish = modules.server('meals.multi-dish');
 
   const today = todayISO();
   const [weekStart, setWeekStart] = React.useState(() => mealWeekStart(today));
-  const week = useMealWeek({ groupId, currentUserId, weekStart, today, groceriesLinked, calendarLinked });
+  const week = useMealWeek({ groupId, currentUserId, weekStart, today, groceriesLinked, calendarLinked, multiDish });
 
   const [draft, setDraft] = React.useState<MealDraftNight[] | null>(null);
   const [drafting, setDrafting] = React.useState(false);
@@ -248,6 +250,14 @@ export function MealWeek({
         onPick={onPick}
         onCook={(userId) => picking && week.setCook(picking.date, userId)}
         onClear={!picking?.draft && pickedNight?.entry ? () => picking && week.clearNight(picking.date) : undefined}
+        dishes={
+          picking?.draft
+            ? []
+            : (pickedNight?.dishes ?? []).map((d) => ({ id: d.entry.id, recipeId: d.recipe.id, title: d.recipe.title, role: d.role, time: d.time }))
+        }
+        onAddDish={!picking?.draft && multiDish ? (recipeId) => picking && week.addDish(picking.date, recipeId) : undefined}
+        onRemoveDish={week.removeDish}
+        onDishRole={week.setDishRole}
       />
     </View>
   );
@@ -296,9 +306,7 @@ function NightRow({
   memberProfiles: MemberProfiles;
   onOpen: () => void;
 }) {
-  const meta = (night.planned ? [night.time, cook ? `${cook} cooks` : null, night.entry?.note, night.hint] : [night.hint])
-    .filter((m): m is string => !!m)
-    .slice(0, 2);
+  const meta = night.planned ? mealNightMeta(night, cook) : night.hint ? [night.hint] : [];
   return (
     <ListItem
       onPress={onOpen}

@@ -253,3 +253,68 @@ export function stepTimerStates(
 export function timerDoneText(timer: Pick<CookTimer, 'label'>, recipeTitle: string): { title: string; body: string } {
   return { title: `${timer.label} is done`, body: recipeTitle };
 }
+
+// ── Cooking heads (R3) ──────────────────────────────────────────────────────
+
+/** Where the heads rest: an edge, and the top head's height as a share of the screen. */
+export interface HeadDock {
+  side: 'left' | 'right';
+  y: number;
+}
+
+export const DEFAULT_HEAD_DOCK: HeadDock = { side: 'right', y: 0.38 };
+
+/** From three cooks on, the heads stack into one pile. */
+export const HEADS_STACK_AT = 3;
+
+/** The size of a head and the gap between heads, in px. */
+export const HEAD_SIZE = 56;
+export const HEAD_GAP = 22;
+
+/** Snap a dropped head to the nearest side edge, kept clear of the top and bottom bars. */
+export function snapHeadDock(centerX: number, centerY: number, viewW: number, viewH: number): HeadDock {
+  const y = viewH > 0 ? centerY / viewH : DEFAULT_HEAD_DOCK.y;
+  return { side: centerX < viewW / 2 ? 'left' : 'right', y: Math.min(0.78, Math.max(0.1, y)) };
+}
+
+/** Read a stored dock, falling back to the default for anything malformed. */
+export function parseHeadDock(raw: string | null | undefined): HeadDock {
+  if (!raw) return DEFAULT_HEAD_DOCK;
+  try {
+    const v = JSON.parse(raw) as Partial<HeadDock>;
+    if ((v.side === 'left' || v.side === 'right') && typeof v.y === 'number' && Number.isFinite(v.y)) {
+      return { side: v.side, y: Math.min(0.78, Math.max(0.1, v.y)) };
+    }
+  } catch {
+    // Fall through to the default.
+  }
+  return DEFAULT_HEAD_DOCK;
+}
+
+/** The stop target's centre: bottom middle, above the tab bar. */
+export function stopTargetCenter(viewW: number, viewH: number, bottomInset: number): { x: number; y: number } {
+  return { x: viewW / 2, y: viewH - bottomInset - 64 };
+}
+
+/** Whether a dragged head's centre is over the stop target. */
+export function overStopTarget(centerX: number, centerY: number, viewW: number, viewH: number, bottomInset: number): boolean {
+  const c = stopTargetCenter(viewW, viewH, bottomInset);
+  return Math.hypot(centerX - c.x, centerY - c.y) < 60;
+}
+
+// ── Cook mode (R4) ──────────────────────────────────────────────────────────
+
+/** Cook mode's route, the same on web and the app. */
+export function cookModeHref(recipeId: string): string {
+  return `/recipes/cook/${recipeId}`;
+}
+
+/** Whether a path is cook mode, where the heads step aside. */
+export function isCookModePath(pathname: string | null | undefined): boolean {
+  return !!pathname && /^\/recipes\/cook\/[^/]+\/?$/.test(pathname);
+}
+
+/** What read-aloud says for a step: its number, then its text. */
+export function stepSpeech(stepIndex: number, stepCount: number, text: string): string {
+  return stepCount > 1 ? `Step ${stepIndex + 1}. ${text}` : text;
+}

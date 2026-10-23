@@ -109,6 +109,14 @@ export const SERVER_FEATURES = {
     minSchema: '20261023170000_cook_sessions',
     label: 'cooking several recipes at once, with timers',
   },
+  'recipes.scan-match': {
+    minSchema: '20261023180000_recipe_scan_match',
+    label: 'recipe staples, and scans that remember your answers',
+  },
+  'meals.multi-dish': {
+    minSchema: '20261023190000_meal_plan_dishes',
+    label: 'several dishes on one night in the meal plan',
+  },
 } as const satisfies Record<string, ServerFeatureDef>;
 
 export type ServerFeatureId = keyof typeof SERVER_FEATURES;

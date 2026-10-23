@@ -46,6 +46,8 @@ import {
   useStoreHelpers,
   useStoreLoaded,
   useModules,
+  useRecipeMatch,
+  ingredientMatchKey,
   RECIPE_METHODS,
   methodMeta,
   canBeMade,
@@ -63,6 +65,7 @@ import { useDataCache } from '@/lib/data-cache';
 import { NoGroupScreen } from '@/components/no-group-screen';
 import { getCurrentSupabaseClient } from '@/lib/supabase-client';
 import { RecipeFormSheet } from '@/features/recipes/recipe-form-sheet';
+import { ScanMatchSheet } from '@/features/recipes/scan-match-sheet';
 import { RecipeRow } from '@/features/recipes/recipe-row';
 import { captureRecipeFromPhoto, discardRecipeDraftPhoto, type CaptureSource } from '@/features/recipes/recipe-capture';
 import { MealWeek } from '@/features/recipes/meal-week';
@@ -99,6 +102,9 @@ export default function RecipesSectionScreen() {
   const { writeRow: writeIngredient, patchRow: patchIngredient, softDeleteRow: softDeleteIngredient } =
     useStoreHelpers(ings$, currentUserId);
   const { writeRow: writeGrocery, patchRow: patchGrocery } = useStoreHelpers(items$, currentUserId);
+  // Recipes v2 R5: staples and taught names for the match step after a scan.
+  const match = useRecipeMatch(group?.id, currentUserId);
+  const staples = groceriesLinked ? match.staples : undefined;
   const storeLoaded = useStoreLoaded(...(groceriesLinked ? [recs$, ings$, items$] : [recs$, ings$]));
 
   const allRecipes = use$(() => Object.values(recs$.get() ?? {}).filter((r): r is Recipe => !!r && !r.deleted));
@@ -141,6 +147,9 @@ export default function RecipesSectionScreen() {
   const canMakeOnly = groceriesLinked && canMakeOnlyPicked;
   // null = closed; {} = "New recipe"; {recipe} = draft review.
   const [sheetState, setSheetState] = React.useState<{ recipe?: Recipe } | null>(null);
+  // The scanned draft whose match step is open; the review sheet follows it.
+  const [matchFor, setMatchFor] = React.useState<Recipe | null>(null);
+  const [matchOpen, setMatchOpen] = React.useState(false);
   // HOUP-191: `open` is tracked separately from `sheetState` — the sheet is
   // keyed on `sheetState`, so clearing it in the same tick as closing would
   // remount the sheet mid-close and skip the 250ms exit animation entirely.
@@ -155,10 +164,10 @@ export default function RecipesSectionScreen() {
         if (selectedCuisines.size && !recipeCuisines(r).some((c) => selectedCuisines.has(c))) return false;
         // Unset method filters as "other".
         if (selectedMethods.size && !selectedMethods.has(r.method ?? 'other')) return false;
-        if (canMakeOnly && !canBeMade(ingredientsByRecipe.get(r.id) ?? [], groceryItems)) return false;
+        if (canMakeOnly && !canBeMade(ingredientsByRecipe.get(r.id) ?? [], groceryItems, staples)) return false;
         return true;
       }),
-    [searched, selectedCuisines, selectedMethods, canMakeOnly, ingredientsByRecipe, groceryItems]
+    [searched, selectedCuisines, selectedMethods, canMakeOnly, ingredientsByRecipe, groceryItems, staples]
   );
 
   // Hearth v2 (Pulse): the Hero caption's "can make now" fragment, from the
@@ -166,9 +175,9 @@ export default function RecipesSectionScreen() {
   const canMakeCount = React.useMemo(
     () =>
       groceriesLinked
-        ? recipes.filter((r) => canBeMade(ingredientsByRecipe.get(r.id) ?? [], groceryItems)).length
+        ? recipes.filter((r) => canBeMade(ingredientsByRecipe.get(r.id) ?? [], groceryItems, staples)).length
         : 0,
-    [groceriesLinked, recipes, ingredientsByRecipe, groceryItems]
+    [groceriesLinked, recipes, ingredientsByRecipe, groceryItems, staples]
   );
 
   // HOUP-208: this list has no group headers, but still flattens through the
@@ -256,6 +265,40 @@ export default function RecipesSectionScreen() {
     patchIngredient(ingredient.id, { item_name: trimmedName });
   };
 
+  // ── Recipes v2 R5: the match step's writes ─────────────────────────────────
+  const sameItem = (ingredient: RecipeIngredient, itemName: string) => {
+    match.remember(ingredientMatchKey(ingredient), itemName);
+    patchIngredient(ingredient.id, { item_name: itemName });
+  };
+  const ownItem = (ingredient: RecipeIngredient) => {
+    const key = ingredientMatchKey(ingredient);
+    match.remember(key, key);
+  };
+  const addScannedToList = (ingredient: RecipeIngredient, name: string) => {
+    if (!group?.id || !matchFor) return;
+    writeGrocery(
+      buildNeededGroceryItem({
+        groupId: group.id,
+        name,
+        recipeNote: recipeNoteFor(ingredient, matchFor.title),
+        recipeSourceId: matchFor.id,
+        createdBy: currentUserId ?? null,
+        quantity: ingredient.quantity,
+        unit: ingredient.unit,
+      }),
+    );
+    if (ingredient.item_name !== name) patchIngredient(ingredient.id, { item_name: name });
+  };
+  // The review sheet rises once the match sheet has slid away.
+  const finishMatch = () => {
+    const recipe = matchFor;
+    setMatchOpen(false);
+    setTimeout(() => {
+      setMatchFor(null);
+      if (recipe) openReview(recipe);
+    }, MOTION_DURATIONS_MS.exit);
+  };
+
   const handleScan = async (source: CaptureSource) => {
     if (!group || !isOnline || scanning) return;
     setScanning(true);
@@ -267,12 +310,19 @@ export default function RecipesSectionScreen() {
         source,
         groceryItems,
         existingIngredients: allIngredients,
+        staples: match.staples,
+        aliases: match.aliases,
         withSteps: modules.server('recipes.steps'),
       });
       if (!result) return; // user cancelled the picker
       writeRecipe(result.recipe);
       result.ingredients.forEach(writeIngredient);
-      openReview(result.recipe);
+      // The match step first, while Groceries is linked: it shows what the
+      // scan matched and asks about the doubtful ones.
+      if (groceriesLinked && result.ingredients.length > 0) {
+        setMatchFor(result.recipe);
+        setMatchOpen(true);
+      } else openReview(result.recipe);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not scan that photo.');
       openNew();
@@ -519,6 +569,7 @@ export default function RecipesSectionScreen() {
           ingredients={ingredientsByRecipe.get(row.item.id) ?? []}
           groceryItems={groceryItems}
           groceriesLinked={groceriesLinked}
+          staples={staples}
           onPress={() => router.push(`/recipes/${row.item.id}` as Href)}
         />
       </View>
@@ -558,7 +609,27 @@ export default function RecipesSectionScreen() {
         onRemoveIngredientRow={sheetState?.recipe?.draft ? softDeleteIngredient : undefined}
         onToggleGroceryItemStatus={sheetState?.recipe?.draft && groceriesLinked ? toggleGroceryItemStatus : undefined}
         onCreateGroceryItemForIngredient={sheetState?.recipe?.draft && groceriesLinked ? createGroceryItemForIngredient : undefined}
+        staples={match.staples}
+        aliases={match.aliases}
+        onRemember={sheetState?.recipe?.draft && groceriesLinked ? match.remember : undefined}
       />
+
+      {matchFor && (
+        <ScanMatchSheet
+          open={matchOpen}
+          onDone={finishMatch}
+          ingredients={ingredientsByRecipe.get(matchFor.id) ?? []}
+          groceryItems={groceryItems}
+          allIngredients={allIngredients}
+          context={match.context}
+          canRemember={match.canRemember}
+          staplesShown={match.staplesShown}
+          onSame={sameItem}
+          onNew={ownItem}
+          onSetStaple={match.setStaple}
+          onAddToList={addScannedToList}
+        />
+      )}
     </ScreenBackground>
   );
 }

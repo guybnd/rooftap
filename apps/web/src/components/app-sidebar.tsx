@@ -3,6 +3,7 @@
 import { AssistantAnswers } from "@/components/assistant-answers";
 import { AssistantChatPopup } from "@/components/assistant-chat-popup";
 import { CookAlarms } from "@/components/cook/cook-alarms";
+import { CookHeads } from "@/components/cook/cook-heads";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter, useSelectedLayoutSegment } from "next/navigation";
@@ -335,6 +336,7 @@ export function AppSidebar({ children }: { children: React.ReactNode }) {
     <AssistantAnswers />
     <AssistantChatPopup />
     <CookAlarms />
+    <CookHeads />
     <div className="flex h-[100svh] overflow-hidden">
       {/* Desktop sidebar */}
       <aside className="desk-classic hidden md:flex w-[220px] flex-col border-r border-sidebar-border/60 bg-sidebar shrink-0">

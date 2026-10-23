@@ -15,7 +15,7 @@ import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { use$ } from '@legendapp/state/react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ArrowLeft, Pencil, Trash2, Plus, Check, RotateCcw, ShoppingCart, Users, Timer, Flame, ChefHat } from 'lucide-react-native';
+import { ArrowLeft, Pencil, Trash2, Plus, Check, RotateCcw, ShoppingCart, Users, Timer, Flame, ChefHat, Play } from 'lucide-react-native';
 import {
   Text,
   Button,
@@ -42,6 +42,8 @@ import {
   matchIngredientToGrocery,
   ingredientMatchKey,
   recipeHaveCount,
+  useRecipeMatch,
+  isStaple,
   canBeMade,
   recipeNoteFor,
   buildNeededGroceryItem,
@@ -51,6 +53,7 @@ import {
   stepTimerStates,
   useCookClock,
   useCooks,
+  cookModeHref,
   trimQty,
   type GroceryItem,
   type Recipe,
@@ -93,6 +96,9 @@ export default function RecipeDetailScreen() {
   const { writeRow: writeIngredient, patchRow: patchIngredient, softDeleteRow: softDeleteIngredient } =
     useStoreHelpers(ings$, currentUserId);
   const { writeRow: writeGrocery, patchRow: patchGrocery } = useStoreHelpers(items$, currentUserId);
+  // Recipes v2 R5: staples are always in stock and never go on the list.
+  const { staples } = useRecipeMatch(group?.id, currentUserId);
+  const staple = (ing: RecipeIngredient) => isStaple(ingredientMatchKey(ing), staples) || isStaple(ing.name, staples);
   const storeLoaded = useStoreLoaded(...(groceriesLinked ? [recs$, ings$, items$] : [recs$, ings$]));
 
   const recipe = use$(() => {
@@ -176,7 +182,7 @@ export default function RecipeDetailScreen() {
   const addMissing = () => {
     for (const ing of ingredients) {
       const match = matchIngredientToGrocery(ingredientMatchKey(ing), groceryItems);
-      if (match?.status === 'have') continue;
+      if (match?.status === 'have' || staple(ing)) continue;
       addIngredientToList(ing);
     }
   };
@@ -238,10 +244,10 @@ export default function RecipeDetailScreen() {
   }
 
   const meta = methodMeta(recipe.method);
-  const { have, total } = recipeHaveCount(ingredients, groceryItems);
-  const ready = groceriesLinked && canBeMade(ingredients, groceryItems);
+  const { have, total } = recipeHaveCount(ingredients, groceryItems, staples);
+  const ready = groceriesLinked && canBeMade(ingredients, groceryItems, staples);
   const missingCount = groceriesLinked
-    ? ingredients.filter((ing) => matchIngredientToGrocery(ingredientMatchKey(ing), groceryItems)?.status !== 'have').length
+    ? ingredients.filter((ing) => !staple(ing) && matchIngredientToGrocery(ingredientMatchKey(ing), groceryItems)?.status !== 'have').length
     : 0;
 
   const kind = [...(recipe.method ? [meta.label] : []), ...recipeCuisines(recipe).map(capitalize)].join(', ');
@@ -271,6 +277,16 @@ export default function RecipeDetailScreen() {
           <Text numberOfLines={2} className="min-w-0 flex-1 font-heading text-display font-bold text-foreground">
             {recipe.title}
           </Text>
+          {steps.length > 0 && (
+            <Pressable
+              onPress={() => openRoute(cookModeHref(recipe.id))}
+              accessibilityRole="button"
+              accessibilityLabel="Cook mode"
+              className="h-11 w-11 items-center justify-center rounded-lg"
+            >
+              <Play size={18} className="text-primary" />
+            </Pressable>
+          )}
           <Pressable
             onPress={() => setIsEditOpen(true)}
             accessibilityRole="button"

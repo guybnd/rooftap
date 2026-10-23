@@ -1,17 +1,26 @@
 // Meal plan: the week's dinners, planned in Recipes' "This week" tab (the
 // `meals` module, which requires Recipes). One `meal_plan_entries` row per
-// night: a recipe, or a label for a night without one (Out, Leftovers, free
-// text), and who cooks. Pure derivations so web, the app, the Home row, the
-// assistant tools and the draft route all read a week the same way.
+// dish: a night holds a main plus sides and a dessert, or one row with a
+// label for a night without a recipe (Out, Leftovers, free text), and who
+// cooks. Pure derivations so web, the app, the Home row, the assistant tools
+// and the draft route all read a week the same way.
 
 import { envRandomUUID } from '../../data/store-environment';
 import { addDaysISO, daysBetweenISO, formatTime12h, toISODate } from '../../date-utils';
 import { freshnessWindow } from '../groceries/groceries';
 import { ingredientMatchKey, matchIngredientToGrocery, norm } from '../recipes/recipes';
+import { withoutStaples } from '../recipes/scan-match';
 import { lookupDefaultShelfLife } from '../groceries/shelf-life-defaults';
 import type { GroceryItem, Recipe, RecipeIngredient } from '../../types';
 
 export type MealSlot = 'breakfast' | 'lunch' | 'dinner';
+
+/** What a dish is on its night. Null (rows from before several dishes) reads as a main. */
+export type MealRole = 'main' | 'side' | 'dessert';
+
+export const MEAL_ROLES: readonly MealRole[] = ['main', 'side', 'dessert'];
+
+export const MEAL_ROLE_LABEL: Record<MealRole, string> = { main: 'Main', side: 'Side', dessert: 'Dessert' };
 
 export interface MealPlanEntry {
   id: string;
@@ -24,6 +33,13 @@ export interface MealPlanEntry {
   label: string | null;
   cook_user_id: string | null;
   note: string | null;
+  /**
+   * Orders dishes inside a role on the night. Both are optional: rows from a
+   * server too old for several dishes don't have the columns, and a write
+   * there must not send them (server-features.ts, meals.multi-dish).
+   */
+  position?: number;
+  role?: MealRole | null;
   // NOT NULL-free in the DB; writeRow stamps the active user.
   created_by: string | null;
   created_at: string;
@@ -77,28 +93,210 @@ export function mealWeekName(weekStart: string, todayISO: string): string {
   return mealWeekRangeLabel(weekStart);
 }
 
+const ROLE_RANK: Record<MealRole, number> = { main: 0, side: 1, dessert: 2 };
+
+/** A dish's role, with rows from before several dishes read as a main. */
+export function mealRole(entry: Pick<MealPlanEntry, 'role'>): MealRole {
+  return entry.role ?? 'main';
+}
+
+function byDishOrder(a: MealPlanEntry, b: MealPlanEntry): number {
+  return (
+    ROLE_RANK[mealRole(a)] - ROLE_RANK[mealRole(b)] ||
+    (a.position ?? 0) - (b.position ?? 0) ||
+    (a.created_at ?? '').localeCompare(b.created_at ?? '') ||
+    a.id.localeCompare(b.id)
+  );
+}
+
 /**
- * One entry per night for `slot`: the newest live row wins. Two people can
- * plan the same night offline, so the table has no unique key and the latest
- * edit is the one shown.
+ * Each night's dishes for `slot`, in order: mains, then sides, then dessert.
+ * A night is either recipes or one label. Two people can plan the same night
+ * offline, so the table has no unique key: recipe rows beat label rows, the
+ * newest label wins among labels, and a recipe added twice shows once.
+ *
+ * `multiDish` false (a server too old for several dishes) keeps the old
+ * rule: the newest live row is the night's one dish.
  */
-export function mealEntriesByDate(
+export function mealDishesByDate(
   entries: readonly MealPlanEntry[],
   slot: MealSlot = 'dinner',
-): Map<string, MealPlanEntry> {
-  const out = new Map<string, MealPlanEntry>();
+  multiDish = true,
+): Map<string, MealPlanEntry[]> {
+  const rows = new Map<string, MealPlanEntry[]>();
   for (const e of entries) {
     if (!e || e.deleted || (e.slot ?? 'dinner') !== slot) continue;
-    const prev = out.get(e.date);
-    if (!prev || (e.updated_at ?? '') > (prev.updated_at ?? '')) out.set(e.date, e);
+    rows.set(e.date, [...(rows.get(e.date) ?? []), e]);
+  }
+  const out = new Map<string, MealPlanEntry[]>();
+  for (const [date, list] of rows) {
+    const newest = list.reduce((a, b) => ((b.updated_at ?? '') > (a.updated_at ?? '') ? b : a));
+    if (!multiDish) {
+      out.set(date, [newest]);
+      continue;
+    }
+    const recipes = list.filter((e) => e.recipe_id).sort(byDishOrder);
+    if (recipes.length === 0) {
+      out.set(date, [newest]);
+      continue;
+    }
+    const seen = new Set<string>();
+    out.set(
+      date,
+      recipes.filter((e) => {
+        if (seen.has(e.recipe_id!)) return false;
+        seen.add(e.recipe_id!);
+        return true;
+      }),
+    );
   }
   return out;
 }
 
-/** Older rows for the same night, which a write should tidy away. */
-export function shadowedMealEntries(entries: readonly MealPlanEntry[], date: string, slot: MealSlot = 'dinner'): MealPlanEntry[] {
-  const winner = mealEntriesByDate(entries, slot).get(date);
-  return entries.filter((e) => e && !e.deleted && e.date === date && (e.slot ?? 'dinner') === slot && e.id !== winner?.id);
+/** The night's first dish (its main) per date: what a one-line summary shows. */
+export function mealEntriesByDate(
+  entries: readonly MealPlanEntry[],
+  slot: MealSlot = 'dinner',
+  multiDish = true,
+): Map<string, MealPlanEntry> {
+  const out = new Map<string, MealPlanEntry>();
+  for (const [date, dishes] of mealDishesByDate(entries, slot, multiDish)) out.set(date, dishes[0]);
+  return out;
+}
+
+/** Live rows for a night that it doesn't show (offline duplicates), which a write should tidy away. */
+export function shadowedMealEntries(
+  entries: readonly MealPlanEntry[],
+  date: string,
+  slot: MealSlot = 'dinner',
+  multiDish = true,
+): MealPlanEntry[] {
+  const shown = new Set((mealDishesByDate(entries, slot, multiDish).get(date) ?? []).map((e) => e.id));
+  return entries.filter((e) => e && !e.deleted && e.date === date && (e.slot ?? 'dinner') === slot && !shown.has(e.id));
+}
+
+/** The role a new dish takes: a main when the night has none, else a side. */
+export function nextDishRole(dishes: readonly MealPlanEntry[]): MealRole {
+  return dishes.some((d) => d.recipe_id && mealRole(d) === 'main') ? 'side' : 'main';
+}
+
+/** The position after the night's last dish. */
+export function nextDishPosition(dishes: readonly MealPlanEntry[]): number {
+  return dishes.reduce((max, d) => Math.max(max, (d.position ?? 0) + 1), 0);
+}
+
+/**
+ * A night's dishes in one line: "Beef lasagne", "Green curry + Jasmine rice",
+ * "Roast chicken + 2 sides", "Curry + 2 more". Null without a recipe.
+ */
+export function dishesTitle(dishes: readonly MealPlanEntry[], recipesById: ReadonlyMap<string, Recipe>): string | null {
+  const titled = dishes
+    .filter((d) => d.recipe_id && recipesById.has(d.recipe_id))
+    .map((d) => ({ title: recipesById.get(d.recipe_id!)!.title, role: mealRole(d) }));
+  if (titled.length === 0) return null;
+  const [first, ...rest] = titled;
+  if (rest.length === 0) return first.title;
+  if (rest.length === 1) return `${first.title} + ${rest[0].title}`;
+  const allSides = rest.every((r) => r.role === 'side');
+  return `${first.title} + ${rest.length} ${allSides ? 'sides' : 'more'}`;
+}
+
+/** The longest dish's prep plus cook time: dishes cook side by side. */
+export function dishesMinutes(dishes: readonly MealPlanEntry[], recipesById: ReadonlyMap<string, Recipe>): number | null {
+  let max: number | null = null;
+  for (const d of dishes) {
+    const m = d.recipe_id ? recipeMinutes(recipesById.get(d.recipe_id)) : null;
+    if (m != null && (max == null || m > max)) max = m;
+  }
+  return max;
+}
+
+export interface MealNightChange {
+  /** Set the main dish, or with `add` add another dish. */
+  recipeId: string | null;
+  add: boolean;
+  /** The role of `recipeId` on the night. */
+  role: MealRole | null;
+  /** Take this recipe's dish off the night (before any add). */
+  removeRecipeId: string | null;
+  /** Replaces the whole night. Ignored while recipeId is set. */
+  label: string | null;
+  clear: boolean;
+}
+
+export interface MealNightPlan {
+  updates: Map<string, Partial<MealPlanEntry>>;
+  inserts: { recipeId: string | null; label: string | null; role: MealRole | null; position: number }[];
+  remove: string[];
+  /** Rows that stay live, in dish order. */
+  keep: string[];
+  /** The first row that stays, which holds the night's note; null when the night is new or cleared. */
+  first: string | null;
+}
+
+/**
+ * One night's edit as row writes, for the assistant's set_meal: the night's
+ * live rows (one date and slot) in, updates, inserts and soft deletes out.
+ * Rows the night doesn't show (offline duplicates) are always tidied away.
+ */
+export function planMealNight(rows: readonly MealPlanEntry[], date: string, change: MealNightChange): MealNightPlan | { error: string } {
+  const dishes = mealDishesByDate(rows).get(date) ?? [];
+  const remove = new Set(shadowedMealEntries(rows, date));
+  const removeIds = new Set([...remove].map((e) => e.id));
+  const updates = new Map<string, Partial<MealPlanEntry>>();
+  const inserts: MealNightPlan['inserts'] = [];
+  const update = (id: string, patch: Partial<MealPlanEntry>) => updates.set(id, { ...updates.get(id), ...patch });
+  const done = (): MealNightPlan => {
+    const keep = dishes.filter((e) => !removeIds.has(e.id)).map((e) => e.id);
+    return { updates, inserts, remove: [...removeIds], keep, first: keep[0] ?? null };
+  };
+
+  if (change.clear) {
+    for (const e of dishes) removeIds.add(e.id);
+    return done();
+  }
+  const label = change.label?.trim() || null;
+  if (!change.recipeId && label) {
+    const [first, ...rest] = dishes;
+    for (const e of rest) removeIds.add(e.id);
+    if (first) update(first.id, { recipe_id: null, label, role: null, position: 0 });
+    else inserts.push({ recipeId: null, label, role: null, position: 0 });
+    return done();
+  }
+  if (change.role && !change.recipeId) return { error: 'Pass recipe_id with role' };
+
+  let recipes = dishes.filter((e) => e.recipe_id);
+  if (change.removeRecipeId) {
+    const gone = recipes.find((e) => e.recipe_id === change.removeRecipeId);
+    if (!gone) return { error: 'That recipe is not on this night' };
+    removeIds.add(gone.id);
+    recipes = recipes.filter((e) => e.id !== gone.id);
+    if (mealRole(gone) === 'main' && recipes.length && !recipes.some((e) => mealRole(e) === 'main')) update(recipes[0].id, { role: 'main' });
+  }
+
+  if (change.recipeId) {
+    const id = change.recipeId;
+    const existing = recipes.find((e) => e.recipe_id === id);
+    if (recipes.length === 0) {
+      // An empty or label night: the recipe becomes its main.
+      const labelRow = dishes.find((e) => !e.recipe_id && !removeIds.has(e.id));
+      if (labelRow) update(labelRow.id, { recipe_id: id, label: null, role: change.role ?? 'main', position: 0 });
+      else inserts.push({ recipeId: id, label: null, role: change.role ?? 'main', position: 0 });
+    } else if (change.add) {
+      if (existing) {
+        if (change.role) update(existing.id, { role: change.role });
+      } else {
+        inserts.push({ recipeId: id, label: null, role: change.role ?? nextDishRole(recipes), position: nextDishPosition(recipes) });
+      }
+    } else {
+      const main = recipes.find((e) => mealRole(e) === 'main') ?? recipes[0];
+      if (existing && existing.id !== main.id) removeIds.add(existing.id);
+      update(main.id, { recipe_id: id, label: null, ...(change.role ? { role: change.role } : main.role ? {} : { role: 'main' as const }) });
+    }
+  } else if (!change.removeRecipeId && dishes.length === 0) {
+    return { error: 'Pass recipe_id or label' };
+  }
+  return done();
 }
 
 /** Whether a night has something on it (a recipe or a label). */
@@ -142,6 +340,9 @@ export function buildMealPlanEntry(input: {
   label?: string | null;
   cookUserId?: string | null;
   note?: string | null;
+  /** Several dishes only: leave both out for a server without the columns. */
+  position?: number;
+  role?: MealRole | null;
   createdBy: string | null;
 }): MealPlanEntry {
   const now = new Date().toISOString();
@@ -154,6 +355,8 @@ export function buildMealPlanEntry(input: {
     label: input.recipeId ? null : input.label?.trim() || null,
     cook_user_id: input.cookUserId ?? null,
     note: input.note ?? null,
+    ...(input.position !== undefined ? { position: input.position } : {}),
+    ...(input.role !== undefined ? { role: input.role } : {}),
     created_by: input.createdBy,
     created_at: now,
     updated_at: now,
@@ -190,6 +393,8 @@ export function weekShopping(input: {
   recipesById: ReadonlyMap<string, Recipe>;
   ingredientsByRecipe: ReadonlyMap<string, readonly RecipeIngredient[]>;
   groceryItems: readonly GroceryItem[];
+  /** Household staples (stapleKeys): never missing, never added. */
+  staples?: ReadonlySet<string>;
 }): WeekShopping {
   const seen = new Set<string>();
   const missing: MissingIngredient[] = [];
@@ -200,6 +405,7 @@ export function weekShopping(input: {
     if (!recipe) continue;
     for (const ing of input.ingredientsByRecipe.get(recipe.id) ?? []) {
       if (ing.deleted) continue;
+      if (input.staples && withoutStaples([ing], input.staples).length === 0) continue;
       const key = ingredientMatchKey(ing);
       const n = norm(key);
       if (!n || seen.has(n)) continue;
@@ -306,17 +512,22 @@ export function groceriesGoingOff(items: readonly GroceryItem[], todayISO: strin
 
 // ── Home ────────────────────────────────────────────────────────────────────
 
-/** Home's row: "Tonight: Thai green curry", with "35 min" as its fact. Null when tonight isn't planned. */
+/**
+ * Home's row: "Tonight: Thai green curry", or "Tonight: Roast chicken + 2
+ * sides", with the longest dish's "35 min" as its fact. Null when tonight
+ * isn't planned.
+ */
 export function tonightLine(
   entries: readonly MealPlanEntry[],
   recipesById: ReadonlyMap<string, Recipe>,
   todayISO: string,
+  multiDish = true,
 ): { title: string; time: string | null; entry: MealPlanEntry } | null {
-  const entry = mealEntriesByDate(entries).get(todayISO);
-  const title = mealTitle(entry, recipesById);
+  const dishes = mealDishesByDate(entries, 'dinner', multiDish).get(todayISO) ?? [];
+  const entry = dishes[0];
+  const title = dishesTitle(dishes, recipesById) ?? mealTitle(entry, recipesById);
   if (!entry || !title) return null;
-  const recipe = entry.recipe_id ? recipesById.get(entry.recipe_id) : undefined;
-  return { title: `Tonight: ${title}`, time: formatMealMinutes(recipeMinutes(recipe)), entry };
+  return { title: `Tonight: ${title}`, time: formatMealMinutes(dishesMinutes(dishes, recipesById)), entry };
 }
 
 // ── Draft my week ───────────────────────────────────────────────────────────

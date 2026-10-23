@@ -16,9 +16,12 @@ import {
   createManualReminder,
   reminderKey,
   toISODate,
+  newCostLine,
+  rentCostLine,
+  setupCostLine,
+  type NewCostLine,
 } from '@homeup/core';
 import { deleteCostReminders, costItems$, setupItems$, apartments$, useReconnectSync, useStoreHelpers, useStoreLoaded } from '@homeup/core';
-import { todayISO } from '@/app/tasks/moving-tasks';
 import { LeadingTile } from '@/components/ui/leading-tile';
 import { BottomSheet } from '@/components/ui/bottom-sheet';
 import { Input } from '@/components/ui/input';
@@ -221,39 +224,19 @@ export default function CostsPage() {
   const rentWeeklyCents = chosenApt?.rent_per_week ? Math.round(chosenApt.rent_per_week * 100) : 0;
 
   // Offline-safe: build the row and write it through the Legend store.
-  const addLine = (line: Partial<CostItem> & Pick<CostItem, 'name' | 'category' | 'amount' | 'cadence'>) => {
+  const addLine = (line: NewCostLine) => {
     if (!group?.id) return;
-    // Only a genuine one-off actual needs an occurrence date; recurring anchors
-    // (e.g. rent) and estimate anchors (e.g. setup) legitimately have none.
-    const isOneOffActual = line.cadence === 'one_off' && !(line.is_estimate ?? false);
-    writeRow({
-      id: crypto.randomUUID(),
-      group_id: group.id,
-      is_estimate: false,
-      start_date: isOneOffActual ? todayISO() : null,
-      end_date: null,
-      discount_end_date: null,
-      provider: null,
-      assigned_to: null,
-      linked_section: null,
-      notes: null,
-      sort_order: 0,
-      created_by: currentUserId ?? null,
-      deleted: false,
-      created_at: null as unknown as string,
-      updated_at: null as unknown as string,
-      ...line,
-    });
+    writeRow(newCostLine(line, { id: crypto.randomUUID(), groupId: group.id, createdBy: currentUserId ?? null }));
   };
 
   const addRentLine = () => {
     if (!rentWeeklyCents) return;
-    addLine({ name: 'Rent', category: 'rent', amount: rentWeeklyCents, cadence: 'weekly', linked_section: 'home_search' });
+    addLine(rentCostLine(rentWeeklyCents));
   };
 
   const addSetupLine = () => {
     if (!setupTotalCents) return;
-    addLine({ name: 'Home setup', category: 'moving', amount: setupTotalCents, cadence: 'one_off', is_estimate: true, linked_section: 'home_setup' });
+    addLine(setupCostLine(setupTotalCents));
   };
 
   if (cacheLoading || (!storeLoaded && items.length === 0)) return <div className="p-6 text-muted-foreground">Loading…</div>;
