@@ -33,6 +33,7 @@ import {
   toISODate,
   type Apartment,
   type CostInsightMarks,
+  type MoneySummaryPrefs,
   type SubscriptionLine,
   type CostCategory,
   type CostItem,
@@ -154,6 +155,19 @@ function CostsScreenBody() {
       });
     },
     [canSaveMarks, persistSettings],
+  );
+  // Assistant summaries (money-summary.ts): asked for per person, posted to the Household chat.
+  const summariesOn = insightsOn && modules.isEnabled('assistant');
+  const [summaryPrefs, setSummaryPrefs] = React.useState<MoneySummaryPrefs>({});
+  React.useEffect(() => {
+    if (userSettings?.money_summaries) setSummaryPrefs(userSettings.money_summaries);
+  }, [userSettings?.money_summaries]);
+  const saveSummaryPrefs = React.useCallback(
+    (next: MoneySummaryPrefs) => {
+      setSummaryPrefs(next);
+      void persistSettings({ money_summaries: next });
+    },
+    [persistSettings],
   );
   const remindToCancel = React.useCallback(
     async (sub: SubscriptionLine) => {
@@ -339,6 +353,7 @@ function CostsScreenBody() {
               nameOf={nameOf}
               onSetAmount={(item, cents) => patchRow(item.id, { amount: cents })}
               footer={suggestions}
+              summaries={summariesOn ? { prefs: summaryPrefs, onChange: modules.server('costs.money-summaries') ? saveSummaryPrefs : null } : null}
               insights={insightsOn ? { marks: insightMarks, onMarks: updateMarks, onRemind: modules.feature('insights.reminders') ? remindToCancel : null } : null}
             />
           )}

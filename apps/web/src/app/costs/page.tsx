@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useDataCache } from '@/lib/data-cache';
 import { createClient } from '@/lib/supabase/client';
 import { use$ } from '@legendapp/state/react';
-import type { CostItem, CostCategory, Apartment, CostInsightMarks, SubscriptionLine } from '@homeup/core';
+import type { CostItem, CostCategory, Apartment, CostInsightMarks, MoneySummaryPrefs, SubscriptionLine } from '@homeup/core';
 import { toast } from 'sonner';
 import { ArrowLeft, X } from 'lucide-react';
 import {
@@ -144,6 +144,19 @@ export default function CostsPage() {
       });
     },
     [canSaveMarks, persistSettings],
+  );
+  // Assistant summaries (money-summary.ts): asked for per person, posted to the Household chat.
+  const summariesOn = insightsOn && modules.isEnabled('assistant');
+  const [summaryPrefs, setSummaryPrefs] = useState<MoneySummaryPrefs>({});
+  useEffect(() => {
+    if (userSettings?.money_summaries) setSummaryPrefs(userSettings.money_summaries);
+  }, [userSettings?.money_summaries]);
+  const saveSummaryPrefs = useCallback(
+    (next: MoneySummaryPrefs) => {
+      setSummaryPrefs(next);
+      void persistSettings({ money_summaries: next });
+    },
+    [persistSettings],
   );
   const remindToCancel = useCallback(
     async (sub: SubscriptionLine) => {
@@ -340,6 +353,7 @@ export default function CostsPage() {
           onSetAmount={setAmount}
           footer={suggestions}
           wide={wide}
+          summaries={summariesOn ? { prefs: summaryPrefs, onChange: modules.server('costs.money-summaries') ? saveSummaryPrefs : null } : null}
           insights={insightsOn ? { marks: insightMarks, onMarks: updateMarks, onRemind: modules.feature('insights.reminders') ? remindToCancel : null } : null}
         />
       )}

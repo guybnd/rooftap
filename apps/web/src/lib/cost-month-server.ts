@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { actualsSinceOf, costMonth, ledgerRows, listCostItems, type CostItem, type CostMonth } from "@homeup/core";
+import { actualsSinceOf, costMonths, ledgerRows, listCostItems, type CostInsightMarks, type CostItem, type CostMonth } from "@homeup/core";
 import { bankLinkRows, visibleBankTransactions } from "@/lib/up-bank";
 
 // The Costs month on the server, for the assistant and the MCP tools: the
@@ -43,36 +43,64 @@ export async function householdCostMonth(
   groupId: string,
   month?: string,
 ): Promise<ServerCostMonth> {
+  const { months, items, goalCents } = await householdCostMonths(admin, userId, groupId, (now) => [
+    month ?? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`,
+  ]);
+  return { month: months[0], items, goalCents };
+}
+
+export interface ServerCostMonths {
+  months: CostMonth[];
+  items: CostItem[];
+  goalCents: number | null;
+  /** The person's wall clock, as costMonth reads it. */
+  now: Date;
+  /** Money insights the person hid or kept. */
+  marks: CostInsightMarks;
+}
+
+/** Several months for the household, worked out on the person's clock. `keysFor` picks them from it. */
+export async function householdCostMonths(
+  admin: SupabaseClient,
+  userId: string,
+  groupId: string,
+  keysFor: (now: Date) => string[],
+): Promise<ServerCostMonths> {
   const { data: settings } = await admin
     .from("user_settings")
-    .select("timezone, costs_budget_monthly")
+    .select("*")
     .eq("user_id", userId)
     .maybeSingle();
-  const s = (settings ?? {}) as { timezone?: string | null; costs_budget_monthly?: number | null };
+  const s = (settings ?? {}) as { timezone?: string | null; costs_budget_monthly?: number | null; money_insight_marks?: CostInsightMarks | null };
   const tz = zoneOffsetMinutes(s.timezone);
   // costMonth reads the calendar from a Date's local fields; on a UTC server
   // shifting the instant by the zone's offset gives the person's wall clock.
-  const now = new Date(Date.now() - tz * 60_000);
+  const wall = new Date(Date.now() - tz * 60_000);
   const [items, rows, links] = await Promise.all([
     listCostItems(admin, groupId),
     visibleBankTransactions(admin, {
       userId,
       groupId,
-      from: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 12, 1)).toISOString(),
+      from: new Date(Date.UTC(wall.getUTCFullYear(), wall.getUTCMonth() - 12, 1)).toISOString(),
       to: new Date(Date.now() + DAY_MS).toISOString(),
       scope: "household",
       limit: 8000,
     }).catch(() => []),
     bankLinkRows(admin, groupId).catch(() => []),
   ]);
-  const key = month ?? `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
-  const result = costMonth({
+  const now = new Date(wall.getUTCFullYear(), wall.getUTCMonth(), wall.getUTCDate(), wall.getUTCHours(), wall.getUTCMinutes());
+  const input = {
     items,
     ledger: ledgerRows(rows, tz),
-    month: key,
-    now: new Date(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+    now: new Date(now.getFullYear(), now.getMonth(), now.getDate()),
     linked: new Set(links.map((l) => l.cost_item_id)),
     since: actualsSinceOf(rows, tz),
-  });
-  return { month: result, items, goalCents: s.costs_budget_monthly ?? null };
+  };
+  return {
+    months: costMonths(input, keysFor(now)),
+    items,
+    goalCents: s.costs_budget_monthly ?? null,
+    now,
+    marks: s.money_insight_marks ?? {},
+  };
 }

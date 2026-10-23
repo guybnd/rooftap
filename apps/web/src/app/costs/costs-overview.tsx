@@ -42,8 +42,10 @@ import {
   type CostMonth,
   type CostMonthCategory,
   type CostMonthLine,
+  type MoneySummaryPrefs,
 } from '@homeup/core';
 import { BottomSheet } from '@/components/ui/bottom-sheet';
+import { Switch } from '@/components/ui/switch';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { upBankApi } from '@/lib/up-bank-client';
 import { cn } from '@/lib/utils';
@@ -80,12 +82,16 @@ export interface CostsOverviewProps {
   wide?: boolean;
   /** The money-insights module's "Worth a look" card, shown on this month; null when it's off. */
   insights?: Pick<CostInsightsCardProps, 'marks' | 'onMarks' | 'onRemind'> | null;
+  /** Assistant summaries: "Summarise <month>" in the ⋯ menu, and the weekly and monthly switches when the server keeps them. Null with the Assistant off. */
+  summaries?: { prefs: MoneySummaryPrefs; onChange: ((next: MoneySummaryPrefs) => void) | null } | null;
 }
 
 export function CostsOverview(props: CostsOverviewProps) {
   const { items, goalCents, onEditGoal, onOpenItem, onAdd, onArchive, onOpenPayments, canArchive, wide } = props;
   const router = useRouter();
-  const { scope, setScope, data } = useUpOverview();
+  const { scope, setScope, data, status } = useUpOverview();
+  // Someone sharing Up who never set the weekly switch gets the bank's weekly digest.
+  const upWeekly = !!status?.connection && status.connection.shareMode !== 'none' && status.connection.weeklyDigest !== false;
   const now = useMemo(() => new Date(), []);
   const keys = useMemo(() => monthKeys(now, -CHART_BACK, CHART_MONTHS), [now]);
   const months = useCostMonths(items, keys);
@@ -270,8 +276,32 @@ export function CostsOverview(props: CostsOverviewProps) {
         <div className="space-y-1 pb-2 pt-1">
           {onOpenPayments ? <MenuRow label="All payments" hint="Every payment as a list, to search and fix categories." onClick={() => { setMoreOpen(false); onOpenPayments(); }} /> : null}
           <MenuRow label="Ask the assistant" onClick={() => ask(`Help me make sense of my costs in ${name}.`)} />
+          {props.summaries ? (
+            <MenuRow
+              label={`Summarise ${name}`}
+              hint="The assistant sums up the month and what is worth a look."
+              onClick={() => ask(summaryAsk(name))}
+            />
+          ) : null}
           <MenuRow label={goalCents ? 'Change the monthly goal' : 'Set a monthly goal'} onClick={() => { setMoreOpen(false); onEditGoal(); }} />
           {canArchive && !month.income ? <MenuRow label="Add income" hint="Pay or other money in. It never counts as a cost." onClick={() => { setMoreOpen(false); onAdd('income'); }} /> : null}
+          {props.summaries?.onChange ? (
+            <div className="mt-2 space-y-1 border-t border-border/60 pt-3">
+              <h3 className={cn(LABEL, 'px-2')}>Summaries in the Household chat</h3>
+              <SwitchRow
+                label="Weekly"
+                hint="Sunday morning: the week, what is worth a look and the bills ahead."
+                checked={props.summaries.prefs.weekly ?? upWeekly}
+                onChange={(on) => props.summaries!.onChange!({ ...props.summaries!.prefs, weekly: on })}
+              />
+              <SwitchRow
+                label="Monthly"
+                hint="On the 1st: last month against the goal and the month before."
+                checked={!!props.summaries.prefs.monthly}
+                onChange={(on) => props.summaries!.onChange!({ ...props.summaries!.prefs, monthly: on })}
+              />
+            </div>
+          ) : null}
         </div>
       </BottomSheet>
     </div>
@@ -692,6 +722,23 @@ function ShopSheet({
       />
     </>
   );
+}
+
+function SwitchRow({ label, hint, checked, onChange }: { label: string; hint: string; checked: boolean; onChange: (on: boolean) => void }) {
+  return (
+    <div className="flex min-h-12 items-center gap-3 rounded-xl px-2 py-2">
+      <div className="min-w-0 flex-1">
+        <div className="text-base font-medium text-foreground">{label}</div>
+        <div className="text-xs text-muted-foreground">{hint}</div>
+      </div>
+      <Switch checked={checked} onChange={onChange} label={`${label} summary`} />
+    </div>
+  );
+}
+
+/** What "Summarise <month>" asks the assistant. */
+function summaryAsk(month: string): string {
+  return `Summarise our costs for ${month}: what we spent against the goal, the biggest categories, how it compares with the month before, and anything worth a look.`;
 }
 
 function MenuRow({ label, hint, onClick }: { label: string; hint?: string; onClick: () => void }) {

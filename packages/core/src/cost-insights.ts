@@ -247,7 +247,14 @@ export function costInsights(input: CostInsightsInput): CostInsights {
     const daysIn = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
     const share = Math.min(1, now.getDate() / daysIn);
     const usual = new Map<CostCategory, number>();
-    for (const m of past.slice(-3)) for (const c of m.categories) if (c.category) usual.set(c.category, (usual.get(c.category) ?? 0) + c.paidCents);
+    const monthsWith = new Map<CostCategory, number>();
+    for (const m of past.slice(-3)) {
+      for (const c of m.categories) {
+        if (!c.category) continue;
+        usual.set(c.category, (usual.get(c.category) ?? 0) + c.paidCents);
+        if (c.paidCents > 0) monthsWith.set(c.category, (monthsWith.get(c.category) ?? 0) + 1);
+      }
+    }
     const months = Math.min(3, past.length);
     const paidNow = new Map(current.categories.map((c) => [c.category, c.paidCents]));
     const under: (CostInsight & { rank: number; saved: number })[] = [];
@@ -288,11 +295,12 @@ export function costInsights(input: CostInsightsInput): CostInsights {
       out.push(rest);
     }
 
-    // The chosen category that costs the most over a year at its pace.
+    // The chosen category that costs the most over a year at its pace: a
+    // steady one, with money in every month, so one big purchase isn't a pace.
     let top: { category: CostCategory; monthly: number } | null = null;
     for (const [category, total] of usual) {
       const monthly = total / months;
-      if (CHOSEN.has(category) && monthly >= 15000 && (!top || monthly > top.monthly)) top = { category, monthly };
+      if (CHOSEN.has(category) && monthsWith.get(category) === months && monthly >= 15000 && (!top || monthly > top.monthly)) top = { category, monthly };
     }
     if (top) {
       push(12, {
@@ -308,7 +316,7 @@ export function costInsights(input: CostInsightsInput): CostInsights {
 
     // Finishing under the goal, in the last ten days of the month.
     const goal = input.goalCents ?? 0;
-    if (goal > 0 && daysIn - now.getDate() <= 10 && current.expectedCents < goal) {
+    if (goal > 0 && daysIn - now.getDate() <= 10 && current.expectedCents > 0 && current.expectedCents < goal) {
       push(42, {
         key: `goal:${monthKey(now)}`,
         group: 'going-well',

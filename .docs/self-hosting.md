@@ -174,16 +174,16 @@ Two features need a request on a timer. Set `CRON_SECRET` in `.env` and send it 
 | Request | What it does | Suggested time |
 |---|---|---|
 | `GET /api/shopper/refresh` | Checks prices for watched Shopper items. See [shopper-sources.md](shopper-sources.md). | Daily |
-| `GET /api/up-bank/digest` | Posts the weekly money digest to each household's Assistant chat. It runs for households with the Assistant, Costs and a shared Up Bank connection. | Sunday morning |
+| `GET /api/money/summaries` | Posts the money summaries people ask for in Costs to the household's Assistant chat: a weekly note on Sunday and a monthly recap on the 1st. It runs for households with the Assistant, Costs and Money insights. A shared Up Bank connection gives the weekly note on its own. | Daily, in the morning |
 
 For example, in the host's crontab:
 
 ```
 0 5 * * * curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://your-server/api/shopper/refresh
-0 8 * * 0 curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://your-server/api/up-bank/digest
+0 8 * * * curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://your-server/api/money/summaries
 ```
 
-The digest posts once in five days at most, so a second run does nothing.
+Each note posts once per week or month, so a second run does nothing. The older `GET /api/up-bank/digest` still works. It posts only the weekly note. If your crontab calls it, you can replace it with the daily request above.
 
 ## Build-time settings (`NEXT_PUBLIC_*`)
 

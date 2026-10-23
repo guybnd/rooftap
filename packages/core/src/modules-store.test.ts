@@ -319,6 +319,7 @@ describe('server schema', () => {
       'the weekly money digest',
       'archiving costs, future prices and an Income category',
       'hiding money insights and keeping subscriptions',
+      'weekly and monthly money summaries from the assistant',
     ]);
 
     act(() => setServerSchema('20261020050000_mcp_oauth'));
@@ -357,6 +358,7 @@ describe('server schema', () => {
       'the weekly money digest',
         'archiving costs, future prices and an Income category',
         'hiding money insights and keeping subscriptions',
+        'weekly and monthly money summaries from the assistant',
       ]);
     } finally {
       delete mcp.minSchema;

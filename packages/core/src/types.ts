@@ -212,6 +212,8 @@ export interface UserSettings {
   costs_hide_section_suggestions: boolean;
   /** Money insights this person hid or kept (cost-insights.ts). Missing before 20261023030000_money_insight_marks. */
   money_insight_marks?: Record<string, string> | null;
+  /** Money summaries this person asked the Assistant for (money-summary.ts). Missing before 20261023040000_money_summaries. */
+  money_summaries?: { weekly?: boolean; monthly?: boolean } | null;
   /** FLUX-65: Groceries aisle display order (synced replacement for localStorage). */
   grocery_aisle_order: string[] | null;
   /** FLUX-65: Groceries per-aisle default unit (aisle id/custom name -> unit string). */

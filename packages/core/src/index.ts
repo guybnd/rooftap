@@ -74,6 +74,7 @@ export * from './cost-categories';
 export * from './money-insights';
 export * from './cost-insights';
 export * from './use-cost-insights';
+export * from './money-summary';
 export * from './month-spending';
 export * from './cost-month';
 export * from './cost-month-view';

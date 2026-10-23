@@ -10,7 +10,7 @@
 import * as React from 'react';
 import { Pressable, View } from 'react-native';
 import { ChevronDown, ChevronRight, FileText, Landmark, MoreHorizontal, PenLine, Plus, Repeat } from 'lucide-react-native';
-import { BottomSheet, SegmentedControl, Text, cn, haptics } from '@homeup/ui';
+import { BottomSheet, SegmentedControl, Switch, Text, cn, haptics } from '@homeup/ui';
 import {
   CADENCE_LABEL,
   bankDayLabel,
@@ -38,6 +38,7 @@ import {
   type CostMonth,
   type CostMonthCategory,
   type CostMonthLine,
+  type MoneySummaryPrefs,
 } from '@homeup/core';
 import { CATEGORY_BAR_FILL, CategoryChip } from './cost-card';
 import { TransactionSheet } from './money-view';
@@ -71,11 +72,15 @@ export interface CostsOverviewProps {
   footer?: React.ReactNode;
   /** The money-insights module's "Worth a look" card, shown on this month; null when it's off. */
   insights?: Pick<CostInsightsCardProps, 'marks' | 'onMarks' | 'onRemind'> | null;
+  /** Assistant summaries: "Summarise <month>" in the ⋯ menu, and the weekly and monthly switches when the server keeps them. Null with the Assistant off. */
+  summaries?: { prefs: MoneySummaryPrefs; onChange: ((next: MoneySummaryPrefs) => void) | null } | null;
 }
 
 export function CostsOverview(props: CostsOverviewProps) {
   const { items, goalCents, onEditGoal, onOpenItem, onAdd, onArchive, onOpenPayments, canArchive } = props;
-  const { scope, setScope, data } = useUpOverview();
+  const { scope, setScope, data, status } = useUpOverview();
+  // Someone sharing Up who never set the weekly switch gets the bank's weekly digest.
+  const upWeekly = !!status?.connection && status.connection.shareMode !== 'none' && status.connection.weeklyDigest !== false;
   const now = React.useMemo(() => new Date(), []);
   const keys = React.useMemo(() => monthKeys(now, -CHART_BACK, CHART_MONTHS), [now]);
   const months = useCostMonths(items, keys);
@@ -239,8 +244,28 @@ export function CostsOverview(props: CostsOverviewProps) {
         <View className="gap-1 px-4 pb-2">
           {onOpenPayments ? <MenuRow label="All payments" hint="Every payment as a list, to search and fix categories." onPress={() => { setMoreOpen(false); onOpenPayments(); }} /> : null}
           <MenuRow label="Ask the assistant" onPress={() => { setMoreOpen(false); ask(`Help me make sense of my costs in ${name}.`); }} />
+          {props.summaries ? (
+            <MenuRow label={`Summarise ${name}`} hint="The assistant sums up the month and what is worth a look." onPress={() => { setMoreOpen(false); ask(summaryAsk(name)); }} />
+          ) : null}
           <MenuRow label={goalCents ? 'Change the monthly goal' : 'Set a monthly goal'} onPress={() => { setMoreOpen(false); onEditGoal(); }} />
           {canArchive && !month.income ? <MenuRow label="Add income" hint="Pay or other money in. It never counts as a cost." onPress={() => { setMoreOpen(false); onAdd('income'); }} /> : null}
+          {props.summaries?.onChange ? (
+            <View className="mt-2 gap-1 border-t border-border/60 pt-3">
+              <Text className={cn(LABEL, 'px-1')}>Summaries in the Household chat</Text>
+              <SwitchRow
+                label="Weekly"
+                hint="Sunday morning: the week, what is worth a look and the bills ahead."
+                checked={props.summaries.prefs.weekly ?? upWeekly}
+                onChange={(on) => props.summaries!.onChange!({ ...props.summaries!.prefs, weekly: on })}
+              />
+              <SwitchRow
+                label="Monthly"
+                hint="On the 1st: last month against the goal and the month before."
+                checked={!!props.summaries.prefs.monthly}
+                onChange={(on) => props.summaries!.onChange!({ ...props.summaries!.prefs, monthly: on })}
+              />
+            </View>
+          ) : null}
         </View>
       </BottomSheet>
     </View>
@@ -661,6 +686,23 @@ function ShopSheet({
       />
     </>
   );
+}
+
+function SwitchRow({ label, hint, checked, onChange }: { label: string; hint: string; checked: boolean; onChange: (on: boolean) => void }) {
+  return (
+    <View className="min-h-12 flex-row items-center gap-3 px-1 py-2">
+      <View className="min-w-0 flex-1">
+        <Text className="text-body font-medium text-foreground">{label}</Text>
+        <Text className="text-caption text-muted-foreground">{hint}</Text>
+      </View>
+      <Switch checked={checked} onChange={onChange} label={`${label} summary`} />
+    </View>
+  );
+}
+
+/** What "Summarise <month>" asks the assistant. */
+function summaryAsk(month: string): string {
+  return `Summarise our costs for ${month}: what we spent against the goal, the biggest categories, how it compares with the month before, and anything worth a look.`;
 }
 
 function MenuRow({ label, hint, onPress }: { label: string; hint?: string; onPress: () => void }) {
