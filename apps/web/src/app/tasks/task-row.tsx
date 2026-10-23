@@ -13,7 +13,7 @@
 
 import { useRef, useEffect, useState, useCallback, type ReactNode } from 'react';
 import Link from 'next/link';
-import { feedRowWhen, heroItemSectionId, parseReminderKey, useEntityCommentCount, useAddChecklistToTask, completionLabel, useModules, type ModuleFeatureId } from '@homeup/core';
+import { feedRowWhen, heroItemSectionId, parseReminderKey, useEntityCommentCount, useAddChecklistToTask, completionLabel, useModules, recurrenceLabel, type ModuleFeatureId } from '@homeup/core';
 import { LeadingTile } from '@/components/ui/leading-tile';
 import { sectionIconFor } from '@/lib/section-icons';
 import { cn } from '@/lib/utils';
@@ -333,21 +333,6 @@ const RECURRENCE_OPTIONS: { label: string; days: number | null }[] = [
   { label: 'Fortnightly', days: 14 },
   { label: 'Monthly', days: 30 },
 ];
-
-// Human-friendly recurrence summary from a day count.
-function recurrenceLabel(days: number): string {
-  if (days % 30 === 0 && days >= 30) {
-    const n = days / 30;
-    return n === 1 ? 'Monthly' : `Every ${n} months`;
-  }
-  if (days % 7 === 0) {
-    const n = days / 7;
-    if (n === 1) return 'Weekly';
-    if (n === 2) return 'Fortnightly';
-    return `Every ${n} weeks`;
-  }
-  return days === 1 ? 'Daily' : `Every ${days} days`;
-}
 
 // Format a wall-clock "HH:MM[:SS]" as a compact 12h label (FLUX-144).
 // One time format across rows, the feed and the Now card ("10:00 AM").

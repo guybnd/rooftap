@@ -9,16 +9,10 @@
 import { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { FieldRow, FormSection, Input, Switch, Text, cn } from '@homeup/ui';
-import { bankLineAmount, bankMatchParts, formatMoney, timeAgo, useCostMergeTargets, useUpConnected, useUpOverview, type BankPayee, type CostBankDetail, type CostCategory, type CostItem } from '@homeup/core';
+import { bankLineAmount, formatMoney, timeAgo, useCostMergeTargets, useUpConnected, useUpOverview, bankMatchLabel, type BankPayee, type CostBankDetail, type CostCategory, type CostItem } from '@homeup/core';
 import { upBankApi } from './up-bank-api';
 
 const TABULAR = { fontVariant: ['tabular-nums' as const] };
-
-function matchLabel(match: string): string {
-  const parts = bankMatchParts(match);
-  if (parts.length > 1) return `Payments to ${parts.map((p) => (p.startsWith('#') ? p : `"${p}"`)).join(' or ')}`;
-  return match.startsWith('#') ? `Tagged ${match}` : `Payments to "${match}"`;
-}
 
 export function CostBankLink({
   costItemId,
@@ -150,7 +144,7 @@ export function CostBankLink({
           <View className="min-h-12 flex-row items-center gap-3 px-4 py-2">
             <View className="min-w-0 flex-1">
               <Text numberOfLines={1} className="text-sm font-medium text-foreground">
-                {matchLabel(rule.match)}
+                {bankMatchLabel(rule.match)}
               </Text>
               <Text numberOfLines={1} className="text-xs text-muted-foreground">
                 {detail.payments.length === 0 ? 'None found yet' : `${detail.payments.length === 6 ? '6 or more' : detail.payments.length} found`}

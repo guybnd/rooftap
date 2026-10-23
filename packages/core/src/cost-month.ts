@@ -20,7 +20,7 @@
 
 import { CATEGORY_META, costTargets, isOneOff, EVERYDAY_WEIGHTS } from './costs';
 import { occurrencesIn } from './month-spending';
-import { costCategoryFromUp } from './up-bank';
+import { costCategoryFromUp, squashVendor } from './up-bank';
 import type { CostCategory, CostItem } from './types';
 
 /** One shop's payments in one month, from a payment source. Built on the server from the rows the viewer may see. */
@@ -165,12 +165,12 @@ export function costMonth(input: CostMonthInput): CostMonth {
   const vendorCategory = new Map<string, CostCategory>();
   for (const r of ledger) {
     const item = r.costItemId ? byId.get(r.costItemId) : undefined;
-    if (item) vendorCategory.set(squash(r.vendor), item.category);
+    if (item) vendorCategory.set(squashVendor(r.vendor), item.category);
   }
   const categoryOf = (r: LedgerRow): CostCategory | null => {
     const item = r.costItemId ? byId.get(r.costItemId) : undefined;
     if (item) return item.category;
-    return vendorCategory.get(squash(r.vendor)) ?? (r.sourceCategory ? costCategoryFromUp(r.sourceCategory) : null);
+    return vendorCategory.get(squashVendor(r.vendor)) ?? (r.sourceCategory ? costCategoryFromUp(r.sourceCategory) : null);
   };
   const recurringLine = (r: LedgerRow) => {
     const item = r.costItemId ? byId.get(r.costItemId) : undefined;
@@ -198,14 +198,14 @@ export function costMonth(input: CostMonthInput): CostMonth {
     const net = r.outCents - (category === INCOME ? 0 : r.inCents);
     const incomeIn = category === INCOME ? r.inCents : r.outCents === 0 && r.inCents > 0 && category === null ? r.inCents : 0;
     if (incomeIn > 0 && net <= 0) {
-      const line = lineIn(INCOME, `in:${squash(r.vendor)}`, () => ({ kind: 'shop', key: `in:${squash(r.vendor)}`, name: r.vendor, paidCents: 0, toComeCents: 0, count: 0, date: null, source: r.source, vendor: r.vendor }));
+      const line = lineIn(INCOME, `in:${squashVendor(r.vendor)}`, () => ({ kind: 'shop', key: `in:${squashVendor(r.vendor)}`, name: r.vendor, paidCents: 0, toComeCents: 0, count: 0, date: null, source: r.source, vendor: r.vendor }));
       line.paidCents += incomeIn;
       line.count += 1;
       line.date = later(line.date, r.lastAt);
       continue;
     }
     if (net === 0) continue;
-    const key = rec ? `r:${rec.id}` : `s:${squash(r.vendor)}`;
+    const key = rec ? `r:${rec.id}` : `s:${squashVendor(r.vendor)}`;
     const line = lineIn(category, key, () =>
       rec
         ? { kind: 'recurring', key, name: rec.name, paidCents: 0, toComeCents: 0, count: 0, date: null, item: rec, source: r.source }
@@ -341,7 +341,7 @@ function regularIncomeToCome(input: CostMonthInput, categoryOf: (r: LedgerRow) =
   const thisMonth = new Map<string, number>();
   for (const r of input.ledger) {
     if (!isIncome(r)) continue;
-    const key = squash(r.vendor);
+    const key = squashVendor(r.vendor);
     if (r.month === input.month) thisMonth.set(key, (thisMonth.get(key) ?? 0) + r.inCents);
     else if (months.has(r.month)) {
       const byMonth = past.get(key) ?? new Map<string, number>();
@@ -377,10 +377,6 @@ export function monthKeys(now: Date, offset: number, count: number): string[] {
 /** A category's label, or "Pick a category" for payments without one. */
 export function costCategoryLabel(category: CostCategory | null): string {
   return category ? CATEGORY_META[category].label : 'Pick a category';
-}
-
-function squash(text: string): string {
-  return text.trim().replace(/\s+/g, ' ').toUpperCase();
 }
 
 function later(a: string | null, b: string): string {

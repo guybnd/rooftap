@@ -10,19 +10,13 @@
 // Native twin: apps/mobile/src/features/costs/cost-bank-link.tsx.
 
 import { useEffect, useState } from 'react';
-import { bankLineAmount, bankMatchParts, formatMoney, timeAgo, useCostMergeTargets, useUpConnected, useUpOverview, type BankPayee, type CostBankDetail, type CostCategory, type CostItem } from '@homeup/core';
+import { bankLineAmount, formatMoney, timeAgo, useCostMergeTargets, useUpConnected, useUpOverview, bankMatchLabel, type BankPayee, type CostBankDetail, type CostCategory, type CostItem } from '@homeup/core';
 import { upBankApi } from '@/lib/up-bank-client';
 import { FieldRow, FormSection } from '@/components/ui/item-form-sheet';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 
-
-function matchLabel(match: string): string {
-  const parts = bankMatchParts(match);
-  if (parts.length > 1) return `Payments to ${parts.map((p) => (p.startsWith('#') ? p : `"${p}"`)).join(' or ')}`;
-  return match.startsWith('#') ? `Tagged ${match}` : `Payments to "${match}"`;
-}
 
 export function CostBankLink({
   costItemId,
@@ -158,7 +152,7 @@ export function CostBankLink({
         <div className="rounded-2xl bg-muted/40">
           <div className="flex min-h-12 items-center gap-3 px-4 py-2">
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-foreground">{matchLabel(rule.match)}</p>
+              <p className="truncate text-sm font-medium text-foreground">{bankMatchLabel(rule.match)}</p>
               <p className="truncate text-xs text-muted-foreground">
                 {detail.payments.length === 0 ? 'None found yet' : `${detail.payments.length === 6 ? '6 or more' : detail.payments.length} found`}
               </p>

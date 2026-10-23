@@ -436,3 +436,23 @@ export const GROCERY_UNDO_LABELS = {
 export const RE_ADD_CHIP_CAP = 6;
 /** The Home dashboard's groceries card shows fewer chips than the Groceries page. */
 export const HOME_RE_ADD_CHIP_CAP = 4;
+
+/** How far one tap moves an item's quantity, by its unit: half a kilo, 50 g, a quarter litre, 50 ml, else one. */
+export function unitQtyStep(unit: string | null | undefined): number {
+  const u = (unit ?? '').toLowerCase().trim();
+  if (u === 'kg') return 0.5;
+  if (u === 'g' || u === 'gram' || u === 'grams') return 50;
+  if (u === 'l' || u === 'litre' || u === 'litres' || u === 'liter' || u === 'liters') return 0.25;
+  if (u === 'ml' || u === 'millilitre' || u === 'millilitres' || u === 'milliliter') return 50;
+  return 1;
+}
+
+/** The largest quantity the stepper allows, by the item's unit. */
+export function unitQtyMax(unit: string | null | undefined): number {
+  const u = (unit ?? '').toLowerCase().trim();
+  if (u === 'kg') return 50;
+  if (u === 'g' || u === 'gram' || u === 'grams') return 5000;
+  if (u === 'l' || u === 'litre' || u === 'litres' || u === 'liter' || u === 'liters') return 20;
+  if (u === 'ml' || u === 'millilitre' || u === 'millilitres' || u === 'milliliter') return 5000;
+  return 999;
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dueDayLabel, formatPastDay, formatRelativeDay, formatTime12h, pad2, taskSnoozePatch } from './date-utils';
+import { dueDayLabel, formatPastDay, formatRelativeDay, formatTime12h, localDateOf, localDateTimeToISO, localTimeOf, pad2, recurrenceLabel, taskSnoozePatch } from './date-utils';
 
 describe('taskSnoozePatch', () => {
   const task = { due_date: '2026-10-18', due_time: '09:30' };
@@ -81,5 +81,32 @@ describe('formatPastDay', () => {
   it('uses a short weekday within the week, then a short date', () => {
     expect(formatPastDay(new Date(2026, 9, 15), now)).toBe('Thu');
     expect(formatPastDay(new Date(2026, 9, 11), now)).toBe('Oct 11');
+  });
+});
+
+describe('local date and time fields', () => {
+  it('round-trips a local date and time through an instant', () => {
+    const iso = localDateTimeToISO('2026-10-23', '18:05');
+    expect(localDateOf(iso)).toBe('2026-10-23');
+    expect(localTimeOf(iso)).toBe('18:05');
+  });
+
+  it('takes an empty time as midnight', () => {
+    expect(localTimeOf(localDateTimeToISO('2026-10-23', ''))).toBe('00:00');
+  });
+});
+
+describe('recurrenceLabel', () => {
+  it('names common intervals', () => {
+    expect([1, 3, 7, 14, 21, 30, 90, 45].map(recurrenceLabel)).toEqual([
+      'Daily',
+      'Every 3 days',
+      'Weekly',
+      'Fortnightly',
+      'Every 3 weeks',
+      'Monthly',
+      'Every 3 months',
+      'Every 45 days',
+    ]);
   });
 });

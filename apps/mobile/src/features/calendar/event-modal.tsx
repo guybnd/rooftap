@@ -30,20 +30,23 @@ import {
   eventEndText,
   withEventDuration,
   withEventStart,
-  type EventTiming,
   toggleReminderDay,
   TRAVEL_MODE_OPTIONS,
   travelHint,
   leaveAlertMinutes,
-  type TravelMode,
-  type EventCategory,
-  type GroupEvent,
   currencySymbol,
-  type Document,
-  type ParsedEventDetails,
   linkEventTicket,
   saveEventTicket,
   useModules,
+  localDateOf,
+  localDateTimeToISO,
+  localTimeOf,
+  type EventTiming,
+  type TravelMode,
+  type EventCategory,
+  type GroupEvent,
+  type Document,
+  type ParsedEventDetails,
 } from '@homeup/core';
 import { randomUUID } from '@/lib/uuid';
 import { parseEventLink, pickAndParseTicket, type EventParseResult } from './event-parse-api';
@@ -61,26 +64,6 @@ const CATEGORY_OPTIONS = (Object.keys(EVENT_CATEGORY_META) as EventCategory[]).m
   value,
   label: EVENT_CATEGORY_META[value].label,
 }));
-
-function pad2(n: number): string {
-  return String(n).padStart(2, '0');
-}
-
-function isoToDateStr(iso: string): string {
-  const d = new Date(iso);
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-}
-
-function isoToTimeStr(iso: string): string {
-  const d = new Date(iso);
-  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
-}
-
-function combineToISO(dateStr: string, timeStr: string): string {
-  const [y, m, d] = dateStr.split('-').map(Number);
-  const [h, min] = (timeStr || '00:00').split(':').map(Number);
-  return new Date(y, m - 1, d, h, min, 0, 0).toISOString();
-}
 
 interface EventModalProps {
   open: boolean;
@@ -124,10 +107,10 @@ export function EventModal({
   const [category, setCategory] = React.useState<EventCategory>(event?.category ?? 'general');
   const [visibility, setVisibility] = React.useState<'shared' | 'private'>(event?.private ? 'private' : 'shared');
   const [isAllDay, setIsAllDay] = React.useState(event?.is_all_day ?? false);
-  const [startDate, setStartDate] = React.useState(event ? isoToDateStr(event.starts_at) : defaultDate || todayISO());
-  const [startTime, setStartTime] = React.useState(event ? isoToTimeStr(event.starts_at) : defaultTime || '09:00');
-  const [endDate, setEndDate] = React.useState(event?.ends_at ? isoToDateStr(event.ends_at) : '');
-  const [endTime, setEndTime] = React.useState(event?.ends_at ? isoToTimeStr(event.ends_at) : '');
+  const [startDate, setStartDate] = React.useState(event ? localDateOf(event.starts_at) : defaultDate || todayISO());
+  const [startTime, setStartTime] = React.useState(event ? localTimeOf(event.starts_at) : defaultTime || '09:00');
+  const [endDate, setEndDate] = React.useState(event?.ends_at ? localDateOf(event.ends_at) : '');
+  const [endTime, setEndTime] = React.useState(event?.ends_at ? localTimeOf(event.ends_at) : '');
   const [location, setLocation] = React.useState(event?.location ?? '');
   const [notes, setNotes] = React.useState(event?.notes ?? '');
   // Time to leave: new events start on Drive when the household's home is set.
@@ -145,7 +128,7 @@ export function EventModal({
   const forecast = useEventForecast(
     open && startDate
       ? {
-          starts_at: combineToISO(startDate, isAllDay ? '00:00' : startTime || '09:00'),
+          starts_at: localDateTimeToISO(startDate, isAllDay ? '00:00' : startTime || '09:00'),
           is_all_day: isAllDay,
           location,
         }
@@ -281,8 +264,8 @@ export function EventModal({
   const save = () => {
     if (!canSave) return;
     const finalStartDate = startDate || todayISO();
-    const starts_at = isAllDay ? combineToISO(finalStartDate, '00:00') : combineToISO(finalStartDate, startTime || '09:00');
-    const ends_at = !isAllDay && endDate && endTime ? combineToISO(endDate, endTime) : null;
+    const starts_at = isAllDay ? localDateTimeToISO(finalStartDate, '00:00') : localDateTimeToISO(finalStartDate, startTime || '09:00');
+    const ends_at = !isAllDay && endDate && endTime ? localDateTimeToISO(endDate, endTime) : null;
     const costCentsOnForm = showBudget && cost ? Math.round(cost * 100) : null;
     const travelFields = {
       travel_mode: isAllDay ? null : travelMode,
@@ -489,7 +472,7 @@ export function EventModal({
             hasHome: travel.hasHome,
             hasPlace: !!location.trim(),
             minutes: travel.minutes,
-            startsAt: combineToISO(startDate || todayISO(), startTime || '09:00'),
+            startsAt: localDateTimeToISO(startDate || todayISO(), startTime || '09:00'),
             alertMinutes: leaveAlertMinutes(userSettings),
             formatClock: (d) => d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
           })}

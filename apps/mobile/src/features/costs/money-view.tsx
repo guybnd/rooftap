@@ -45,6 +45,7 @@ import {
   shiftMonth,
   useUpConnected,
   useUpOverview,
+  bankRowMeta,
   type BankTransactionPatch,
   type MakeCostPreview,
   type BankTransactionView,
@@ -334,18 +335,6 @@ const CADENCE_WORD: Record<MakeCostPreview['cadence'], string> = {
   one_off: 'once',
 };
 
-function rowMeta(t: BankTransactionView, line: CostItem | null, categoryLabel: string | null, owner: string | null): string {
-  return [
-    t.pending ? 'Pending' : null,
-    t.isTransfer ? 'Transfer' : t.amountCents > 0 ? 'Money in' : categoryLabel ?? 'No category yet',
-    line ? `line ${line.name}` : null,
-    t.note,
-    owner,
-  ]
-    .filter(Boolean)
-    .join(' · ');
-}
-
 function MoneyRow({
   t,
   line,
@@ -374,7 +363,7 @@ function MoneyRow({
           {t.description}
         </Text>
         <Text numberOfLines={1} className="text-xs text-muted-foreground">
-          {rowMeta(t, line, categoryLabel, owner)}
+          {bankRowMeta(t, line, categoryLabel, owner)}
         </Text>
       </View>
       <Text className={cn('text-sm', t.amountCents > 0 ? 'text-success' : 'text-foreground')} style={TABULAR}>

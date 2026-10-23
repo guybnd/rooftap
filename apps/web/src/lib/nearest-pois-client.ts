@@ -1,15 +1,5 @@
-import type { NearbyPOI } from '@homeup/core';
+import { haversineMeters, type NearbyPOI } from '@homeup/core';
 
-function haversine(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLng = ((lng2 - lng1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLng / 2) ** 2;
-  return 6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
 
 export async function fetchNearestPoiDistancesClient(
   lat: number,
@@ -35,7 +25,7 @@ export async function fetchNearestPoiDistancesClient(
     let nearestTransport = Infinity;
 
     for (const poi of pois) {
-      const dist = haversine(lat, lng, poi.lat, poi.lng);
+      const dist = haversineMeters(lat, lng, poi.lat, poi.lng);
       if (poi.category === "supermarket") {
         nearestSuper = Math.min(nearestSuper, dist);
       } else {

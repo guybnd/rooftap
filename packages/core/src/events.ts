@@ -3,7 +3,7 @@
 // SearchablePicker), but styled for the calendar's light event-card chrome
 // (bg-*-500/10 + border + text-*-800, matching getCalendarEventClasses).
 
-import type { EventCategory } from './types';
+import type { EventCategory, GroupEvent } from './types';
 import type { PickerOption } from "./types";
 
 export const EVENT_CATEGORY_META: Record<EventCategory, { label: string; classes: string }> = {
@@ -49,4 +49,12 @@ const DIRECTIONS_MODE: Record<string, string> = { drive: 'driving', walk: 'walki
 export function mapsDirectionsUrl(place: string, travelMode?: string | null): string {
   const mode = travelMode ? DIRECTIONS_MODE[travelMode] : undefined;
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(place.trim())}${mode ? `&travelmode=${mode}` : ''}`;
+}
+
+/** "Tue 28 Oct" for an all-day event, else "Tue 28 Oct, 6:30pm". */
+export function eventWhenText(event: Pick<GroupEvent, 'starts_at' | 'is_all_day'>): string {
+  const start = new Date(event.starts_at);
+  const day = start.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' });
+  if (event.is_all_day) return day;
+  return `${day}, ${start.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' }).replace(/\s/g, '').toLowerCase()}`;
 }

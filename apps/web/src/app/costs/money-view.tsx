@@ -36,6 +36,7 @@ import {
   shiftMonth,
   useUpConnected,
   useUpOverview,
+  bankRowMeta,
   type BankTransactionPatch,
   type MakeCostPreview,
   type BankTransactionView,
@@ -333,18 +334,6 @@ const CADENCE_WORD: Record<MakeCostPreview['cadence'], string> = {
   one_off: 'once',
 };
 
-function rowMeta(t: BankTransactionView, line: CostItem | null, categoryLabel: string | null, owner: string | null): string {
-  return [
-    t.pending ? 'Pending' : null,
-    t.isTransfer ? 'Transfer' : t.amountCents > 0 ? 'Money in' : categoryLabel ?? 'No category yet',
-    line ? `line ${line.name}` : null,
-    t.note,
-    owner,
-  ]
-    .filter(Boolean)
-    .join(' · ');
-}
-
 function MoneyRow({
   t,
   line,
@@ -364,7 +353,7 @@ function MoneyRow({
     <button type="button" onClick={onOpen} className="flex min-h-[52px] w-full items-center gap-3 bg-card px-4 py-2 text-left hover:bg-muted/40">
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium text-foreground">{t.description}</p>
-        <p className="truncate text-xs text-muted-foreground">{rowMeta(t, line, categoryLabel, owner)}</p>
+        <p className="truncate text-xs text-muted-foreground">{bankRowMeta(t, line, categoryLabel, owner)}</p>
       </div>
       <span className={cn('text-sm tabular-nums', t.amountCents > 0 ? 'text-success' : 'text-foreground')}>
         {t.amountCents > 0 ? '+' : ''}

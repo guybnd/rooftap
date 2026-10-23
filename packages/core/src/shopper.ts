@@ -407,3 +407,20 @@ export function shopperShortcutValue(rows: readonly ShopperRowSummary[]): string
   if (good > 0) return `${good} good ${good === 1 ? 'deal' : 'deals'}`;
   return `${watching.length} watching`;
 }
+
+/** x and y for a price chart's points inside `pad`, with the series' low and high. */
+export function priceChartScale(series: readonly DailyPrice[], width: number, height: number, pad: number) {
+  const values = series.map((p) => p.cents);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = max - min || 1;
+  const x = (i: number) => (series.length === 1 ? width - pad : pad + (i / (series.length - 1)) * (width - pad * 2));
+  const y = (cents: number) => pad + (1 - (cents - min) / span) * (height - pad * 2);
+  return { x, y, min, max };
+}
+
+/** "28 Oct" from a YYYY-MM-DD day, in the device's locale. */
+export function priceDayLabel(day: string): string {
+  const [y, m, d] = day.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+}

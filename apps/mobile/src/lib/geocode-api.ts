@@ -6,7 +6,7 @@
 // attached as `Authorization: Bearer`. The nearest-POI haversine reduction
 // mirrors apps/web/src/lib/nearest-pois-client.ts (that file lives in
 // apps/web, so the pure calc is duplicated here rather than imported).
-import type { NearbyPOI } from '@homeup/core';
+import { haversineMeters, type NearbyPOI } from '@homeup/core';
 import { getCurrentSupabaseClient } from '@/lib/supabase-client';
 import { getStoredServer } from '@/lib/server-config';
 
@@ -37,16 +37,6 @@ export async function geocodeAddress(address: string, suburb?: string | null): P
   }
 }
 
-function haversine(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLng = ((lng2 - lng1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLng / 2) ** 2;
-  return 6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
 
 /** Best-effort nearest supermarket/transport distances via the existing token-free /api/nearby-pois route. */
 export async function fetchNearestPoiDistances(
@@ -72,7 +62,7 @@ export async function fetchNearestPoiDistances(
     let nearestSuper = Infinity;
     let nearestTransport = Infinity;
     for (const poi of pois) {
-      const dist = haversine(lat, lng, poi.lat, poi.lng);
+      const dist = haversineMeters(lat, lng, poi.lat, poi.lng);
       if (poi.category === 'supermarket') {
         nearestSuper = Math.min(nearestSuper, dist);
       } else {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GROCERY_UNDO_LABELS, parseGroceryShow, formatEntryQuantity, groceryAislesMatching, grocerySearchAddOptions, isReAddDismissed, parseGroceryEntry, recentGroceryPicks, sortGroceriesFlat, suggestReAdd } from './groceries';
+import { GROCERY_UNDO_LABELS, parseGroceryShow, formatEntryQuantity, groceryAislesMatching, grocerySearchAddOptions, isReAddDismissed, parseGroceryEntry, recentGroceryPicks, sortGroceriesFlat, suggestReAdd, unitQtyMax, unitQtyStep } from './groceries';
 import type { LibraryOverride } from './item-library';
 import type { GroceryItem } from './types';
 
@@ -266,5 +266,12 @@ describe("grocery Show switch", () => {
     expect(parseGroceryShow("all")).toBe("all");
     expect(parseGroceryShow(null)).toBe("all");
     expect(parseGroceryShow("junk")).toBe("all");
+  });
+});
+
+describe('unit-aware quantity steps', () => {
+  it('steps and caps by unit, any case', () => {
+    expect(['kg', 'G', 'litres', 'ml', null, 'pack'].map(unitQtyStep)).toEqual([0.5, 50, 0.25, 50, 1, 1]);
+    expect(['kg', 'grams', 'L', 'millilitre', undefined].map(unitQtyMax)).toEqual([50, 5000, 20, 5000, 999]);
   });
 });

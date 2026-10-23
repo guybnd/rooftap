@@ -32,6 +32,7 @@ import {
   createManualReminder,
   syncDocumentReminder,
   deleteDocumentReminder,
+  documentMetadataValue,
 } from '@homeup/core';
 import { dialog } from '@homeup/core';
 import { memberLabel } from '@/app/setup/member-label';
@@ -149,12 +150,6 @@ function expiryLabel(days: number, expiryDate: string): { text: string; classNam
       sameYear ? { month: 'short', day: 'numeric' } : { month: 'short', year: 'numeric' }
     )}`,
   };
-}
-
-/** Metadata values read as words: an ISO date becomes a short date (H6). */
-function metadataValue(value: string): string {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
-  return new Date(`${value}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 // Hearth §6 Document row: the leading chip is the doc type, a glyph on a
@@ -1404,7 +1399,7 @@ function DocumentCard({
         {/* Per-category sub-fields, read-only (FLUX-133), as one quiet line. */}
         {metaFields.length > 0 && (
           <p className="truncate text-xs text-muted-foreground">
-            {metaFields.map((f) => `${f.label} ${metadataValue(f.value)}`).join(', ')}
+            {metaFields.map((f) => `${f.label} ${documentMetadataValue(f.value)}`).join(', ')}
           </p>
         )}
 

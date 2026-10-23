@@ -14,7 +14,7 @@
 
 import { useRef, useState } from 'react';
 import type { GrocerySession } from '@homeup/core';
-import { formatMoney, useModules, currencySymbol, ensureSession, updateSession } from '@homeup/core';
+import { formatMoney, useModules, currencySymbol, ensureSession, updateSession, sessionTotalSource } from '@homeup/core';
 import { Receipt, Camera, Check, Loader2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { BottomSheet } from '@/components/ui/bottom-sheet';
@@ -27,11 +27,6 @@ const FLOAT_SPOT =
   'fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] md:bottom-4 left-1/2 z-40 w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2';
 // MO: the floating layers rise in at slow, like a sheet arriving.
 const FLOAT_ENTER = 'animate-in fade-in slide-in-from-bottom-2 duration-[var(--motion-slow)]';
-
-/** Where the trip's total came from, for its caption. */
-function totalSource(session: GrocerySession): string {
-  return session.override_total_cents != null ? 'manual total' : session.receipt_total_cents != null ? 'from receipt' : 'estimated';
-}
 
 /** The trip's total; tapping it swaps in an input to override it (Enter or
  *  blur commits, empty clears the override, Escape backs out). H1: body
@@ -187,7 +182,7 @@ export function ShopTrackingPill({
   receiptError: string | null;
   onDone: () => void;
 }) {
-  const source = totalSource(session);
+  const source = sessionTotalSource(session);
   const caption = `${source === 'estimated' ? 'in cart' : source} · ${boughtCount} got`;
   return (
     <div className={cn(FLOAT_SPOT, FLOAT_ENTER, 'rounded-2xl border border-border bg-popover py-1.5 pl-4 pr-2 text-popover-foreground shadow-xl shadow-black/40')}>
@@ -255,7 +250,7 @@ export function FinishShopSheet({
   const modules = useModules();
   const toCosts = modules.feature('costs.from-groceries');
   const caption = session
-    ? [totalSource(session), `${boughtCount} got`, unpricedCount > 0 ? `${unpricedCount} unpriced` : null].filter(Boolean).join(' · ')
+    ? [sessionTotalSource(session), `${boughtCount} got`, unpricedCount > 0 ? `${unpricedCount} unpriced` : null].filter(Boolean).join(' · ')
     : '';
   const outline =
     'min-h-12 flex-1 rounded-xl border border-border text-sm font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-50';

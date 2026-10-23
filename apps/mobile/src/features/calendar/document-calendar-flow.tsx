@@ -15,6 +15,7 @@ import {
   linkEventTicket,
   useEventSave,
   useModules,
+  eventWhenText,
   type Document,
   type GroupEvent,
   type ParsedEventDetails,
@@ -37,13 +38,6 @@ import { useDataCache } from '@/lib/data-cache';
 import { getCurrentSupabaseClient } from '@/lib/supabase-client';
 import { EventModal } from './event-modal';
 import { parseEventDocument } from './event-parse-api';
-
-function whenText(event: GroupEvent): string {
-  const start = new Date(event.starts_at);
-  const day = start.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' });
-  if (event.is_all_day) return day;
-  return `${day}, ${start.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' }).replace(/\s/g, '').toLowerCase()}`;
-}
 
 export function DocumentCalendarFlow({
   doc,
@@ -143,7 +137,7 @@ export function DocumentCalendarFlow({
                 <ListItemContent>
                   <ListItemTitle numberOfLines={1}>{event.title}</ListItemTitle>
                   <ListItemMeta>
-                    <Text className="text-caption text-muted-foreground">{whenText(event)}</Text>
+                    <Text className="text-caption text-muted-foreground">{eventWhenText(event)}</Text>
                   </ListItemMeta>
                 </ListItemContent>
               </ListItem>

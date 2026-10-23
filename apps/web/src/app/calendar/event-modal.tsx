@@ -48,9 +48,12 @@ import {
   leaveAlertMinutes,
   saveEventTicket,
   EVENT_TICKETS_FOLDER_NAME,
-  type TravelMode,
   useModules,
   currencySymbol,
+  localDateOf,
+  localDateTimeToISO,
+  localTimeOf,
+  type TravelMode,
 } from '@homeup/core';
 import { dialog } from '@homeup/core';
 import { Input } from '@/components/ui/input';
@@ -90,26 +93,6 @@ interface EventModalProps {
 
 type AttachmentDoc = Pick<Document, 'id' | 'title' | 'filename'>;
 
-function pad2(n: number) {
-  return String(n).padStart(2, '0');
-}
-
-function isoToDateStr(iso: string): string {
-  const d = new Date(iso);
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-}
-
-function isoToTimeStr(iso: string): string {
-  const d = new Date(iso);
-  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
-}
-
-function combineToISO(dateStr: string, timeStr: string): string {
-  const [y, m, d] = dateStr.split('-').map(Number);
-  const [h, min] = (timeStr || '00:00').split(':').map(Number);
-  return new Date(y, m - 1, d, h, min, 0, 0).toISOString();
-}
-
 export function EventModal({
   isOpen,
   event,
@@ -138,10 +121,10 @@ export function EventModal({
       title: event?.title || '',
       category: (event?.category ?? 'general') as EventCategory,
       private: event?.private ?? false,
-      start_date: event ? isoToDateStr(event.starts_at) : defaultDate || todayISO(),
-      start_time: event ? isoToTimeStr(event.starts_at) : defaultTime || '09:00',
-      end_date: event?.ends_at ? isoToDateStr(event.ends_at) : '',
-      end_time: event?.ends_at ? isoToTimeStr(event.ends_at) : '',
+      start_date: event ? localDateOf(event.starts_at) : defaultDate || todayISO(),
+      start_time: event ? localTimeOf(event.starts_at) : defaultTime || '09:00',
+      end_date: event?.ends_at ? localDateOf(event.ends_at) : '',
+      end_time: event?.ends_at ? localTimeOf(event.ends_at) : '',
       is_all_day: event?.is_all_day ?? false,
       location: event?.location || '',
       notes: event?.notes || '',
@@ -259,7 +242,7 @@ export function EventModal({
   const forecast = useEventForecast(
     isOpen && formData.start_date
       ? {
-          starts_at: combineToISO(formData.start_date, formData.is_all_day ? '00:00' : formData.start_time || '09:00'),
+          starts_at: localDateTimeToISO(formData.start_date, formData.is_all_day ? '00:00' : formData.start_time || '09:00'),
           is_all_day: formData.is_all_day,
           location: formData.location,
         }
@@ -377,11 +360,11 @@ export function EventModal({
             : null,
     };
     const starts_at = formData.is_all_day
-      ? combineToISO(start_date, '00:00')
-      : combineToISO(start_date, formData.start_time || '09:00');
+      ? localDateTimeToISO(start_date, '00:00')
+      : localDateTimeToISO(start_date, formData.start_time || '09:00');
     const ends_at =
       !formData.is_all_day && formData.end_date && formData.end_time
-        ? combineToISO(formData.end_date, formData.end_time)
+        ? localDateTimeToISO(formData.end_date, formData.end_time)
         : null;
 
     if (event?.id) {
@@ -629,7 +612,7 @@ export function EventModal({
               hasHome: travel.hasHome,
               hasPlace: !!formData.location.trim(),
               minutes: travel.minutes,
-              startsAt: combineToISO(formData.start_date || todayISO(), formData.start_time || '09:00'),
+              startsAt: localDateTimeToISO(formData.start_date || todayISO(), formData.start_time || '09:00'),
               alertMinutes: leaveAlertMinutes(userSettings),
               formatClock: (d) => d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
             })}

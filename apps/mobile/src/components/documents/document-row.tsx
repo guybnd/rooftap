@@ -59,6 +59,7 @@ import {
   metadataSummary,
   serviceLabel,
   timeAgo,
+  documentMetadataValue,
   type DocumentLink,
   type UnifiedDocument,
 } from '@homeup/core';
@@ -121,12 +122,6 @@ function expiryLabel(days: number, expiryDate: string): { text: string; classNam
     )}`,
     className: 'text-muted-foreground',
   };
-}
-
-/** Metadata values read as words: an ISO date becomes a short date (H6). */
-function metadataValue(value: string): string {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
-  return new Date(`${value}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 // HOUP-230/HOUP-198: matches task-row.tsx/setup-item-card.tsx's hold-to-edit
@@ -286,7 +281,7 @@ export function DocumentRow({
 
         {meta.length > 0 && (
           <Text className="text-xs text-muted-foreground" numberOfLines={1}>
-            {meta.map((f) => `${f.label} ${metadataValue(f.value)}`).join(', ')}
+            {meta.map((f) => `${f.label} ${documentMetadataValue(f.value)}`).join(', ')}
           </Text>
         )}
 

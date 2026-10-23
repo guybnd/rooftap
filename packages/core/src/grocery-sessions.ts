@@ -306,3 +306,8 @@ export async function applyReceiptLearning(
     }
   }
 }
+
+/** Where the trip's total came from, for its caption. */
+export function sessionTotalSource(session: GrocerySession): string {
+  return session.override_total_cents != null ? 'manual total' : session.receipt_total_cents != null ? 'from receipt' : 'estimated';
+}

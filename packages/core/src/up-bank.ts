@@ -229,7 +229,7 @@ export function ledgerRows(rows: readonly BankTransaction[], tzOffset = 0): Ledg
     // Up's raw text can end in a stray backslash ("LUNE FITZROY\\").
     const vendor = r.description.replace(/[\\\s]+$/, '').trim() || r.description;
     const costItemId = r.cost_item_id ?? null;
-    const key = `${month}|${costItemId ?? ''}|${squash(vendor)}|${costItemId ? '' : (r.category ?? '')}`;
+    const key = `${month}|${costItemId ?? ''}|${squashVendor(vendor)}|${costItemId ? '' : (r.category ?? '')}`;
     const cur = out.get(key) ?? { month, vendor, costItemId, sourceCategory: r.category ?? null, outCents: 0, inCents: 0, count: 0, lastAt: r.occurred_at, source: r.source };
     if (r.amount_cents < 0) {
       cur.outCents += -r.amount_cents;
@@ -591,7 +591,8 @@ export const UP_COST_CATEGORY: Readonly<Record<string, CostCategory>> = {
   groceries: 'grocery_estimate',
 };
 
-function squash(text: string): string {
+/** A vendor or description folded for matching: trimmed, single-spaced, upper case. */
+export function squashVendor(text: string): string {
   return text.trim().replace(/\s+/g, ' ').toUpperCase();
 }
 
@@ -619,7 +620,7 @@ export function bankMatchParts(match: string): string[] {
 /** A match with one more payee in it, or null when it already has that one. */
 export function addBankMatch(match: string | null | undefined, extra: string): string | null {
   const parts = match ? bankMatchParts(match) : [];
-  const add = bankMatchParts(extra).filter((m) => !parts.some((p) => squash(p) === squash(m)));
+  const add = bankMatchParts(extra).filter((m) => !parts.some((p) => squashVendor(p) === squashVendor(m)));
   return add.length ? [...parts, ...add].join(BANK_MATCH_OR) : null;
 }
 
@@ -630,9 +631,9 @@ export function bankMatchFits(match: string, row: Pick<BankTransaction, 'descrip
     const tag = match.slice(1).toLowerCase();
     return (row.tags ?? []).some((t) => t.toLowerCase() === tag);
   }
-  const needle = squash(match);
+  const needle = squashVendor(match);
   if (!needle) return false;
-  return squash(row.description).includes(needle) || (!!row.raw_text && squash(row.raw_text).includes(needle));
+  return squashVendor(row.description).includes(needle) || (!!row.raw_text && squashVendor(row.raw_text).includes(needle));
 }
 
 /** Money out that isn't a move between own accounts: the payments a cost line can link to. */
@@ -747,7 +748,7 @@ export function bankPayees(
   opts: { category?: CostCategory | null; query?: string; limit?: number } = {},
 ): BankPayee[] {
   const byMatch = new Map<string, BankPayee>();
-  const query = squash(opts.query ?? '');
+  const query = squashVendor(opts.query ?? '');
   const sorted = uniqueByExternal(rows.slice().sort((a, b) => b.occurred_at.localeCompare(a.occurred_at)));
   for (const r of sorted) {
     if (!isLinkablePayment(r) || r.hidden) continue;
@@ -755,7 +756,7 @@ export function bankPayees(
     const keys: { match: string; label: string }[] = [{ match: r.description, label: r.description }];
     for (const tag of r.tags ?? []) keys.push({ match: `#${tag}`, label: `Tag: ${tag}` });
     for (const k of keys) {
-      if (query && !squash(k.label).includes(query) && !squash(k.match).includes(query)) continue;
+      if (query && !squashVendor(k.label).includes(query) && !squashVendor(k.match).includes(query)) continue;
       const id = k.match.toUpperCase();
       const seen = byMatch.get(id);
       if (seen) {

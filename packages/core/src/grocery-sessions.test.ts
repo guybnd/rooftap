@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { syncSession, uploadReceipt } from './grocery-sessions';
+import { sessionTotalSource, syncSession, uploadReceipt } from './grocery-sessions';
 import type { DocumentUploadInput } from './documents';
 import { ALL_MODULE_IDS, type ModuleId } from './modules';
 import { resetModulesStore, setModuleRows } from './modules-store';
@@ -194,5 +194,14 @@ describe('syncSession', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await syncSession(client as any, session, 'group-1', 1250);
     expect(writes.filter((w) => w.table === 'cost_items')).toHaveLength(1);
+  });
+});
+
+describe('sessionTotalSource', () => {
+  const s = (over: Partial<GrocerySession>) => ({ override_total_cents: null, receipt_total_cents: null, ...over }) as GrocerySession;
+  it('prefers a manual total, then the receipt, else the estimate', () => {
+    expect(sessionTotalSource(s({ override_total_cents: 100, receipt_total_cents: 90 }))).toBe('manual total');
+    expect(sessionTotalSource(s({ receipt_total_cents: 90 }))).toBe('from receipt');
+    expect(sessionTotalSource(s({}))).toBe('estimated');
   });
 });

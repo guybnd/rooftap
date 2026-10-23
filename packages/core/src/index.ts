@@ -17,6 +17,7 @@ export * from './supabase';
 export * from './native-client';
 export * from './server-origin';
 export * from './date-utils';
+export * from './geometry';
 
 export * from './checklists';
 export * from './checklist-view';
@@ -75,6 +76,7 @@ export * from './cost-insights';
 export * from './use-cost-insights';
 export * from './month-spending';
 export * from './cost-month';
+export * from './cost-month-view';
 export * from './document-folders';
 export * from './events';
 export * from './event-tickets';

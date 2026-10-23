@@ -65,6 +65,7 @@ import {
   todayISO,
   useAddChecklistToTask,
   useModules,
+  recurrenceLabel,
   type Checklist,
   type ChecklistTaskItem,
   type GroupMember,
@@ -100,20 +101,6 @@ const REMINDER_ORIGIN: Partial<Record<string, { label: string; route: Href; feat
   cost: { label: 'Costs', route: '/costs' as Href, feature: 'tasks.from-cost' },
   document: { label: 'Documents', route: '/documents' as Href, feature: 'tasks.from-document' },
 };
-
-function recurrenceLabel(days: number): string {
-  if (days % 30 === 0 && days >= 30) {
-    const n = days / 30;
-    return n === 1 ? 'Monthly' : `Every ${n} months`;
-  }
-  if (days % 7 === 0) {
-    const n = days / 7;
-    if (n === 1) return 'Weekly';
-    if (n === 2) return 'Fortnightly';
-    return `Every ${n} weeks`;
-  }
-  return days === 1 ? 'Daily' : `Every ${days} days`;
-}
 
 function formatTime(time: string): string {
   const m = /^(\d{1,2}):(\d{2})/.exec(time);

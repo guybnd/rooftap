@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { GroceryItem, GroceryCustomAisle, GroupMember } from '@homeup/core';
-import { getAisleMeta, getAisleColor, AISLE_ORDER, qtyLabel, freshnessWindow, daysUntilISO, currencySymbol } from '@homeup/core';
+import { getAisleMeta, getAisleColor, AISLE_ORDER, qtyLabel, freshnessWindow, daysUntilISO, currencySymbol, unitQtyMax, unitQtyStep } from '@homeup/core';
 import { clearRecipeNoteOnLeaveNeeded, useModules } from '@homeup/core';
 import { runNavTransition } from '@/lib/view-transitions';
 import { getGroceryEmoji } from '@homeup/core';
@@ -76,25 +76,6 @@ interface GroceryItemCardProps {
   showAisleDot?: boolean;
   /** Search results: a have/bought row gets a one-click "Need again" button. */
   showNeedAgain?: boolean;
-}
-
-// ── Unit-aware qty config ────────────────────────────────────────────────────
-function getUnitStep(unit: string | null | undefined): number {
-  const u = (unit ?? '').toLowerCase().trim();
-  if (u === 'kg') return 0.5;
-  if (u === 'g' || u === 'gram' || u === 'grams') return 50;
-  if (u === 'l' || u === 'litre' || u === 'litres' || u === 'liter' || u === 'liters') return 0.25;
-  if (u === 'ml' || u === 'millilitre' || u === 'millilitres' || u === 'milliliter') return 50;
-  return 1;
-}
-
-function getUnitMax(unit: string | null | undefined): number {
-  const u = (unit ?? '').toLowerCase().trim();
-  if (u === 'kg') return 50;
-  if (u === 'g' || u === 'gram' || u === 'grams') return 5000;
-  if (u === 'l' || u === 'litre' || u === 'litres' || u === 'liter' || u === 'liters') return 20;
-  if (u === 'ml' || u === 'millilitre' || u === 'millilitres' || u === 'milliliter') return 5000;
-  return 999;
 }
 
 function roundQty(v: number, unit: string | null | undefined): number {
@@ -318,7 +299,7 @@ function GroceryItemCardInner({
   }, [localQty, item.quantity, item.unit, patchField]);
 
   const adjustQty = (delta: number) => {
-    const next = Math.max(0, Math.min(getUnitMax(item.unit), localQty + delta));
+    const next = Math.max(0, Math.min(unitQtyMax(item.unit), localQty + delta));
     setLocalQty(roundQty(next, item.unit));
   };
 
@@ -525,9 +506,9 @@ function GroceryItemCardInner({
   // ── Drag-to-adjust qty & price ──────────────────────────────────────────────
   const qtyDrag = useDragNumber({
     current: item.quantity ?? 1,
-    step: getUnitStep(item.unit),
+    step: unitQtyStep(item.unit),
     min: 0,
-    max: getUnitMax(item.unit),
+    max: unitQtyMax(item.unit),
     round: (v) => roundQty(v, item.unit),
     commit: (v) => void patchField({ quantity: v }),
   });
@@ -568,7 +549,7 @@ function GroceryItemCardInner({
         type="button"
         tabIndex={0}
         onMouseDown={(e) => e.preventDefault()}
-        onClick={() => adjustQty(-getUnitStep(item.unit))}
+        onClick={() => adjustQty(-unitQtyStep(item.unit))}
         className="h-6 w-6 grid place-items-center rounded-full text-muted-foreground hover:bg-muted flex-shrink-0 transition-colors"
       >
         <Minus className="h-3 w-3" />
@@ -583,12 +564,12 @@ function GroceryItemCardInner({
         }}
         inputMode="decimal"
         min={0}
-        max={getUnitMax(item.unit)}
-        step={getUnitStep(item.unit)}
+        max={unitQtyMax(item.unit)}
+        step={unitQtyStep(item.unit)}
         autoFocus
         onKeyDown={(e) => {
-          if (e.key === 'ArrowUp') { e.preventDefault(); adjustQty(getUnitStep(item.unit)); }
-          if (e.key === 'ArrowDown') { e.preventDefault(); adjustQty(-getUnitStep(item.unit)); }
+          if (e.key === 'ArrowUp') { e.preventDefault(); adjustQty(unitQtyStep(item.unit)); }
+          if (e.key === 'ArrowDown') { e.preventDefault(); adjustQty(-unitQtyStep(item.unit)); }
           if (e.key === 'Escape' || e.key === 'Enter') e.currentTarget.blur();
         }}
         className="w-11 text-center bg-transparent text-foreground text-sm font-medium tabular-nums focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
@@ -600,7 +581,7 @@ function GroceryItemCardInner({
         type="button"
         tabIndex={0}
         onMouseDown={(e) => e.preventDefault()}
-        onClick={() => adjustQty(getUnitStep(item.unit))}
+        onClick={() => adjustQty(unitQtyStep(item.unit))}
         className="h-6 w-6 grid place-items-center rounded-full text-muted-foreground hover:bg-muted flex-shrink-0 transition-colors"
       >
         <Plus className="h-3 w-3" />

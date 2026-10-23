@@ -17,7 +17,6 @@ import { ChevronDown, ChevronRight, FileText, Landmark, MoreHorizontal, PenLine,
 import {
   CADENCE_LABEL,
   CATEGORY_COLOR,
-  CATEGORY_META,
   bankDayLabel,
   costCategoryLabel,
   formatMoney,
@@ -25,6 +24,17 @@ import {
   openAssistantPopup,
   useCostMonths,
   useUpOverview,
+  costCategoryKey,
+  costDayLabel,
+  lineMeta,
+  lineRanks,
+  monthBar,
+  monthLastDayLabel,
+  monthLongName,
+  monthShortName,
+  moneyFlow,
+  signedMoney,
+  squashVendor,
   type BankTransactionPatch,
   type BankTransactionView,
   type CostCategory,
@@ -87,7 +97,7 @@ export function CostsOverview(props: CostsOverviewProps) {
   const [moreOpen, setMoreOpen] = useState(false);
   // A colour picked on the spend bar: the chart shows only that category.
   const [focus, setFocus] = useState<string | null>(null);
-  const name = monthName(month.month);
+  const name = monthLongName(month.month);
 
   const toggle = (id: string) =>
     setOpen((cur) => {
@@ -135,7 +145,7 @@ export function CostsOverview(props: CostsOverviewProps) {
             <span className={LABEL}>{month.when === 'past' ? 'Paid' : 'Paid · to come'}</span>
           </div>
           <div className={CARD}>
-            {month.categories.filter((c) => !focus || catKey(c.category) === focus).map((c, n) => (
+            {month.categories.filter((c) => !focus || costCategoryKey(c.category) === focus).map((c, n) => (
               <CategoryRow
                 key={c.category ?? 'none'}
                 c={c}
@@ -283,7 +293,7 @@ function Hero({
 }) {
   const [hover, setHover] = useState<string | null>(null);
   const segments = month.categories.filter((c) => c.paidCents > 0);
-  const name = monthName(month.month);
+  const name = monthLongName(month.month);
   const max = Math.max(goalCents ?? 0, month.expectedCents, 1);
   const pct = (v: number) => `${Math.min(100, (v / max) * 100)}%`;
   const vsGoal = goalCents ? goalCents - month.expectedCents : null;
@@ -303,7 +313,7 @@ function Hero({
         ) : null}
         <div className="absolute inset-y-0 left-0 flex overflow-hidden rounded-full" style={{ width: pct(month.paidCents) }}>
           {segments.map((c) => {
-            const key = catKey(c.category);
+            const key = costCategoryKey(c.category);
             const label = `${costCategoryLabel(c.category)} ${formatMoney(c.paidCents)}`;
             return (
               <button
@@ -328,7 +338,7 @@ function Hero({
             <span className="font-semibold text-foreground">{hover}</span>
           ) : month.when === 'current' ? (
             <>
-              Expected by {lastDayLabel(month.month)} <span className="font-semibold text-foreground">{formatMoney(month.expectedCents)}</span>
+              Expected by {monthLastDayLabel(month.month)} <span className="font-semibold text-foreground">{formatMoney(month.expectedCents)}</span>
             </>
           ) : month.when === 'future' ? (
             'Forecast'
@@ -345,34 +355,11 @@ function Hero({
       {flow ? (
         <div className="flex gap-2 pt-1">
           <Stat label={flow.incomeLabel} value={formatMoney(flow.income)} hint={flow.incomeHint} />
-          <Stat label={flow.leftLabel} value={signed(flow.left)} hint={flow.leftHint} tone={flow.left < 0 ? 'danger' : 'success'} />
+          <Stat label={flow.leftLabel} value={signedMoney(flow.left)} hint={flow.leftHint} tone={flow.left < 0 ? 'danger' : 'success'} />
         </div>
       ) : null}
     </div>
   );
-}
-
-/**
- * The income and "in vs out" tiles: what actually came in and went out, with
- * the month-end estimate as the subtitle. A future month has no actuals, so
- * it shows the estimate itself.
- */
-function moneyFlow(month: CostMonth): { incomeLabel: string; income: number; incomeHint?: string; leftLabel: string; left: number; leftHint?: string } | null {
-  const expected = month.incomeExpectedCents;
-  if (expected == null) return null;
-  if (month.when === 'future') {
-    return { incomeLabel: 'Expected income', income: expected, leftLabel: 'Expected left', left: expected - month.expectedCents };
-  }
-  const left = month.incomeCents - month.paidCents;
-  if (month.when === 'past') return { incomeLabel: 'Income', income: month.incomeCents, leftLabel: 'Left over', left };
-  return {
-    incomeLabel: 'Income so far',
-    income: month.incomeCents,
-    incomeHint: expected > month.incomeCents ? `About ${formatMoney(expected)} expected` : undefined,
-    leftLabel: 'In vs out so far',
-    left,
-    leftHint: `About ${signed(expected - month.expectedCents)} by month end`,
-  };
 }
 
 function Stat({ label, value, hint, tone }: { label: string; value: string; hint?: string; tone?: 'success' | 'danger' }) {
@@ -421,13 +408,13 @@ function MonthChart({
         {months.map((m, i) => {
           const on = m.month === picked;
           const bar = bars[i];
-          const name = shortMonth(m.month);
+          const name = monthShortName(m.month);
           return (
             <button
               key={m.month}
               type="button"
               aria-pressed={on}
-              aria-label={`${monthName(m.month)}, ${formatMoney(bar.paid + bar.toCome)}`}
+              aria-label={`${monthLongName(m.month)}, ${formatMoney(bar.paid + bar.toCome)}`}
               onClick={() => onPick(m.month)}
               onMouseEnter={() => setHover(`${name} · ${formatMoney(bar.paid)}${bar.toCome ? ` paid · ~${formatMoney(bar.toCome)} to come` : ''}`)}
               className={cn('group flex h-full flex-1 flex-col justify-end transition-opacity', on ? 'opacity-100' : 'opacity-45 hover:opacity-80')}
@@ -459,7 +446,7 @@ function MonthChart({
       <div className="flex gap-1">
         {months.map((m) => (
           <span key={m.month} className={cn('flex-1 text-center text-[10px]', m.month === picked ? 'font-semibold text-foreground' : 'text-muted-foreground')}>
-            {shortMonth(m.month)}
+            {monthShortName(m.month)}
           </span>
         ))}
       </div>
@@ -467,59 +454,8 @@ function MonthChart({
   );
 }
 
-const CATEGORY_ORDER = Object.keys(CATEGORY_META) as CostCategory[];
-
-interface BarSegment {
-  key: string;
-  category: CostCategory | null;
-  cents: number;
-  label: string;
-  /** 0 for a category; a line's place in its category, for its shade. */
-  shade: number;
-}
-
-/**
- * A month's chart bar: paid split by category (in a fixed order, so colours
- * line up month to month) and what's to come. With a category picked, its
- * shops and costs instead, each in a shade of the category's colour, in the
- * order `lineRank` gives (biggest over the chart first).
- */
-function monthBar(m: CostMonth, focus: string | null, lineRank: ReadonlyMap<string, number>): { paid: number; toCome: number; segments: BarSegment[] } {
-  const cats = m.categories.filter((c) => !focus || catKey(c.category) === focus);
-  const toCome = focus ? cats.reduce((s, c) => s + c.toComeCents, 0) : m.toComeCents;
-  if (focus) {
-    const c = cats[0];
-    const segments = (c?.lines ?? [])
-      .filter((l) => l.paidCents > 0)
-      .sort((a, b) => (lineRank.get(a.key) ?? 99) - (lineRank.get(b.key) ?? 99))
-      .map((l) => ({ key: l.key, category: c.category, cents: l.paidCents, label: l.name, shade: lineRank.get(l.key) ?? 0 }));
-    return { paid: c?.paidCents ?? 0, toCome, segments };
-  }
-  const rank = (c: CostCategory | null) => (c ? CATEGORY_ORDER.indexOf(c) : CATEGORY_ORDER.length);
-  const segments = cats
-    .filter((c) => c.paidCents > 0)
-    .sort((a, b) => rank(a.category) - rank(b.category))
-    .map((c) => ({ key: catKey(c.category), category: c.category, cents: c.paidCents, label: costCategoryLabel(c.category), shade: 0 }));
-  return { paid: segments.reduce((s, x) => s + x.cents, 0), toCome, segments };
-}
-
-/** A picked category's lines ranked by what they paid over the chart, biggest first. */
-function lineRanks(months: CostMonth[], focus: string | null): Map<string, number> {
-  const totals = new Map<string, number>();
-  if (focus) {
-    for (const m of months) {
-      for (const l of m.categories.find((c) => catKey(c.category) === focus)?.lines ?? []) totals.set(l.key, (totals.get(l.key) ?? 0) + l.paidCents);
-    }
-  }
-  return new Map([...totals.entries()].sort((a, b) => b[1] - a[1]).map(([k], i) => [k, i]));
-}
-
 /** Shades for a category's lines, so neighbours in a bar stand apart. */
 const SHADES = ['opacity-100', 'opacity-70', 'opacity-50', 'opacity-85', 'opacity-60', 'opacity-40'];
-
-function catKey(category: CostCategory | null): string {
-  return category ?? 'none';
-}
 
 function fillOf(category: CostCategory | null): string {
   return category ? CATEGORY_COLOR[category].fill : 'bg-muted-foreground/60';
@@ -554,7 +490,7 @@ function CategoryRow({
   const costs = c.lines.filter((l) => l.kind !== 'usual').length;
   const meta = [
     payments ? `${payments} payment${payments === 1 ? '' : 's'}${shops > 1 ? ` · ${shops} shops` : ''}` : null,
-    due.length === 1 && due[0].date ? `Due ${dayLabel(due[0].date)}` : due.length > 1 ? `${due.length} due` : null,
+    due.length === 1 && due[0].date ? `Due ${costDayLabel(due[0].date)}` : due.length > 1 ? `${due.length} due` : null,
     !payments && !due.length ? `${costs} cost${costs === 1 ? '' : 's'}` : null,
   ]
     .filter(Boolean)
@@ -643,20 +579,6 @@ function LineRow({ l, divided, monthName: name, onClick, onMenu }: { l: CostMont
   );
 }
 
-/** A line's second row: "5 payments · last Tue", "Paid Oct 1", "Due Oct 28", "Usual for the rest of October". */
-function lineMeta(l: CostMonthLine, name: string): string | null {
-  const now = new Date();
-  if (l.kind === 'usual') return `Usual for the rest of ${name}`;
-  if (l.kind === 'target') return 'A plan the payments replaced, not counted';
-  if (l.kind === 'shop') return `${l.count} payment${l.count === 1 ? '' : 's'}${l.date ? ` · last ${bankDayLabel(l.date, now)}` : ''}`;
-  if (l.kind === 'recurring') {
-    if (l.paidCents > 0) return `Paid ${l.date ? dayLabel(l.date) : ''}`.trim();
-    return l.date ? `Due ${dayLabel(l.date)}` : 'Due';
-  }
-  if (l.item?.archived) return 'Archived';
-  return l.date ? dayLabel(l.date) : null;
-}
-
 /** A shop's payments in the month, newest first; a click opens the payment's sheet. */
 function ShopSheet({
   line,
@@ -689,8 +611,8 @@ function ShopSheet({
       .transactions({ month: `${month}-01`, scope: scope ?? undefined })
       .then((page) => {
         if (!live) return;
-        const key = squash(line.vendor ?? line.name);
-        setRows(page.transactions.filter((t) => !t.isTransfer && !t.hidden && squash(t.description.replace(/[\\\s]+$/, '')) === key));
+        const key = squashVendor(line.vendor ?? line.name);
+        setRows(page.transactions.filter((t) => !t.isTransfer && !t.hidden && squashVendor(t.description.replace(/[\\\s]+$/, '')) === key));
       })
       .catch((err) => live && setError(err instanceof Error ? err.message : "Couldn't read the payments."));
     return () => {
@@ -719,7 +641,7 @@ function ShopSheet({
             <p className="text-lg font-semibold tabular-nums text-foreground">{line ? formatMoney(line.paidCents) : ''}</p>
           </div>
           <p className="text-xs text-muted-foreground">
-            {monthName(month)} · {line?.count ?? 0} payment{line?.count === 1 ? '' : 's'}
+            {monthLongName(month)} · {line?.count ?? 0} payment{line?.count === 1 ? '' : 's'}
           </p>
           {line?.item ? (
             <button type="button" onClick={() => { const it = line.item!; onClose(); onOpenItem(it); }} className="min-h-10 text-sm font-medium text-primary">
@@ -787,33 +709,4 @@ function menuHandler(open: () => void) {
     e.preventDefault();
     open();
   };
-}
-
-function squash(text: string): string {
-  return text.trim().replace(/\s+/g, ' ').toUpperCase();
-}
-
-function monthName(key: string): string {
-  const [y, m] = key.split('-').map(Number);
-  return new Date(y, m - 1, 1).toLocaleString('en-AU', { month: 'long' });
-}
-
-function shortMonth(key: string): string {
-  const [y, m] = key.split('-').map(Number);
-  return new Date(y, m - 1, 1).toLocaleString('en-AU', { month: 'short' }).slice(0, 3);
-}
-
-function lastDayLabel(key: string): string {
-  const [y, m] = key.split('-').map(Number);
-  return new Date(y, m, 0).toLocaleDateString('en-AU', { month: 'short', day: 'numeric' });
-}
-
-/** "Oct 28" from a YYYY-MM-DD day or an instant. */
-function dayLabel(date: string): string {
-  const d = /^\d{4}-\d{2}-\d{2}$/.test(date) ? new Date(`${date}T00:00:00`) : new Date(date);
-  return d.toLocaleDateString('en-AU', { month: 'short', day: 'numeric' });
-}
-
-function signed(cents: number): string {
-  return `${cents < 0 ? '−' : '+'}${formatMoney(Math.abs(cents))}`;
 }

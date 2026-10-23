@@ -18,6 +18,8 @@ import {
   type DailyPrice,
   type ShopperPriceSnapshot,
   type ShopperWant,
+  priceChartScale,
+  priceDayLabel,
 } from './shopper';
 import {
   checkSourceManifest,
@@ -308,5 +310,22 @@ describe('source manifest and external sources (HOUP-437)', () => {
     expect(sourceCapabilityLabel(['offers'])).toBe('Prices');
     expect(sourceCapabilityLabel(['offers', 'stores', 'deals'])).toBe('Prices, nearby stores and shared deals');
     expect(sourceCapabilityLabel([])).toBe('');
+  });
+});
+
+describe('priceChartScale', () => {
+  it('puts the low at the bottom and the high at the top, inside the padding', () => {
+    const { x, y, min, max } = priceChartScale([{ day: '2026-10-01', cents: 100 }, { day: '2026-10-02', cents: 300 }], 100, 50, 5);
+    expect([min, max]).toEqual([100, 300]);
+    expect([x(0), x(1)]).toEqual([5, 95]);
+    expect([y(100), y(300)]).toEqual([45, 5]);
+  });
+
+  it('draws a single price at the right edge', () => {
+    expect(priceChartScale([{ day: '2026-10-01', cents: 100 }], 100, 50, 5).x(0)).toBe(95);
+  });
+
+  it('labels a day without a UTC shift', () => {
+    expect(priceDayLabel('2026-10-01')).toMatch(/1/);
   });
 });

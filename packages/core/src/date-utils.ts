@@ -50,6 +50,40 @@ export function pad2(n: number): string {
 }
 
 /** The current local wall-clock time as HH:MM. */
+/** The local YYYY-MM-DD of an instant, for a date input. */
+export function localDateOf(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+/** The local HH:MM of an instant, for a time input. */
+export function localTimeOf(iso: string): string {
+  const d = new Date(iso);
+  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+
+/** A local YYYY-MM-DD and HH:MM (midnight when empty) as an ISO instant. */
+export function localDateTimeToISO(dateStr: string, timeStr: string): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const [h, min] = (timeStr || '00:00').split(':').map(Number);
+  return new Date(y, m - 1, d, h, min, 0, 0).toISOString();
+}
+
+/** A repeat interval in days as words: "Weekly", "Fortnightly", "Every 3 months". */
+export function recurrenceLabel(days: number): string {
+  if (days % 30 === 0 && days >= 30) {
+    const n = days / 30;
+    return n === 1 ? 'Monthly' : `Every ${n} months`;
+  }
+  if (days % 7 === 0) {
+    const n = days / 7;
+    if (n === 1) return 'Weekly';
+    if (n === 2) return 'Fortnightly';
+    return `Every ${n} weeks`;
+  }
+  return days === 1 ? 'Daily' : `Every ${days} days`;
+}
+
 export function currentHHMM(): string {
   const d = new Date();
   return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;

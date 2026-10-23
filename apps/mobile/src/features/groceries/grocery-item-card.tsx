@@ -52,9 +52,11 @@ import {
   timeAgo,
   daysUntilISO,
   useModules,
+  currencySymbol,
+  unitQtyMax,
+  unitQtyStep,
   type GroceryCustomAisle,
   type GroceryItem,
-  currencySymbol,
 } from '@homeup/core';
 import { GroceryItemQuickMenu } from './grocery-item-quick-menu';
 
@@ -91,28 +93,6 @@ interface GroceryItemCardProps {
 
 // HOUP-198: matches task-row.tsx's hold-to-edit timing (HOUP-144).
 const LONG_PRESS_MS = 500;
-
-// ── Unit-aware qty step/max — ported from web grocery-item-card.tsx:74-90
-// (getUnitStep/getUnitMax). Kept local, same as web's own copy: this is a
-// small display-only heuristic, not shared business logic worth hoisting to
-// packages/core. ────────────────────────────────────────────────────────────
-function getUnitStep(unit: string | null | undefined): number {
-  const u = (unit ?? '').toLowerCase().trim();
-  if (u === 'kg') return 0.5;
-  if (u === 'g' || u === 'gram' || u === 'grams') return 50;
-  if (u === 'l' || u === 'litre' || u === 'litres' || u === 'liter' || u === 'liters') return 0.25;
-  if (u === 'ml' || u === 'millilitre' || u === 'millilitres' || u === 'milliliter') return 50;
-  return 1;
-}
-
-function getUnitMax(unit: string | null | undefined): number {
-  const u = (unit ?? '').toLowerCase().trim();
-  if (u === 'kg') return 50;
-  if (u === 'g' || u === 'gram' || u === 'grams') return 5000;
-  if (u === 'l' || u === 'litre' || u === 'litres' || u === 'liter' || u === 'liters') return 20;
-  if (u === 'ml' || u === 'millilitre' || u === 'millilitres' || u === 'milliliter') return 5000;
-  return 999;
-}
 
 function isDecimalUnit(unit: string | null | undefined): boolean {
   const u = (unit ?? '').toLowerCase().trim();
@@ -230,9 +210,9 @@ export function GroceryItemCard({
         key="qty"
         value={qtyValue}
         onChange={(v) => onPatch(item.id, { quantity: v ?? 0 })}
-        step={getUnitStep(item.unit)}
+        step={unitQtyStep(item.unit)}
         min={0}
-        max={getUnitMax(item.unit)}
+        max={unitQtyMax(item.unit)}
         precision={isDecimalUnit(item.unit) ? 2 : 0}
         trimTrailingZeros
         suffix={item.unit || undefined}

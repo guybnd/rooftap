@@ -48,3 +48,9 @@ export function metadataSummary(
   }
   return out;
 }
+
+/** Metadata values read as words: an ISO date becomes a short date (H6). */
+export function documentMetadataValue(value: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  return new Date(`${value}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}

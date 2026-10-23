@@ -13,12 +13,7 @@ import { Pressable, View } from 'react-native';
 import Animated, { FadeInDown, FadeOutDown } from 'react-native-reanimated';
 import { Camera, Check, Loader2, Receipt } from 'lucide-react-native';
 import { BottomSheet, Text, Button, Input, cn, haptics } from '@homeup/ui';
-import { effectiveSessionTotal, formatMoney, MOTION_DURATIONS_MS, useModules, type GrocerySession } from '@homeup/core';
-
-/** Where the trip's total came from, for its caption. */
-function totalSource(session: GrocerySession): string {
-  return session.override_total_cents != null ? 'manual total' : session.receipt_total_cents != null ? 'from receipt' : 'estimated';
-}
+import { effectiveSessionTotal, formatMoney, MOTION_DURATIONS_MS, useModules, sessionTotalSource, type GrocerySession } from '@homeup/core';
 
 /** The trip's total; tapping it swaps in an input to override it (empty clears
  *  the override). H1: never display weight in the pill (the screen's lede is
@@ -109,7 +104,7 @@ interface ShopTrackingPillProps {
  *  scrolls (Guy, 2026-10-20). A neutral popover, not the ask's accent: it's a
  *  standing tool, not a question. Done opens FinishShopSheet. */
 export function ShopTrackingPill({ session, boughtCount, bottom, onOverrideTotal, onReceipt, receiptBusy, receiptError, onDone, pending = false }: ShopTrackingPillProps) {
-  const source = totalSource(session);
+  const source = sessionTotalSource(session);
   const caption = `${source === 'estimated' ? 'in cart' : source} · ${boughtCount} got`;
   return (
     <Animated.View
@@ -184,7 +179,7 @@ export function FinishShopSheet({
   const modules = useModules();
   const toCosts = modules.feature('costs.from-groceries');
   const caption = session
-    ? [totalSource(session), `${boughtCount} got`, unpricedCount > 0 ? `${unpricedCount} unpriced` : null].filter(Boolean).join(' · ')
+    ? [sessionTotalSource(session), `${boughtCount} got`, unpricedCount > 0 ? `${unpricedCount} unpriced` : null].filter(Boolean).join(' · ')
     : '';
   return (
     <BottomSheet open={open} onOpenChange={onOpenChange}>

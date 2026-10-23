@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { eventDetailLabel, mapsDirectionsUrl, mapsSearchUrl } from './events';
+import { eventDetailLabel, mapsDirectionsUrl, mapsSearchUrl, eventWhenText } from './events';
 
 describe('eventDetailLabel', () => {
   it('shows the place when one was entered', () => {
@@ -28,5 +28,14 @@ describe('mapsDirectionsUrl', () => {
   });
   it('leaves the mode to Maps without one', () => {
     expect(mapsDirectionsUrl('MCG', null)).toBe('https://www.google.com/maps/dir/?api=1&destination=MCG');
+  });
+});
+
+describe('eventWhenText', () => {
+  it('gives the day, and the time unless all day', () => {
+    const starts_at = new Date(2026, 9, 28, 18, 30).toISOString();
+    const day = new Date(starts_at).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' });
+    expect(eventWhenText({ starts_at, is_all_day: true })).toBe(day);
+    expect(eventWhenText({ starts_at, is_all_day: false })).toBe(`${day}, 6:30pm`);
   });
 });

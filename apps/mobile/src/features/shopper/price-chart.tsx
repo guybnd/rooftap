@@ -10,7 +10,7 @@ import { View } from 'react-native';
 import Svg, { Circle, G, Polyline, Rect } from 'react-native-svg';
 import { cssInterop } from 'nativewind';
 import { Text } from '@homeup/ui';
-import { formatMoney, type DailyPrice, type DealRating } from '@homeup/core';
+import { formatMoney, priceChartScale, priceDayLabel, type DailyPrice, type DealRating } from '@homeup/core';
 
 cssInterop(Svg, { className: { target: 'style', nativeStyleToProp: { color: true } } });
 cssInterop(G, { className: { target: false, nativeStyleToProp: { color: true } } });
@@ -21,20 +21,10 @@ export function dealToneClass(rating: DealRating | null): string {
   return 'text-muted-foreground';
 }
 
-function scale(series: readonly DailyPrice[], width: number, height: number, pad: number) {
-  const values = series.map((p) => p.cents);
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const span = max - min || 1;
-  const x = (i: number) => (series.length === 1 ? width - pad : pad + (i / (series.length - 1)) * (width - pad * 2));
-  const y = (cents: number) => pad + (1 - (cents - min) / span) * (height - pad * 2);
-  return { x, y, min, max };
-}
-
 /** 52 x 18 trend for a row; nothing for fewer than two days. */
 export function Sparkline({ series, rating }: { series: readonly DailyPrice[]; rating: DealRating | null }) {
   if (series.length < 2) return null;
-  const { x, y } = scale(series, 52, 18, 2);
+  const { x, y } = priceChartScale(series, 52, 18, 2);
   const points = series.map((p, i) => `${x(i).toFixed(1)},${y(p.cents).toFixed(1)}`).join(' ');
   const last = series[series.length - 1];
   return (
@@ -66,7 +56,7 @@ export function PriceChart({
   const W = width || 320;
   // Keep the usual band inside the scale so it is always drawn to the same axis.
   const withBand = usual ? [...series, { day: '', cents: usual.from }, { day: '', cents: usual.to }] : series;
-  const { y, min, max } = scale(withBand, W, H, PAD);
+  const { y, min, max } = priceChartScale(withBand, W, H, PAD);
   const x = (i: number) => PAD + (i / (series.length - 1)) * (W - PAD * 2);
   const points = series.map((p, i) => `${x(i).toFixed(1)},${y(p.cents).toFixed(1)}`).join(' ');
   const last = series[series.length - 1];
@@ -101,7 +91,7 @@ export function PriceChart({
       </View>
       <View className="flex-row justify-between">
         <Text className="font-mono text-[11.5px] text-muted-foreground" style={{ fontVariant: ['tabular-nums'] }}>
-          {shortDay(series[0].day)}
+          {priceDayLabel(series[0].day)}
         </Text>
         {usual && (
           <Text className="font-mono text-[11.5px] text-muted-foreground" style={{ fontVariant: ['tabular-nums'] }}>
@@ -112,9 +102,4 @@ export function PriceChart({
       </View>
     </View>
   );
-}
-
-function shortDay(day: string): string {
-  const [y, m, d] = day.split('-').map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 }

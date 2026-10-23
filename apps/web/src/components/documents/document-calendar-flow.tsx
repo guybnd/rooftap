@@ -11,7 +11,7 @@ import { useMemo, useState } from 'react';
 import { use$ } from '@legendapp/state/react';
 import { toast } from 'sonner';
 import { CalendarPlus, Loader2, Sparkles } from 'lucide-react';
-import { groupEvents$, linkableEvents, linkEventTicket, useEventSave, useModules, type GroupEvent, type ParsedEventDetails } from '@homeup/core';
+import { groupEvents$, linkableEvents, linkEventTicket, useEventSave, useModules, eventWhenText, type GroupEvent, type ParsedEventDetails } from '@homeup/core';
 import { BottomSheet } from '@/components/ui/bottom-sheet';
 import { ListGroup, ListItem, ListItemContent, ListItemLeading, ListItemMeta, ListItemTitle } from '@/components/ui/list-item';
 import { EventModal } from '@/app/calendar/event-modal';
@@ -24,13 +24,6 @@ export interface CalendarDoc {
   id: string;
   title: string | null;
   filename: string;
-}
-
-function whenText(event: GroupEvent): string {
-  const start = new Date(event.starts_at);
-  const day = start.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' });
-  if (event.is_all_day) return day;
-  return `${day}, ${start.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' }).replace(/\s/g, '').toLowerCase()}`;
 }
 
 export function DocumentCalendarFlow({
@@ -131,7 +124,7 @@ export function DocumentCalendarFlow({
                       </ListItemLeading>
                       <ListItemContent>
                         <ListItemTitle>{event.title}</ListItemTitle>
-                        <ListItemMeta>{whenText(event)}</ListItemMeta>
+                        <ListItemMeta>{eventWhenText(event)}</ListItemMeta>
                       </ListItemContent>
                     </button>
                   </ListItem>
