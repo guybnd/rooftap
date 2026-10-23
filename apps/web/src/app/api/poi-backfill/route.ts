@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getSessionUser } from "@/lib/supabase/session";
+import { requireModules } from "@/lib/server-modules";
 
 export async function POST(request: NextRequest) {
+  const user = await getSessionUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const off = await requireModules(user.id, "search");
+  if (off) return off;
   const supabase = await createClient();
   const body = await request.json();
   const updates: { id: string; nearest_supermarket_m: number | null; nearest_transport_m: number | null }[] = body.updates;
@@ -26,6 +32,10 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET() {
+  const user = await getSessionUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const off = await requireModules(user.id, "search");
+  if (off) return off;
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("apartments")

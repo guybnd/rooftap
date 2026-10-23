@@ -1,8 +1,14 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getSessionUser } from "@/lib/supabase/session";
+import { requireModules } from "@/lib/server-modules";
 import { geocodeAddress } from "@/lib/geocode";
 
 export async function POST() {
+  const user = await getSessionUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const off = await requireModules(user.id, "search");
+  if (off) return off;
   const supabase = await createClient();
 
   const { data: apartments, error } = await supabase
