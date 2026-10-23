@@ -259,6 +259,8 @@ function HomeHub() {
   // Each person picks which Spaces Home shows (Customize your summary > Spaces).
   const spaceOn = (key: string) => isModuleShown(key, userSettings?.home_hero_modules, modules.feature);
   const documentsVisible = !isHidden('documents');
+  // Home care reminders show with Home Setup and the home-care module on.
+  const careVisible = !isHidden('setup') && modules.isEnabled('home-care');
   // Modules: bin night's card needs the Bin night module (module-features.ts).
   const binsVisible = !isHidden('bins') && modules.feature('hub.bins');
   const bins = useBins(binsVisible ? group?.id : undefined, currentUserId);
@@ -304,7 +306,7 @@ function HomeHub() {
   // events, so it checks all but the last).
   const agendaVisible =
     householdVisible ||
-    hasVisibleReminders(tasks, { costs: costsVisible, documents: documentsVisible }) ||
+    hasVisibleReminders(tasks, { costs: costsVisible, documents: documentsVisible, 'home-care': careVisible }) ||
     viewingsVisible ||
     eventsVisible ||
     (calendarEventsVisible && (calendarConnected || calendarEvents.length > 0));
@@ -446,7 +448,7 @@ function HomeHub() {
         groupEvents: homeEvents,
         groupEventsVisible: eventsVisible,
         viewerId: currentUserId,
-        reminderOwnersVisible: { costs: costsVisible, documents: documentsVisible },
+        reminderOwnersVisible: { costs: costsVisible, documents: documentsVisible, 'home-care': careVisible },
         calendarEventsVisible,
         taskChecklistsVisible,
         checklistByTaskId,
@@ -469,6 +471,7 @@ function HomeHub() {
       currentUserId,
       costsVisible,
       documentsVisible,
+      careVisible,
       calendarEventsVisible,
       taskChecklistsVisible,
       checklistByTaskId,
@@ -496,7 +499,7 @@ function HomeHub() {
         groupEvents: homeEvents,
         groupEventsVisible: eventsVisible,
         viewerId: currentUserId,
-        reminderOwnersVisible: { costs: costsVisible, documents: documentsVisible },
+        reminderOwnersVisible: { costs: costsVisible, documents: documentsVisible, 'home-care': careVisible },
         calendarEventsVisible,
         taskChecklistsVisible,
         checklistByTaskId,
@@ -518,6 +521,7 @@ function HomeHub() {
       currentUserId,
       costsVisible,
       documentsVisible,
+      careVisible,
       calendarEventsVisible,
       taskChecklistsVisible,
       checklistByTaskId,

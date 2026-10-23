@@ -61,6 +61,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { useWideLayout } from '@/lib/desktop-layout';
+import { CareView } from './care/care-view';
 import { cn } from '@/lib/utils';
 
 // FLUX-150 slice 3: Legend-State local-first migration
@@ -82,10 +83,16 @@ const BAR_BUTTON =
 
 const STATUS_FILTER_KEY = 'setup_status_filters';
 
+type SetupView = 'setup' | 'care';
+const VIEW_SEGMENTS: { value: SetupView; label: string }[] = [
+  { value: 'setup', label: 'Setting up' },
+  { value: 'care', label: 'Care' },
+];
+
 const money = (n: number) => `${currencySymbol()}${n.toLocaleString()}`;
 
 export default function SetupPage() {
-  const { group, loading: cacheLoading, currentUserId } = useDataCache();
+  const { group, loading: cacheLoading, currentUserId, groupMembers, memberProfiles } = useDataCache();
 
   const items$ = setupItems$(group?.id);
   useReconnectSync(items$);
@@ -101,7 +108,23 @@ export default function SetupPage() {
   const storeLoaded = useStoreLoaded(items$);
 
   // Modules: the "Doc" chip on a setup item needs documents and setup (module-features.ts).
-  const docsOn = useModules().feature('documents.setup');
+  const modules = useModules();
+  const docsOn = modules.feature('documents.setup');
+
+  // Home care (module `home-care`) is Setup's second view: ?view=care, so a
+  // care reminder opened from Home or a push lands on it.
+  const careOn = modules.isEnabled('home-care');
+  const [view, setView] = useState<SetupView>('setup');
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('view') === 'care') setView('care');
+  }, []);
+  const switchView = useCallback((next: SetupView) => {
+    setView(next);
+    const url = new URL(window.location.href);
+    if (next === 'care') url.searchParams.set('view', 'care');
+    else url.searchParams.delete('view');
+    window.history.replaceState(window.history.state, '', url);
+  }, []);
 
   const [stores, setStores] = useState<SetupStore[]>([]);
   const wide = useWideLayout();
@@ -380,8 +403,36 @@ export default function SetupPage() {
   const selectControlClass = `${CONTROL_H} w-full min-w-0 rounded-lg border border-input bg-input px-3 text-xs font-medium text-foreground focus:outline-none focus:border-ring sm:w-auto`;
   const headerButtonClass = `flex ${CONTROL_H} items-center justify-center gap-1.5 rounded-xl border text-sm font-medium transition-colors`;
 
+  const viewSwitch = careOn ? (
+    <SegmentedControl
+      options={VIEW_SEGMENTS}
+      value={view}
+      onChange={switchView}
+      size="sm"
+      ariaLabel="Home Setup view"
+      className="w-full sm:w-auto"
+    />
+  ) : null;
+
+  if (careOn && view === 'care') {
+    return (
+      <div className={cn('space-y-5 p-4 md:p-6 mx-auto pb-24', wide ? 'max-w-[1400px] lg:px-8' : 'max-w-5xl')}>
+        {viewSwitch}
+        <CareView
+          groupId={group?.id}
+          currentUserId={currentUserId}
+          region={group?.region}
+          groupMembers={groupMembers}
+          memberProfiles={memberProfiles}
+          setupRooms={Array.from(new Set(allSetupItems.map((i) => i.room).filter(Boolean)))}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className={cn('space-y-5 p-4 md:p-6 mx-auto pb-24', wide ? 'max-w-[1400px] lg:px-8' : 'max-w-5xl')}>
+      {viewSwitch}
       {/* Hearth v2 (Pulse, H1): what's still to get is the page's Hero lede,
           with its own meter once something is done (H3); the actions sit
           beside it. Title + tagline stay removed (FLUX-187/190): the nav

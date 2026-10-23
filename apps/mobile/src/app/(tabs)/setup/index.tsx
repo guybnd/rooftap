@@ -31,9 +31,11 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { use$ } from '@legendapp/state/react';
 import { syncState } from '@legendapp/state';
 import { ArrowUpDown, Check, ChevronDown, ChevronRight, X } from 'lucide-react-native';
-import { Text, BottomSheet, Button, Card, ListGroup, ListItem, ListItemContent, ListItemTitle, ListItemTrailing, ReorderableList, ScreenBackground, haptics, cn } from '@homeup/ui';
+import { Text, BottomSheet, Button, Card, SegmentedControl, ListGroup, ListItem, ListItemContent, ListItemTitle, ListItemTrailing, ReorderableList, ScreenBackground, haptics, cn } from '@homeup/ui';
 import { setupItems$, useReconnectSync, useStoreHelpers, useStoreLoaded, seedTemplateItems, getStoreEnvironment, MOTION_DURATIONS_MS, summarize, useModules, type SetupItem, type SetupStore, type DocumentSource, dialog } from '@homeup/core';
+import { useLocalSearchParams } from 'expo-router';
 import { useDataCache } from '@/lib/data-cache';
+import { CareView } from '@/features/setup/care-view';
 import { NoGroupScreen } from '@/components/no-group-screen';
 import { getCurrentSupabaseClient } from '@/lib/supabase-client';
 import { SetupItemCard, type SetupDocLink } from '@/features/setup/setup-item-card';
@@ -82,7 +84,7 @@ function setupRowSpacing(prev: SetupRow | undefined, current: SetupRow): string 
 
 export default function SetupSectionScreen() {
   const insets = useSafeAreaInsets();
-  const { group, currentUserId, memberProfiles, loading: cacheLoading } = useDataCache();
+  const { group, currentUserId, memberProfiles, groupMembers, loading: cacheLoading } = useDataCache();
   const supabase = getCurrentSupabaseClient();
 
   const items$ = setupItems$(group?.id);
@@ -106,7 +108,16 @@ export default function SetupSectionScreen() {
   const [commentCounts, setCommentCounts] = React.useState<Record<string, number>>({});
   const [docLinksByItem, setDocLinksByItem] = React.useState<Record<string, SetupDocLink>>({});
   // Modules: the "Doc" chip on a setup item needs documents and setup (module-features.ts).
-  const docsOn = useModules().feature('documents.setup');
+  const modules = useModules();
+  const docsOn = modules.feature('documents.setup');
+  // Home care (module `home-care`) is Setup's second view; a care reminder
+  // opened from Home or a push lands on it through ?view=care.
+  const careOn = modules.isEnabled('home-care');
+  const viewParam = useLocalSearchParams<{ view?: string }>().view;
+  const [view, setView] = React.useState<'setup' | 'care'>(viewParam === 'care' ? 'care' : 'setup');
+  React.useEffect(() => {
+    if (viewParam === 'care') setView('care');
+  }, [viewParam]);
   const [collapsedRooms, setCollapsedRooms] = React.useState<Set<string>>(new Set());
   const [selectMode, setSelectMode] = React.useState(false);
   const [reorderMode, setReorderMode] = React.useState(false);
@@ -541,7 +552,38 @@ export default function SetupSectionScreen() {
     return <NoGroupScreen />;
   }
 
+  const viewSwitch = careOn ? (
+    <SegmentedControl
+      options={[
+        { value: 'setup' as const, label: 'Setting up' },
+        { value: 'care' as const, label: 'Care' },
+      ]}
+      value={view}
+      onChange={setView}
+      size="sm"
+      accessibilityLabel="Home Setup view"
+    />
+  ) : null;
+
+  if (careOn && view === 'care') {
+    return (
+      <ScreenBackground>
+        <CareView
+          header={viewSwitch}
+          groupId={group.id}
+          currentUserId={currentUserId}
+          region={group.region}
+          groupMembers={groupMembers}
+          memberProfiles={memberProfiles}
+          setupRooms={existingRooms}
+        />
+      </ScreenBackground>
+    );
+  }
+
   const listHeaderElement = (
+    <View className="gap-4">
+    {viewSwitch}
     <SetupListHeader
       allItemsCount={allSetupItems.length}
       reorderMode={reorderMode}
@@ -574,6 +616,7 @@ export default function SetupSectionScreen() {
       isSeeding={isSeeding}
       onSeedTemplates={handleSeedTemplates}
     />
+    </View>
   );
 
   const budgetFooterElement = <SetupBudgetFooter allItemsCount={allSetupItems.length} allSetupItems={allSetupItems} />;

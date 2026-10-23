@@ -29,6 +29,7 @@ export type ModuleId =
   | 'bins'
   | 'assistant'
   | 'money-insights'
+  | 'home-care'
   | 'google-calendar'
   | 'mcp';
 
@@ -180,6 +181,17 @@ export const MODULES: ModuleDef[] = [
     // Costs on: with Costs off there is nowhere to show it.
     defaultEnabled: true,
     enhances: ['costs', 'shopper', 'household'],
+  },
+  {
+    id: 'home-care',
+    label: 'Home care',
+    description: 'Upkeep on a schedule you choose, from smoke alarms to gutters, in Home Setup.',
+    iconId: 'wrench',
+    // Lives in Home Setup as its Care view, so it needs Setup on.
+    defaultEnabled: false,
+    requires: ['setup'],
+    enhances: ['household', 'calendar'],
+    minSchema: '20261023120000_home_care',
   },
   {
     id: 'google-calendar',

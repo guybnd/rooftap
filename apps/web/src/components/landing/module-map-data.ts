@@ -9,7 +9,7 @@ import type { ScreenId } from "./screens";
 
 // Occasions isn't on the map yet: it needs its own spot and demo frames.
 // Bin night has no demo screens yet, so it isn't on the map (nor are its lines).
-export type MapModule = Exclude<ModuleId, "mcp" | "money-insights" | "occasions" | "bins">;
+export type MapModule = Exclude<ModuleId, "mcp" | "money-insights" | "occasions" | "bins" | "home-care">;
 
 /** Short names: the map has no room for "Tasks & Reminders". */
 export const MAP_LABEL: Record<MapModule, string> = {

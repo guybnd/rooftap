@@ -20,6 +20,7 @@ export const STORE_MODULES = {
   loyalty_cards: ['groceries', 'rewards'],
   cost_items: ['costs'],
   setup_items: ['setup'],
+  care_jobs: ['home-care'],
   checklists: ['checklists'],
   checklist_task_items: ['checklists'],
   checklist_templates: ['checklists'],

@@ -17,13 +17,28 @@ const REMINDER_OWNER: Record<ReminderOriginKind, ModuleId> = {
   tracked_item: 'household',
   // The lease lives in the home profile (platform), so its to-do is a Tasks to-do.
   lease: 'household',
+  // Home care jobs live in Home Setup's Care view.
+  care: 'home-care',
 };
 
 /** Where a reminder opens when Tasks is off: its owning module's screen. */
 const OWNER_HREF: Partial<Record<ModuleId, string>> = {
   costs: '/costs',
   documents: '/documents',
+  'home-care': '/setup?view=care',
 };
+
+/** Modules whose reminders show on the hub on their own, without Tasks. */
+export type ReminderOwner = 'costs' | 'documents' | 'home-care';
+
+export function isReminderOwner(id: string): id is ReminderOwner {
+  return id === 'costs' || id === 'documents' || id === 'home-care';
+}
+
+/** The section a reminder owner's rows wear (Home care lives in Home Setup). */
+export function reminderOwnerSection(owner: ReminderOwner): string {
+  return owner === 'home-care' ? 'setup' : owner;
+}
 
 /** The screen a reminder's owning module opens to (Costs, Documents), or null. */
 export function ownerScreenHref(owner: ModuleId): string | null {
@@ -63,12 +78,12 @@ export function taskOpenHref(
  */
 export function hasVisibleReminders(
   tasks: readonly { template_key: string | null; deleted?: boolean }[],
-  visible: Partial<Record<'costs' | 'documents', boolean>>,
+  visible: Partial<Record<ReminderOwner, boolean>>,
 ): boolean {
   return tasks.some((t) => {
     if (t.deleted) return false;
     const owner = taskOwnerModule(t);
-    return (owner === 'costs' || owner === 'documents') && visible[owner] === true;
+    return isReminderOwner(owner) && visible[owner] === true;
   });
 }
 

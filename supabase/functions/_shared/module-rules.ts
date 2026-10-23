@@ -22,6 +22,7 @@ export const MODULE_DEFAULTS: ReadonlyArray<{ id: string; defaultEnabled: boolea
   { id: "bins", defaultEnabled: false, requires: [] },
   { id: "assistant", defaultEnabled: false, requires: [] },
   { id: "money-insights", defaultEnabled: true, requires: [] },
+  { id: "home-care", defaultEnabled: false, requires: ["setup"] },
   { id: "google-calendar", defaultEnabled: false, requires: ["calendar"] },
   { id: "mcp", defaultEnabled: false, requires: [] },
 ];
@@ -65,11 +66,13 @@ const REMINDER_OWNER: Record<string, string> = {
   "doc-reminder": "documents",
   "tracked-item-reminder": "household",
   "lease-reminder": "household",
+  "care-reminder": "home-care",
 };
 
 const OWNER_HREF: Record<string, string> = {
   costs: "/costs",
   documents: "/documents",
+  "home-care": "/setup?view=care",
 };
 
 /** The module a task belongs to: a bill or document reminder's origin, otherwise Tasks. */

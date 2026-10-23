@@ -89,7 +89,7 @@ describe("availableModules", () => {
 describe("sections and modules", () => {
   it("every module is a real section, apart from the integrations", () => {
     const sectionIds = new Set(sections.map((s) => s.id));
-    const integrations = new Set(["money-insights", "google-calendar", "mcp"]);
+    const integrations = new Set(["money-insights", "home-care", "google-calendar", "mcp"]);
     for (const id of ALL_MODULE_IDS) expect([id, sectionIds.has(id)]).toEqual([id, !integrations.has(id)]);
   });
 
@@ -157,10 +157,11 @@ describe("modules and routes", () => {
 });
 
 describe("dependantsOf", () => {
-  it("only Google Calendar hard-requires another module, so only Calendar's switch can lock", () => {
+  it("only Google Calendar and Home care hard-require another module, so only Calendar's and Setup's switches can lock", () => {
     const all = new Set(ALL_MODULE_IDS);
+    const locks: Record<string, string[]> = { calendar: ["google-calendar"], setup: ["home-care"] };
     for (const id of ALL_MODULE_IDS) {
-      expect([id, dependantsOf(id, all).map((m) => m.id)]).toEqual([id, id === "calendar" ? ["google-calendar"] : []]);
+      expect([id, dependantsOf(id, all).map((m) => m.id)]).toEqual([id, locks[id] ?? []]);
     }
     expect(dependantsOf("calendar", new Set(ALL_MODULE_IDS.filter((m) => m !== "google-calendar")))).toEqual([]);
   });

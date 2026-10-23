@@ -5,7 +5,7 @@
 
 import type { HouseholdTask, Appointment, GoogleCalendarEventWithAttribution, GroupEvent } from './types';
 import type { ModuleFeatureId } from './module-features';
-import { taskOwnerModule, ownerScreenHref } from './task-modules';
+import { taskOwnerModule, ownerScreenHref, isReminderOwner, type ReminderOwner } from './task-modules';
 import { parseReminderKey } from './reminders';
 import { addDaysISO, daysBetweenISO, pad2 } from './date-utils';
 import { DEFAULT_UPCOMING_WINDOW_DAYS } from './modules/household/household-tasks';
@@ -125,7 +125,7 @@ export function buildHeroItems(opts: {
    * not Tasks is. An owner left out follows householdVisible (every reminder
    * as a task, as before modules).
    */
-  reminderOwnersVisible?: Partial<Record<'costs' | 'documents', boolean>>;
+  reminderOwnersVisible?: Partial<Record<ReminderOwner, boolean>>;
   /**
    * Items other modules build for today (bin night, bins.ts binNightHeroItem),
    * already gated on their hub feature. Added as they are.
@@ -148,10 +148,9 @@ export function buildHeroItems(opts: {
     for (const t of tasks) {
       if (t.deleted) continue;
       const owner = taskOwnerModule(t);
-      const ownerVisible =
-        owner === 'costs' || owner === 'documents'
-          ? (opts.reminderOwnersVisible?.[owner] ?? householdVisible)
-          : householdVisible;
+      const ownerVisible = isReminderOwner(owner)
+        ? (opts.reminderOwnersVisible?.[owner] ?? householdVisible)
+        : householdVisible;
       if (!ownerVisible) continue;
       if (t.done) {
         // Keep a completed task visible only if it was completed today.
@@ -178,7 +177,15 @@ export function buildHeroItems(opts: {
         overdue: !t.done && !!t.due_date && t.due_date < today,
         done: t.done,
         assignedTo: t.assigned_to,
-        sourceLabel: checklistLink ? 'Checklist' : isReminder ? 'Reminder' : t.template_key ? 'Moving' : 'Task',
+        sourceLabel: checklistLink
+          ? 'Checklist'
+          : parsed?.kind === 'care'
+            ? 'Home care'
+            : isReminder
+              ? 'Reminder'
+              : t.template_key
+                ? 'Moving'
+                : 'Task',
         checklistHref: checklistLink?.href ?? null,
         completionLabel: checklistLink?.completionLabel ?? null,
         completionRatio: checklistLink?.completion ?? null,

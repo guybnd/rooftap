@@ -19,6 +19,7 @@ const TASKS = [
   { id: 'tracked', template_key: reminderKey('tracked_item', 'item-1'), owner: 'household' },
   { id: 'lease', template_key: reminderKey('lease', 'group-1', 'notice'), owner: 'household' },
   { id: 'colon-id', template_key: reminderKey('cost', 'a:b'), owner: 'costs' },
+  { id: 'care', template_key: reminderKey('care', 'job-1', '2026-11-01'), owner: 'home-care' },
 ] as const;
 
 const allOn = new Set<string>(ALL_MODULE_IDS);
@@ -117,9 +118,10 @@ describe('the edge-function twin (supabase/functions/_shared/module-rules.ts)', 
 
   it('resolves every on/off combination the same way, with and without a server limit', () => {
     // Every combination of the modules the rules read (requirements, task
-    // owners, Google Calendar), crossed with the other modules all off, all
-    // on, and each one alone. Every module at once would be 2^modules runs,
-    // which doubles with each new module and outgrew the test's time limit.
+    // owners, Google Calendar), crossed with the other modules all off and
+    // all on; each other module alone is crossed with the ruled ones all off
+    // and all on. Every module at once would be 2^modules runs, which
+    // doubles with each new module and outgrew the test's time limit.
     const ruled = ALL_MODULE_IDS.filter(
       (id) =>
         ['household', 'costs', 'documents', 'calendar', 'search'].includes(id) ||
@@ -127,8 +129,10 @@ describe('the edge-function twin (supabase/functions/_shared/module-rules.ts)', 
         MODULES.some((m) => m.requires?.includes(id)),
     );
     const others = ALL_MODULE_IDS.filter((id) => !ruled.includes(id));
-    const otherSets: string[][] = [[], others, ...others.map((id) => [id])];
-    for (let mask = 0; mask < 1 << ruled.length; mask++) {
+    const full = (1 << ruled.length) - 1;
+    for (let mask = 0; mask <= full; mask++) {
+      const otherSets: string[][] =
+        mask === 0 || mask === full ? [[], others, ...others.map((id) => [id])] : [[], others];
       for (const otherOn of otherSets) {
         const rows = ALL_MODULE_IDS.map((id) => ({
           module_id: id,

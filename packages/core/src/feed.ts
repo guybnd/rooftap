@@ -5,7 +5,7 @@
 import type { HeroItem, HeroItemType, HeroRange } from './hero';
 import { parseLocalISODate } from './hero';
 import { addDaysISO, daysBetweenISO } from './date-utils';
-import { taskOwnerModule } from './task-modules';
+import { taskOwnerModule, isReminderOwner, reminderOwnerSection } from './task-modules';
 
 /**
  * The feed's day header for a due date. Anything already past collapses into
@@ -97,7 +97,7 @@ export function heroItemSectionId(item: HeroItem): string {
   if (item.checklistHref) return 'checklists';
   if (item.task) {
     const owner = taskOwnerModule(item.task);
-    if (owner === 'costs' || owner === 'documents') return owner;
+    if (isReminderOwner(owner)) return reminderOwnerSection(owner);
   }
   return 'household';
 }

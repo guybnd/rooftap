@@ -8,13 +8,15 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 export const REMINDER_LEAD_DAYS = 14;
 
-export type ReminderOriginKind = 'cost' | 'document' | 'tracked_item' | 'lease';
+export type ReminderOriginKind = 'cost' | 'document' | 'tracked_item' | 'lease' | 'care';
 
 const PREFIX: Record<ReminderOriginKind, string> = {
   cost: 'cost-reminder',
   document: 'doc-reminder',
   tracked_item: 'tracked-item-reminder',
   lease: 'lease-reminder',
+  // Home care jobs: the database keeps these in step (20261023120000_home_care.sql).
+  care: 'care-reminder',
 };
 
 const KIND_BY_PREFIX: Record<string, ReminderOriginKind> = {
@@ -22,6 +24,7 @@ const KIND_BY_PREFIX: Record<string, ReminderOriginKind> = {
   'doc-reminder': 'document',
   'tracked-item-reminder': 'tracked_item',
   'lease-reminder': 'lease',
+  'care-reminder': 'care',
 };
 
 /** Stable template_key for a reminder: `<prefix>:<originId>:<sub>` (sub e.g. expiry|contract|discount). */

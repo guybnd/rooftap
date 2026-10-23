@@ -6,6 +6,7 @@ import {
   BookOpen,
   Bot,
   Lightbulb,
+  Wrench,
   CalendarDays,
   CalendarSync,
   ChefHat,
@@ -66,6 +67,7 @@ export const sectionIcons: Record<string, LucideIcon> = {
   'calendar-sync': CalendarSync,
   bot: Bot,
   lightbulb: Lightbulb,
+  wrench: Wrench,
 };
 
 /** A section's own glyph (its sections.ts iconId), for leading tiles. */

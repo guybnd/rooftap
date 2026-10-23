@@ -543,6 +543,8 @@ function HomeSectionBody() {
   // or not Tasks is (task-modules.ts).
   const costsVisible = !hidden.includes('costs');
   const documentsVisible = !hidden.includes('documents');
+  // Home care reminders show with Home Setup and the home-care module on.
+  const careVisible = !hidden.includes('setup') && modules.isEnabled('home-care');
   // Modules: the household's own events need calendar (module-features.ts).
   const eventsVisible = !hidden.includes('calendar') && modules.feature('hub.events');
   // Holding an event's row edits it here, Budget line and all (use-event-save.ts).
@@ -568,7 +570,7 @@ function HomeSectionBody() {
   // are the agenda's only sources and with all of them off it goes too.
   const agendaVisible =
     householdVisible ||
-    hasVisibleReminders(tasks, { costs: costsVisible, documents: documentsVisible }) ||
+    hasVisibleReminders(tasks, { costs: costsVisible, documents: documentsVisible, 'home-care': careVisible }) ||
     viewingsVisible ||
     eventsVisible;
 
@@ -614,12 +616,12 @@ function HomeSectionBody() {
         groupEvents: homeEvents,
         groupEventsVisible: eventsVisible,
         viewerId: currentUserId,
-        reminderOwnersVisible: { costs: costsVisible, documents: documentsVisible },
+        reminderOwnersVisible: { costs: costsVisible, documents: documentsVisible, 'home-care': careVisible },
         taskChecklistsVisible,
         checklistByTaskId,
         extraItems: binExtraItems,
       }),
-    [tasks, appointmentsList, apartmentsList, homeEvents, eventsVisible, currentUserId, todayISOStr, householdVisible, viewingsVisible, costsVisible, documentsVisible, taskChecklistsVisible, checklistByTaskId, binExtraItems]
+    [tasks, appointmentsList, apartmentsList, homeEvents, eventsVisible, currentUserId, todayISOStr, householdVisible, viewingsVisible, costsVisible, documentsVisible, careVisible, taskChecklistsVisible, checklistByTaskId, binExtraItems]
   );
 
   const todayLabel = now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
@@ -752,7 +754,7 @@ function HomeSectionBody() {
         groupEvents: homeEvents,
         groupEventsVisible: eventsVisible,
         viewerId: currentUserId,
-        reminderOwnersVisible: { costs: costsVisible, documents: documentsVisible },
+        reminderOwnersVisible: { costs: costsVisible, documents: documentsVisible, 'home-care': careVisible },
         taskChecklistsVisible,
         range,
         // The Upcoming range reaches the user's window (Settings, default 90 days).
@@ -760,7 +762,7 @@ function HomeSectionBody() {
         checklistByTaskId,
         extraItems: binExtraItems,
       }),
-    [tasks, appointmentsList, apartmentsList, homeEvents, eventsVisible, currentUserId, todayISOStr, householdVisible, viewingsVisible, costsVisible, documentsVisible, taskChecklistsVisible, userSettings, checklistByTaskId, binExtraItems]
+    [tasks, appointmentsList, apartmentsList, homeEvents, eventsVisible, currentUserId, todayISOStr, householdVisible, viewingsVisible, costsVisible, documentsVisible, careVisible, taskChecklistsVisible, userSettings, checklistByTaskId, binExtraItems]
   );
   const heroItems = React.useMemo(() => heroItemsFor(heroRange), [heroItemsFor, heroRange]);
 
