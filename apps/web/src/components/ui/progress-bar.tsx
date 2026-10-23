@@ -11,6 +11,8 @@ interface ProgressBarProps {
   value: number;
   /** Denominator (e.g. total ingredients). 0 renders an empty bar (no NaN). */
   total: number;
+  /** Where the value is expected to end up (e.g. paid so far, then what is still to come). Drawn faint past `value`. */
+  expected?: number;
   /** Bar fill colour class. Default success (theme token). */
   fillClassName?: string;
   /** Track background class. */
@@ -21,23 +23,29 @@ interface ProgressBarProps {
 export function ProgressBar({
   value,
   total,
+  expected,
   fillClassName = "bg-success",
   trackClassName = "bg-muted",
   className,
 }: ProgressBarProps) {
-  const pct = total > 0 ? Math.round((Math.min(value, total) / total) * 100) : 0;
+  const share = (n: number) => (total > 0 ? Math.round((Math.max(0, Math.min(n, total)) / total) * 100) : 0);
+  const pct = share(value);
+  const ahead = expected != null ? Math.max(0, share(expected) - pct) : 0;
   return (
     <div
       role="progressbar"
       aria-valuenow={value}
       aria-valuemin={0}
       aria-valuemax={total}
-      className={cn("h-1.5 w-full overflow-hidden rounded-full", trackClassName, className)}
+      className={cn("flex h-1.5 w-full overflow-hidden rounded-full", trackClassName, className)}
     >
       <div
-        className={cn("h-full rounded-full transition-all", fillClassName)}
+        className={cn("h-full shrink-0 rounded-full transition-all", fillClassName)}
         style={{ width: `${pct}%` }}
       />
+      {ahead > 0 ? (
+        <div className={cn("h-full shrink-0 rounded-r-full opacity-30 transition-all", fillClassName)} style={{ width: `${ahead}%` }} />
+      ) : null}
     </div>
   );
 }

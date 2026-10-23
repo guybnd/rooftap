@@ -92,7 +92,8 @@ export function BudgetSpace({
                 </View>
               )}
               {lens.budgetCents != null ? (
-                <ProgressBar value={lens.spentCents} total={lens.budgetCents} fillClassName={TONE_FILL[tone]} className="h-[3px]" />
+                // Solid: paid so far. Faint: what is still to come this month.
+                <ProgressBar value={lens.paidCents ?? lens.spentCents} expected={lens.spentCents} total={lens.budgetCents} fillClassName={TONE_FILL[tone]} className="h-[3px]" />
               ) : (
                 <Text className="text-caption text-muted-foreground">Set a monthly budget in Costs to track spend against it.</Text>
               )}

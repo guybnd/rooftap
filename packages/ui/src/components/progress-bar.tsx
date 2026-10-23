@@ -8,6 +8,8 @@ export interface ProgressBarProps {
   value: number;
   /** Denominator (e.g. total ingredients). 0 renders an empty bar (no NaN). */
   total: number;
+  /** Where the value is expected to end up (e.g. paid so far, then what is still to come). Drawn faint past `value`. */
+  expected?: number;
   /** Bar fill colour class. Default success (theme token). */
   fillClassName?: string;
   /** Track background class. */
@@ -18,18 +20,22 @@ export interface ProgressBarProps {
 export function ProgressBar({
   value,
   total,
+  expected,
   fillClassName = 'bg-success',
   trackClassName = 'bg-muted',
   className,
 }: ProgressBarProps) {
-  const pct = total > 0 ? Math.round((Math.min(value, total) / total) * 100) : 0;
+  const share = (n: number) => (total > 0 ? Math.round((Math.max(0, Math.min(n, total)) / total) * 100) : 0);
+  const pct = share(value);
+  const ahead = expected != null ? Math.max(0, share(expected) - pct) : 0;
   return (
     <View
       accessibilityRole="progressbar"
       accessibilityValue={{ min: 0, max: total, now: value }}
-      className={cn('h-[3px] w-full overflow-hidden rounded-full', trackClassName, className)}
+      className={cn('h-[3px] w-full flex-row overflow-hidden rounded-full', trackClassName, className)}
     >
       <View className={cn('h-full rounded-full', fillClassName)} style={{ width: `${pct}%` }} />
+      {ahead > 0 ? <View className={cn('h-full rounded-r-full', fillClassName)} style={{ width: `${ahead}%`, opacity: 0.3 }} /> : null}
     </View>
   );
 }
