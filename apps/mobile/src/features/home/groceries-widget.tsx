@@ -104,7 +104,7 @@ export function GroceriesWidget({
     const seen = new Map<string, string>(); // lowercased → first-seen display form
     // Rows still syncing in on a fresh install can lack a name.
     const add = (raw: string | null | undefined) => {
-      if (!raw) return;
+      if (typeof raw !== 'string' || !raw) return;
       const k = raw.toLowerCase().trim();
       if (k && !seen.has(k)) seen.set(k, raw.trim());
     };

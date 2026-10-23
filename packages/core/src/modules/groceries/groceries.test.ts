@@ -107,6 +107,37 @@ describe('sortGroceriesFlat', () => {
   });
 });
 
+describe('suggestReAdd with rows that are still syncing or malformed', () => {
+  const today = '2026-06-20';
+  const stale = (overrides: Record<string, unknown> = {}) =>
+    item({ status: 'have', status_changed_at: '2026-06-01T09:00:00.000Z', shelf_life_days: 7, ...overrides } as Partial<GroceryItem>);
+
+  it('skips bad rows and still suggests the good ones', () => {
+    const rows = [
+      stale({ id: 'num-date', status_changed_at: 1717232400000 }),
+      stale({ id: 'obj-date', status_changed_at: {} }),
+      stale({ id: 'no-name', name: undefined, shelf_life_days: null }),
+      stale({ id: 'num-name', name: 42, shelf_life_days: null }),
+      stale({ id: 'bad-snooze', re_add_snoozed_until: 20260701 }),
+      stale({ id: 'bad-days', shelf_life_days: '7' }),
+      stale({ id: 'bad-dismiss', re_add_dismissed_at: 5 }),
+      undefined as unknown as GroceryItem,
+      stale({ id: 'good' }),
+    ];
+    const ids = suggestReAdd(rows, new Map(), today).map((i) => i.id);
+    expect(ids).toContain('good');
+    expect(ids).not.toContain('num-date');
+    expect(ids).not.toContain('obj-date');
+    expect(ids).not.toContain('no-name');
+    expect(ids).not.toContain('num-name');
+  });
+
+  it('never throws, whatever a row holds', () => {
+    const weird = [{}, { status: 'have' }, { status: 'have', status_changed_at: '' }, { status: 'have', status_changed_at: 'x', name: [] }];
+    expect(() => suggestReAdd(weird as unknown as GroceryItem[], new Map(), today)).not.toThrow();
+  });
+});
+
 describe('suggestReAdd dismissal', () => {
   const today = '2026-06-20';
   // Marked have-it on Jun 1 with a 7-day shelf life: 12 days overdue by today.

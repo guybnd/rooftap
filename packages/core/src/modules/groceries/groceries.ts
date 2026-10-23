@@ -160,16 +160,27 @@ export function suggestReAdd(
   today: string = todayISO()
 ): SuggestReAddItem[] {
   return items
-    .filter((i) => i.status === "have" && i.status_changed_at)
+    .filter((i) => i?.status === "have" && typeof i.status_changed_at === "string")
     .map((i): SuggestReAddItem | null => {
-      const days = i.shelf_life_days ?? resolveItemDefaults(i.name, library).days;
-      if (days == null) return null;
-      const dueISO = addDaysISO(i.status_changed_at!.slice(0, 10), days);
-      const daysOverdue = daysBetweenISO(dueISO, today);
-      if (daysOverdue <= 0) return null;
-      if (i.re_add_snoozed_until && i.re_add_snoozed_until.slice(0, 10) > today) return null;
-      if (isReAddDismissed(i)) return null;
-      return { ...i, daysOverdue };
+      // Rows come from the device cache and from a sync in progress, so a
+      // field can be missing or the wrong type. A row that can't be read is
+      // skipped: one bad row must never take down Home or the list.
+      try {
+        const days = typeof i.shelf_life_days === "number"
+          ? i.shelf_life_days
+          : typeof i.name === "string" ? resolveItemDefaults(i.name, library).days : null;
+        if (days == null) return null;
+        const dueISO = addDaysISO(i.status_changed_at!.slice(0, 10), days);
+        const daysOverdue = daysBetweenISO(dueISO, today);
+        if (!(daysOverdue > 0)) return null;
+        const snoozed = i.re_add_snoozed_until;
+        if (typeof snoozed === "string" && snoozed.slice(0, 10) > today) return null;
+        if (isReAddDismissed(i)) return null;
+        return { ...i, daysOverdue };
+      } catch (e) {
+        console.warn("[groceries] skipped a re-add row it could not read", i?.id, e);
+        return null;
+      }
     })
     .filter((i): i is SuggestReAddItem => i != null)
     .sort((a, b) => {
@@ -182,7 +193,7 @@ export function suggestReAdd(
  *  status stint. Compared as instants, not strings: the server echoes
  *  timestamptz as `+00:00` while the client writes `Z`. */
 export function isReAddDismissed(item: Pick<GroceryItem, "re_add_dismissed_at" | "status_changed_at">): boolean {
-  if (!item.re_add_dismissed_at || !item.status_changed_at) return false;
+  if (typeof item.re_add_dismissed_at !== "string" || typeof item.status_changed_at !== "string") return false;
   return Date.parse(item.re_add_dismissed_at) >= Date.parse(item.status_changed_at);
 }
 
@@ -207,7 +218,7 @@ export function freshnessWindow(
   days: number | null,
   today: string = todayISO()
 ): FreshnessWindow | null {
-  if (!gotItISO || days == null || days <= 0) return null;
+  if (typeof gotItISO !== "string" || !gotItISO || typeof days !== "number" || !(days > 0)) return null;
   const start = gotItISO.slice(0, 10);
   const dueISO = addDaysISO(start, days);
   const elapsedDays = Math.max(0, daysBetweenISO(start, today));
