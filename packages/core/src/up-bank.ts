@@ -177,12 +177,6 @@ export interface CostActual {
   cents: number;
 }
 
-/** A local YYYY-MM key for an instant or a Date. */
-export function monthKey(at: string | Date): string {
-  const d = typeof at === 'string' ? new Date(at) : at;
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
-
 /**
  * The YYYY-MM month of an instant on a device `tzOffset` minutes behind UTC
  * (Date#getTimezoneOffset: -600 in Sydney), so the server files a payment in

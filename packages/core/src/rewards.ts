@@ -80,10 +80,6 @@ export const REWARD_PERK_KINDS: { value: RewardPerkKind; label: string }[] = [
   { value: 'other', label: 'Other' },
 ];
 
-export function schemeKindLabel(kind: RewardSchemeKind): string {
-  return REWARD_SCHEME_KINDS.find((k) => k.value === kind)?.label ?? 'Other';
-}
-
 // ── Names ────────────────────────────────────────────────────────────────────
 
 /**

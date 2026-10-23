@@ -75,17 +75,6 @@ export async function learnItemPrice(
   await upsertLibrary(supabase, groupId, name.trim(), { typical_price_cents: cents });
 }
 
-/** Record/refresh an item's shelf life. */
-export async function learnItemShelfLife(
-  supabase: SupabaseClient,
-  groupId: string,
-  name: string,
-  days: number | null,
-): Promise<void> {
-  if (!name.trim()) return;
-  await upsertLibrary(supabase, groupId, name.trim(), { shelf_life_days: days });
-}
-
 /**
  * Upsert an item's full learnable details (shelf life + typical price + aisle)
  * into the library in one merge — used when archiving an item so its details

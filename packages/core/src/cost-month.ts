@@ -374,11 +374,6 @@ export function monthKeys(now: Date, offset: number, count: number): string[] {
   return Array.from({ length: count }, (_, k) => monthKeyOf(new Date(now.getFullYear(), now.getMonth() + offset + k, 1)));
 }
 
-/** Where a cost line's money comes from, for its source mark. */
-export function costSource(item: Pick<CostItem, 'bank_source'>, linked: boolean): 'up' | 'manual' {
-  return item.bank_source || linked ? 'up' : 'manual';
-}
-
 /** A category's label, or "Pick a category" for payments without one. */
 export function costCategoryLabel(category: CostCategory | null): string {
   return category ? CATEGORY_META[category].label : 'Pick a category';

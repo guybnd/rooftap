@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { learnItemPrice } from './item-library';
 import type { GrocerySession, GroceryItem } from './types';
-import { SIGNED_URL_TTL_SECONDS, type DocumentUploadInput } from './documents';
+import type { DocumentUploadInput } from './documents';
 import { isFeatureEnabled } from './module-features';
 import { getEnabledModules } from './modules-store';
 
@@ -264,11 +264,6 @@ export async function uploadReceipt(
     .upload(path, input.body, { upsert: true, contentType: input.mimeType ?? undefined });
   if (error) { console.error('receipt upload failed:', error.message ?? error); return null; }
   return { path, name: input.filename };
-}
-
-export async function receiptSignedUrl(supabase: SupabaseClient, path: string): Promise<string | null> {
-  const { data } = await supabase.storage.from(BUCKET).createSignedUrl(path, SIGNED_URL_TTL_SECONDS);
-  return data?.signedUrl ?? null;
 }
 
 export interface ParsedReceipt {

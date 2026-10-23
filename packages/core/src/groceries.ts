@@ -137,11 +137,6 @@ export function parseGroceryShow(raw: string | null | undefined): GroceryShowFil
   return raw === "needed" || raw === "all" ? raw : DEFAULT_GROCERY_SHOW;
 }
 
-/** Essentials that still need buying — surfaced on the Home hub (FLUX-185). */
-export function essentialNeeded(items: GroceryItem[]): GroceryItem[] {
-  return items.filter((i) => i.is_essential && i.status === "needed");
-}
-
 export function countHave(items: GroceryItem[]): number {
   return items.filter((i) => i.status === "have").length;
 }
@@ -236,12 +231,6 @@ export function snoozeUntilISO(kind: "1d" | "1w" | "1m" | string, today: string 
 
 export function countBought(items: GroceryItem[]): number {
   return items.filter((i) => i.status === "bought").length;
-}
-
-export function estimatedTotal(items: GroceryItem[]): number {
-  return items
-    .filter((i) => i.status === "needed" && i.last_price)
-    .reduce((sum, i) => sum + (i.last_price ?? 0) * (i.quantity ?? 1), 0);
 }
 
 /** Display string for quantity + unit (e.g. "2 kg", "1", "500 ml"). Missing

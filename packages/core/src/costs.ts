@@ -47,11 +47,6 @@ export function totalForPeriod(items: CostItem[], period: Period): number {
   return items.reduce((sum, i) => sum + amountForPeriod(i, period), 0);
 }
 
-/** Sum of one-off items (minor units) — counted once, e.g. toward the yearly view. */
-export function totalOneOff(items: CostItem[]): number {
-  return items.filter(isOneOff).reduce((sum, i) => sum + i.amount, 0);
-}
-
 /**
  * Format minor units as whole currency units, in the household's currency
  * (currency.ts) unless `currency` is given.
@@ -191,20 +186,6 @@ export function stepBackByCategory(
     result[category] = { est: e, act: a, effective, remaining: Math.max(e - a, 0) };
   }
   return result;
-}
-
-/**
- * A bucket's recurring spend split by category, in CATEGORY_META order, with
- * each category's named one-offs subtracted (byCategory mixes both). Shared
- * by the monthly chart's stacked bars and the breakdown strip so one
- * category reads the same color and size in both places.
- */
-export function recurringByCategory(bucket: MonthBucket): { category: CostCategory; amount: number }[] {
-  const oneOff: Record<string, number> = {};
-  for (const o of bucket.oneOffItems) oneOff[o.category] = (oneOff[o.category] ?? 0) + o.amount;
-  return (Object.keys(CATEGORY_META) as CostCategory[])
-    .map((category) => ({ category, amount: (bucket.byCategory[category] ?? 0) - (oneOff[category] ?? 0) }))
-    .filter((s) => s.amount > 0);
 }
 
 /**

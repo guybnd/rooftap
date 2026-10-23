@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { costSectionSuggestions, costTargets, everydayAverage, monthlyProjection, nextOccurrence, recurringByCategory, type BankActuals } from './costs';
+import { costSectionSuggestions, costTargets, everydayAverage, monthlyProjection, nextOccurrence, type BankActuals } from './costs';
 import { costCategoryChoices, costMergeTargets } from './cost-categories';
 import { isFeatureEnabled } from './module-features';
 import { ALL_MODULE_IDS, type ModuleId } from './modules';
@@ -187,23 +187,6 @@ describe("costSectionSuggestions", () => {
     { name: "a setup line exists", input: { items: [{ linked_section: "home_setup", category: "moving" as const }] }, expected: { rent: true, setup: false } },
   ])("with every module on, $name", ({ input, expected }) => {
     expect(costSectionSuggestions({ ...base, rentEnabled: true, setupEnabled: true, ...input })).toEqual(expected);
-  });
-});
-
-describe("recurringByCategory", () => {
-  it("splits recurring spend by category in palette order, net of one-offs", () => {
-    const segs = recurringByCategory({
-      label: "Oct",
-      total: 1_300,
-      recurring: 1_000,
-      oneOff: 300,
-      byCategory: { utilities: 400, rent: 600, purchase: 300 },
-      oneOffItems: [{ name: "Couch", category: "purchase", amount: 300 }],
-    });
-    expect(segs).toEqual([
-      { category: "rent", amount: 600 },
-      { category: "utilities", amount: 400 },
-    ]);
   });
 });
 
