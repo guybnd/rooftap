@@ -1,102 +1,45 @@
 'use client';
 
-// ── FLUX-242: shared weather fetch + client cache for the /home hub ─────────────
-// Extracted from the retired weather-tile.tsx so the summary hero (and anything
-// else that needs current weather) can reuse the same fetch/cache/icon logic
-// instead of duplicating it.
+// FLUX-242: web's binding for core's useWeather (one fetch + 45-minute cache
+// per location, shared by the summary hero and the week board). Web reaches
+// /api/weather relative to its own origin.
 
-import { useEffect, useState } from 'react';
 import { Sun, Cloud, CloudSun, CloudFog, CloudDrizzle, CloudRain, CloudSnow, CloudLightning, type LucideIcon } from 'lucide-react';
+import {
+  conditionForWeatherCode,
+  useWeather as useCoreWeather,
+  type WeatherCondition,
+  type WeatherData,
+  type WeatherFetcher,
+} from '@homeup/core';
 
-export interface WeatherData {
-  tempC: number;
-  weatherCode: number;
-  highC: number;
-  lowC: number;
-  /** FLUX-256: soft-optional — a missing field degrades one tip, not the whole payload. */
-  humidity?: number;
-  windSpeedKmh?: number;
-  /** ISO local-time string (Open-Meteo `timezone=auto`), e.g. "2026-07-23T19:42". */
-  sunset?: string;
-  uvIndexMax?: number;
-  hourly?: {
-    /** ISO local-time strings, one per hour of today. */
-    times: string[];
-    precipitation: number[];
-    precipitationProbability: number[];
-    uvIndex: number[];
-  };
-  /** The next 12 hours from the current hour, for the day ribbon (core WeatherData.ahead). */
-  ahead?: {
-    times: string[];
-    tempC: number[];
-    precipitationProbability: number[];
-  };
-  /**
-   * The week ahead, one entry per local day starting today, for the week
-   * board's day headers on wide screens. Soft-optional: a server that
-   * predates it leaves the headers without weather.
-   */
-  days?: {
-    /** 'YYYY-MM-DD' local dates. */
-    dates: string[];
-    weatherCode: number[];
-    highC: number[];
-    lowC: number[];
-    precipitationProbabilityMax: number[];
-  };
-}
+export type { WeatherData };
 
-const CACHE_TTL_MS = 45 * 60 * 1000;
-const cache = new Map<string, { data: WeatherData; expiresAt: number }>();
-
-// WMO weather codes (https://open-meteo.com/en/docs) collapsed to a small icon set.
-export function iconAndLabelForCode(code: number): { Icon: LucideIcon; label: string } {
-  if (code === 0) return { Icon: Sun, label: 'Clear' };
-  if (code <= 2) return { Icon: CloudSun, label: 'Partly cloudy' };
-  if (code === 3) return { Icon: Cloud, label: 'Overcast' };
-  if (code <= 48) return { Icon: CloudFog, label: 'Foggy' };
-  if (code <= 57) return { Icon: CloudDrizzle, label: 'Drizzle' };
-  if (code <= 67) return { Icon: CloudRain, label: 'Rain' };
-  if (code <= 77) return { Icon: CloudSnow, label: 'Snow' };
-  if (code <= 82) return { Icon: CloudRain, label: 'Showers' };
-  if (code <= 86) return { Icon: CloudSnow, label: 'Snow showers' };
-  if (code <= 99) return { Icon: CloudLightning, label: 'Thunderstorm' };
-  return { Icon: Cloud, label: 'Cloudy' };
-}
+const fetchWeather: WeatherFetcher = async (lat, lng) => {
+  const res = await fetch(`/api/weather?lat=${lat}&lng=${lng}`);
+  if (!res.ok) throw new Error('weather fetch failed');
+  return (await res.json()) as WeatherData;
+};
 
 export function useWeather(lat: number | null, lng: number | null): { data: WeatherData | null; error: boolean } {
-  const [data, setData] = useState<WeatherData | null>(null);
-  const [error, setError] = useState(false);
+  return useCoreWeather(lat, lng, fetchWeather);
+}
 
-  useEffect(() => {
-    if (lat == null || lng == null) return;
+const ICONS: Record<WeatherCondition, LucideIcon> = {
+  clear: Sun,
+  'partly-cloudy': CloudSun,
+  foggy: CloudFog,
+  drizzle: CloudDrizzle,
+  rain: CloudRain,
+  snow: CloudSnow,
+  showers: CloudRain,
+  'snow-showers': CloudSnow,
+  thunderstorm: CloudLightning,
+  cloudy: Cloud,
+};
 
-    const key = `${lat.toFixed(2)},${lng.toFixed(2)}`;
-    const cached = cache.get(key);
-    if (cached && cached.expiresAt > Date.now()) {
-      setData(cached.data);
-      return;
-    }
-
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch(`/api/weather?lat=${lat}&lng=${lng}`);
-        if (!res.ok) throw new Error('weather fetch failed');
-        const result = (await res.json()) as WeatherData;
-        if (cancelled) return;
-        cache.set(key, { data: result, expiresAt: Date.now() + CACHE_TTL_MS });
-        setData(result);
-      } catch {
-        if (!cancelled) setError(true);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [lat, lng]);
-
-  return { data, error };
+/** WMO weather code to a lucide icon and label (core conditionForWeatherCode). */
+export function iconAndLabelForCode(code: number): { Icon: LucideIcon; label: string } {
+  const { condition, label } = conditionForWeatherCode(code);
+  return { Icon: ICONS[condition], label };
 }

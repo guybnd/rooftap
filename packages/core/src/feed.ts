@@ -6,6 +6,7 @@ import type { HeroItem, HeroItemType, HeroRange } from './hero';
 import { parseLocalISODate } from './hero';
 import { addDaysISO, daysBetweenISO } from './date-utils';
 import { taskOwnerModule, isReminderOwner, reminderOwnerSection } from './task-modules';
+import { compareStrings } from './sort';
 
 /**
  * The feed's day header for a due date. Anything already past collapses into
@@ -378,4 +379,26 @@ export function weekBoardColumns(
   if (later.length) columns.push({ key: 'later', label: 'Later', date: null, items: later });
   if (undated.length) columns.push({ key: 'none', label: 'No date', items: undated, date: null });
   return columns;
+}
+
+/**
+ * The feed's row order. Done rows sink last. Today breaks ties overdue first;
+ * the longer ranges go chronologically by day (undated items last). Then
+ * untimed before timed, by time, then by title.
+ */
+export function compareHeroItems(a: HeroItem, b: HeroItem, isToday: boolean): number {
+  if (a.done !== b.done) return a.done ? 1 : -1;
+  if (isToday) {
+    if (a.overdue !== b.overdue) return a.overdue ? -1 : 1;
+  } else {
+    const ad = a.dueDate ?? '9999-99-99';
+    const bd = b.dueDate ?? '9999-99-99';
+    if (ad !== bd) return ad.localeCompare(bd);
+  }
+  const at = a.dueTime ?? '';
+  const bt = b.dueTime ?? '';
+  if (!at && bt) return -1;
+  if (at && !bt) return 1;
+  if (at !== bt) return at < bt ? -1 : 1;
+  return compareStrings(a.title, b.title);
 }

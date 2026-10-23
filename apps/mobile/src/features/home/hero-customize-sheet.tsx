@@ -9,20 +9,10 @@ import * as React from 'react';
 import { Pressable, View } from 'react-native';
 import { Text, BottomSheet, BottomSheetScrollView, FormSection, FieldRow, Input, DateScrollField, Switch } from '@homeup/ui';
 import type { UserSettings } from '@homeup/core';
-import { useModules } from '@homeup/core';
-import { availableHeroModules, isModuleEnabled, type HeroModuleGroup } from './hero-modules';
+import { availableHeroModules, isModuleEnabled, HERO_GROUP_LABELS, HERO_GROUP_ORDER, useModules } from '@homeup/core';
 
 type Countdown = UserSettings['home_hero_countdown'];
 
-const GROUP_LABELS: Record<HeroModuleGroup, string> = {
-  header: 'Weather',
-  day: 'Your day',
-  home: 'Shortcuts, up to 3',
-  tips: 'Smart tips',
-  spaces: 'Spaces',
-};
-
-const GROUP_ORDER: HeroModuleGroup[] = ['header', 'day', 'tips', 'home', 'spaces'];
 
 export function HeroCustomizeSheet({
   open,
@@ -59,11 +49,11 @@ export function HeroCustomizeSheet({
             `font-heading` for the same property; `text-sm` is the same 14px
             with no family opinion. */}
         <Text className="font-heading text-sm font-semibold text-foreground">Customize your summary</Text>
-        {GROUP_ORDER.map((group) => {
+        {HERO_GROUP_ORDER.map((group) => {
           const modules = available.filter((m) => m.group === group);
           if (modules.length === 0) return null;
           return (
-            <FormSection key={group} title={GROUP_LABELS[group]}>
+            <FormSection key={group} title={HERO_GROUP_LABELS[group]}>
               {modules.map((m) => {
                 const isCountdownRow = m.key === 'countdown';
                 const countdownOn = isCountdownRow && isModuleEnabled(m.key, config);

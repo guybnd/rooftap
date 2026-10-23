@@ -37,6 +37,12 @@ import {
   todayProgress,
   useModules,
   useMonthTotals,
+  coarseCountdown,
+  isCountdownDueSoon,
+  isModuleShown,
+  unassignedCount,
+  whosOnHookBuckets,
+  type HeroModuleGroup,
 } from '@homeup/core';
 import { cn } from '@/lib/utils';
 import { memberLabel } from '@/app/setup/member-label';
@@ -50,14 +56,8 @@ import { useWeather } from './use-weather';
 import { useHeroModuleConfig } from './use-hero-module-config';
 import {
   HERO_MODULES,
-  isModuleShown,
-  coarseCountdown,
-  isCountdownDueSoon,
-  whosOnHookBuckets,
-  unassignedCount,
   type HeroModule,
   type HeroModuleContext,
-  type HeroModuleGroup,
 } from './hero-modules';
 import { HeroCustomizeSheet } from './hero-customize-sheet';
 import { DayRibbon, SkyBlock, SkyNote, useSkyRibbonOpen } from './sky';
@@ -204,9 +204,9 @@ export function SummaryHero({
   const progress = todayProgress(ctx.todayItems);
   const nowQueue = isOn('nextUp') ? pickNowQueue(ctx.todayItems, today) : [];
 
-  const { assigneeIds, countFor } = whosOnHookBuckets(ctx);
+  const { assigneeIds, countFor } = whosOnHookBuckets(ctx.todayItems, ctx.currentUserId, ctx.memberProfiles);
   const showWhosOnHook = isOn('whosOnHook') && assigneeIds.length > 0;
-  const unassigned = unassignedCount(ctx);
+  const unassigned = unassignedCount(ctx.todayItems);
   const showUnassignedChip = isOn('unassignedNudge') && unassigned > 0;
 
   const streakModule = HERO_MODULES.find((m) => m.key === 'streak');

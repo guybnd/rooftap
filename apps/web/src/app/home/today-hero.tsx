@@ -75,7 +75,7 @@ import {
   HERO_RANGES,
   HERO_RANGE_LABEL,
   mapsDirectionsUrl,
-  compareStrings,
+  compareHeroItems,
   feedRowWhen,
   filterHeroFeed,
   groupFeedItems,
@@ -149,28 +149,6 @@ interface TodayHeroProps {
   /** The week's forecast for the board's day headers (soft-optional, see core WeatherData.days). */
   weatherDays?: WeatherData['days'];
 }
-
-// FLUX-239: done rows sink last — factored once so the flat (Today) sort and the
-// grouped (Week/Month) per-day-bucket sort can't drift apart. Ties fall through to
-// the pre-existing overdue → dueDate → dueTime → title order.
-function compareHeroItems(a: HeroItem, b: HeroItem, isToday: boolean): number {
-  if (a.done !== b.done) return a.done ? 1 : -1;
-  if (isToday) {
-    if (a.overdue !== b.overdue) return a.overdue ? -1 : 1;
-  } else {
-    // Week/Month: chronological by day (undated items sort last, grouped separately below).
-    const ad = a.dueDate ?? '9999-99-99';
-    const bd = b.dueDate ?? '9999-99-99';
-    if (ad !== bd) return ad.localeCompare(bd);
-  }
-  const at = a.dueTime ?? '';
-  const bt = b.dueTime ?? '';
-  if (!at && bt) return -1;
-  if (at && !bt) return 1;
-  if (at !== bt) return at < bt ? -1 : 1;
-  return compareStrings(a.title, b.title);
-}
-
 
 // FLUX-235: swipe-left = dismiss, the only gesture a pulled calendar row gets
 // (it's otherwise inert — no tap/hold/complete). Matches the swipe contract

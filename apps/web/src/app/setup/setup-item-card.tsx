@@ -50,7 +50,6 @@ import { SwipeActions } from '@/components/ui/swipe-actions';
 import { SetupItemComments } from '@/components/setup-item-comments';
 import { StoreSelect } from '@/components/store-select';
 import { signedDocumentUrl, documentBucket, SIGNED_URL_TTL_SECONDS } from '@/lib/documents';
-import type { DocumentSource } from '@homeup/core';
 import { PopMenu, MenuItem, MenuLabel, MenuDivider } from './pop-menu';
 import { useRowContextMenu, withRowMenu } from '@/components/ui/row-context-menu';
 import { STATUS_FILL } from './setup-status';
@@ -102,16 +101,8 @@ const PRIORITY_META: Record<string, { Icon: LucideIcon; className: string }> = {
   low: { Icon: ChevronsDown, className: 'text-muted-foreground' },
 };
 
-export interface CommentSummary {
-  count: number;
-  latest: { content: string; user_id: string; created_at: string } | null;
-}
-
-/** A document linked to this setup item (FLUX-132: replaces the warranty link). */
-export interface SetupDocLink {
-  storagePath: string;
-  source: DocumentSource;
-}
+import type { SetupCommentSummary as CommentSummary, SetupDocLink } from '@homeup/core';
+export type { CommentSummary, SetupDocLink };
 
 interface SetupItemCardProps {
   item: SetupItem;

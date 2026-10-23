@@ -56,12 +56,11 @@ import { SummaryHero } from './summary-hero';
 import { useWeather } from './use-weather';
 import { useWideLayout } from '@/lib/desktop-layout';
 import { BudgetSpace, BillsSpace } from './money-spaces';
-import { isModuleShown } from './hero-modules';
 import { GroceriesWidget } from './groceries-widget';
 import { TonightMeal } from './tonight-meal';
 import { SetupTile, HomeSearchTile, ShopperTile, AssistantTile } from './section-tiles';
 import { DeskHome } from './desk-home';
-import { UpOverviewProvider } from '@homeup/core';
+import { UpOverviewProvider, isModuleShown } from '@homeup/core';
 import { upBankApi } from '@/lib/up-bank-client';
 
 // The bank overview wraps Home so the Budget figures follow real payments and

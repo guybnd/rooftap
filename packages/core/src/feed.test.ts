@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  compareHeroItems,
   NOW_QUEUE_MAX,
   earnedAllClear,
   feedDayLabel,
@@ -304,5 +305,30 @@ describe("heroItemEventDetails", () => {
     const groupEvent = { location: null, starts_at: "2026-10-18", ends_at: "2026-10-19", is_all_day: true } as never;
     expect(heroItemEventDetails(item({ groupEvent }))).toEqual({ location: null, endsAt: null, travelMode: null });
     expect(heroItemEventDetails(item())).toEqual({ location: null, endsAt: null, travelMode: null });
+  });
+});
+
+describe("compareHeroItems", () => {
+  const sorted = (items: HeroItem[], isToday: boolean) => [...items].sort((a, b) => compareHeroItems(a, b, isToday)).map((i) => i.id);
+
+  it("sinks done rows and puts overdue first on Today", () => {
+    const items = [
+      item({ id: "done", done: true }),
+      item({ id: "timed", dueTime: "09:00" }),
+      item({ id: "overdue", overdue: true, dueTime: "18:00" }),
+      item({ id: "untimed", title: "B" }),
+      item({ id: "untimedA", title: "A" }),
+    ];
+    expect(sorted(items, true)).toEqual(["overdue", "untimedA", "untimed", "timed", "done"]);
+  });
+
+  it("goes by day on the longer ranges, undated last", () => {
+    const items = [
+      item({ id: "undated", dueDate: null }),
+      item({ id: "tue", dueDate: "2026-10-20" }),
+      item({ id: "mon-late", dueDate: "2026-10-19", dueTime: "20:00" }),
+      item({ id: "mon-early", dueDate: "2026-10-19", dueTime: "08:00" }),
+    ];
+    expect(sorted(items, false)).toEqual(["mon-early", "mon-late", "tue", "undated"]);
   });
 });

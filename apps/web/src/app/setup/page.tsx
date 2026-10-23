@@ -1,27 +1,34 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useDataCache } from '@/lib/data-cache';
 import { createClient } from '@/lib/supabase/client';
-import { use$ } from '@legendapp/state/react';
-import { syncState } from '@legendapp/state';
 import {
-  setupItems$,
-  useReconnectSync,
-  useStoreHelpers,
-  useStoreLoaded,
-  seedTemplateItems,
   STATUS_ORDER,
   summarize,
   useModules,
   SETUP_STATUS_LABEL,
+  SETUP_STATUS_SEGMENTS,
   currencySymbol,
+  filterSetupItems,
+  groupSetupByRoom,
+  moveInRoom,
+  setupHeroCaption,
+  setupRoomNames,
+  setupStoreTrip,
+  topSetupRooms,
+  useSeedSetupTemplates,
+  useSetupFilters,
+  useSetupItems,
+  useSetupListModes,
+  useSetupNotice,
+  useSetupRowPortals,
+  useSetupStores,
 } from '@homeup/core';
 import { dialog } from '@homeup/core';
 import { ListGroup } from '@/components/ui/list-item';
-import type { SetupItem, SetupStore } from '@homeup/core';
+import type { SetupItem } from '@homeup/core';
 import { SetupItemModal } from './setup-item-modal';
-import { type CommentSummary, type SetupDocLink } from './setup-item-card';
 import { SortableSetupItem } from './setup-sortable-item';
 import { SectionSearchBar } from '@/components/section-search-bar';
 import { useFuzzySearch } from '@/hooks/use-fuzzy-search';
@@ -56,7 +63,6 @@ import {
 } from '@dnd-kit/core';
 import {
   SortableContext,
-  arrayMove,
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
@@ -64,15 +70,9 @@ import { useWideLayout } from '@/lib/desktop-layout';
 import { CareView } from './care/care-view';
 import { cn } from '@/lib/utils';
 
-// FLUX-150 slice 3: Legend-State local-first migration
-
-// The status filter as one segmented track (H5): the stored filter list
-// stays an array, so "All" is the empty list and each status is a list of one.
-type StatusSegment = 'all' | (typeof STATUS_ORDER)[number];
-const STATUS_SEGMENTS: { value: StatusSegment; label: string }[] = [
-  { value: 'all', label: 'All' },
-  ...STATUS_ORDER.map((s) => ({ value: s as StatusSegment, label: SETUP_STATUS_LABEL[s] })),
-];
+// FLUX-150 slice 3: Legend-State local-first migration. The list state and
+// its view logic are shared with mobile from @homeup/core (use-setup-list.ts,
+// setup-list-view.ts); this file only renders.
 
 // Header and filter controls share one height: 44px on phones (M2), compact
 // on desktop.
@@ -80,8 +80,6 @@ const CONTROL_H = 'h-11 sm:h-9';
 
 const BAR_BUTTON =
   'flex h-9 shrink-0 items-center gap-1 rounded-lg border border-border bg-secondary/60 px-2.5 text-xs font-medium text-secondary-foreground hover:bg-secondary';
-
-const STATUS_FILTER_KEY = 'setup_status_filters';
 
 type SetupView = 'setup' | 'care';
 const VIEW_SEGMENTS: { value: SetupView; label: string }[] = [
@@ -94,18 +92,14 @@ const money = (n: number) => `${currencySymbol()}${n.toLocaleString()}`;
 export default function SetupPage() {
   const { group, loading: cacheLoading, currentUserId, groupMembers, memberProfiles } = useDataCache();
 
-  const items$ = setupItems$(group?.id);
-  useReconnectSync(items$);
-  const { writeRow, patchRow, softDeleteRow } = useStoreHelpers(items$, currentUserId);
-
-  // Full list from the Legend store — filtered for deleted and sorted by sort_order.
-  const allSetupItems = use$(() =>
-    Object.values(items$.get() ?? {})
-      .filter((i): i is SetupItem => !!i && !i.deleted)
-      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-  );
-
-  const storeLoaded = useStoreLoaded(items$);
+  const {
+    items: allSetupItems,
+    loaded: storeLoaded,
+    writeRow,
+    patchRow,
+    softDeleteRow,
+    refresh,
+  } = useSetupItems(group?.id, currentUserId);
 
   // Modules: the "Doc" chip on a setup item needs documents and setup (module-features.ts).
   const modules = useModules();
@@ -126,81 +120,40 @@ export default function SetupPage() {
     window.history.replaceState(window.history.state, '', url);
   }, []);
 
-  const [stores, setStores] = useState<SetupStore[]>([]);
+  const { stores, addStore } = useSetupStores(group?.id, createClient);
   const wide = useWideLayout();
-  const [commentSummaries, setCommentSummaries] = useState<Record<string, CommentSummary>>({});
-  const [docLinksByItem, setDocLinksByItem] = useState<Record<string, SetupDocLink>>({});
-  const [search, setSearch] = useState('');
-  const [roomFilter, setRoomFilter] = useState<string | null>(null);
-  const [storeFilter, setStoreFilter] = useState<string | null>(null);
-  const [statusFilters, setStatusFilters] = useState<string[]>([]);
-  // mineOnly is now a client-side filter — currentUserId comes from DataCache.
-  const [mineOnly, setMineOnly] = useState(false);
+  const { commentSummaries, docLinks: docLinksByItem, refreshComments } = useSetupRowPortals({
+    groupId: group?.id,
+    getClient: createClient,
+    loaded: storeLoaded,
+    items: allSetupItems,
+    docsOn,
+  });
+  const filters = useSetupFilters({ restoreAfterMount: true });
+  const { search, setSearch, roomFilter, setRoomFilter, storeFilter, setStoreFilter, statusSegment, setStatusSegment, mineOnly, toggleMineOnly } = filters;
+  const {
+    collapsedRooms,
+    toggleRoomCollapsed,
+    selectMode,
+    toggleSelectMode,
+    exitSelectMode,
+    selectedIds,
+    toggleSelect,
+    clearOrExitSelect,
+    reorderMode,
+    startReorder,
+    exitReorder,
+  } = useSetupListModes();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<SetupItem | undefined>();
   const [defaultRoom, setDefaultRoom] = useState('');
-  const [isSeeding, setIsSeeding] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [collapsedRooms, setCollapsedRooms] = useState<Set<string>>(new Set());
-  const [selectMode, setSelectMode] = useState(false);
-  // Reorder mode (mirrors mobile, HOUP-129/174): the drag handle only shows
-  // here (Hearth §6), entered from the select bar.
-  const [reorderMode, setReorderMode] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-    const saved = localStorage.getItem(STATUS_FILTER_KEY);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) setStatusFilters(parsed);
-      } catch {
-        // ignore malformed
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!notice) return;
-    const t = setTimeout(() => setNotice(null), 5000);
-    return () => clearTimeout(t);
-  }, [notice]);
-
-  const clearStatusFilters = () => {
-    setStatusFilters([]);
-    localStorage.setItem(STATUS_FILTER_KEY, JSON.stringify([]));
-  };
-
-  const statusSegment: StatusSegment =
-    statusFilters.length === 1 ? (statusFilters[0] as StatusSegment) : 'all';
-  const setStatusSegment = (seg: StatusSegment) => {
-    if (seg === 'all') return clearStatusFilters();
-    setStatusFilters([seg]);
-    localStorage.setItem(STATUS_FILTER_KEY, JSON.stringify([seg]));
-  };
-
-  const toggleRoomCollapsed = (room: string) => {
-    setCollapsedRooms((prev) => {
-      const next = new Set(prev);
-      if (next.has(room)) next.delete(room);
-      else next.add(room);
-      return next;
-    });
-  };
-
-  const toggleSelect = (itemId: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(itemId)) next.delete(itemId);
-      else next.add(itemId);
-      return next;
-    });
-  };
-
-  const exitSelectMode = () => {
-    setSelectMode(false);
-    setSelectedIds(new Set());
-  };
+  const [notice, setNotice] = useSetupNotice();
+  const { isSeeding, seed: handleSeedTemplates } = useSeedSetupTemplates({
+    groupId: group?.id,
+    getClient: createClient,
+    refresh,
+    onNotice: setNotice,
+  });
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -214,120 +167,9 @@ export default function SetupPage() {
 
     const oldIndex = roomItems.findIndex((i) => i.id === active.id);
     const newIndex = roomItems.findIndex((i) => i.id === over.id);
-    if (oldIndex === -1 || newIndex === -1) return;
-
-    arrayMove(roomItems, oldIndex, newIndex).forEach((it, idx) => {
-      patchRow(it.id, { sort_order: idx } as Partial<SetupItem>);
+    moveInRoom(roomItems, oldIndex, newIndex).forEach(({ id, sort_order }) => {
+      patchRow(id, { sort_order } as Partial<SetupItem>);
     });
-  };
-
-  const fetchCommentSummaries = useCallback(async (itemIds: string[]) => {
-    if (itemIds.length === 0) {
-      setCommentSummaries({});
-      return;
-    }
-    const supabase = createClient();
-    const { data } = await supabase
-      .from('setup_item_comments')
-      .select('setup_item_id, content, user_id, created_at')
-      .in('setup_item_id', itemIds)
-      .order('created_at', { ascending: false });
-
-    const summaries: Record<string, CommentSummary> = {};
-    for (const c of data ?? []) {
-      const existing = summaries[c.setup_item_id];
-      if (existing) {
-        existing.count += 1;
-      } else {
-        summaries[c.setup_item_id] = {
-          count: 1,
-          latest: { content: c.content, user_id: c.user_id, created_at: c.created_at },
-        };
-      }
-    }
-    setCommentSummaries(summaries);
-  }, []);
-
-  const fetchStores = useCallback(async () => {
-    if (!group?.id) return;
-    const supabase = createClient();
-    const { data } = await supabase
-      .from('setup_stores')
-      .select('*')
-      .eq('group_id', group.id)
-      .order('name', { ascending: true });
-    setStores(data ?? []);
-  }, [group?.id]);
-
-  const fetchSetupDocs = useCallback(async () => {
-    if (!group?.id) {
-      setDocLinksByItem({});
-      return;
-    }
-    const supabase = createClient();
-    const { data } = await supabase
-      .from('document_links')
-      .select('entity_id, created_at, documents(storage_path, source)')
-      .eq('group_id', group.id)
-      .eq('entity_type', 'setup_item')
-      .order('created_at', { ascending: false });
-
-    const map: Record<string, SetupDocLink> = {};
-    for (const row of (data ?? []) as unknown as Array<{ entity_id: string; documents: { storage_path: string; source: SetupDocLink['source'] } | null }>) {
-      if (!row.documents || map[row.entity_id]) continue;
-      map[row.entity_id] = { storagePath: row.documents.storage_path, source: row.documents.source };
-    }
-    setDocLinksByItem(map);
-  }, [group?.id]);
-
-  // Fetch stores when group loads (stores are not in the Legend store).
-  useEffect(() => {
-    if (group?.id) void fetchStores();
-  }, [group?.id, fetchStores]);
-
-  // Fetch comments and doc-links once, when the Legend store finishes its initial sync.
-  const commentsFetchedRef = useRef(false);
-  useEffect(() => {
-    if (!storeLoaded || commentsFetchedRef.current) return;
-    commentsFetchedRef.current = true;
-    const ids = allSetupItems.map((i) => i.id);
-    if (ids.length > 0) {
-      void fetchCommentSummaries(ids);
-    }
-  // allSetupItems is intentionally omitted — we only want to run this once.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storeLoaded, fetchCommentSummaries]);
-
-  // Doc chips: fetched once the store has synced and Documents is on, which
-  // may be later than the first load if the owner switches Documents on.
-  const docsFetchedRef = useRef(false);
-  useEffect(() => {
-    if (!storeLoaded || !docsOn || docsFetchedRef.current) return;
-    docsFetchedRef.current = true;
-    void fetchSetupDocs();
-  }, [storeLoaded, docsOn, fetchSetupDocs]);
-
-  const handleSeedTemplates = async () => {
-    if (!group?.id) return;
-    setIsSeeding(true);
-    const supabase = createClient();
-    try {
-      const count = await seedTemplateItems(group.id, supabase);
-      if (count > 0) {
-        // Pull newly seeded items into the Legend store, then fetch their comments.
-        await syncState(items$).sync();
-        const ids = allSetupItems.map((i) => i.id);
-        if (ids.length > 0) void fetchCommentSummaries(ids);
-        setNotice(`Added ${count} starter item${count === 1 ? '' : 's'}.`);
-      } else {
-        setNotice('Starter items are already in your list.');
-      }
-    } catch (error) {
-      console.error('Failed to seed templates:', error);
-      setNotice('Could not add starter items.');
-    } finally {
-      setIsSeeding(false);
-    }
   };
 
   const bulkUpdate = (payload: Partial<SetupItem>) => {
@@ -351,46 +193,24 @@ export default function SetupPage() {
   };
 
   // Client-side filters: room, store, status, mine only.
-  const filteredItems = allSetupItems.filter((item) => {
-    if (roomFilter && item.room !== roomFilter) return false;
-    if (storeFilter && item.store_id !== storeFilter) return false;
-    if (statusFilters.length > 0 && !statusFilters.includes(item.status)) return false;
-    if (mineOnly && item.assigned_to !== currentUserId) return false;
-    return true;
-  });
+  const filteredItems = filterSetupItems(allSetupItems, filters, currentUserId);
 
   const searchedItems = useFuzzySearch(filteredItems, search, ['name', 'notes', 'where_to_buy', 'room']);
 
   // Reorder mode always works on the unfiltered list (as on mobile): reindexing
   // a filtered subset would scramble the order of the hidden items.
-  const groupedByRoom = (reorderMode ? allSetupItems : searchedItems).reduce((acc, item) => {
-    const room = item.room || 'Other';
-    if (!acc[room]) acc[room] = [];
-    acc[room].push(item);
-    return acc;
-  }, {} as Record<string, SetupItem[]>);
+  const groupedByRoom = groupSetupByRoom(reorderMode ? allSetupItems : searchedItems);
 
-  const existingRooms = Array.from(
-    new Set(allSetupItems.map((i) => i.room).filter(Boolean))
-  ).sort() as string[];
+  const existingRooms = setupRoomNames(allSetupItems);
 
   const overall = summarize(allSetupItems);
   const doneCount = overall.total - overall.outstanding;
 
   // Per-room summaries for the pulse strip's top-rooms tiles (Hearth 5 /
-  // FLUX-277) — unfiltered by search/room/store/mine-only so the tiles read as
-  // stable overview stats, not a moving target while the list below is filtered.
-  // Picks the rooms with the most work outstanding (falls back to the largest
-  // rooms once everything's done), capped at two per "a couple of top rooms".
-  const allRoomsGrouped = allSetupItems.reduce((acc, item) => {
-    const room = item.room || 'Other';
-    (acc[room] ??= []).push(item);
-    return acc;
-  }, {} as Record<string, SetupItem[]>);
-  const topRoomSummaries = Object.entries(allRoomsGrouped)
-    .map(([room, roomItems]) => ({ room, ...summarize(roomItems) }))
-    .sort((a, b) => b.outstanding - a.outstanding || b.total - a.total)
-    .slice(0, 2);
+  // FLUX-277), unfiltered so the tiles read as stable overview stats.
+  const topRoomSummaries = topSetupRooms(allSetupItems);
+
+  const storeTrip = setupStoreTrip(filteredItems, storeFilter, stores);
 
   if (cacheLoading || (!storeLoaded && allSetupItems.length === 0)) {
     return <div className="p-6 text-muted-foreground">Loading...</div>;
@@ -442,19 +262,12 @@ export default function SetupPage() {
           value={overall.outstanding}
           label="to get"
           meter={doneCount > 0 ? { done: doneCount, total: overall.total } : undefined}
-          caption={(() => {
-            if (overall.total === 0) return undefined;
-            const fragments = [
-              overall.outstanding === 0 ? 'All set up' : doneCount > 0 ? `${doneCount} done` : null,
-              overall.spent > 0 ? `${money(overall.spent)} spent` : null,
-            ].filter(Boolean);
-            return fragments.length ? fragments.join(' · ') : undefined;
-          })()}
+          caption={setupHeroCaption(overall, money)}
         />
         <div className="flex items-center gap-2">
           {reorderMode ? (
             <button
-              onClick={() => setReorderMode(false)}
+              onClick={exitReorder}
               className={`${headerButtonClass} border-primary/40 bg-primary/15 px-4 text-primary`}
             >
               Done
@@ -462,7 +275,7 @@ export default function SetupPage() {
           ) : (
             allSetupItems.length > 0 && (
               <button
-                onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
+                onClick={toggleSelectMode}
                 aria-pressed={selectMode}
                 className={`${headerButtonClass} px-3.5 ${
                   selectMode
@@ -476,7 +289,7 @@ export default function SetupPage() {
             )
           )}
           <button
-            onClick={() => void syncState(items$).sync()}
+            onClick={() => void refresh()}
             className={`${headerButtonClass} aspect-square border-border bg-secondary text-secondary-foreground hover:bg-accent`}
             aria-label="Refresh"
           >
@@ -545,7 +358,7 @@ export default function SetupPage() {
           />
           <div className="flex items-center gap-2">
             <SegmentedControl
-              options={STATUS_SEGMENTS}
+              options={SETUP_STATUS_SEGMENTS}
               value={statusSegment}
               onChange={setStatusSegment}
               size="sm"
@@ -553,7 +366,7 @@ export default function SetupPage() {
               className={`${CONTROL_H} flex-1 sm:flex-none`}
             />
             <button
-              onClick={() => setMineOnly((v) => !v)}
+              onClick={toggleMineOnly}
               aria-pressed={mineOnly}
               className={`${CONTROL_H} shrink-0 whitespace-nowrap rounded-lg border px-3 text-xs font-medium transition-colors ${
                 mineOnly
@@ -596,10 +409,10 @@ export default function SetupPage() {
       )}
 
       {/* Store shopping-trip summary */}
-      {storeFilter && (() => {
-        const trip = summarize(filteredItems);
+      {storeTrip && (() => {
+        const trip = storeTrip;
         const bought = trip.total - trip.outstanding;
-        const storeName = stores.find((s) => s.id === storeFilter)?.name ?? 'Store';
+        const storeName = trip.storeName;
         return (
           // H2: a neutral card with the Setup tile; coral is for controls.
           <div className="sticky top-0 z-20 space-y-2.5 rounded-3xl border border-border/60 bg-card px-4 py-3 shadow-[var(--card-shadow)]">
@@ -623,8 +436,8 @@ export default function SetupPage() {
 
       {/* Items grouped by room. Hearth §13.7 "Desktop shell": on a wide
           screen the rooms flow into columns, like Groceries' aisles. */}
-      <div className={wide && Object.keys(groupedByRoom).length > 0 ? 'columns-2 gap-5 xl:columns-3 [&>*]:mb-4 [&>*]:break-inside-avoid' : 'space-y-3'}>
-        {Object.entries(groupedByRoom).length === 0 ? (
+      <div className={wide && groupedByRoom.size > 0 ? 'columns-2 gap-5 xl:columns-3 [&>*]:mb-4 [&>*]:break-inside-avoid' : 'space-y-3'}>
+        {groupedByRoom.size === 0 ? (
           <div className="space-y-3 rounded-3xl border border-border/60 bg-card p-10 text-center shadow-[var(--card-shadow)]">
             <p className="text-muted-foreground">
               {allSetupItems.length === 0
@@ -643,7 +456,7 @@ export default function SetupPage() {
             )}
           </div>
         ) : (
-          Object.entries(groupedByRoom).map(([room, roomItems]) => {
+          Array.from(groupedByRoom.entries()).map(([room, roomItems]) => {
             const collapsed = collapsedRooms.has(room);
             const roll = summarize(roomItems);
             return (
@@ -705,10 +518,8 @@ export default function SetupPage() {
                                 setEditingItem(it);
                                 setIsModalOpen(true);
                               }}
-                              onCommentsChanged={() =>
-                                fetchCommentSummaries(allSetupItems.map((i) => i.id))
-                              }
-                              onStoreCreated={(store) => setStores((prev) => [...prev, store])}
+                              onCommentsChanged={refreshComments}
+                              onStoreCreated={addStore}
                             />
                           ))}
                         </ListGroup>
@@ -755,10 +566,7 @@ export default function SetupPage() {
 
           {selectedIds.size === 0 && (
             <button
-              onClick={() => {
-                exitSelectMode();
-                setReorderMode(true);
-              }}
+              onClick={startReorder}
               className={BAR_BUTTON}
             >
               <ArrowUpDown className="h-3.5 w-3.5" />
@@ -838,7 +646,7 @@ export default function SetupPage() {
           )}
 
           <button
-            onClick={() => (selectedIds.size > 0 ? setSelectedIds(new Set()) : exitSelectMode())}
+            onClick={clearOrExitSelect}
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
             aria-label={selectedIds.size > 0 ? 'Clear selection' : 'Exit select mode'}
           >
@@ -855,7 +663,7 @@ export default function SetupPage() {
         existingRooms={existingRooms}
         stores={stores}
         defaultRoom={defaultRoom}
-        onStoreCreated={(store) => setStores((prev) => [...prev, store])}
+        onStoreCreated={addStore}
         onClose={() => {
           setIsModalOpen(false);
           setEditingItem(undefined);

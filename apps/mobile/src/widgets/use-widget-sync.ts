@@ -32,11 +32,12 @@ import {
   type GroupEvent,
   type HouseholdTask,
   type WidgetSummary,
+  budgetPulseTone,
+  upcomingBills,
+  BILLS_DUE_MAX_ROWS,
 } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
 import { readHomeHiddenEventIds } from '@/lib/home-hidden-events';
-import { upcomingBills, BILLS_DUE_MAX_ROWS } from '@/features/home/hero-modules';
-import { deriveBudgetPulseTone } from '@/features/home/budget-tile';
 import { isWeatherStale, readWeatherCache } from './weather-cache';
 import { writeWidgetSnapshot } from './widget-snapshot';
 import { tasksWidgetRepresentation } from './TasksWidget';
@@ -128,7 +129,7 @@ export function useWidgetSync(): void {
       const monthlyTotalCents = totalForPeriod(costItemsList.filter((c) => !isOneOff(c)), 'monthly');
       const budget =
         budgetCents != null
-          ? { spentCents: monthlyTotalCents, budgetCents, tone: deriveBudgetPulseTone(budgetCents, monthlyTotalCents), currencySymbol: currencySymbol() }
+          ? { spentCents: monthlyTotalCents, budgetCents, tone: budgetPulseTone(budgetCents, monthlyTotalCents), currencySymbol: currencySymbol() }
           : null;
       const bills = costsOn
         ? upcomingBills(costItemsList, now)

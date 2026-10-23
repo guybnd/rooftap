@@ -1,21 +1,11 @@
 import { Pressable, View } from 'react-native';
 import { ChevronDown, Plus, RotateCw, Sparkles, Store as StoreIcon } from 'lucide-react-native';
 import { Text, Button, Card, HeroLede, LeadingTile, PulseTile, SectionSearchBar, SegmentedControl, cn } from '@homeup/ui';
-import { STATUS_ORDER, type SetupItem, type SetupStore, type SetupSummary, SETUP_STATUS_LABEL, currencySymbol } from '@homeup/core';
+import { SETUP_STATUS_SEGMENTS, setupHeroCaption, type SetupItem, type SetupStore, type SetupSummary, type SetupStatusSegment, currencySymbol } from '@homeup/core';
 import { BudgetSummary } from '@/features/setup/budget-summary';
 import { SegmentedBar } from '@/features/setup/segmented-bar';
 
 export const money = (n: number) => `${currencySymbol()}${n.toLocaleString()}`;
-
-// The status filter as one segmented track (H5), mirroring web page.tsx: the
-// stored filter list stays an array, so "All" is the empty list and each
-// status is a list of one.
-export type StatusSegment = 'all' | (typeof STATUS_ORDER)[number];
-
-export const STATUS_SEGMENTS: { value: StatusSegment; label: string }[] = [
-  { value: 'all', label: 'All' },
-  ...STATUS_ORDER.map((s) => ({ value: s as StatusSegment, label: SETUP_STATUS_LABEL[s] })),
-];
 
 // Filter chips: neutral at rest, the interactive accent when on (H2).
 export const chipClass = (active: boolean) =>
@@ -37,8 +27,8 @@ export interface SetupListHeaderProps {
   notice: string | null;
   search: string;
   onSearchChange: (value: string) => void;
-  statusSegment: StatusSegment;
-  onStatusSegmentChange: (segment: StatusSegment) => void;
+  statusSegment: SetupStatusSegment;
+  onStatusSegmentChange: (segment: SetupStatusSegment) => void;
   mineOnly: boolean;
   onToggleMineOnly: () => void;
   existingRooms: string[];
@@ -128,14 +118,7 @@ export function SetupListHeader({
         value={overall.outstanding}
         label="to get"
         meter={doneCount > 0 ? { done: doneCount, total: overall.total } : undefined}
-        caption={(() => {
-          if (overall.total === 0) return undefined;
-          const fragments = [
-            overall.outstanding === 0 ? 'All set up' : doneCount > 0 ? `${doneCount} done` : null,
-            overall.spent > 0 ? `${money(overall.spent)} spent` : null,
-          ].filter(Boolean);
-          return fragments.length ? fragments.join(' · ') : undefined;
-        })()}
+        caption={setupHeroCaption(overall, money)}
       />
 
       {/* Pulse strip: with a single room its tile would restate the Hero
@@ -183,7 +166,7 @@ export function SetupListHeader({
               neutral segmented track instead of red/green chips (mirrors web). */}
           <View className="flex-row items-center gap-2">
             <SegmentedControl
-              options={STATUS_SEGMENTS}
+              options={SETUP_STATUS_SEGMENTS}
               value={statusSegment}
               onChange={onStatusSegmentChange}
               size="sm"

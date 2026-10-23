@@ -45,9 +45,6 @@ export const HUB = {
   GROCERY_SUGGEST_CAP,
   /** How long a just-marked 'have' row lingers before fading out of the hub list. */
   HAVE_LINGER_MS: 10_000,
-  /** Budget colour thresholds (percent of monthly budget spent). */
-  BUDGET_YELLOW_PCT: 80,
-  BUDGET_RED_PCT: 100,
 } as const;
 
 export type MemberProfiles = Record<string, { email: string; name: string | null; avatar: string | null }>;

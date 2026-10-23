@@ -10,20 +10,11 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { DateScrollField } from '@/components/date-scroll-field';
 import type { UserSettings } from '@homeup/core';
-import { useModules } from '@homeup/core';
-import { availableHeroModules, isModuleEnabled, type HeroModuleGroup } from './hero-modules';
+import { HERO_GROUP_LABELS, HERO_GROUP_ORDER, isModuleEnabled, useModules } from '@homeup/core';
+import { availableHeroModules } from './hero-modules';
 
 type Countdown = UserSettings['home_hero_countdown'];
 
-const GROUP_LABELS: Record<HeroModuleGroup, string> = {
-  header: 'Weather',
-  day: 'Your day',
-  home: 'Shortcuts, up to 3',
-  tips: 'Smart tips',
-  spaces: 'Spaces',
-};
-
-const GROUP_ORDER: HeroModuleGroup[] = ['header', 'day', 'tips', 'home', 'spaces'];
 
 export function HeroCustomizeSheet({
   open,
@@ -59,11 +50,11 @@ export function HeroCustomizeSheet({
     >
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-none px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
         <p className="font-heading text-base font-semibold text-foreground">Customize your summary</p>
-        {GROUP_ORDER.map((group) => {
+        {HERO_GROUP_ORDER.map((group) => {
           const modules = available.filter((m) => m.group === group);
           if (modules.length === 0) return null;
           return (
-            <FormSection key={group} title={GROUP_LABELS[group]}>
+            <FormSection key={group} title={HERO_GROUP_LABELS[group]}>
               {modules.map((m) => {
                 const isCountdownRow = m.key === 'countdown';
                 const countdownOn = isCountdownRow && isModuleEnabled(m.key, config);

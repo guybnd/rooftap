@@ -14,6 +14,7 @@ import { Plus, Receipt, Wallet } from 'lucide-react';
 import type { CostItem, Group } from '@homeup/core';
 import {
   CATEGORY_COLOR,
+  budgetPulseTone,
   SPACE_COLLAPSED_ROWS,
   buildBillsLens,
   buildBudgetLens,
@@ -29,13 +30,13 @@ import {
 import { ProgressBar } from '@/components/ui/progress-bar';
 import { CostModal } from '@/app/costs/cost-modal';
 import { CategoryGlyph } from '@/app/costs/category-glyph';
-import { HUB, HubTile, TileHeader, stopNav } from './hub-shared';
+import { HubTile, TileHeader, stopNav } from './hub-shared';
+
+const TONE_FILL = { success: 'bg-success', warning: 'bg-warning', danger: 'bg-destructive' } as const;
 
 function budgetTone(lens: BudgetLens): string {
   if (lens.budgetCents == null) return 'bg-foreground/45';
-  if (lens.spentCents >= (lens.budgetCents * HUB.BUDGET_RED_PCT) / 100) return 'bg-destructive';
-  if (lens.spentCents >= (lens.budgetCents * HUB.BUDGET_YELLOW_PCT) / 100) return 'bg-warning';
-  return 'bg-success';
+  return TONE_FILL[budgetPulseTone(lens.budgetCents, lens.spentCents)];
 }
 
 export function BudgetSpace({

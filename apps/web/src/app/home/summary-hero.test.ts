@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { ALL_MODULE_IDS, isFeatureEnabled, type ModuleFeatureId, type ModuleId } from "@homeup/core";
+import { ALL_MODULE_IDS, isFeatureEnabled, isModuleShown, type ModuleFeatureId, type ModuleId } from "@homeup/core";
 import { selectRenderedTips } from "./summary-hero";
-import { HERO_MODULES, availableHeroModules, isModuleShown, type HeroModuleContext } from "./hero-modules";
+import { HERO_MODULES, availableHeroModules, type HeroModuleContext } from "./hero-modules";
 import type { WeatherData } from "./use-weather";
 
 // HOUP-14: integration test for the density-cap loop at summary-hero.tsx —

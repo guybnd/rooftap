@@ -88,18 +88,12 @@ import {
   computeAllClearStreak,
   countNeeded,
   countdownDisplay,
-  currentUvIndex,
   daysUntilLabel,
   formatMoney,
-  isDryingDay,
   isOneOff,
-  rainLaterLabel,
-  sunsetInfo,
   totalForPeriod,
-  weatherRecommendation,
   buildDayRibbon,
   skyHeadline,
-  UV_HIGH_THRESHOLD,
   MOTION_DURATIONS_MS,
   householdTasks$,
   groupEvents$,
@@ -145,7 +139,6 @@ import {
   type HeroRange,
   type HouseholdTask,
   type GroupEvent,
-  compareStrings,
   hasVisibleReminders,
   upcomingWindowDays,
   ALL_CLEAR_MOMENT_STORAGE_KEY,
@@ -156,6 +149,17 @@ import {
   heroItemSectionId,
   pickNowQueue,
   todayProgress,
+  budgetPulseTone as toneForBudget,
+  coarseCountdown,
+  compareHeroItems,
+  heroTips,
+  isCountdownDueSoon,
+  isModuleShown,
+  unassignedCount,
+  upcomingBills,
+  whosOnHookBuckets,
+  BILLS_DUE_MAX_ROWS,
+  type HeroTipGlyph,
 } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
 import { useOpenRoute } from '@/lib/tab-routes';
@@ -166,8 +170,6 @@ import { useWeather } from '@/features/home/use-weather';
 import { DayRibbon, SkyBlock, SkyNote, useSkyRibbonOpen } from '@/features/home/sky';
 import { EventCardFooter } from '@/features/home/event-card-footer';
 import { BinLids } from '@/features/bins/bin-lids';
-import { isModuleShown, upcomingBills, BILLS_DUE_MAX_ROWS } from '@/features/home/hero-modules';
-import { deriveBudgetPulseTone } from '@/features/home/budget-tile';
 import { useHeroModuleConfig } from '@/features/home/use-hero-module-config';
 import { HeroCustomizeSheet } from '@/features/home/hero-customize-sheet';
 import { GroceriesWidget } from '@/features/home/groceries-widget';
@@ -187,29 +189,8 @@ import { randomUUID } from '@/lib/uuid';
 import { sectionIconFor } from '@/lib/section-icons';
 import { nativeStoreEnvironment } from '@/lib/legend/environment';
 
-// HOUP-172: coarseCountdown/isCountdownDueSoon port apps/web's
-// app/home/hero-modules.tsx (kept local — that's a web-only, JSX-adjacent
-// module apps/mobile can't import).
-
-/** Coarse "in Nh" / "in Nm" from `now` to today's `dueTime` (HH:MM). No live ticking. */
-function coarseCountdown(now: Date, dueTime: string): string {
-  const [h, m] = dueTime.split(':').map(Number);
-  const due = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m);
-  const diffMin = Math.round((due.getTime() - now.getTime()) / 60_000);
-  if (diffMin <= 0) return 'now';
-  if (diffMin < 60) return `in ${diffMin}m`;
-  return `in ${Math.round(diffMin / 60)}h`;
-}
-
-/** True when a countdown string means "due within the hour" — the only case the Hearth lede's time chip goes warning-amber. */
-function isCountdownDueSoon(countdown: string): boolean {
-  return countdown === 'now' || /^in \d+m$/.test(countdown);
-}
-
-// HOUP-172: people-line helpers, ported from web's whosOnHookBuckets/
-// unassignedCount (apps/web/src/app/home/hero-modules.tsx). "On the hook" =
-// actionable items only, not appointments — keeps the two counts in
-// agreement (frozen decision inherited from web's FLUX-254 plan).
+// The people line's helpers (whosOnHookBuckets, unassignedCount) and the
+// lede's countdown come from core's home/hero-modules.ts, shared with web.
 type MemberProfiles = Record<string, { email: string; name: string | null; avatar: string | null }>;
 
 function memberLabel(userId: string | null, profiles: MemberProfiles): string {
@@ -217,34 +198,6 @@ function memberLabel(userId: string | null, profiles: MemberProfiles): string {
   const profile = profiles[userId];
   if (!profile) return 'Former member';
   return profile.name || profile.email || 'Member';
-}
-
-function isHookable(item: HeroItem): boolean {
-  return item.type === 'task' || item.type === 'reminder';
-}
-
-/** Per-assignee open-item counts for today's hookable items, current user first. */
-function whosOnHookBuckets(
-  items: HeroItem[],
-  currentUserId: string | null,
-  memberProfiles: MemberProfiles
-): { assigneeIds: string[]; countFor: (id: string) => number } {
-  const hookItems = items.filter((i) => !i.done && isHookable(i));
-  const buckets = new Map<string | null, number>();
-  for (const item of hookItems) buckets.set(item.assignedTo, (buckets.get(item.assignedTo) ?? 0) + 1);
-  const assigneeIds = [...buckets.keys()]
-    .filter((id): id is string => id !== null)
-    .sort((a, b) => {
-      if (a === currentUserId) return -1;
-      if (b === currentUserId) return 1;
-      return memberLabel(a, memberProfiles).localeCompare(memberLabel(b, memberProfiles));
-    });
-  return { assigneeIds, countFor: (id) => buckets.get(id) ?? 0 };
-}
-
-/** Count of today's open hookable items nobody's picked up (feeds the people line's nudge chip). */
-function unassignedCount(items: HeroItem[]): number {
-  return items.filter((i) => !i.done && isHookable(i) && i.assignedTo === null).length;
 }
 
 function PersonAvatar({ userId, profiles, size = 18 }: { userId: string | null; profiles: MemberProfiles; size?: number }) {
@@ -265,46 +218,23 @@ function PersonAvatar({ userId, profiles, size = 18 }: { userId: string | null; 
   );
 }
 
-// HOUP-204: apps/web's local weather-tips.ts maps weatherRecommendation's
-// `kind` to a lucide-react Icon directly (a contract packages/core's
-// platform-agnostic version deliberately can't carry — see the core file's
-// header comment); this is that mapping's lucide-react-native equivalent.
-const WEATHER_TIP_RAIN_ICON: Record<'rain' | 'snow' | 'hot' | 'cold', LucideIcon> = {
+// Core heroTips picks the lines (first two that qualify); this maps each
+// tip's glyph to its lucide-react-native icon.
+const TIP_ICON: Record<HeroTipGlyph, LucideIcon> = {
   rain: CloudRain,
   snow: CloudSnow,
   hot: Sun,
   cold: CloudSnow,
+  uv: Sun,
+  drying: Wind,
+  sunset: Sunset,
 };
-
-// HOUP-204: web caps the tips group to the first 2 *qualifying* tips in
-// registry priority order (FLUX-256 density guardrail) — mobile pushed every
-// qualifying tip with no cap.
-const TIPS_MAX_ROWS = 2;
 
 // Hearth v2: the home-group shortcuts show one compact row of at most three (web summary-hero.tsx SHORTCUTS_CAP).
 const SHORTCUTS_CAP = 3;
 
 // ── HOUP-150: interactive Today hero (range/type/mine + day grouping) ──────
 type TypeFilter = HeroTypeFilter;
-
-// FLUX-239 parity: done rows sink last; Today ties break on overdue-first,
-// Week/Month ties break chronologically by day — mirrors web today-hero.tsx.
-function compareHeroItems(a: HeroItem, b: HeroItem, isToday: boolean): number {
-  if (a.done !== b.done) return a.done ? 1 : -1;
-  if (isToday) {
-    if (a.overdue !== b.overdue) return a.overdue ? -1 : 1;
-  } else {
-    const ad = a.dueDate ?? '9999-99-99';
-    const bd = b.dueDate ?? '9999-99-99';
-    if (ad !== bd) return ad.localeCompare(bd);
-  }
-  const at = a.dueTime ?? '';
-  const bt = b.dueTime ?? '';
-  if (!at && bt) return -1;
-  if (at && !bt) return 1;
-  if (at !== bt) return at < bt ? -1 : 1;
-  return compareStrings(a.title, b.title);
-}
 
 // Hearth v2 (Feed): the feed's day header (core groupFeedItems/feedDayLabel)
 // — mirrors web's FeedHeader. Earlier is the overdue pile, so it reads in
@@ -687,28 +617,8 @@ function HomeSectionBody() {
     haptics.celebrate();
   };
 
-  // HOUP-204: capped to the first TIPS_MAX_ROWS *qualifying* tips (registry
-  // priority order, mirrors web's FLUX-256 density guardrail) — must gate on
-  // qualification, not just "enabled", so an enabled-but-not-qualifying tip
-  // can't steal a slot from a lower-priority one that does qualify.
-  const tips: { key: string; text: string; Icon: LucideIcon }[] = [];
-  if (weather) {
-    if (tips.length < TIPS_MAX_ROWS && heroOn('tipRain')) {
-      const rec = weatherRecommendation({ weatherCode: weather.weatherCode, tempC: weather.tempC, rainLaterLabel: rainLaterLabel(weather, now) });
-      if (rec) tips.push({ key: 'tipRain', text: rec.text, Icon: WEATHER_TIP_RAIN_ICON[rec.kind] });
-    }
-    if (tips.length < TIPS_MAX_ROWS && heroOn('tipUv')) {
-      const uv = currentUvIndex(weather, now);
-      if (uv != null && uv >= UV_HIGH_THRESHOLD) tips.push({ key: 'tipUv', text: 'UV is high, wear sunscreen', Icon: Sun });
-    }
-    if (tips.length < TIPS_MAX_ROWS && heroOn('tipDrying') && isDryingDay(weather, now)) {
-      tips.push({ key: 'tipDrying', text: 'Great day to dry laundry outside', Icon: Wind });
-    }
-    if (tips.length < TIPS_MAX_ROWS && heroOn('tipSunset')) {
-      const info = sunsetInfo(weather);
-      if (info) tips.push({ key: 'tipSunset', text: `Sunset ${info.sunset} · golden hour ${info.goldenHour}`, Icon: Sunset });
-    }
-  }
+  // The first two tips that are on and qualify, in registry order (core heroTips).
+  const tips = heroTips(weather, now, heroOn).map((tip) => ({ ...tip, Icon: TIP_ICON[tip.glyph] }));
 
   // ── HOUP-150: interactive Today hero — range/type/mine controls and
   // gesture rows via the native TaskRow. Hearth v2 (heading menu): the
@@ -832,7 +742,7 @@ function HomeSectionBody() {
   // internally, mirroring web's CostsTile — this pulse tile is a separate
   // keeper and stays untouched.
   const showBudgetPulseTile = heroOn('budgetPulse') && budgetCents != null;
-  const budgetPulseTone = budgetCents != null ? deriveBudgetPulseTone(budgetCents, costs.monthlyTotalCents) : 'success';
+  const budgetPulseTone = budgetCents != null ? toneForBudget(budgetCents, costs.monthlyTotalCents) : 'success';
 
   // HOUP-172: pulse tiles (item 2) — same qualification rules as web's
   // billsDue/shoppingList/setupProgress modules (a module renders nothing,

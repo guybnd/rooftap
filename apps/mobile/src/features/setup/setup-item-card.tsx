@@ -54,7 +54,6 @@ import {
   documentBucket,
   type SetupItem,
   type SetupStore,
-  type DocumentSource,
   SETUP_STATUS_LABEL,
   currencySymbol,
   scoutPrefillFromSetupItem,
@@ -76,11 +75,8 @@ const PRIORITY_META: Record<string, { Icon: LucideIcon; className: string }> = {
   low: { Icon: ChevronsDown, className: 'text-muted-foreground' },
 };
 
-/** A document linked to this setup item — mirrors web's SetupDocLink (apps/web/src/app/setup/setup-item-card.tsx). */
-export interface SetupDocLink {
-  storagePath: string;
-  source: DocumentSource;
-}
+import type { SetupDocLink } from '@homeup/core';
+export type { SetupDocLink };
 
 interface SetupItemCardProps {
   item: SetupItem;

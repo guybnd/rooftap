@@ -27,10 +27,10 @@ import {
   type CostCategory,
   type CostItem,
   type Group,
+  budgetPulseTone,
 } from '@homeup/core';
 import { CostModal } from '@/features/costs/cost-modal';
 import { CATEGORY_BAR_FILL, CategoryChip } from '@/features/costs/cost-card';
-import { deriveBudgetPulseTone } from './budget-tile';
 import { TileHeader } from './section-tiles';
 
 
@@ -64,7 +64,7 @@ export function BudgetSpace({
   const lineById = new Map(costItems.map((c) => [c.id, c]));
   const over = lens.leftCents != null && lens.leftCents < 0;
   const discount = lens.endingDiscounts[0];
-  const tone = lens.budgetCents != null ? deriveBudgetPulseTone(lens.budgetCents, lens.spentCents) : 'success';
+  const tone = lens.budgetCents != null ? budgetPulseTone(lens.budgetCents, lens.spentCents) : 'success';
   const bars = expanded ? lens.categories : lens.categories.slice(0, SPACE_COLLAPSED_ROWS);
 
   return (
