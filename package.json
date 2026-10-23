@@ -20,6 +20,7 @@
     "check": "node scripts/whats-new.mjs check && turbo run typecheck test lint",
     "check:web": "turbo run typecheck test smoke --filter=web",
     "db:types": "node scripts/db-types.mjs",
+    "new-module": "node scripts/new-module.mjs",
     "postinstall": "node -e \"require('fs').existsSync('scripts/whats-new.mjs') && require('child_process').execFileSync(process.execPath, ['scripts/whats-new.mjs'], { stdio: 'inherit' })\" && (patch-package || node -e \"process.exit(process.env.VERCEL ? 0 : 1)\")"
   },
   "devDependencies": {

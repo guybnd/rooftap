@@ -68,11 +68,11 @@ import {
   occasionTitle,
   type Occasion,
 } from "@homeup/core";
-import type { createAdminClient } from "@/lib/supabase/admin";
 import { memberNames } from "@/lib/member-names";
 import { personTimeZone, todayIn } from "@/lib/meal-plan-server";
 import { householdCostMonths } from "@/lib/cost-month-server";
-import type { HouseholdTool, HouseholdToolContext, ToolResult } from "./household-tools";
+import type { HouseholdTool, HouseholdToolContext } from "./household-tools";
+import { compact, fail, ISO_DATE, liveRows, ok, toolRegistrar, type Admin, type Row } from "./tool-kit";
 
 // The household tools for the modules that came after the first set: Rewards,
 // Bin night, Home care, Shopper's watchlist, new checklists, saving a recipe,
@@ -81,30 +81,6 @@ import type { HouseholdTool, HouseholdToolContext, ToolResult } from "./househol
 // the group by hand and repeats the module's privacy rule (another member's
 // private loyalty card or Setup item, a watch kept from this person).
 // Each tool's module is in MCP_TOOLS (core mcp-tools.ts), which gates it.
-
-type Admin = ReturnType<typeof createAdminClient>;
-type Row = Record<string, unknown>;
-
-function ok(body: unknown): ToolResult {
-  return { content: [{ type: "text", text: JSON.stringify(body) }] };
-}
-
-function fail(message: string): ToolResult {
-  return { content: [{ type: "text", text: JSON.stringify({ error: message }) }], isError: true };
-}
-
-const NO_GROUP = "No household group";
-
-/** Drops empty fields so a row reads short. */
-function compact<T extends Row>(row: T): Partial<T> {
-  return Object.fromEntries(Object.entries(row).filter(([, v]) => v != null && v !== "" && !(Array.isArray(v) && v.length === 0))) as Partial<T>;
-}
-
-async function liveRows<T>(admin: Admin, table: string, groupId: string): Promise<T[]> {
-  const { data, error } = await admin.from(table).select("*").eq("group_id", groupId).eq("deleted", false);
-  if (error) throw new Error(error.message);
-  return (data ?? []) as T[];
-}
 
 async function personToday(admin: Admin, userId: string): Promise<string> {
   return todayIn(await personTimeZone(admin, userId).catch(() => "UTC"));
@@ -119,7 +95,6 @@ function who(id: string | null | undefined, userId: string, members: Map<string,
   return id === userId ? "you" : (members.get(id) ?? "someone");
 }
 
-const ISO_DATE = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "YYYY-MM-DD");
 
 // ── Shared reads for get_agenda ─────────────────────────────────────────────
 
@@ -209,28 +184,7 @@ async function binData(admin: Admin, groupId: string) {
 export function moduleTools({ admin, userId, groupId, enabled, shared = false }: HouseholdToolContext): HouseholdTool[] {
   // A watch kept from this person, or in the household's shared chat from anyone (Occasions).
   const keptHere = (w: ShopperWant) => isKeptFrom(w, userId) || (shared && (w.hidden_from ?? []).length > 0);
-  const tools: HouseholdTool[] = [];
-
-  function tool<S extends z.ZodRawShape>(
-    name: string,
-    config: { description: string; inputSchema?: S },
-    handler: (args: z.infer<z.ZodObject<S>>, groupId: string) => Promise<ToolResult>,
-    empty: unknown = [],
-  ) {
-    tools.push({
-      name,
-      description: config.description,
-      inputSchema: config.inputSchema,
-      handler: (async (args: z.infer<z.ZodObject<S>>) => {
-        if (!groupId) return empty === null ? fail(NO_GROUP) : ok(empty);
-        try {
-          return await handler(args, groupId);
-        } catch (err) {
-          return fail(err instanceof Error ? err.message : "Something went wrong");
-        }
-      }) as HouseholdTool["handler"],
-    });
-  }
+  const { tools, tool } = toolRegistrar(groupId);
 
   // ── Rewards ───────────────────────────────────────────────────────────────
 

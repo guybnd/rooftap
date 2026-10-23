@@ -298,15 +298,9 @@ describe('server schema', () => {
 
     act(() => setServerSchema(null));
     expect(result.current.server('mcp.connected-apps')).toBe(false);
-    // Meal plan, Shopper, Rewards, Occasions, Bin night, Home care and Assistant are modules newer than the baseline, so they are listed too.
+    // Modules newer than the baseline (a minSchema) come first, in registry order.
     expect(result.current.serverUpdateAdds.map((f) => f.label)).toEqual([
-      'Meal plan',
-      'Shopper',
-      'Rewards',
-      'Occasions',
-      'Bin night',
-      'Assistant',
-      'Home care',
+      ...MODULES.filter((m) => m.minSchema).map((m) => m.label),
       'connecting AI assistants by signing in',
       'switching Shopper price sources on and off',
       "using your household's own AI key",
@@ -349,14 +343,8 @@ describe('server schema', () => {
       expect(result.current.isEnabled('mcp')).toBe(false);
       expect(result.current.offered.some((m) => m.id === 'mcp')).toBe(false);
       expect(result.current.serverUpdateAdds.map((f) => f.label)).toEqual([
-        'Meal plan',
-        'Shopper',
-        'Rewards',
-        'Occasions',
-        'Bin night',
-        'Assistant',
-        'Home care',
-        'AI assistants (MCP)',
+        // MCP now has a minSchema too, so it joins the modules, in registry order.
+        ...MODULES.filter((m) => m.minSchema).map((m) => m.label),
         'switching Shopper price sources on and off',
         "using your household's own AI key",
         'Scout, AI research for things you want to buy',

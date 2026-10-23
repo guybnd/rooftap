@@ -28,4 +28,5 @@ export * from './rewards-stores';
 export * from './occasions-stores';
 export * from './care-jobs-store';
 export * from './bins-stores';
+// new-module:module-stores (scripts/new-module.mjs adds above this line)
 export * from './recipe-match-stores';

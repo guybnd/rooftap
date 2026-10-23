@@ -28,6 +28,7 @@ export type ModuleId =
   | 'rewards'
   | 'occasions'
   | 'bins'
+  // new-module:module-id (scripts/new-module.mjs adds above this line)
   | 'assistant'
   | 'money-insights'
   | 'home-care'
@@ -185,6 +186,7 @@ export const MODULES: ModuleDef[] = [
     enhances: ['household', 'calendar', 'costs', 'groceries'],
     minSchema: '20261021020000_assistant',
   },
+  // new-module:module-def (scripts/new-module.mjs adds above this line)
   // Integrations: modules with no section of their own (.docs/modules.md, section 3).
   {
     id: 'money-insights',

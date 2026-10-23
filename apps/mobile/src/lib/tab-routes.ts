@@ -32,6 +32,7 @@ export const TAB_ROUTES = [
   '/bins',
   '/assistant',
   '/documents',
+  // new-module:tab-route (scripts/new-module.mjs adds above this line)
   '/appointments',
   '/checklist',
 ] as const;

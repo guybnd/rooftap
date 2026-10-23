@@ -96,6 +96,7 @@ const documentsNavItems: NavItem[] = [
   { href: "/documents", label: "All Documents", iconId: "folder-open", accent: true },
 ];
 
+// new-module:nav-items (scripts/new-module.mjs adds above this line)
 export const sections: Section[] = [
   {
     id: "home",
@@ -248,6 +249,7 @@ export const sections: Section[] = [
     acceptsShares: false,
     navItems: documentsNavItems,
   },
+  // new-module:section (scripts/new-module.mjs adds above this line)
 ];
 
 /**
@@ -356,6 +358,7 @@ export function getSectionByPath(pathname: string): Section {
     const documentsSection = getSection("documents");
     if (documentsSection) return documentsSection;
   }
+  // new-module:section-path (scripts/new-module.mjs adds above this line)
   // Default to Home Search
   return getSection("search") || sections[0];
 }

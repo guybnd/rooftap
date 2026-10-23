@@ -309,3 +309,47 @@ When you add a tool:
 2. Repeat the module's privacy rule in the handler. The handlers use the admin client, so row level security does not apply. Examples: private tasks and Setup items, "Just me" loyalty cards, and watches kept from a member.
 3. Give a write tool a line in `describeProposal` (`packages/core/src/modules/assistant/assistant-api.ts`) if the generic line does not say clearly what it changes.
 4. Update `TABLE_REACH`.
+
+## 15. Adding a module
+
+Start every new module with the generator. It writes the module in the shape the rest of the app expects, so the module does not need a refactor later.
+
+```sh
+npm run new-module -- plant-care --label "Plant care" --short Plants \
+  --icon sprout --hue <free hue> --description "Which plants need water, and when."
+```
+
+The generator makes these files:
+
+| File | What it holds |
+|---|---|
+| `packages/core/src/modules/<id>/<id>.ts` | The row type and the pure view helpers: sorting, the Hero, labels and the row menu. |
+| `packages/core/src/modules/<id>/use-<id>.ts` | The hook that reads and writes the synced store. Both apps call it. |
+| `packages/core/src/modules/<id>/<id>.test.ts` | Tests for the helpers. |
+| `packages/core/src/data/stores/<id>-stores.ts` | The local-first group store. |
+| `apps/web/src/app/<id>/page.tsx` | The web screen. It binds the hook and renders `ListItem` rows with `useRowContextMenu`. |
+| `apps/mobile/src/app/(tabs)/<id>/index.tsx` | The phone screen. It binds the same hook and renders `ListItem` rows with `useRowMenuSheet`. |
+| `apps/web/src/lib/mcp/tools/<id>-tools.ts` | A read tool and a write tool for the Assistant. |
+| `supabase/migrations/<version>_<id>.sql` | The table, its grants, row level security, sync triggers and realtime. |
+| `whats-new/<date>-<id>.md` | The What's new entry. |
+
+It also adds the module to each registry: `modules.ts` (with `minSchema`), `sections.ts`, `store-modules.ts`, the section hue, both icon maps, both route tests, the web offline cache, `MCP_TOOLS`, `TABLE_REACH`, `schema-check.ts` and the edge functions' `module-rules.ts`. Each registry has a `new-module:<slot>` comment. The generator adds its lines above that comment, so do not remove the comments.
+
+After the generator runs:
+
+1. Generate the database types: `npx supabase db start`, then `npm run db:types`.
+2. Change the starter list into the real module. Keep the split. Types, helpers, row menus and hooks go in the core folder. A screen only binds them and lays them out.
+3. Decide where else the module shows: the agenda, Home, the calendar, search and features that join two modules (`module-features.ts`).
+4. Write the What's new entry for the people who use the app.
+5. Run `npm run check`.
+
+`apps/web/src/lib/module-conformance.test.ts` runs in `npm run check` and checks every module in the registry. It fails when:
+
+- the module has no core folder, or the folder has no hook;
+- a module with a section has no web screen or no phone screen, and `PLATFORM_DEFERRALS` does not name a follow-up ticket;
+- a screen does not use the module's core hook;
+- rows do not use `ListItem`, or have no row menu (web `useRowContextMenu`, phone `useRowMenuSheet` or a long press);
+- the web and the phone screens declare a helper or a hook with the same name, which means shared logic is in the wrong place;
+- a screen queries Supabase, opens an OS dialog, or imports the React Native `Modal`.
+
+Modules that are older than these rules have their gaps in `module-conformance-baseline.ts`. The list can only get shorter. A new gap fails the test, and so does a fixed gap that is still on the list.

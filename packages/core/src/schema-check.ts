@@ -81,3 +81,4 @@ export type ShopperPicksMatches = Expect<Equal<Matches<App.ShopperPick, 'shopper
 export type ShopperPriceSnapshotsMatches = Expect<Equal<Matches<App.ShopperPriceSnapshot, 'shopper_price_snapshots'>, Ok>>;
 export type ShopperSearchesMatches = Expect<Equal<Matches<App.ShopperSearch, 'shopper_searches'>, Ok>>;
 export type ShopperWantsMatches = Expect<Equal<Matches<App.ShopperWant, 'shopper_wants'>, Ok>>;
+// new-module:schema-check (scripts/new-module.mjs adds above this line)

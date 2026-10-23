@@ -36,6 +36,7 @@ export * from './components/checklist-panel';
 export * from './components/checklist-item-list';
 export * from './components/entity-comments';
 export * from './components/action-menu';
+export * from './components/row-menu-sheet';
 export * from './components/bottom-sheet';
 export * from './components/bottom-sheet-scroll-view';
 export * from './components/sheet';

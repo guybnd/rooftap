@@ -54,6 +54,7 @@ const INDEXEDDB_TABLES = [
   'meal_plan_entries',          // Meal plan (Recipes' This week)
   'recipe_staples',             // Recipes scan match
   'ingredient_aliases',         // Recipes scan match
+  // new-module:indexeddb-table (scripts/new-module.mjs adds above this line)
 ];
 const INDEXEDDB_VERSION = 12; // bumped for the scan match tables (non-destructive upgrade)
 

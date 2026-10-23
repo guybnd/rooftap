@@ -47,6 +47,7 @@ export const STORE_MODULES = {
   bin_streams: ['bins'],
   bin_changes: ['bins'],
   bin_plans: ['bins'],
+  // new-module:store-modules (scripts/new-module.mjs adds above this line)
   // Home Search: listings, agents, viewings and the listing checklist.
   apartments: ['search'],
   agents: ['search'],

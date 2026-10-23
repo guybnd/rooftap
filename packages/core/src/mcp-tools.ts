@@ -77,6 +77,7 @@ export const MCP_TOOLS: McpToolMeta[] = [
   { name: 'find_documents', kind: 'read', module: 'documents' },
   { name: 'get_home_search', kind: 'read', module: 'search' },
   { name: 'get_money_insights', kind: 'read', module: 'money-insights' },
+  // new-module:mcp-tool (scripts/new-module.mjs adds above this line)
 ];
 
 export const MCP_TOOL_BY_NAME: Record<string, McpToolMeta> = Object.fromEntries(

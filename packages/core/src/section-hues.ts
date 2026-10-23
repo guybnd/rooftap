@@ -299,6 +299,7 @@ export const SECTION_HUE_BY_SECTION: Readonly<Record<string, SectionHue>> = {
   shopper: 'orchid',
   rewards: 'fern',
   bins: 'olive',
+  // new-module:section-hue (scripts/new-module.mjs adds above this line)
   assistant: 'indigo',
   occasions: 'cherry',
   documents: 'slate',

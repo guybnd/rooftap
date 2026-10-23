@@ -21,6 +21,7 @@ const EXPECTED: Record<string, string | null> = {
   rewards: "rewards",
   occasions: "occasions",
   bins: "bins",
+  // new-module:module-route (scripts/new-module.mjs adds above this line)
   assistant: "assistant",
   costs: "costs",
   setup: "setup",

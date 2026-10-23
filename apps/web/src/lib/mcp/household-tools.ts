@@ -12,6 +12,7 @@ import {
 } from "@homeup/core";
 import { memberNames } from "@/lib/member-names";
 import { agendaExtras, moduleTools } from "./module-tools";
+// new-module:tool-import (scripts/new-module.mjs adds above this line)
 import {
   aiBlockedMessage,
   parseScoutBrief,
@@ -2992,6 +2993,7 @@ export function householdTools({
   );
 
   tools.push(...moduleTools({ admin, userId, groupId, enabled, shared }));
+  // new-module:tool-push (scripts/new-module.mjs adds above this line)
 
   return tools;
 }

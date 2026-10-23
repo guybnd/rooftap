@@ -45,6 +45,7 @@ export * from './modules/rewards/rewards-view';
 export * from './modules/occasions/occasions';
 export * from './modules/bins/bins';
 export * from './modules/bins/bins-view';
+// new-module:module-exports (scripts/new-module.mjs adds above this line)
 export * from './modules/shopper/shopper-sources';
 export * from './modules/shopper/shopper-relevance';
 export * from './modules/shopper/shopper-scout';
@@ -181,6 +182,7 @@ export * from './modules/occasions/occasions-view';
 export * from './modules/occasions/use-occasions-view';
 export * from './modules/bins/use-bins';
 export * from './modules/bins/use-bins-view';
+// new-module:module-hooks (scripts/new-module.mjs adds above this line)
 export * from './modules/recipes/use-recipe-match';
 
 // hooks/use-debounce + hooks/use-fuzzy-search are deliberately NOT exported
