@@ -17,7 +17,7 @@ import { catalogModelPrices } from '../../ai-providers';
  * How far the assistant may go in one module, set by an owner.
  * - read: lookups only; write tools aren't offered at all.
  * - ask: every change becomes a proposal the person confirms with a tap.
- * - act: changes are made at once, each with Undo.
+ * - act: changes are made at once (no Undo yet: the person asks for the opposite change).
  * Deletes always ask, whatever the level.
  */
 export type TrustLevel = 'read' | 'ask' | 'act';

@@ -14,6 +14,7 @@ import {
   describeProposal,
   entitlementTier,
   getModule,
+  MCP_TOOLS,
   isConversationOpen,
   wantsAssistantReply,
   microsToCents,
@@ -620,6 +621,7 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
           ]
         : []),
     ],
+    off: [...new Set(MCP_TOOLS.map((t) => t.module))].filter((m) => !reachable.includes(m)).map((m) => getModule(m)?.label ?? m),
     memories: ((memoryRows ?? []) as { text: string }[]).map((m) => m.text),
     kind: conversation.kind,
     channel: input.channel ?? "app",

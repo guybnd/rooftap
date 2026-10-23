@@ -42,6 +42,19 @@ describe('buildAssistantSystemPrompt', () => {
     expect(prompt).toContain('## Earlier in this conversation\nPlanned dinners.');
   });
 
+  it('names switched-off modules and how to turn them on', () => {
+    const prompt = buildAssistantSystemPrompt({ ...base, off: ['Recipes', 'Meal plan'] });
+    expect(prompt).toContain('Switched off here: Recipes, Meal plan.');
+    expect(prompt).toContain('Settings > Modules');
+    expect(buildAssistantSystemPrompt(base)).not.toContain('Switched off here');
+  });
+
+  it('is honest about undo and about what waits for a tap', () => {
+    const prompt = buildAssistantSystemPrompt({ ...base, modules: [{ label: 'Groceries', trust: 'act' as const }] });
+    expect(prompt).toContain('there is no Undo button');
+    expect(prompt).toContain('which wait for their tap');
+  });
+
   it('says so when no modules are reachable', () => {
     expect(buildAssistantSystemPrompt({ ...base, modules: [] })).toContain('No parts of the app are available');
   });

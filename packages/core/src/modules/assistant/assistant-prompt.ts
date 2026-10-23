@@ -38,8 +38,8 @@ export const PRIVACY_TEXT =
 
 const TRUST_TEXT: Record<TrustLevel, string> = {
   read: 'look up only; you cannot change anything here',
-  ask: 'changes are proposed to the person, who confirms them with a tap',
-  act: 'changes happen immediately, and the person can undo them',
+  ask: 'changes are proposed first and happen only when the person taps to confirm; declining leaves everything as it was',
+  act: 'changes happen right away; there is no Undo button for them, so to reverse one the person asks you and you make the opposite change',
 };
 
 const CHANNEL_TEXT: Record<MessageChannel, string> = {
@@ -72,6 +72,8 @@ export interface AssistantPromptInput {
   members: string[];
   /** Switched-on modules the assistant has tools for. */
   modules: AssistantModuleBrief[];
+  /** Modules the assistant could use but that are switched off here, by label. */
+  off?: string[];
   memories: string[];
   kind: ConversationKind;
   channel: MessageChannel;
@@ -91,8 +93,12 @@ export function buildAssistantSystemPrompt(input: AssistantPromptInput): string 
   if (input.modules.length > 0) {
     sections.push(
       `## What you can reach\n${input.modules.map((m) => `- ${m.label}: ${TRUST_TEXT[m.trust]}.`).join('\n')}\n` +
-        'Deleting anything is always proposed first. If something is not listed, that part of the app is ' +
-        'switched off: say so plainly rather than guessing.'
+        'Deleting anything is always proposed first. When the person asks what you can do, say plainly which parts ' +
+        'change right away and which wait for their tap.' +
+        (input.off?.length
+          ? `\nSwitched off here: ${input.off.join(', ')}. When asked about one of these, say that part of the app is ` +
+            'switched off and that a household owner can turn it on in Settings > Modules. Do not try another tool instead.'
+          : '\nIf something is not listed, that part of the app is switched off: say so plainly rather than guessing.')
     );
   } else {
     sections.push('## What you can reach\nNo parts of the app are available to you yet. You can still chat and remember facts.');
