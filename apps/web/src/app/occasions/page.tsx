@@ -211,6 +211,7 @@ export default function OccasionsPage() {
           members={groupMembers}
           profiles={memberProfiles}
           onSaved={(o) => setFocusId(o.id)}
+          calendar={modules.feature('calendar.occasions') && modules.server('occasions.calendar')}
         />
       )}
 

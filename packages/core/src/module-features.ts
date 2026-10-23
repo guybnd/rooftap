@@ -43,6 +43,10 @@ export const MODULE_FEATURES = {
     modules: ['calendar', 'bins'],
     what: 'Bin collection days on the calendar.',
   },
+  'calendar.occasions': {
+    modules: ['calendar', 'occasions'],
+    what: 'Birthdays and other occasions on the calendar.',
+  },
   'calendar.google-events': {
     modules: ['calendar', 'google-calendar'],
     what: 'Pulled Google Calendar events on the calendar, sharing them, and Google setup in Calendar settings.',

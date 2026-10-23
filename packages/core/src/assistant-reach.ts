@@ -122,7 +122,7 @@ export const TABLE_REACH: Record<string, Reach> = {
   reward_perks: { tools: ['get_rewards', 'add_reward_perk'] },
 
   // Occasions
-  occasions: { tools: ['get_occasions', 'add_occasion'] },
+  occasions: { tools: ['get_occasions', 'add_occasion', 'get_agenda'] },
   gift_ideas: { tools: ['get_occasions', 'add_gift_ideas'] },
   wishlist_items: { tools: ['get_occasions', 'add_wishlist_items'] },
 

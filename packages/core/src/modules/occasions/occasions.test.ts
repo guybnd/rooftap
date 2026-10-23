@@ -11,6 +11,8 @@ import {
   keptFromLabel,
   nextOccasionDay,
   occasionSpend,
+  occasionsOnDay,
+  isOnCalendar,
   occasionSubtitle,
   occasionWhenLabel,
   planGiftCost,
@@ -96,6 +98,26 @@ describe('occasion days', () => {
       occasion({ id: 'c', title: 'Tegan', date: '1990-11-15' }),
     ];
     expect(sortOccasions(list, '2026-10-23').map((o) => o.id)).toEqual(['c', 'a', 'b']);
+  });
+});
+
+describe('on the calendar', () => {
+  it('falls on its day every year, a one-off only once, and not when switched off', () => {
+    const birthday = occasion();
+    const party = occasion({ id: 'o2', title: 'Party', repeats: false, date: '2026-11-15' });
+    const hidden = occasion({ id: 'o3', title: 'Quiet one', on_calendar: false });
+    expect(occasionsOnDay([birthday, party, hidden], '2026-11-15').map((o) => o.id)).toEqual(['o2', 'o1']);
+    expect(occasionsOnDay([birthday, party], '2027-11-15').map((o) => o.id)).toEqual(['o1']);
+    expect(occasionsOnDay([birthday], '1989-11-15')).toEqual([]);
+    expect(occasionsOnDay([birthday], '2026-11-16')).toEqual([]);
+  });
+
+  it('is on unless switched off, and a new occasion only carries the field when asked', () => {
+    expect(isOnCalendar(occasion())).toBe(true);
+    expect(isOnCalendar(occasion({ on_calendar: false }))).toBe(false);
+    expect('on_calendar' in occasion()).toBe(false);
+    const withField = buildOccasion({ id: 'o4', groupId: 'g', title: 'x', kind: 'other', date: '2026-01-01', onCalendar: false, createdBy: GUY });
+    expect(withField.on_calendar).toBe(false);
   });
 });
 

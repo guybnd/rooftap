@@ -37,6 +37,11 @@ export interface Occasion {
   notes: string | null;
   /** Members it is kept from (a surprise party). */
   hidden_from: string[];
+  /**
+   * Shown on the Calendar (calendar.occasions). True unless switched off;
+   * absent on a server older than 20261023200000_occasions_on_calendar.
+   */
+  on_calendar?: boolean;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -148,6 +153,24 @@ export function sortOccasions<T extends Pick<Occasion, 'date' | 'repeats' | 'tit
     if (kb) return 1;
     return b.date.localeCompare(a.date);
   });
+}
+
+/** "Birthday", "Anniversary": the kind as a label. */
+export function occasionKindLabel(kind: OccasionKind): string {
+  return OCCASION_KINDS.find((k) => k.value === kind)?.label ?? 'Occasion';
+}
+
+/** Whether it shows on the Calendar: on unless switched off for it. */
+export function isOnCalendar(occasion: Pick<Occasion, 'on_calendar'>): boolean {
+  return occasion.on_calendar !== false;
+}
+
+/** The occasions that fall on `day` (YYYY-MM-DD) and show on the Calendar, by title. */
+export function occasionsOnDay<T extends Pick<Occasion, 'date' | 'repeats' | 'title' | 'on_calendar'>>(occasions: T[], day: string): T[] {
+  const [year] = parts(day);
+  return occasions
+    .filter((o) => isOnCalendar(o) && (o.repeats ? day >= o.date && occasionDayIn(o.date, year) === day : o.date === day))
+    .sort((a, b) => a.title.localeCompare(b.title));
 }
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -452,6 +475,8 @@ export function buildOccasion(input: {
   budgetCents?: number | null;
   notes?: string | null;
   hiddenFrom?: string[];
+  /** Left out unless the server has the column (server feature occasions.calendar). */
+  onCalendar?: boolean;
   createdBy: string | null;
 }): Occasion {
   const now = new Date().toISOString();
@@ -467,6 +492,7 @@ export function buildOccasion(input: {
     budget_cents: input.budgetCents ?? null,
     notes: input.notes?.trim() || null,
     hidden_from: input.hiddenFrom ?? [],
+    ...(input.onCalendar !== undefined ? { on_calendar: input.onCalendar } : {}),
     created_by: input.createdBy,
     created_at: now,
     updated_at: now,

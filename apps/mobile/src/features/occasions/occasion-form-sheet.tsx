@@ -39,6 +39,7 @@ export function OccasionFormSheet({
   members,
   profiles,
   onSaved,
+  calendar = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -49,6 +50,8 @@ export function OccasionFormSheet({
   members: GroupMember[];
   profiles: MemberProfiles;
   onSaved?: (occasion: Occasion) => void;
+  /** Offer the Calendar switch: calendar.occasions is on and the server has the column. */
+  calendar?: boolean;
 }) {
   const [kind, setKind] = React.useState<OccasionKind>(occasion?.kind ?? 'birthday');
   const [who, setWho] = React.useState<Who>(
@@ -59,6 +62,7 @@ export function OccasionFormSheet({
   const [titleTouched, setTitleTouched] = React.useState(!!occasion);
   const [date, setDate] = React.useState(occasion?.date ?? todayISO());
   const [repeats, setRepeats] = React.useState(occasion?.repeats ?? true);
+  const [onCalendar, setOnCalendar] = React.useState(occasion?.on_calendar !== false);
   const [budget, setBudget] = React.useState(occasion?.budget_cents ? String(occasion.budget_cents / 100) : '');
   const [hidden, setHidden] = React.useState<string[]>(occasion?.hidden_from ?? []);
   const [tried, setTried] = React.useState(false);
@@ -80,6 +84,8 @@ export function OccasionFormSheet({
       person_name: who.kind === 'name' ? personName.trim() || null : null,
       budget_cents: budgetCents,
       hidden_from: hidden.filter((id) => id !== currentUserId),
+      // Only to a server with the column (occasions.calendar).
+      ...(calendar ? { on_calendar: onCalendar } : {}),
     };
     const saved: Occasion = occasion
       ? { ...occasion, ...fields }
@@ -147,6 +153,12 @@ export function OccasionFormSheet({
           <Text className="min-w-0 flex-1 text-sm text-foreground">Every year</Text>
           <Switch checked={repeats} onChange={setRepeats} label="Every year" />
         </View>
+        {calendar && (
+          <View className="flex-row items-center gap-3">
+            <Text className="min-w-0 flex-1 text-sm text-foreground">Show on Calendar</Text>
+            <Switch checked={onCalendar} onChange={setOnCalendar} label="Show on Calendar" />
+          </View>
+        )}
         <FieldRow label="Gift budget">
           <Input keyboardType="decimal-pad" value={budget} onChangeText={setBudget} placeholder="Optional" className="tabular-nums" />
         </FieldRow>

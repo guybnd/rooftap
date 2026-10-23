@@ -50,6 +50,10 @@ import {
   binCollections,
   binNamesPhrase,
   useBins,
+  occasionKindLabel,
+  occasionsOnDay,
+  occasionTitle,
+  useOccasionDays,
   householdTasks$,
   groupEvents$,
   costItems$,
@@ -156,6 +160,9 @@ function CalendarPage() {
     const key = toISODate(date);
     return binCollections(binsApi.streams, binsApi.changes, key, key)[0] ?? null;
   };
+  // Birthdays and other occasions need calendar and occasions; each can be switched off on its own.
+  const showOccasions = modules.feature("calendar.occasions");
+  const occasionDays = useOccasionDays(showOccasions ? group?.id : undefined);
 
   const apts$ = apartments$(viewingsGroupId);
   const agentsStore$ = agents$(viewingsGroupId);
@@ -759,7 +766,7 @@ const filteredApartments = useMemo(() => filterApartments(apartments, searchQuer
     subtitle?: string;
     subtitleTone?: "warning";
     /** The owner section's tile: "search" for a viewing, else the calendar's. Omitted for tasks (checkbox). */
-    sectionId?: "search" | "calendar" | "bins";
+    sectionId?: "search" | "calendar" | "bins" | "occasions";
     /** Bin night: the lid colours collected that day. */
     lids?: string[];
     onClick: () => void;
@@ -812,6 +819,14 @@ const filteredApartments = useMemo(() => filterApartments(apartments, searchQuer
           lids: item.collection.streams.map((st) => st.lid),
           onClick: () => router.push("/bins"),
         };
+      case "occasion":
+        return {
+          ...base,
+          title: occasionTitle(item.occasion, currentUserId ?? null),
+          subtitle: occasionKindLabel(item.occasion.kind),
+          sectionId: "occasions",
+          onClick: () => router.push("/occasions"),
+        };
       case "task":
         return {
           ...base,
@@ -833,6 +848,7 @@ const filteredApartments = useMemo(() => filterApartments(apartments, searchQuer
       tasks,
       calendarEvents: calendarConnected ? calendarEvents : [],
       binDay: binDayOf(date),
+      occasions: occasionDays,
     })
       .map(toAgendaRow)
       .sort((a, b) => a.sortMinutes - b.sortMinutes || compareStrings(a.title, b.title));
@@ -865,6 +881,12 @@ const filteredApartments = useMemo(() => filterApartments(apartments, searchQuer
           }]
         : [];
     })(),
+    ...occasionsOnDay(occasionDays, toISODate(day)).map((o) => ({
+      key: `occasion-${o.id}`,
+      title: occasionTitle(o, currentUserId ?? null),
+      classes: "border border-border bg-muted text-foreground",
+      onClick: () => router.push("/occasions"),
+    })),
     ...(calendarConnected ? getCalendarEventsForDay(day) : []).filter(isAllDayCalendarEvent).map((ev) => ({
       key: `gcal-${ev.id}`,
       title: ev.title || "Untitled event",
@@ -1396,7 +1418,7 @@ const filteredApartments = useMemo(() => filterApartments(apartments, searchQuer
                         // Hearth v2 (§6 feed row): the owner section's tile.
                         <LeadingTile
                           sectionId={item.sectionId ?? "calendar"}
-                          Icon={item.sectionId === "search" ? Building2 : sectionIconFor(item.sectionId === "bins" ? "bins" : "calendar")}
+                          Icon={item.sectionId === "search" ? Building2 : sectionIconFor(item.sectionId === "bins" || item.sectionId === "occasions" ? item.sectionId : "calendar")}
                           size="md"
                         />
                       )}

@@ -219,3 +219,13 @@ export function useOccasions(
 }
 
 export type OccasionsApi = ReturnType<typeof useOccasions>;
+
+/**
+ * Occasions alone, for the Calendar (calendar.occasions): no gift ideas,
+ * wishlists or budget writes. `groupId` undefined opens the inert store.
+ */
+export function useOccasionDays(groupId: string | undefined): Occasion[] {
+  const o$ = occasions$(groupId);
+  useReconnectSync(o$);
+  return use$(() => live(o$.get()));
+}

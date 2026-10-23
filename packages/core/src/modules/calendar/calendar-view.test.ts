@@ -15,6 +15,7 @@ import {
   isSameLocalDay,
   timedStartHours,
 } from './calendar-view';
+import { buildOccasion, type Occasion } from '../occasions/occasions';
 
 // Local wall-clock instants, so the tests hold in any time zone.
 const at = (day: number, hour = 0, minute = 0) => new Date(2026, 9, day, hour, minute).toISOString();
@@ -116,6 +117,22 @@ describe('calendarOpenHour', () => {
 
 describe('calendarAgenda', () => {
   const bins = { date: '2026-10-20', streams: [] } as unknown as BinCollection;
+
+  it('adds occasions on the day as all-day rows, unless switched off', () => {
+    const base: Occasion = buildOccasion({ id: 'o', groupId: 'g', title: '', kind: 'birthday', date: '1990-10-20', createdBy: null });
+    const items = calendarAgenda(day(20), {
+      appointments: [],
+      apartments: [],
+      groupEvents: [],
+      calendarEvents: [],
+      occasions: [
+        { ...base, id: 'b', title: "Tegan's birthday", date: '1990-10-20' },
+        { ...base, id: 'off', title: 'Hidden', date: '1990-10-20', on_calendar: false },
+        { ...base, id: 'other', title: 'Later', date: '1990-10-21' },
+      ],
+    });
+    expect(items.map((i) => [i.key, i.timeLabel])).toEqual([['occasion-b', 'All day']]);
+  });
 
   it('merges a day and sorts it, all-day rows first', () => {
     const items = calendarAgenda(day(20), {

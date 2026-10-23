@@ -64,6 +64,9 @@ import {
   type RewardScheme,
   type SetupItem,
   type ShopperWant,
+  nextOccasionDay,
+  occasionTitle,
+  type Occasion,
 } from "@homeup/core";
 import type { createAdminClient } from "@/lib/supabase/admin";
 import { memberNames } from "@/lib/member-names";
@@ -127,11 +130,11 @@ const ISO_DATE = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "YYYY-MM-DD");
  * the whole agenda.
  */
 export async function agendaExtras(
-  ctx: Pick<HouseholdToolContext, "admin" | "userId" | "enabled"> & { groupId: string },
+  ctx: Pick<HouseholdToolContext, "admin" | "userId" | "enabled" | "shared"> & { groupId: string },
   today: string,
   last: string,
 ): Promise<Row> {
-  const { admin, userId, groupId, enabled } = ctx;
+  const { admin, userId, groupId, enabled, shared = false } = ctx;
   const out: Row = {};
   const needNames = enabled.has("bins") || enabled.has("meals");
   const members = needNames ? await names(admin, groupId) : new Map<string, string>();
@@ -173,6 +176,19 @@ export async function agendaExtras(
               cook: who(dishes.find((d) => d.cook_user_id)?.cook_user_id, userId, members),
             }),
           );
+        })
+        .catch(() => {}),
+    // Birthdays and other days. Kept ones stay out like in get_occasions; gift ideas never show here.
+    enabled.has("occasions") &&
+      liveRows<Occasion>(admin, "occasions", groupId)
+        .then((rows) => {
+          const days = rows
+            .filter((o) => !(o.hidden_from ?? []).includes(userId) && !(shared && (o.hidden_from ?? []).length > 0))
+            .map((o) => ({ o, day: nextOccasionDay(o, today) }))
+            .filter((x): x is { o: Occasion; day: string } => !!x.day && x.day <= last)
+            .sort((a, b) => a.day.localeCompare(b.day));
+          if (days.length === 0) return;
+          out.occasions = days.map(({ o, day }) => ({ id: o.id, title: occasionTitle(o, userId), date: day, kind: o.kind }));
         })
         .catch(() => {}),
   ]);

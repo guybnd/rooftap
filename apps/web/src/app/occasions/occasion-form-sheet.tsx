@@ -40,6 +40,7 @@ export function OccasionFormSheet({
   members,
   profiles,
   onSaved,
+  calendar = false,
 }: {
   isOpen: boolean;
   onClose: () => void;
@@ -50,6 +51,8 @@ export function OccasionFormSheet({
   members: GroupMember[];
   profiles: MemberProfiles;
   onSaved?: (occasion: Occasion) => void;
+  /** Offer the Calendar switch: calendar.occasions is on and the server has the column. */
+  calendar?: boolean;
 }) {
   const [kind, setKind] = useState<OccasionKind>(occasion?.kind ?? 'birthday');
   const [who, setWho] = useState<Who>(
@@ -60,6 +63,7 @@ export function OccasionFormSheet({
   const [titleTouched, setTitleTouched] = useState(!!occasion);
   const [date, setDate] = useState(occasion?.date ?? '');
   const [repeats, setRepeats] = useState(occasion?.repeats ?? true);
+  const [onCalendar, setOnCalendar] = useState(occasion?.on_calendar !== false);
   const [budget, setBudget] = useState(occasion?.budget_cents ? String(occasion.budget_cents / 100) : '');
   const [hidden, setHidden] = useState<string[]>(occasion?.hidden_from ?? []);
   const [tried, setTried] = useState(false);
@@ -81,6 +85,8 @@ export function OccasionFormSheet({
       person_name: who.kind === 'name' ? personName.trim() || null : null,
       budget_cents: budgetCents,
       hidden_from: hidden.filter((id) => id !== currentUserId),
+      // Only to a server with the column (occasions.calendar).
+      ...(calendar ? { on_calendar: onCalendar } : {}),
     };
     const saved: Occasion = occasion
       ? { ...occasion, ...fields }
@@ -145,6 +151,12 @@ export function OccasionFormSheet({
           <span className="min-w-0 flex-1 text-sm text-foreground">Every year</span>
           <Switch checked={repeats} onChange={setRepeats} label="Every year" />
         </div>
+        {calendar && (
+          <div className="flex items-center gap-3">
+            <span className="min-w-0 flex-1 text-sm text-foreground">Show on Calendar</span>
+            <Switch checked={onCalendar} onChange={setOnCalendar} label="Show on Calendar" />
+          </div>
+        )}
         <FieldRow label="Gift budget" htmlFor="occasion-budget">
           <Input id="occasion-budget" inputMode="decimal" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="Optional" className="tabular-nums" />
         </FieldRow>

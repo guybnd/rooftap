@@ -29,6 +29,8 @@ import { Text, ActionMenu, type ActionMenuAnchor, BottomSheet, Button, HeroLede,
 import {
   binCollections,
   useBins,
+  occasionTitle,
+  useOccasionDays,
   agents$,
   apartments$,
   appointments$,
@@ -110,6 +112,15 @@ export default function CalendarSectionScreen() {
     },
     [showBins, binsApi.streams, binsApi.changes]
   );
+  // Birthdays and other occasions need calendar and occasions; each can be switched off on its own.
+  // Titled for this person ("Your birthday") before the agenda places them.
+  const showOccasions = modules.feature('calendar.occasions');
+  const occasionRows = useOccasionDays(showOccasions ? group?.id : undefined);
+  const occasions = React.useMemo(
+    () => occasionRows.map((o) => ({ ...o, title: occasionTitle(o, currentUserId ?? null) })),
+    [occasionRows, currentUserId]
+  );
+  const openOccasions = React.useCallback(() => openRoute('/occasions'), [openRoute]);
 
   const apts$ = apartments$(viewingsGroupId);
   const agentsStore$ = agents$(viewingsGroupId);
@@ -286,8 +297,9 @@ export default function CalendarSectionScreen() {
         tasks,
         calendarEvents: dayCalendarEvents,
         binDay: binDayOf(currentDate),
+        occasions,
       }),
-    [currentDate, appointments, apartments, groupEvents, tasks, dayCalendarEvents, binDayOf]
+    [currentDate, appointments, apartments, groupEvents, tasks, dayCalendarEvents, binDayOf, occasions]
   );
 
   // Day view opens scrolled to roughly the current time when viewing today,
@@ -331,10 +343,11 @@ export default function CalendarSectionScreen() {
           tasks,
           calendarEvents: calendarConnected ? calendarEvents.filter((ev) => isSameLocalDay(new Date(ev.starts_at), day)) : [],
           binDay: binDayOf(day),
+          occasions,
         }),
       }))
       .filter((group) => group.items.length > 0 || span === 'day');
-  }, [listMode, spanDays, appointments, apartments, groupEvents, tasks, calendarConnected, calendarEvents, span, binDayOf]);
+  }, [listMode, spanDays, appointments, apartments, groupEvents, tasks, calendarConnected, calendarEvents, span, binDayOf, occasions]);
 
   const taskCountFor = React.useCallback(
     (day: Date) => {
@@ -624,6 +637,7 @@ export default function CalendarSectionScreen() {
                     onPressCalendarEvent={setSelectedCalendarEvent}
                     onPressTask={openTask}
               onPressBins={openBins}
+              onPressOccasions={openOccasions}
                     onToggleTaskDone={toggleTaskDone}
                     addPhrase={calendarAddPhrase({ tasks: showTasks, viewings: showViewings })}
                     onAddSomething={() =>
@@ -687,6 +701,7 @@ export default function CalendarSectionScreen() {
               onPressCalendarEvent={setSelectedCalendarEvent}
               onPressTask={openTask}
               onPressBins={openBins}
+              onPressOccasions={openOccasions}
               onToggleTaskDone={toggleTaskDone}
               addPhrase={calendarAddPhrase({ tasks: showTasks, viewings: showViewings })}
               onAddSomething={() => openChooserAt(new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), new Date().getHours()))}

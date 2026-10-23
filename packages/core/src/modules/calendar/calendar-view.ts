@@ -10,6 +10,7 @@ import type {
   HouseholdTask,
 } from '../../types';
 import type { BinCollection } from '../bins/bins';
+import { occasionsOnDay, type Occasion } from '../occasions/occasions';
 import { daysBetweenISO, toISODate } from '../../date-utils';
 import { getEventsForDay, isEventStartDay } from './calendar-overlap';
 
@@ -127,19 +128,22 @@ export type CalendarAgendaItem =
   | { kind: 'event'; key: string; sortMinutes: number; timeLabel: string; event: GroupEvent }
   | { kind: 'calendarEvent'; key: string; sortMinutes: number; timeLabel: string; calendarEvent: GoogleCalendarEventWithAttribution }
   | { kind: 'task'; key: string; sortMinutes: number; timeLabel: string; task: HouseholdTask }
-  | { kind: 'bins'; key: string; sortMinutes: number; timeLabel: string; collection: BinCollection };
+  | { kind: 'bins'; key: string; sortMinutes: number; timeLabel: string; collection: BinCollection }
+  | { kind: 'occasion'; key: string; sortMinutes: number; timeLabel: string; occasion: Occasion };
 
-/** A day's agenda sources, plus the apartments viewings name and the day's bin collection. */
+/** A day's agenda sources, plus the apartments viewings name, the day's bin collection and the household's occasions. */
 export interface CalendarAgendaSources extends CalendarDaySources {
   apartments: Apartment[];
   binDay?: BinCollection | null;
+  /** Every occasion (calendar.occasions); those falling on the day and shown on the Calendar become rows. */
+  occasions?: Occasion[];
 }
 
 const ALL_DAY = 'All day';
 
 /**
  * One day's agenda: viewings, Google events, household events, the bin
- * collection and to-dos due that day, sorted by time (all-day rows first, in
+ * collection, birthdays and other occasions, and to-dos due that day, sorted by time (all-day rows first, in
  * that order otherwise). A later day of a spanned event is an all-day row,
  * since only its start day carries a clock time.
  */
@@ -151,6 +155,10 @@ export function calendarAgenda(date: Date, sources: CalendarAgendaSources): Cale
   if (sources.binDay) {
     items.push({ kind: 'bins', key: `bins-${sources.binDay.date}`, sortMinutes: -1, timeLabel: ALL_DAY, collection: sources.binDay });
   }
+
+  occasionsOnDay(sources.occasions ?? [], dateKey).forEach((occasion) => {
+    items.push({ kind: 'occasion', key: `occasion-${occasion.id}`, sortMinutes: -1, timeLabel: ALL_DAY, occasion });
+  });
 
   appointmentsOn(sources.appointments, date).forEach((app) => {
     const d = new Date(app.scheduled_at);

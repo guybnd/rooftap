@@ -117,6 +117,10 @@ export const SERVER_FEATURES = {
     minSchema: '20261023190000_meal_plan_dishes',
     label: 'several dishes on one night in the meal plan',
   },
+  'occasions.calendar': {
+    minSchema: '20261023200000_occasions_on_calendar',
+    label: 'choosing which occasions show on the calendar',
+  },
 } as const satisfies Record<string, ServerFeatureDef>;
 
 export type ServerFeatureId = keyof typeof SERVER_FEATURES;

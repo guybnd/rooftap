@@ -9,6 +9,7 @@ import { Text, Button, LeadingTile, ListGroup, ListItem, ListItemContent, ListIt
 import {
   binNamesPhrase,
   eventDetailLabel,
+  occasionKindLabel,
   legText,
   type CalendarAgendaItem,
   type Appointment,
@@ -41,6 +42,8 @@ interface AgendaListProps {
   onPressTask: (task: HouseholdTask) => void;
   /** Bin night: a collection row opens Bins. */
   onPressBins?: () => void;
+  /** An occasion row opens Occasions. */
+  onPressOccasions?: () => void;
   onToggleTaskDone: (task: HouseholdTask) => void;
   /** Launches the same "New…" chooser a long-press opens (Hearth E-series). */
   onAddSomething?: () => void;
@@ -110,6 +113,7 @@ export function AgendaList({
   onPressCalendarEvent,
   onPressTask,
   onPressBins,
+  onPressOccasions,
   onToggleTaskDone,
   onAddSomething,
   addPhrase = 'an appointment, event, or to-do',
@@ -193,6 +197,20 @@ export function AgendaList({
                 <AgendaMeta timeLabel={item.timeLabel} subtitle={binNamesPhrase(item.collection.streams)} />
               </ListItemContent>
               <BinLids lids={item.collection.streams.map((st) => st.lid)} size="sm" />
+            </ListItem>
+          );
+        }
+
+        if (item.kind === 'occasion') {
+          return (
+            <ListItem key={item.key} onPress={onPressOccasions}>
+              <ListItemLeading>
+                <LeadingTile sectionId="occasions" Icon={sectionIconFor('occasions')} size="md" />
+              </ListItemLeading>
+              <ListItemContent>
+                <ListItemTitle>{item.occasion.title}</ListItemTitle>
+                <AgendaMeta timeLabel={item.timeLabel} subtitle={occasionKindLabel(item.occasion.kind)} />
+              </ListItemContent>
             </ListItem>
           );
         }
