@@ -32,6 +32,7 @@ import {
 import { CATEGORY_BAR_FILL, CategoryChip } from './cost-card';
 import { TransactionSheet } from './money-view';
 import { upBankApi } from './up-bank-api';
+import { CostInsightsCard, type CostInsightsCardProps } from './cost-insights';
 import { useOpenRoute } from '@/lib/tab-routes';
 
 const TABULAR = { fontVariant: ['tabular-nums' as const] };
@@ -58,6 +59,8 @@ export interface CostsOverviewProps {
   onSetAmount: (item: CostItem, cents: number) => void;
   /** Rendered between the categories and the end of the page (suggestions). */
   footer?: React.ReactNode;
+  /** The money-insights module's "Worth a look" card, shown on this month; null when it's off. */
+  insights?: Pick<CostInsightsCardProps, 'marks' | 'onMarks' | 'onRemind'> | null;
 }
 
 export function CostsOverview(props: CostsOverviewProps) {
@@ -83,6 +86,13 @@ export function CostsOverview(props: CostsOverviewProps) {
       else next.add(id);
       return next;
     });
+
+  // An insight's "Show the category": this month, with that category open.
+  const openCategory = (category: CostCategory | null) => {
+    setFocus(null);
+    setPicked(keys[CHART_BACK]);
+    setOpen((cur) => new Set(cur).add(category ?? 'none'));
+  };
 
   const openRoute = useOpenRoute();
   const ask = (question: string) => {
@@ -129,6 +139,10 @@ export function CostsOverview(props: CostsOverviewProps) {
       <Hero month={month} goalCents={goalCents} onEditGoal={onEditGoal} focus={focus} onFocus={(k) => { haptics.select(); setFocus((cur) => (cur === k ? null : k)); }} />
 
       <MonthChart months={months} picked={month.month} goalCents={goalCents} onPick={(k) => { haptics.select(); setPicked(k); }} focus={focus} onClearFocus={() => setFocus(null)} />
+
+      {props.insights && month.when === 'current' ? (
+        <CostInsightsCard items={items} goalCents={goalCents} onOpenItem={onOpenItem} onOpenCategory={openCategory} {...props.insights} />
+      ) : null}
 
       {month.categories.length === 0 ? (
         <Text className="px-1 text-sm text-muted-foreground">

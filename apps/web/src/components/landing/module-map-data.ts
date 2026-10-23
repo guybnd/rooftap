@@ -7,7 +7,7 @@ import type { ScreenId } from "./screens";
 // module-map-data.test.ts fails when a two-module feature has no line here,
 // or a line names a feature that does not join its two modules.
 
-export type MapModule = Exclude<ModuleId, "mcp">;
+export type MapModule = Exclude<ModuleId, "mcp" | "money-insights">;
 
 /** Short names: the map has no room for "Tasks & Reminders". */
 export const MAP_LABEL: Record<MapModule, string> = {
@@ -264,7 +264,11 @@ export const MAP_LINKS: readonly MapLink[] = [
 
 export const MAP_MODULES = Object.keys(POS) as MapModule[];
 
-/** Every two-module feature in core, so the test can hold the map to it. */
+/**
+ * Every two-module feature in core between modules on the map, so the test can
+ * hold the map to it. Money insights is part of Costs on the map, so its
+ * features (Compare with Scout, a reminder to cancel) have no line of their own.
+ */
 export const PAIR_FEATURES = (Object.keys(MODULE_FEATURES) as ModuleFeatureId[]).filter(
-  (id) => MODULE_FEATURES[id].modules.length === 2,
+  (id) => MODULE_FEATURES[id].modules.length === 2 && MODULE_FEATURES[id].modules.every((m) => m in POS),
 );

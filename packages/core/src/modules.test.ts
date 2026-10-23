@@ -22,8 +22,8 @@ describe("resolveEnabledModules", () => {
     expect([...on].sort()).toEqual(DEFAULT_ON);
   });
 
-  it("ships the base set on by default: Tasks, Calendar, Checklists, Documents", () => {
-    expect(DEFAULT_ON).toEqual(["calendar", "checklists", "documents", "household"]);
+  it("ships the base set on by default: Tasks, Calendar, Checklists, Documents, and Money insights for when Costs is on", () => {
+    expect(DEFAULT_ON).toEqual(["calendar", "checklists", "documents", "household", "money-insights"]);
   });
 
   it("lets a row override the default in either direction", () => {
@@ -89,7 +89,7 @@ describe("availableModules", () => {
 describe("sections and modules", () => {
   it("every module is a real section, apart from the integrations", () => {
     const sectionIds = new Set(sections.map((s) => s.id));
-    const integrations = new Set(["google-calendar", "mcp"]);
+    const integrations = new Set(["money-insights", "google-calendar", "mcp"]);
     for (const id of ALL_MODULE_IDS) expect([id, sectionIds.has(id)]).toEqual([id, !integrations.has(id)]);
   });
 

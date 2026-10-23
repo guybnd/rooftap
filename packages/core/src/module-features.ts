@@ -138,6 +138,15 @@ export const MODULE_FEATURES = {
     what: 'The moving costs suggestion from Home Setup purchases.',
   },
 
+  'insights.compare': {
+    modules: ['money-insights', 'shopper'],
+    what: 'Compare on a plan or discount that ends soon, which opens a Scout search.',
+  },
+  'insights.reminders': {
+    modules: ['money-insights', 'household'],
+    what: '"Remind me to cancel" on a subscription, which adds a reminder task.',
+  },
+
   // ── Documents ────────────────────────────────────────────────────────────
   'documents.costs': {
     modules: ['documents', 'costs'],

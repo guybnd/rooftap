@@ -28,7 +28,12 @@ import {
   useUpOverview,
   UpOverviewProvider,
   CostCategoriesProvider,
+  createManualReminder,
+  reminderKey,
+  toISODate,
   type Apartment,
+  type CostInsightMarks,
+  type SubscriptionLine,
   type CostCategory,
   type CostItem,
   type SetupItem,
@@ -130,6 +135,48 @@ function CostsScreenBody() {
       // Offline, or the client isn't bound yet: the local state already shows it.
     }
   }, []);
+
+  // Money insights: what this person hid and the subscriptions they kept
+  // (user_settings.money_insight_marks). Older servers lack the column: the
+  // marks then last until the screen closes.
+  const insightsOn = modules.isEnabled('money-insights');
+  const canSaveMarks = modules.server('costs.insight-marks');
+  const [insightMarks, setInsightMarks] = React.useState<CostInsightMarks>({});
+  React.useEffect(() => {
+    if (userSettings?.money_insight_marks) setInsightMarks(userSettings.money_insight_marks);
+  }, [userSettings?.money_insight_marks]);
+  const updateMarks = React.useCallback(
+    (update: (cur: CostInsightMarks) => CostInsightMarks) => {
+      setInsightMarks((cur) => {
+        const next = update(cur);
+        if (canSaveMarks) void persistSettings({ money_insight_marks: next });
+        return next;
+      });
+    },
+    [canSaveMarks, persistSettings],
+  );
+  const remindToCancel = React.useCallback(
+    async (sub: SubscriptionLine) => {
+      if (!group?.id || !sub.item) return;
+      const due = new Date();
+      due.setDate(due.getDate() + 3);
+      try {
+        await createManualReminder(getCurrentSupabaseClient(), {
+          groupId: group.id,
+          templateKey: reminderKey('cost', sub.item.id, 'cancel'),
+          title: `Cancel ${sub.name}?`,
+          dueDate: toISODate(due),
+          assignedTo: currentUserId ?? null,
+          notes: 'From Worth a look on Costs.',
+        });
+        haptics.success();
+        toast.success(`Reminder added for ${sub.name}`);
+      } catch {
+        toast.error("Couldn't add the reminder.");
+      }
+    },
+    [group?.id, currentUserId],
+  );
 
   const saveGoal = () => {
     const dollars = Number(goalDraft);
@@ -292,6 +339,7 @@ function CostsScreenBody() {
               nameOf={nameOf}
               onSetAmount={(item, cents) => patchRow(item.id, { amount: cents })}
               footer={suggestions}
+              insights={insightsOn ? { marks: insightMarks, onMarks: updateMarks, onRemind: modules.feature('insights.reminders') ? remindToCancel : null } : null}
             />
           )}
         </KeyboardAwareScrollView>

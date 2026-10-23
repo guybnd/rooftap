@@ -89,6 +89,10 @@ export const SERVER_FEATURES = {
     minSchema: '20261022170000_cost_redesign',
     label: 'archiving costs, future prices and an Income category',
   },
+  'costs.insight-marks': {
+    minSchema: '20261023030000_money_insight_marks',
+    label: 'hiding money insights and keeping subscriptions',
+  },
 } as const satisfies Record<string, ServerFeatureDef>;
 
 export type ServerFeatureId = keyof typeof SERVER_FEATURES;

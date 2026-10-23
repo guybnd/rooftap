@@ -417,8 +417,9 @@ describe('buildGlobalHits with a module switched off', () => {
     });
     // Calendar has no rows of its own in search yet, Google Calendar and MCP
     // are integrations with no rows at all, assistant chats aren't searched,
-    // and Rewards answers store searches on its own screen.
-    const noRows = new Set(['calendar', 'google-calendar', 'mcp', 'assistant', 'rewards']);
+    // Rewards answers store searches on its own screen, and Money insights
+    // only adds a card to Costs.
+    const noRows = new Set(['calendar', 'google-calendar', 'mcp', 'assistant', 'rewards', 'money-insights']);
     expect([...modulesWithHits(hits)].sort()).toEqual(ALL_MODULE_IDS.filter((id) => !noRows.has(id)).sort());
   });
 

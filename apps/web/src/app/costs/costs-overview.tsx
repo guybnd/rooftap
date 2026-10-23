@@ -38,6 +38,7 @@ import { SegmentedControl } from '@/components/ui/segmented-control';
 import { upBankApi } from '@/lib/up-bank-client';
 import { cn } from '@/lib/utils';
 import { CategoryGlyph } from './category-glyph';
+import { CostInsightsCard, type CostInsightsCardProps } from './cost-insights';
 import { TransactionSheet } from './money-view';
 
 const LABEL = 'text-[10.5px] font-medium uppercase tracking-[0.1em] text-muted-foreground';
@@ -67,6 +68,8 @@ export interface CostsOverviewProps {
   footer?: ReactNode;
   /** Wide screens put the summary on the left and the categories on the right. */
   wide?: boolean;
+  /** The money-insights module's "Worth a look" card, shown on this month; null when it's off. */
+  insights?: Pick<CostInsightsCardProps, 'marks' | 'onMarks' | 'onRemind'> | null;
 }
 
 export function CostsOverview(props: CostsOverviewProps) {
@@ -100,11 +103,22 @@ export function CostsOverview(props: CostsOverviewProps) {
     if (!openAssistantPopup({ ask: question })) router.push(`/assistant/new?kind=quick&ask=${encodeURIComponent(question)}`);
   };
   const onLine = (l: CostMonthLine) => (l.kind === 'shop' ? setShop(l) : l.item ? onOpenItem(l.item) : undefined);
+  // An insight's "Show the category": this month, that category open, scrolled to.
+  const openCategory = (category: CostCategory | null) => {
+    const id = category ?? 'none';
+    setFocus(null);
+    setPicked(keys[CHART_BACK]);
+    setOpen((cur) => new Set(cur).add(id));
+    requestAnimationFrame(() => document.getElementById(`cost-cat-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  };
 
   const summary = (
     <div className="space-y-5">
       <Hero month={month} goalCents={goalCents} onEditGoal={onEditGoal} focus={focus} onFocus={(k) => setFocus((cur) => (cur === k ? null : k))} />
       <MonthChart months={months} picked={month.month} goalCents={goalCents} onPick={setPicked} focus={focus} onClearFocus={() => setFocus(null)} />
+      {props.insights && month.when === 'current' && (
+        <CostInsightsCard items={items} goalCents={goalCents} onOpenItem={onOpenItem} onOpenCategory={openCategory} {...props.insights} />
+      )}
     </div>
   );
 
@@ -546,7 +560,7 @@ function CategoryRow({
     .filter(Boolean)
     .join(' · ');
   return (
-    <div className={cn(divided && 'border-t border-border/60')}>
+    <div id={`cost-cat-${c.category ?? 'none'}`} className={cn('scroll-mt-4', divided && 'border-t border-border/60')}>
       <button
         type="button"
         aria-expanded={isOpen}

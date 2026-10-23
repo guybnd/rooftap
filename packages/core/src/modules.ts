@@ -26,6 +26,7 @@ export type ModuleId =
   | 'shopper'
   | 'rewards'
   | 'assistant'
+  | 'money-insights'
   | 'google-calendar'
   | 'mcp';
 
@@ -150,6 +151,16 @@ export const MODULES: ModuleDef[] = [
     minSchema: '20261021020000_assistant',
   },
   // Integrations: modules with no section of their own (.docs/modules.md, section 3).
+  {
+    id: 'money-insights',
+    label: 'Money insights',
+    description: 'Price rises, subscriptions to rethink and ways to save, on the Costs page.',
+    iconId: 'lightbulb',
+    // Lives on the Costs page, so it needs no switch of its own to lock
+    // Costs on: with Costs off there is nowhere to show it.
+    defaultEnabled: true,
+    enhances: ['costs', 'shopper', 'household'],
+  },
   {
     id: 'google-calendar',
     label: 'Google Calendar',

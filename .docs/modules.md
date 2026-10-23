@@ -49,6 +49,7 @@ Module ids reuse the existing section ids so `hidden_sections`, `section_order`,
 | `shopper` | Shopper (watchlist, price history, deal rating) | Off | | `household`, `costs` |
 | `rewards` | Rewards (loyalty cards and memberships, their partner stores and perks, store lookup) | Off | | `groceries` |
 | `assistant` | Assistant (quick asks, chats, the household thread; asks before changing anything) | Off | | `household`, `calendar`, `costs`, `groceries` |
+| `money-insights` | Money insights (the "Worth a look" card on Costs: price rises, subscriptions, plans ending, spending against its usual). Shows only on Costs, so it locks nothing | **On** | | `costs`, `shopper`, `household` |
 | `mcp` | MCP / agent access | Off | | all |
 
 `home` (the hub) and `profile` (Settings) are platform, not modules.

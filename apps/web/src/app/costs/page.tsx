@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useDataCache } from '@/lib/data-cache';
 import { createClient } from '@/lib/supabase/client';
 import { use$ } from '@legendapp/state/react';
-import type { CostItem, CostCategory, Apartment } from '@homeup/core';
+import type { CostItem, CostCategory, Apartment, CostInsightMarks, SubscriptionLine } from '@homeup/core';
+import { toast } from 'sonner';
 import { ArrowLeft, X } from 'lucide-react';
 import {
   formatMoney,
@@ -12,6 +13,9 @@ import {
   CostCategoriesProvider,
   UpOverviewProvider,
   useModules,
+  createManualReminder,
+  reminderKey,
+  toISODate,
 } from '@homeup/core';
 import { deleteCostReminders, costItems$, setupItems$, apartments$, useReconnectSync, useStoreHelpers, useStoreLoaded } from '@homeup/core';
 import { todayISO } from '@/app/tasks/moving-tasks';
@@ -121,6 +125,43 @@ export default function CostsPage() {
     setHideSectionSuggestions(true);
     persistSettings({ costs_hide_section_suggestions: true });
   };
+
+  // Money insights: what this person hid and the subscriptions they kept
+  // (user_settings.money_insight_marks). Older servers lack the column: the
+  // marks then last until the page closes.
+  const insightsOn = modules.isEnabled('money-insights');
+  const canSaveMarks = modules.server('costs.insight-marks');
+  const [insightMarks, setInsightMarks] = useState<CostInsightMarks>({});
+  useEffect(() => {
+    if (userSettings?.money_insight_marks) setInsightMarks(userSettings.money_insight_marks);
+  }, [userSettings?.money_insight_marks]);
+  const updateMarks = useCallback(
+    (update: (cur: CostInsightMarks) => CostInsightMarks) => {
+      setInsightMarks((cur) => {
+        const next = update(cur);
+        if (canSaveMarks) void persistSettings({ money_insight_marks: next });
+        return next;
+      });
+    },
+    [canSaveMarks, persistSettings],
+  );
+  const remindToCancel = useCallback(
+    async (sub: SubscriptionLine) => {
+      if (!group?.id || !sub.item) return;
+      const due = new Date();
+      due.setDate(due.getDate() + 3);
+      await createManualReminder(createClient(), {
+        groupId: group.id,
+        templateKey: reminderKey('cost', sub.item.id, 'cancel'),
+        title: `Cancel ${sub.name}?`,
+        dueDate: toISODate(due),
+        assignedTo: currentUserId ?? null,
+        notes: 'From Worth a look on Costs.',
+      });
+      toast.success(`Reminder added for ${sub.name}`);
+    },
+    [group?.id, currentUserId],
+  );
 
   const saveGoal = (cents: number | null) => {
     const value = cents && cents > 0 ? cents : null;
@@ -299,6 +340,7 @@ export default function CostsPage() {
           onSetAmount={setAmount}
           footer={suggestions}
           wide={wide}
+          insights={insightsOn ? { marks: insightMarks, onMarks: updateMarks, onRemind: modules.feature('insights.reminders') ? remindToCancel : null } : null}
         />
       )}
 
