@@ -1,7 +1,8 @@
 import { z } from "zod";
 import type { createAdminClient } from "@/lib/supabase/admin";
 import { visibleTasks, visibleEvents, visibleGroceryItems } from "@/lib/pat";
-import { listCostItems, isTaskOwnerEnabled, type ModuleId } from "@homeup/core";
+import { listCostItems, isTaskOwnerEnabled, applyTaskCompletion, billsDue, addDaysISO, toISODate, type ModuleId } from "@homeup/core";
+import { memberNames } from "@/lib/member-names";
 import { aiBlockedMessage, parseScoutBrief, scoutLatestRun, scoutRunStatus, scoutTitle, SCOUT_BRIEF_MAX, type Group } from "@homeup/core";
 import { hasOfferSources, scoutBrain, startScoutRun } from "@/lib/shopper/scout";
 import { readThread } from "@/lib/shopper/scout-thread";
@@ -419,20 +420,39 @@ export function householdTools({ admin, userId, groupId, enabled }: HouseholdToo
     "get_tasks",
     {
       description:
-        "Household to-dos visible to the authenticated user. Pass done false for what's still open. Each task says whether it's assigned to you.",
-      inputSchema: { done: z.boolean().optional(), detail: DETAIL },
+        "Household to-dos visible to the authenticated user. Pass done false for what's still open, or done true for what got done: done ones come newest first with completed_at and who ticked it off (completed_by). recurrence_days says how often a to-do repeats; ticking off a repeating one makes the next. Each task says whether it's assigned to you.",
+      inputSchema: {
+        done: z.boolean().optional(),
+        search: z.string().optional().describe("Only to-dos whose title contains this text, any case (say \"bins\")."),
+        completed_since: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .optional()
+          .describe("YYYY-MM-DD: only to-dos ticked off on or after this day."),
+        detail: DETAIL,
+      },
     },
-    async ({ done, detail }) => {
+    async ({ done, search, completed_since, detail }) => {
       if (!groupId) return { content: [{ type: "text", text: JSON.stringify([]) }] };
       const { data } = await admin
         .from("household_tasks")
         .select("*")
         .eq("group_id", groupId)
         .eq("deleted", false);
+      const needle = search?.trim().toLowerCase();
       const tasks = visibleTasks((data ?? []) as HouseholdTask[], userId)
         .filter((t) => isTaskOwnerEnabled(t, enabled))
-        .filter((t) => done === undefined || t.done === done);
-      const shaped = detail === "full" ? tasks : tasks.map((t) => ({ ...basic(t, TASK_BASIC), assigned_to_me: t.assigned_to === userId }));
+        .filter((t) => done === undefined || t.done === done)
+        .filter((t) => !needle || t.title.toLowerCase().includes(needle))
+        .filter((t) => !completed_since || (!!t.completed_at && t.completed_at.slice(0, 10) >= completed_since))
+        .sort((a, b) => Number(a.done) - Number(b.done) || (b.completed_at ?? "").localeCompare(a.completed_at ?? ""));
+      if (detail === "full") return { content: [{ type: "text", text: JSON.stringify(tasks) }] };
+      const names = tasks.some((t) => t.completed_by) ? await memberNames(admin, groupId).catch(() => new Map<string, string>()) : null;
+      const shaped = tasks.map((t) => ({
+        ...basic(t, TASK_BASIC),
+        assigned_to_me: t.assigned_to === userId,
+        ...(t.completed_by ? { completed_by: t.completed_by === userId ? "you" : names?.get(t.completed_by) ?? "someone" } : {}),
+      }));
       return { content: [{ type: "text", text: JSON.stringify(shaped) }] };
     }
   );
@@ -440,7 +460,8 @@ export function householdTools({ admin, userId, groupId, enabled }: HouseholdToo
   tool(
     "create_task",
     {
-      description: "Create a new household to-do, assigned to the authenticated user.",
+      description:
+        "Create a new household to-do, assigned to the authenticated user. Set repeat_every_days for a chore that repeats (bins every Tuesday: due_date the next Tuesday, repeat_every_days 7).",
       inputSchema: {
         title: z.string().min(1),
         due_date: z.string().optional(),
@@ -448,9 +469,17 @@ export function householdTools({ admin, userId, groupId, enabled }: HouseholdToo
         notes: z.string().optional(),
         priority: z.enum(["low", "medium", "high"]).optional(),
         private: z.boolean().optional(),
+        repeat_every_days: z
+          .number()
+          .int()
+          .min(1)
+          .max(366)
+          .nullable()
+          .optional()
+          .describe("Repeat this often in days: 7 weekly, 14 fortnightly, 30 monthly. Needs a due date for the first one. null stops repeating."),
       },
     },
-    async ({ title, due_date, due_time, notes, priority, private: isPrivate }) => {
+    async ({ title, due_date, due_time, notes, priority, private: isPrivate, repeat_every_days }) => {
       if (!groupId) return noGroupError();
       const id = crypto.randomUUID();
       const row: Record<string, unknown> = {
@@ -460,7 +489,7 @@ export function householdTools({ admin, userId, groupId, enabled }: HouseholdToo
         due_date: due_date ?? null,
         due_time: due_time ?? null,
         offset_days: null,
-        recurrence_days: null,
+        recurrence_days: repeat_every_days ?? null,
         done: false,
         completed_at: null,
         assigned_to: userId,
@@ -480,7 +509,7 @@ export function householdTools({ admin, userId, groupId, enabled }: HouseholdToo
   tool(
     "update_task",
     {
-      description: "Update fields on an existing household to-do (title, due date/time, notes, priority, private flag). Only the fields provided are changed; omit a field to leave it as-is.",
+      description: "Update fields on an existing household to-do (title, due date/time, notes, priority, private flag, how often it repeats). Only the fields provided are changed; omit a field to leave it as-is.",
       inputSchema: {
         task_id: z.string(),
         title: z.string().min(1).optional(),
@@ -489,9 +518,17 @@ export function householdTools({ admin, userId, groupId, enabled }: HouseholdToo
         notes: z.string().nullable().optional(),
         priority: z.enum(["low", "medium", "high"]).optional(),
         private: z.boolean().optional(),
+        repeat_every_days: z
+          .number()
+          .int()
+          .min(1)
+          .max(366)
+          .nullable()
+          .optional()
+          .describe("Repeat this often in days: 7 weekly, 14 fortnightly, 30 monthly. Needs a due date for the first one. null stops repeating."),
       },
     },
-    async ({ task_id, ...patch }) => {
+    async ({ task_id, repeat_every_days, ...patch }) => {
       if (!groupId) return noGroupError();
       const task = await findVisibleTask(admin, groupId, userId, task_id, enabled);
       if (!task) return toolError("Task not found");
@@ -499,6 +536,7 @@ export function householdTools({ admin, userId, groupId, enabled }: HouseholdToo
       for (const key of ["title", "due_date", "due_time", "notes", "priority", "private"] as const) {
         if (patch[key] !== undefined) updates[key] = patch[key];
       }
+      if (repeat_every_days !== undefined) updates.recurrence_days = repeat_every_days;
       if (Object.keys(updates).length > 0) {
         const { error } = await admin.from("household_tasks").update(updates).eq("id", task_id).eq("group_id", groupId);
         if (error) return toolError(error.message);
@@ -510,20 +548,34 @@ export function householdTools({ admin, userId, groupId, enabled }: HouseholdToo
   tool(
     "complete_task",
     {
-      description: "Mark a household to-do done or not done.",
+      description: "Mark a household to-do done or not done. Ticking off a repeating to-do makes its next one, as the app does.",
       inputSchema: { task_id: z.string(), done: z.boolean() },
     },
     async ({ task_id, done }) => {
       if (!groupId) return noGroupError();
       const task = await findVisibleTask(admin, groupId, userId, task_id, enabled);
       if (!task) return toolError("Task not found");
+      // Already in that state: change nothing, so a repeat never makes a second next one.
+      if (task.done === done) return { content: [{ type: "text", text: JSON.stringify({ ok: true, id: task_id, done }) }] };
+      const { update, createNextOccurrence } = applyTaskCompletion(task, done, { nextId: crypto.randomUUID() });
+      // The service role has no signed-in person for the trigger to read, so say who.
       const { error } = await admin
         .from("household_tasks")
-        .update({ done, completed_at: done ? new Date().toISOString() : null })
+        .update({ ...update, completed_by: done ? userId : null })
         .eq("id", task_id)
         .eq("group_id", groupId);
       if (error) return toolError(error.message);
-      return { content: [{ type: "text", text: JSON.stringify({ ok: true, id: task_id, done }) }] };
+      let next: { id: string; due_date: string | null } | undefined;
+      if (createNextOccurrence) {
+        // The database stamps the times.
+        const row: Partial<HouseholdTask> = { ...createNextOccurrence };
+        delete row.created_at;
+        delete row.updated_at;
+        const { error: nextError } = await admin.from("household_tasks").insert(row);
+        if (nextError) return toolError(nextError.message);
+        next = { id: createNextOccurrence.id, due_date: createNextOccurrence.due_date };
+      }
+      return { content: [{ type: "text", text: JSON.stringify({ ok: true, id: task_id, done, ...(next ? { next } : {}) }) }] };
     }
   );
 
@@ -567,6 +619,58 @@ export function householdTools({ admin, userId, groupId, enabled }: HouseholdToo
       const events = visibleEvents((data ?? []) as GroupEvent[], userId);
       const shaped = detail === "full" ? events : events.map((e) => basic(e, EVENT_BASIC));
       return { content: [{ type: "text", text: JSON.stringify(shaped) }] };
+    }
+  );
+
+  tool(
+    "get_agenda",
+    {
+      description:
+        "What's due across the household in the next days, in one answer: open to-dos due (and overdue ones), calendar events, and bills from Costs with their usual amount. Use it for \"what's due this week\". Parts whose module is off are left out. Amounts in cents.",
+      inputSchema: { days: z.number().int().positive().max(31).optional().describe("How many days ahead, today included; 7 when left out.") },
+    },
+    async ({ days }) => {
+      const span = days ?? 7;
+      if (!groupId) return { content: [{ type: "text", text: JSON.stringify({ tasks: [], events: [], bills: [] }) }] };
+      const costsOn = enabled.has("costs");
+      const cost = costsOn ? await householdCostMonth(admin, userId, groupId) : null;
+      // The person's today: Costs already works it out from their time zone.
+      const today = cost ? toISODate(cost.today) : new Date().toISOString().slice(0, 10);
+      const last = addDaysISO(today, span - 1);
+      const out: Record<string, unknown> = { from: today, to: last };
+      if (enabled.has("household")) {
+        const { data } = await admin.from("household_tasks").select("*").eq("group_id", groupId).eq("deleted", false).eq("done", false);
+        const open = visibleTasks((data ?? []) as HouseholdTask[], userId)
+          .filter((t) => isTaskOwnerEnabled(t, enabled))
+          .filter((t) => t.due_date && t.due_date <= last)
+          .sort((a, b) => (a.due_date ?? "").localeCompare(b.due_date ?? ""));
+        const row = (t: HouseholdTask) => ({ ...basic(t, TASK_BASIC), assigned_to_me: t.assigned_to === userId });
+        out.overdue_tasks = open.filter((t) => t.due_date! < today).map(row);
+        out.tasks = open.filter((t) => t.due_date! >= today).map(row);
+      }
+      if (enabled.has("calendar")) {
+        const { data } = await admin
+          .from("events")
+          .select("*")
+          .eq("group_id", groupId)
+          .eq("deleted", false)
+          .gte("starts_at", new Date(Date.now() - 12 * 3600_000).toISOString())
+          .lte("starts_at", new Date(Date.now() + (span + 1) * 86_400_000).toISOString());
+        out.events = visibleEvents((data ?? []) as GroupEvent[], userId)
+          .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
+          .map((e) => basic(e, EVENT_BASIC));
+      }
+      if (cost) {
+        out.bills = billsDue(cost.items, cost.links, cost.today, span - 1).map((b) => ({
+          name: b.item.name,
+          due: toISODate(b.due),
+          amount_cents: b.amountCents,
+          ...(b.item.is_estimate ? { estimate: true } : {}),
+          category: CATEGORY_META[b.item.category]?.label ?? b.item.category,
+          cost_item_id: b.item.id,
+        }));
+      }
+      return { content: [{ type: "text", text: JSON.stringify(out) }] };
     }
   );
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ASSISTANT_PERSONA, REMEMBER_INSTRUCTION, buildAssistantSystemPrompt, extractMemoryMarkers, summaryRequest } from './assistant-prompt';
+import { ASSISTANT_PERSONA, PRIVACY_TEXT, REMEMBER_INSTRUCTION, buildAssistantSystemPrompt, extractMemoryMarkers, summaryRequest } from './assistant-prompt';
 
 const base = {
   now: 'Tuesday 21 October 2026, 09:41',
@@ -20,6 +20,7 @@ describe('buildAssistantSystemPrompt', () => {
     const prompt = buildAssistantSystemPrompt(base);
     expect(prompt.startsWith(ASSISTANT_PERSONA)).toBe(true);
     expect(prompt).toContain(REMEMBER_INSTRUCTION);
+    expect(prompt).toContain(PRIVACY_TEXT);
   });
 
   it('names the person, the members and each module with its trust level', () => {

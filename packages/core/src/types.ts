@@ -594,6 +594,8 @@ export interface HouseholdTask {
   recurrence_days: number | null;
   done: boolean;
   completed_at: string | null; // ISO timestamp set when done→true, cleared on un-check (FLUX-164)
+  /** Who ticked it off; a database trigger fills it. Missing before 20261023060000_task_completed_by. */
+  completed_by?: string | null;
   assigned_to: string | null;
   private: boolean;
   template_key: string | null;

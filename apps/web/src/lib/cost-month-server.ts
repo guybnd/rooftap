@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { actualsSinceOf, costMonths, ledgerRows, listCostItems, type CostInsightMarks, type CostItem, type CostMonth } from "@homeup/core";
+import { actualsSinceOf, costBankLinks, costMonths, ledgerRows, listCostItems, type CostBankLink, type CostInsightMarks, type CostItem, type CostMonth } from "@homeup/core";
 import { bankLinkRows, visibleBankTransactions } from "@/lib/up-bank";
 
 // The Costs month on the server, for the assistant and the MCP tools: the
@@ -34,6 +34,10 @@ export interface ServerCostMonth {
   items: CostItem[];
   /** The household's monthly goal in cents, null when none is set. */
   goalCents: number | null;
+  /** Each bank-linked line's last payment, for when a bill is next due. */
+  links: CostBankLink[];
+  /** The start of the person's today, in the server's local fields (what billsDue reads). */
+  today: Date;
 }
 
 /** A YYYY-MM month (the current one when left out) for the household. */
@@ -43,10 +47,10 @@ export async function householdCostMonth(
   groupId: string,
   month?: string,
 ): Promise<ServerCostMonth> {
-  const { months, items, goalCents } = await householdCostMonths(admin, userId, groupId, (now) => [
+  const { months, items, goalCents, links, now } = await householdCostMonths(admin, userId, groupId, (now) => [
     month ?? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`,
   ]);
-  return { month: months[0], items, goalCents };
+  return { month: months[0], items, goalCents, links, today: new Date(now.getFullYear(), now.getMonth(), now.getDate()) };
 }
 
 export interface ServerCostMonths {
@@ -57,6 +61,8 @@ export interface ServerCostMonths {
   now: Date;
   /** Money insights the person hid or kept. */
   marks: CostInsightMarks;
+  /** Each bank-linked line's last payment, for when a bill is next due. */
+  links: CostBankLink[];
 }
 
 /** Several months for the household, worked out on the person's clock. `keysFor` picks them from it. */
@@ -102,5 +108,6 @@ export async function householdCostMonths(
     goalCents: s.costs_budget_monthly ?? null,
     now,
     marks: s.money_insight_marks ?? {},
+    links: costBankLinks(rows, links),
   };
 }

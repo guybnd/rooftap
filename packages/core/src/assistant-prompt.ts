@@ -25,6 +25,15 @@ export const REMEMBER_INSTRUCTION =
   'marker is removed before anyone sees the reply. Remember sparingly: only facts that will matter ' +
   'again, never one-off details or anything a tool can look up.';
 
+/** What the tools hide, so the assistant explains a gap instead of guessing at it. */
+export const PRIVACY_TEXT =
+  '## What is private\n' +
+  'Your tools show only what the person you are talking with can see. Tasks, events and grocery items another ' +
+  'member marked private are hidden from you, and bank payments include only this person\'s own and those other ' +
+  'members chose to share. Cost lines and the Costs month are shared with the whole household. When someone asks ' +
+  'about another member\'s spending or plans, answer from what you can see and say that anything they keep private ' +
+  'is not visible to you. Never guess at it.';
+
 const TRUST_TEXT: Record<TrustLevel, string> = {
   read: 'look up only; you cannot change anything here',
   ask: 'changes are proposed to the person, who confirms them with a tap',
@@ -86,6 +95,8 @@ export function buildAssistantSystemPrompt(input: AssistantPromptInput): string 
   } else {
     sections.push('## What you can reach\nNo parts of the app are available to you yet. You can still chat and remember facts.');
   }
+
+  sections.push(PRIVACY_TEXT);
 
   sections.push(
     'When a tool says a change was proposed, tell the person what you proposed in one line and that it ' +

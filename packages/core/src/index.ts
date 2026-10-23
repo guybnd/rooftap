@@ -66,6 +66,7 @@ export * from './ai-keys';
 export * from './ai-providers';
 export * from './assistant-prompt';
 export * from './assistant-api';
+export * from './feedback';
 export * from './assistant-stream';
 export * from './home-assistant';
 export * from './up-bank';

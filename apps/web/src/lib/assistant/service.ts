@@ -49,7 +49,11 @@ import { resolveServerKeys } from "@/lib/admin-config";
 import { householdKeys } from "@/lib/ai/household-keys";
 import { assistantTools } from "./tools";
 import { homeAssistantTools } from "./home-assistant";
+import { feedbackTool } from "./feedback-tool";
 import { isUnread, markConversationRead, readStates } from "./reads";
+import { memberNames } from "@/lib/member-names";
+
+export { memberNames };
 
 // HOUP-443: the assistant's server side, shared by every /api/assistant
 // route (and, later, Telegram and routines). Loads the household's context,
@@ -110,7 +114,8 @@ export async function assistantContextFor(
 
 /**
  * Everything the assistant may call this turn: the household tools for its
- * switched-on modules, plus Home Assistant's when the household connected it.
+ * switched-on modules, Home Assistant's when the household connected it, and
+ * sending feedback to the Rooftap team.
  */
 async function turnTools(ctx: AssistantContext, settings: AssistantSettings, readOnly: boolean) {
   const household = assistantTools(
@@ -118,7 +123,8 @@ async function turnTools(ctx: AssistantContext, settings: AssistantSettings, rea
     { settings, readOnly }
   );
   const homeAssistant = await homeAssistantTools(ctx.admin, ctx.groupId, { readOnly });
-  return { tools: [...household, ...(homeAssistant?.tools ?? [])], homeAssistant };
+  const feedback = feedbackTool(ctx.admin, ctx.userId, ctx.groupId);
+  return { tools: [...household, ...(homeAssistant?.tools ?? []), feedback], homeAssistant };
 }
 
 // ── Rows to DTOs ──────────────────────────────────────────────────────────
@@ -199,9 +205,10 @@ export function toMessage(row: MessageRow, names: Map<string, string>, viewerId?
  * Rows back into the model's chat format, starting at a user message so no
  * tool result is orphaned. With `names` (the household thread) each member's
  * message says who wrote it, and members talking among themselves become one
- * user message, since the model only answers when tagged.
+ * user message, since the model only answers when tagged. `max` keeps the
+ * newest messages, still starting at a user message.
  */
-export function toHistory(rows: MessageRow[], names?: Map<string, string>): ChatMessage[] {
+export function toHistory(rows: MessageRow[], names?: Map<string, string>, max?: number): ChatMessage[] {
   const out: ChatMessage[] = [];
   for (const row of rows) {
     if (row.role === "user" && names) {
@@ -218,38 +225,41 @@ export function toHistory(rows: MessageRow[], names?: Map<string, string>): Chat
       if (meta.toolCallId && meta.name) out.push({ role: "tool", toolCallId: meta.toolCallId, name: meta.name, content: row.content });
     }
   }
-  const firstUser = out.findIndex((m) => m.role === "user");
-  return firstUser < 0 ? [] : out.slice(firstUser);
+  const paired = pairToolSteps(out);
+  const kept = max === undefined ? paired : paired.slice(-max);
+  const firstUser = kept.findIndex((m) => m.role === "user");
+  return firstUser < 0 ? [] : kept.slice(firstUser);
+}
+
+/**
+ * Puts each tool result right after the step that called it, as every
+ * provider requires. A turn's steps used to be saved in one insert with one
+ * timestamp, so reading them back could put a result before its call (and
+ * Anthropic refused the whole chat). A result with no call, or a call with
+ * no result, is dropped.
+ */
+export function pairToolSteps(messages: ChatMessage[]): ChatMessage[] {
+  const results = new Map<string, ChatMessage & { role: "tool" }>();
+  for (const m of messages) if (m.role === "tool") results.set(m.toolCallId, m);
+  const out: ChatMessage[] = [];
+  for (const m of messages) {
+    if (m.role === "tool") continue;
+    if (m.role !== "assistant" || !m.toolCalls?.length) {
+      out.push(m);
+      continue;
+    }
+    const answered = m.toolCalls.filter((c) => results.has(c.id));
+    if (answered.length) out.push({ role: "assistant", content: m.content, toolCalls: answered });
+    else if (m.content) out.push({ role: "assistant", content: m.content });
+    for (const c of answered) {
+      out.push(results.get(c.id)!);
+      results.delete(c.id);
+    }
+  }
+  return out;
 }
 
 // ── Household context ────────────────────────────────────────────────────
-
-// Names come from auth, one admin call per member, on every turn and every
-// history load. They hardly change, so a warm server keeps them a few minutes.
-const NAMES_TTL_MS = 5 * 60_000;
-const namesCache = new Map<string, { at: number; names: Map<string, string> }>();
-
-export async function memberNames(admin: SupabaseClient, groupId: string): Promise<Map<string, string>> {
-  const cached = namesCache.get(groupId);
-  if (cached && Date.now() - cached.at < NAMES_TTL_MS) return cached.names;
-  const names = await loadMemberNames(admin, groupId);
-  namesCache.set(groupId, { at: Date.now(), names });
-  return names;
-}
-
-async function loadMemberNames(admin: SupabaseClient, groupId: string): Promise<Map<string, string>> {
-  const { data: members } = await admin.from("group_members").select("user_id").eq("group_id", groupId);
-  const names = new Map<string, string>();
-  await Promise.all(
-    (members ?? []).map(async (m: { user_id: string }) => {
-      const { data } = await admin.auth.admin.getUserById(m.user_id);
-      const meta = data.user?.user_metadata as { full_name?: string; name?: string } | undefined;
-      const name = meta?.full_name ?? meta?.name ?? data.user?.email?.split("@")[0] ?? "Someone";
-      names.set(m.user_id, name.split(" ")[0]);
-    })
-  );
-  return names;
-}
 
 export async function loadSettings(admin: SupabaseClient, groupId: string): Promise<AssistantSettings> {
   const { data } = await admin.from("assistant_settings").select("*").eq("group_id", groupId).maybeSingle();
@@ -586,7 +596,7 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
     markConversationRead(ctx, conversation.id, { at: now }),
   ]);
   const household = conversation.kind === "household";
-  const history = toHistory(((recent ?? []) as MessageRow[]).reverse(), household ? names : undefined).slice(-settings.contextMessages * 3);
+  const history = toHistory(((recent ?? []) as MessageRow[]).reverse(), household ? names : undefined, settings.contextMessages * 3);
 
   const contextMs = Date.now() - started - readMs;
   const { tools, homeAssistant, ms: toolsMs } = await gathering;
@@ -682,7 +692,11 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
   const cost = turnCost(active, model, turn.inputTokens, turn.outputTokens);
   // Steps before the final answer are stored for the model's memory of the
   // turn; only the last one carries the proposals, tokens and cost.
-  const steps = turn.messages.slice(0, -1).map((m) => ({
+  // Each row gets its own time, a millisecond apart, so the turn reads back
+  // in order (one insert would stamp them all alike).
+  const savedAt = Date.now();
+  const steps = turn.messages.slice(0, -1).map((m, i) => ({
+    created_at: new Date(savedAt + i).toISOString(),
     conversation_id: conversation.id,
     group_id: ctx.groupId,
     user_id: ctx.userId,
@@ -696,6 +710,7 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
   const { data: replyRow } = await ctx.admin
     .from("assistant_messages")
     .insert({
+      created_at: new Date(savedAt + steps.length).toISOString(),
       conversation_id: conversation.id,
       group_id: ctx.groupId,
       user_id: ctx.userId,

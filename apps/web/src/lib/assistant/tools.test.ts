@@ -33,9 +33,9 @@ describe("assistantTools", () => {
 
   it("hides writes under read trust and for read-only members", () => {
     const read = assistantTools(ctx(["household"]), { settings: { ...DEFAULT_ASSISTANT_SETTINGS, trust: { household: "read" } } });
-    expect(read.map((t) => t.name)).toEqual(["get_tasks"]);
+    expect(read.map((t) => t.name)).toEqual(["get_tasks", "get_agenda"]);
     const member = assistantTools(ctx(["household"]), { settings: DEFAULT_ASSISTANT_SETTINGS, readOnly: true });
-    expect(member.map((t) => t.name)).toEqual(["get_tasks"]);
+    expect(member.map((t) => t.name)).toEqual(["get_tasks", "get_agenda"]);
   });
 
   it("gives every tool an object JSON schema and validates arguments", async () => {

@@ -1,6 +1,6 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalDependencies": ["whats-new/**", "CHANGELOG.md"],
+  "globalDependencies": ["whats-new/**", "CHANGELOG.md", "supabase/migrations/**"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

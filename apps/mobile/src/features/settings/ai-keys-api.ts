@@ -1,6 +1,6 @@
 // HOUP-436: native calls to /api/ai-keys (Settings > AI keys). Same
 // authedFetch pattern as features/shopper/shopper-api.ts.
-import type { AiKeyProvider, AiProvidersStatus, HouseholdAiKeysStatus } from '@homeup/core';
+import type { AiKeyProvider, AiProvidersStatus, FeedbackInbox, HouseholdAiKeysStatus } from '@homeup/core';
 import { getCurrentSupabaseClient } from '@/lib/supabase-client';
 import { getStoredServer } from '@/lib/server-config';
 
@@ -53,4 +53,14 @@ export async function hasAiProvidersPanel(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/** Settings > Feedback (server operators only); a 403 or 404 hides the panel. */
+export function feedbackInbox(): Promise<FeedbackInbox> {
+  return call('/api/admin/feedback');
+}
+
+/** Marks one piece of feedback dealt with, or back to new; answers the inbox. */
+export function setFeedbackDone(id: string, done: boolean): Promise<FeedbackInbox> {
+  return call('/api/admin/feedback', { method: 'PATCH', body: JSON.stringify({ id, done }) });
 }

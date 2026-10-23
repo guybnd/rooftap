@@ -14,6 +14,7 @@ import { AgentsManager } from "@/components/agents-manager";
 import { PatSettings } from "@/components/pat-settings";
 import { AiProvidersSettings } from "@/components/ai-providers-settings";
 import { ApiKeysSettings } from "@/components/api-keys-settings";
+import { FeedbackInbox } from "@/components/feedback-inbox";
 import { HouseholdAiKeys } from "@/components/household-ai-keys";
 import { McpSettings } from "@/components/mcp-settings";
 import { UsersManager } from "@/components/users-manager";
@@ -46,7 +47,7 @@ export const globalMenus: GlobalMenu[] = [
   { key: "appearance", label: "Appearance", panels: [AppearanceSettings] },
   { key: "notifications", label: "Notifications", panels: [NotificationsSettings] },
   { key: "connectors", label: "Connectors", panels: [UpBankSettings] },
-  { key: "integrations", label: "Integrations & keys", panels: [HouseholdAiKeys, AiProvidersSettings, ApiKeysSettings, PatSettings, McpSettings] },
+  { key: "integrations", label: "Integrations & keys", panels: [HouseholdAiKeys, AiProvidersSettings, ApiKeysSettings, FeedbackInbox, PatSettings, McpSettings] },
   { key: "whats-new", label: "What's new", panels: [WhatsNewHistory] },
 ];
 

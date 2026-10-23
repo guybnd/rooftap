@@ -54,12 +54,14 @@ function Spans({ spans }: { spans: ReplySpan[] }) {
   );
 }
 
+// Selectable, so a long press copies a reply (or part of one) with the
+// system's own text menu: no clipboard module, so no new app build.
 export function ReplyText({ text }: { text: string }) {
   return (
     <View className="gap-1.5">
       {parseReply(text).map((b, i) =>
         b.type === 'paragraph' ? (
-          <Text key={i} className="text-body leading-relaxed text-foreground">
+          <Text key={i} selectable className="text-body leading-relaxed text-foreground">
             <Spans spans={b.spans} />
           </Text>
         ) : (
@@ -67,7 +69,7 @@ export function ReplyText({ text }: { text: string }) {
             <Text className="text-body text-muted-foreground" style={{ fontVariant: ['tabular-nums'] }}>
               {b.type === 'bullet' ? '•' : `${b.n}.`}
             </Text>
-            <Text className="min-w-0 flex-1 text-body leading-relaxed text-foreground">
+            <Text selectable className="min-w-0 flex-1 text-body leading-relaxed text-foreground">
               <Spans spans={b.spans} />
             </Text>
           </View>

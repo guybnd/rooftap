@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
+vi.mock("@/lib/member-names", () => ({ memberNames: vi.fn(async () => new Map([["u2", "Noa"]])) }));
 
 import { MCP_TOOLS } from "@/lib/mcp-tools";
 import { householdTools } from "./household-tools";
@@ -141,5 +142,88 @@ describe("checklist tools", () => {
   it("lists open checklists with their items", async () => {
     const { body } = await run(base(), "get_checklists", {});
     expect(body[0].items.map((i: Row) => i.label)).toEqual(["Passports", "Chargers"]);
+  });
+});
+
+describe("task tools", () => {
+  const bins = (over: Row = {}) => ({
+    id: "t1",
+    group_id: "g1",
+    title: "Put the bins out",
+    due_date: "2026-10-20",
+    due_time: null,
+    offset_days: null,
+    recurrence_days: 7,
+    done: false,
+    completed_at: null,
+    assigned_to: "u1",
+    private: false,
+    template_key: null,
+    notes: null,
+    sort_order: 0,
+    priority: "medium",
+    deleted: false,
+    ...over,
+  });
+
+  it("creates a repeating to-do", async () => {
+    const tables: Record<string, Row[]> = { household_tasks: [] };
+    await run(tables, "create_task", { title: "Bins", due_date: "2026-10-27", repeat_every_days: 7 });
+    expect(tables.household_tasks[0]).toMatchObject({ title: "Bins", recurrence_days: 7 });
+  });
+
+  it("sets and stops a repeat on update", async () => {
+    const tables: Record<string, Row[]> = { household_tasks: [bins({ recurrence_days: null })] };
+    await run(tables, "update_task", { task_id: "t1", repeat_every_days: 14 });
+    expect(tables.household_tasks[0].recurrence_days).toBe(14);
+    await run(tables, "update_task", { task_id: "t1", repeat_every_days: null });
+    expect(tables.household_tasks[0].recurrence_days).toBeNull();
+  });
+
+  it("ticking off a repeating to-do makes the next one, once", async () => {
+    const tables: Record<string, Row[]> = { household_tasks: [bins()] };
+    const { body } = await run(tables, "complete_task", { task_id: "t1", done: true });
+    expect(tables.household_tasks[0]).toMatchObject({ done: true, completed_by: "u1" });
+    expect(tables.household_tasks).toHaveLength(2);
+    expect(tables.household_tasks[1]).toMatchObject({ title: "Put the bins out", recurrence_days: 7, done: false });
+    expect(tables.household_tasks[1]).not.toHaveProperty("created_at");
+    expect(body.next.id).toBe(tables.household_tasks[1].id);
+    await run(tables, "complete_task", { task_id: "t1", done: true });
+    expect(tables.household_tasks).toHaveLength(2);
+  });
+
+  it("says who ticked off a to-do, newest first, and filters by title", async () => {
+    const tables: Record<string, Row[]> = {
+      household_tasks: [
+        bins({ id: "a", done: true, completed_at: "2026-10-13T08:00:00Z", completed_by: "u1" }),
+        bins({ id: "b", done: true, completed_at: "2026-10-20T08:00:00Z", completed_by: "u2" }),
+        bins({ id: "c", title: "Water plants", done: true, completed_at: "2026-10-21T08:00:00Z" }),
+      ],
+    };
+    const { body } = await run(tables, "get_tasks", { done: true, search: "BINS" });
+    expect(body.map((t: Row) => [t.id, t.completed_by])).toEqual([
+      ["b", "Noa"],
+      ["a", "you"],
+    ]);
+    const since = await run(tables, "get_tasks", { done: true, completed_since: "2026-10-20" });
+    expect(since.body.map((t: Row) => t.id)).toEqual(["c", "b"]);
+  });
+
+  it("lists what's due and overdue in the agenda", async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const day = (n: number) => new Date(Date.parse(today) + n * 86_400_000).toISOString().slice(0, 10);
+    const tables: Record<string, Row[]> = {
+      household_tasks: [
+        bins({ id: "late", due_date: day(-2) }),
+        bins({ id: "soon", due_date: day(3) }),
+        bins({ id: "far", due_date: day(20) }),
+        bins({ id: "undated", due_date: null }),
+      ],
+    };
+    const { body } = await run(tables, "get_agenda", { days: 7 }, new Set(["household"]) as typeof ctx.enabled);
+    expect(body.overdue_tasks.map((t: Row) => t.id)).toEqual(["late"]);
+    expect(body.tasks.map((t: Row) => t.id)).toEqual(["soon"]);
+    expect(body).not.toHaveProperty("events");
+    expect(body).not.toHaveProperty("bills");
   });
 });

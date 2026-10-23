@@ -28,6 +28,7 @@ export const MCP_TOOLS: McpToolMeta[] = [
   { name: 'complete_task', kind: 'write', module: 'household' },
   { name: 'delete_task', kind: 'write', module: 'household' },
   { name: 'get_upcoming_calendar_events', kind: 'read', module: 'calendar' },
+  { name: 'get_agenda', kind: 'read', module: 'household' },
   { name: 'create_event', kind: 'write', module: 'calendar' },
   { name: 'update_event', kind: 'write', module: 'calendar' },
   { name: 'delete_event', kind: 'write', module: 'calendar' },

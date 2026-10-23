@@ -42,6 +42,55 @@ describe("toHistory", () => {
   });
 });
 
+describe("toHistory with steps read back out of order", () => {
+  const call = (id: string) => ({ id, name: "get_budget_summary", args: {} });
+  it("puts each tool result after the step that called it", () => {
+    // One insert stamped the whole turn alike, so the result came back first.
+    const history = toHistory([
+      row({ role: "user", content: "costs in October?" }),
+      row({ role: "tool", content: "{}", tool_calls: { toolCallId: "t1", name: "get_budget_summary" } }),
+      row({ role: "assistant", content: "", tool_calls: [call("t1")] }),
+      row({ role: "assistant", content: "Here's October." }),
+      row({ role: "user", content: "and groceries?" }),
+    ]);
+    expect(history.map((m) => m.role)).toEqual(["user", "assistant", "tool", "assistant", "user"]);
+    expect(history[2]).toMatchObject({ role: "tool", toolCallId: "t1" });
+  });
+
+  it("drops a call with no result and a result with no call", () => {
+    const history = toHistory([
+      row({ role: "user", content: "hi" }),
+      row({ role: "assistant", content: "Looking.", tool_calls: [call("gone")] }),
+      row({ role: "tool", content: "{}", tool_calls: { toolCallId: "stray", name: "get_tasks" } }),
+      row({ role: "assistant", content: "Done." }),
+    ]);
+    expect(history).toEqual([
+      { role: "user", content: "hi" },
+      { role: "assistant", content: "Looking." },
+      { role: "assistant", content: "Done." },
+    ]);
+  });
+
+  it("keeps the newest messages from a user message on", () => {
+    const history = toHistory(
+      [
+        row({ role: "user", content: "first" }),
+        row({ role: "assistant", content: "", tool_calls: [call("t1")] }),
+        row({ role: "tool", content: "{}", tool_calls: { toolCallId: "t1", name: "get_budget_summary" } }),
+        row({ role: "assistant", content: "One." }),
+        row({ role: "user", content: "second" }),
+        row({ role: "assistant", content: "Two." }),
+      ],
+      undefined,
+      4
+    );
+    expect(history).toEqual([
+      { role: "user", content: "second" },
+      { role: "assistant", content: "Two." },
+    ]);
+  });
+});
+
 describe("toHistory in the household thread", () => {
   it("names each member and folds their chat into one message before the ask", () => {
     const names = new Map([

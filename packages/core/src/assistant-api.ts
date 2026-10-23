@@ -24,6 +24,7 @@ import {
 } from './home-assistant';
 import { createAssistantStreamReader, type AssistantStreamEvent } from './assistant-stream';
 import { scoutTitle } from './shopper-scout';
+import { SEND_FEEDBACK_TOOL } from './feedback';
 
 export interface AssistantConversation {
   id: string;
@@ -341,6 +342,8 @@ export function describeProposal(tool: string, module: AssistantScope, args: Rec
     const target = args.name ?? args.area ?? args.floor;
     return `${homeAssistantToolLabel(tool)}${typeof target === 'string' && target.trim() ? ` ${quoted(target)}` : ''} in Home Assistant`;
   }
+  // The whole message, so the person sees exactly what leaves the household.
+  if (tool === SEND_FEEDBACK_TOOL) return `Send this to the Rooftap team: ${quoted(args.message)}`;
   if (tool === 'start_scout') return `Ask Scout to find ${quoted(typeof args.text === 'string' ? scoutTitle({ text: args.text }) : null)}`;
   const bank = bankProposal(tool, args);
   if (bank) return bank;

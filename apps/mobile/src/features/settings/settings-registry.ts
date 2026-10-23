@@ -18,6 +18,7 @@ import { AssistantHomeAssistant } from './panels/assistant-home-assistant';
 import { NotificationsSettings } from './panels/notifications-settings';
 import { AiProvidersSettings } from './panels/ai-providers-settings';
 import { ApiKeysSettings } from './panels/api-keys-settings';
+import { FeedbackInbox } from './panels/feedback-inbox';
 import { HouseholdAiKeys } from './panels/household-ai-keys';
 import { PatSettings } from './panels/pat-settings';
 import { McpSettings } from './panels/mcp-settings';
@@ -50,7 +51,7 @@ export const globalMenus: GlobalMenu[] = [
   { key: 'appearance', label: 'Appearance', panels: [AppearanceSettings, MotionSettings, HapticsSettings] },
   { key: 'notifications', label: 'Notifications', panels: [NotificationsSettings] },
   { key: 'connectors', label: 'Connectors', panels: [UpBankSettings] },
-  { key: 'integrations', label: 'Integrations & keys', panels: [HouseholdAiKeys, AiProvidersSettings, ApiKeysSettings, PatSettings, McpSettings] },
+  { key: 'integrations', label: 'Integrations & keys', panels: [HouseholdAiKeys, AiProvidersSettings, ApiKeysSettings, FeedbackInbox, PatSettings, McpSettings] },
   { key: 'about', label: 'About & updates', panels: [AppUpdates] },
 ];
 

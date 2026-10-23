@@ -104,6 +104,8 @@ Registration is open until the first account exists. Then the auth server closes
 
 The panel shows only where a household key adds something. On a self-hosted server with `SERVER_OPERATOR_EMAILS` set, nobody sees it, because the operator manages the server's keys in **AI providers**. On a server with no operator, the panel stays, because it is then the only way to add a key in the app.
 
+**Feedback.** People can ask the Assistant to send feedback to the Rooftap team. The Assistant shows the whole message and sends it only after the person confirms. It goes to **Settings → Integrations & keys → Feedback**, which only operators see, so on your server the feedback reaches you. Set `FEEDBACK_GITHUB_REPO` and `FEEDBACK_GITHUB_TOKEN` to also open a GitHub issue for each one. The issue holds the message and the server version, but no name or household data.
+
 On a self-hosted server, `ROOFTAP_BILLING` is unset, so every household can use the server's key with no limit.
 
 ## Choosing which modules your server offers
