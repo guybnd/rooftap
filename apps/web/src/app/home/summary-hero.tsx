@@ -42,6 +42,7 @@ import { cn } from '@/lib/utils';
 import { memberLabel } from '@/app/setup/member-label';
 import { HeroLede } from '@/components/ui/hero-lede';
 import { NowCardPager, type NowCardPagerItem } from '@/components/ui/now-card';
+import { BinLids } from '@/components/bin-lids';
 import { sectionIconFor } from '@/lib/section-icons';
 import { TaskChecklistPanel } from '@/app/tasks/task-checklist-panel';
 import { AvatarBubble, formatTime12h, type HeroItem, type MemberProfiles } from './hub-shared';
@@ -272,14 +273,15 @@ export function SummaryHero({
               {countdown && countdown !== 'now' ? ` · ${countdown}` : ''}
             </span>
           )}
+          {item.binNight && <BinLids lids={item.binNight.lids} />}
           <span className="text-xs text-muted-foreground">{item.sourceLabel}</span>
         </>
       ),
       progress: checklist ? completion(checklistItems) : null,
       body: checklist ? <TaskChecklistPanel checklist={checklist} items={checklistItems} currentUserId={currentUserId} /> : undefined,
       onOpen: heroItemOpenTarget(item) ? () => onOpenItem(item) : undefined,
-      onComplete: item.task && !item.task.done ? () => onCompleteItem(item) : undefined,
-      footer: item.task ? undefined : (
+      onComplete: (item.task && !item.task.done) || (item.binNight && !item.done) ? () => onCompleteItem(item) : undefined,
+      footer: item.task || item.binNight ? undefined : (
         <EventCardFooter item={item} onOpen={heroItemOpenTarget(item) ? () => onOpenItem(item) : undefined} />
       ),
     };

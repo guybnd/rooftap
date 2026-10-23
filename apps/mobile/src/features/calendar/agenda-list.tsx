@@ -7,11 +7,13 @@ import { Pressable, View } from 'react-native';
 import { Building2, Check, CalendarDays, Navigation } from 'lucide-react-native';
 import { Text, Button, LeadingTile, ListGroup, ListItem, ListItemContent, ListItemLeading, ListItemMeta, ListItemTitle } from '@homeup/ui';
 import {
+  binNamesPhrase,
   eventDetailLabel,
   legText,
   getEventsForDay,
   isEventStartDay,
   type Apartment,
+  type BinCollection,
   type Appointment,
   type GoogleCalendarEventWithAttribution,
   type GroupEvent,
@@ -21,6 +23,7 @@ import {
 import { sectionIconFor } from '@/lib/section-icons';
 import { useEventForecast } from './use-event-forecast';
 import { useLegTravel } from './use-event-travel';
+import { BinLids } from '@/features/bins/bin-lids';
 
 type MemberProfiles = Record<string, { email: string; name: string | null; avatar: string | null }>;
 
@@ -47,7 +50,8 @@ export type AgendaItem =
   | { kind: 'appointment'; key: string; sortMinutes: number; timeLabel: string; appointment: Appointment; apartment: Apartment | null }
   | { kind: 'event'; key: string; sortMinutes: number; timeLabel: string; event: GroupEvent }
   | { kind: 'calendarEvent'; key: string; sortMinutes: number; timeLabel: string; calendarEvent: GoogleCalendarEventWithAttribution }
-  | { kind: 'task'; key: string; sortMinutes: number; timeLabel: string; task: HouseholdTask };
+  | { kind: 'task'; key: string; sortMinutes: number; timeLabel: string; task: HouseholdTask }
+  | { kind: 'bins'; key: string; sortMinutes: number; timeLabel: string; collection: BinCollection };
 
 export function getAgendaItems(
   date: Date,
@@ -55,10 +59,16 @@ export function getAgendaItems(
   apartments: Apartment[],
   groupEvents: GroupEvent[],
   tasks: HouseholdTask[],
-  calendarEvents: GoogleCalendarEventWithAttribution[] = []
+  calendarEvents: GoogleCalendarEventWithAttribution[] = [],
+  binDay: BinCollection | null = null
 ): AgendaItem[] {
   const items: AgendaItem[] = [];
   const dateKey = toDateKey(date);
+
+  // Bin night: the day's collection, as an all-day row (needs calendar and bins).
+  if (binDay) {
+    items.push({ kind: 'bins', key: `bins-${binDay.date}`, sortMinutes: -1, timeLabel: 'All day', collection: binDay });
+  }
 
   appointments
     .filter((app) => toDateKey(new Date(app.scheduled_at)) === dateKey)
@@ -128,6 +138,8 @@ interface AgendaListProps {
   onPressEvent: (event: GroupEvent) => void;
   onPressCalendarEvent?: (event: GoogleCalendarEventWithAttribution) => void;
   onPressTask: (task: HouseholdTask) => void;
+  /** Bin night: a collection row opens Bins. */
+  onPressBins?: () => void;
   onToggleTaskDone: (task: HouseholdTask) => void;
   /** Launches the same "New…" chooser a long-press opens (Hearth E-series). */
   onAddSomething?: () => void;
@@ -196,6 +208,7 @@ export function AgendaList({
   onPressEvent,
   onPressCalendarEvent,
   onPressTask,
+  onPressBins,
   onToggleTaskDone,
   onAddSomething,
   addPhrase = 'an appointment, event, or to-do',
@@ -264,6 +277,21 @@ export function AgendaList({
                 <EventAgendaMeta timeLabel={item.timeLabel} event={item.event} />
                 {legOf(item.event.id) && <LegLine leg={legOf(item.event.id)!} />}
               </ListItemContent>
+            </ListItem>
+          );
+        }
+
+        if (item.kind === 'bins') {
+          return (
+            <ListItem key={item.key} onPress={onPressBins}>
+              <ListItemLeading>
+                <LeadingTile sectionId="bins" Icon={sectionIconFor('bins')} size="md" />
+              </ListItemLeading>
+              <ListItemContent>
+                <ListItemTitle>Bin collection</ListItemTitle>
+                <AgendaMeta timeLabel={item.timeLabel} subtitle={binNamesPhrase(item.collection.streams)} />
+              </ListItemContent>
+              <BinLids lids={item.collection.streams.map((st) => st.lid)} size="sm" />
             </ListItem>
           );
         }

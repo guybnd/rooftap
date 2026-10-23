@@ -47,8 +47,11 @@ const INDEXEDDB_TABLES = [
   'occasions',                  // Occasions module
   'gift_ideas',                 // Occasions module
   'wishlist_items',             // Occasions module
+  'bin_streams',                // Bin night module
+  'bin_changes',                // Bin night module
+  'bin_plans',                  // Bin night module
 ];
-const INDEXEDDB_VERSION = 9; // bumped for the Occasions tables (non-destructive upgrade)
+const INDEXEDDB_VERSION = 10; // bumped for the Occasions and Bin night tables (non-destructive upgrade)
 
 let indexedDBPlugin: ReturnType<typeof observablePersistIndexedDB> | undefined;
 

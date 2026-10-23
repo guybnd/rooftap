@@ -88,7 +88,7 @@ export async function resolveServerKey(key: string): Promise<string | undefined>
 // unset (or an unrecognized value), each type falls back to its historical
 // provider so an untouched install behaves exactly as it did before this
 // setting existed.
-export type ParsingType = "listing" | "receipt" | "recipe" | "event";
+export type ParsingType = "listing" | "receipt" | "recipe" | "event" | "bins";
 export type ParsingProvider = "openai" | "openrouter" | "gemini" | "anthropic";
 
 const KNOWN_PROVIDERS = new Set<string>(["openai", "openrouter", "gemini", "anthropic"]);
@@ -98,6 +98,7 @@ const LEGACY_PROVIDER: Record<ParsingType, ParsingProvider> = {
   receipt: "openai",
   recipe: "gemini",
   event: "gemini",
+  bins: "gemini",
 };
 
 /** The server's AI settings (Settings > AI providers); empty when never saved. */

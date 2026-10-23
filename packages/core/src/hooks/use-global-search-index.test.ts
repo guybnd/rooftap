@@ -420,7 +420,7 @@ describe('buildGlobalHits with a module switched off', () => {
     // Rewards answers store searches on its own screen, Occasions keeps gifts
     // out of search for now, and Money insights
     // only adds a card to Costs.
-    const noRows = new Set(['calendar', 'google-calendar', 'mcp', 'assistant', 'rewards', 'occasions', 'money-insights']);
+    const noRows = new Set(['calendar', 'google-calendar', 'mcp', 'assistant', 'rewards', 'occasions', 'bins', 'money-insights']);
     expect([...modulesWithHits(hits)].sort()).toEqual(ALL_MODULE_IDS.filter((id) => !noRows.has(id)).sort());
   });
 

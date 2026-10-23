@@ -396,3 +396,66 @@ export async function parseEventDetails(
     schemaName: EVENT_SCHEMA_NAME,
   }, key?.apiKey, key?.model);
 }
+
+// Bin night: a council's bin calendar (the fridge magnet, or the PDF from the
+// council's site). Answers the regular pattern per bin and the one-off
+// changes; core's normalizeParsedBins checks it before the person confirms.
+const BINS_SYSTEM_PROMPT = `You read council waste collection calendars (a photo of a fridge magnet or a printed calendar, or a PDF from a council website) and describe the household's bin collections. Only use what the calendar shows. For each bin stream (for example general waste, recycling, garden organics, glass, food), give its name as the calendar calls it (short), its lid colour (red, yellow, green, blue, purple, grey or other) when shown or usual for that stream, the weekday it is collected (0 = Sunday to 6 = Saturday), how many weeks apart collections are (1 = weekly, 2 = fortnightly), and the next collection date on or after today as yyyy-mm-dd. Then list one-off changes the calendar marks, such as public holiday collections moved to another day or skipped: the date the collection was due, the date it moves to (null when there is no collection), which bin (null when it is every bin due that day) and a short note such as the holiday's name. When the year isn't printed, use the dates that fall next after today. Leave changes empty when there are none.`;
+
+const BINS_SCHEMA_NAME = "parsed_bins";
+
+const BINS_SCHEMA = {
+  type: "object",
+  properties: {
+    streams: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "What the calendar calls this bin, short" },
+          lid: { type: ["string", "null"], description: "red|yellow|green|blue|purple|grey|other" },
+          weekday: { type: ["number", "null"], description: "0 = Sunday ... 6 = Saturday" },
+          every_weeks: { type: ["number", "null"], description: "1 weekly, 2 fortnightly, 4 monthly" },
+          next_date: { type: ["string", "null"], description: "Next collection on or after today, yyyy-mm-dd" },
+        },
+        required: ["name", "lid", "weekday", "every_weeks", "next_date"],
+        additionalProperties: false,
+      },
+    },
+    changes: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          bin: { type: ["string", "null"], description: "Which bin, or null for every bin due that day" },
+          date: { type: "string", description: "The date the collection was due, yyyy-mm-dd" },
+          moved_to: { type: ["string", "null"], description: "New date yyyy-mm-dd, or null when there is no collection" },
+          note: { type: ["string", "null"], description: "Short reason, e.g. the public holiday" },
+        },
+        required: ["bin", "date", "moved_to", "note"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["streams", "changes"],
+  additionalProperties: false,
+};
+
+/** Read a council bin calendar from page text (a PDF) or images. Returns the raw answer; callers normalize it with core's normalizeParsedBins. */
+export async function parseBinCalendar(
+  input: { text: string } | { images: string[] },
+  key?: AiCallKey,
+): Promise<Record<string, unknown>> {
+  const provider = key?.provider ?? (await resolveParsingProvider("bins"));
+  const today = new Date().toISOString().slice(0, 10);
+  return runStructuredParse(provider, {
+    systemPrompt: BINS_SYSTEM_PROMPT,
+    userText:
+      "text" in input
+        ? `Today is ${today}. Read this council bin calendar:\n\n${input.text}`
+        : `Today is ${today}. Read this council bin calendar:`,
+    images: "images" in input ? input.images : undefined,
+    schema: BINS_SCHEMA,
+    schemaName: BINS_SCHEMA_NAME,
+  }, key?.apiKey, key?.model);
+}

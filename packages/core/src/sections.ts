@@ -84,6 +84,10 @@ const occasionsNavItems: NavItem[] = [
   { href: "/occasions", label: "Occasions", iconId: "gift", accent: true },
 ];
 
+const binsNavItems: NavItem[] = [
+  { href: "/bins", label: "Bin night", iconId: "trash-2", accent: true },
+];
+
 const assistantNavItems: NavItem[] = [
   { href: "/assistant", label: "Chats", iconId: "sparkles", accent: true },
 ];
@@ -215,6 +219,16 @@ export const sections: Section[] = [
     navItems: occasionsNavItems,
   },
   {
+    id: "bins",
+    label: "Bin night",
+    shortLabel: "Bins",
+    iconId: "trash-2",
+    basePath: "/bins",
+    enabled: true,
+    acceptsShares: false,
+    navItems: binsNavItems,
+  },
+  {
     id: "assistant",
     label: "Assistant",
     shortLabel: "Assistant",
@@ -329,6 +343,10 @@ export function getSectionByPath(pathname: string): Section {
   if (matchesBase(pathname, "/occasions")) {
     const occasionsSection = getSection("occasions");
     if (occasionsSection) return occasionsSection;
+  }
+  if (matchesBase(pathname, "/bins")) {
+    const binsSection = getSection("bins");
+    if (binsSection) return binsSection;
   }
   if (matchesBase(pathname, "/assistant")) {
     const assistantSection = getSection("assistant");

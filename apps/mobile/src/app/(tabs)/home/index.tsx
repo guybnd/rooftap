@@ -122,6 +122,7 @@ import {
   checklistItems$,
   hiddenWithDisabledModules,
   useModules,
+  useBins,
   useMonthTotals,
   UpOverviewProvider,
   syncedGroupId,
@@ -164,6 +165,7 @@ import { useTaskSnoozeUndo } from '@/features/tasks/use-task-snooze-undo';
 import { useWeather } from '@/features/home/use-weather';
 import { DayRibbon, SkyBlock, SkyNote, useSkyRibbonOpen } from '@/features/home/sky';
 import { EventCardFooter } from '@/features/home/event-card-footer';
+import { BinLids } from '@/features/bins/bin-lids';
 import { isModuleShown, upcomingBills, BILLS_DUE_MAX_ROWS } from '@/features/home/hero-modules';
 import { deriveBudgetPulseTone } from '@/features/home/budget-tile';
 import { useHeroModuleConfig } from '@/features/home/use-hero-module-config';
@@ -545,6 +547,10 @@ function HomeSectionBody() {
   const eventsVisible = !hidden.includes('calendar') && modules.feature('hub.events');
   // Holding an event's row edits it here, Budget line and all (use-event-save.ts).
   const { linkedCostOf, saveEvent, deleteEvent } = useEventSave(eventsVisible ? group?.id : undefined, currentUserId, modules.feature('calendar.budget'));
+  // Modules: bin night's card needs the Bin night module (module-features.ts).
+  const binsVisible = !hidden.includes('bins') && modules.feature('hub.bins');
+  const bins = useBins(binsVisible ? group?.id : undefined, currentUserId);
+  const binExtraItems = React.useMemo(() => (binsVisible && bins.heroItem ? [bins.heroItem] : []), [binsVisible, bins.heroItem]);
   const [eventModalOpen, setEventModalOpen] = React.useState(false);
   const [editingEvent, setEditingEvent] = React.useState<GroupEvent | null>(null);
   const unhideEventRef = React.useRef(unhideEvent);
@@ -611,8 +617,9 @@ function HomeSectionBody() {
         reminderOwnersVisible: { costs: costsVisible, documents: documentsVisible },
         taskChecklistsVisible,
         checklistByTaskId,
+        extraItems: binExtraItems,
       }),
-    [tasks, appointmentsList, apartmentsList, homeEvents, eventsVisible, currentUserId, todayISOStr, householdVisible, viewingsVisible, costsVisible, documentsVisible, taskChecklistsVisible, checklistByTaskId]
+    [tasks, appointmentsList, apartmentsList, homeEvents, eventsVisible, currentUserId, todayISOStr, householdVisible, viewingsVisible, costsVisible, documentsVisible, taskChecklistsVisible, checklistByTaskId, binExtraItems]
   );
 
   const todayLabel = now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
@@ -751,8 +758,9 @@ function HomeSectionBody() {
         // The Upcoming range reaches the user's window (Settings, default 90 days).
         upcomingDays: upcomingWindowDays(userSettings),
         checklistByTaskId,
+        extraItems: binExtraItems,
       }),
-    [tasks, appointmentsList, apartmentsList, homeEvents, eventsVisible, currentUserId, todayISOStr, householdVisible, viewingsVisible, costsVisible, documentsVisible, taskChecklistsVisible, userSettings, checklistByTaskId]
+    [tasks, appointmentsList, apartmentsList, homeEvents, eventsVisible, currentUserId, todayISOStr, householdVisible, viewingsVisible, costsVisible, documentsVisible, taskChecklistsVisible, userSettings, checklistByTaskId, binExtraItems]
   );
   const heroItems = React.useMemo(() => heroItemsFor(heroRange), [heroItemsFor, heroRange]);
 
@@ -766,6 +774,8 @@ function HomeSectionBody() {
     appointment: viewingsVisible,
     event: eventsVisible,
     calendar: false,
+    // Bin night shows under All only.
+    bins: false,
   };
   const activeType: TypeFilter = typeTabShown[typeFilter] ? typeFilter : 'all';
   const typeOptions: FeedTypeOption[] = [
@@ -960,6 +970,16 @@ function HomeSectionBody() {
     });
   };
 
+  // Bin night: finishing its item marks the bins out, and Undo puts it back.
+  const finishBinsOut = (item: HeroItem) => {
+    if (!item.binNight || item.done) return;
+    bins.markOut(item.binNight.collectionDate);
+    toast.message('Bins out', {
+      duration: 4000,
+      action: { label: 'Undo', onPress: () => bins.undoOut() },
+    });
+  };
+
   const openHeroItem: OpenHeroItem = (item) => {
     if (item.task) {
       // Modules: a reminder shown while Tasks isn't opens its bill or
@@ -972,7 +992,13 @@ function HomeSectionBody() {
       setModalOpen(true);
       return;
     }
-    if (item.appointment) router.push(`/apartment/${item.appointment.apartment_id}` as Href);
+    if (item.appointment) {
+      router.push(`/apartment/${item.appointment.apartment_id}` as Href);
+      return;
+    }
+    // Anything else with a screen of its own (bin night opens Bins).
+    const target = heroItemOpenTarget(item);
+    if (target?.kind === 'route') openRoute(target.href);
   };
 
   // The Now card's tap path opens whatever the item is (core
@@ -1079,6 +1105,7 @@ function HomeSectionBody() {
               </Text>
             )}
             <Text className="text-caption text-muted-foreground">{item.sourceLabel}</Text>
+            {item.binNight && <BinLids lids={item.binNight.lids} size="sm" />}
           </ListItemMeta>
         </ListItemContent>
         <ListItemTrailing>
@@ -1170,6 +1197,7 @@ function HomeSectionBody() {
             </Text>
           )}
           <Text className="text-caption text-muted-foreground">{item.sourceLabel}</Text>
+          {item.binNight && <BinLids lids={item.binNight.lids} size="sm" />}
         </>
       ),
       progress: checklist ? completion(checklistItems) : null,
@@ -1182,7 +1210,11 @@ function HomeSectionBody() {
         />
       ) : undefined,
       onOpen: heroItemOpenTarget(item) ? () => openNowItem(item) : undefined,
-      onComplete: item.task && !item.task.done ? () => finishFromNowCard(item.task!) : undefined,
+      onComplete: item.task && !item.task.done
+        ? () => finishFromNowCard(item.task!)
+        : item.binNight && !item.done
+          ? () => finishBinsOut(item)
+          : undefined,
       footer: item.task ? undefined : (
         <EventCardFooter item={item} onOpen={heroItemOpenTarget(item) ? () => openNowItem(item) : undefined} />
       ),

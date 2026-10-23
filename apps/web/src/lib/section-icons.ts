@@ -25,6 +25,7 @@ import {
   ListTodo,
   LayoutTemplate,
   ChefHat,
+  Trash2,
 } from "lucide-react";
 import { getSection, profileSection } from "@homeup/core";
 
@@ -45,6 +46,7 @@ export const sectionIcons: Record<string, IconComponent> = {
   "shopping-bag": ShoppingBag,
   "wallet-cards": WalletCards,
   gift: Gift,
+  "trash-2": Trash2,
   sparkles: Sparkles,
   "list-todo": ListTodo,
   "chef-hat": ChefHat,

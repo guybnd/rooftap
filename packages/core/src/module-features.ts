@@ -39,6 +39,10 @@ export const MODULE_FEATURES = {
     modules: ['calendar', 'costs'],
     what: "An event's ticket cost, kept as a Going out line in the Budget.",
   },
+  'calendar.bins': {
+    modules: ['calendar', 'bins'],
+    what: 'Bin collection days on the calendar.',
+  },
   'calendar.google-events': {
     modules: ['calendar', 'google-calendar'],
     what: 'Pulled Google Calendar events on the calendar, sharing them, and Google setup in Calendar settings.',
@@ -85,6 +89,10 @@ export const MODULE_FEATURES = {
     modules: ['shopper'],
     what: 'Shopper good-deal count in the summary hero.',
   },
+  'hub.bins': {
+    modules: ['bins'],
+    what: "The bin night card on Home's Now card and feed.",
+  },
 
   // ── Tasks and checklists ─────────────────────────────────────────────────
   'tasks.checklists': {
@@ -128,6 +136,12 @@ export const MODULE_FEATURES = {
   'occasions.costs': {
     modules: ['occasions', 'costs'],
     what: 'A gift idea\'s Budget line, named "Gift" until the day has passed.',
+  },
+
+  // ── Bin night ────────────────────────────────────────────────────────────
+  'bins.home-assistant': {
+    modules: ['bins', 'assistant'],
+    what: "Reading bin days from Home Assistant's Waste Collection Schedule, through the Assistant's Home Assistant connection.",
   },
 
   // ── Costs ────────────────────────────────────────────────────────────────

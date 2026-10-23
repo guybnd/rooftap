@@ -43,9 +43,13 @@ import { memberLabel } from "@/app/setup/member-label";
 import { useLongPress } from "@/hooks/use-long-press";
 import { HouseholdTaskModal } from "@/app/tasks/household-task-modal";
 import { EventModal } from "@/app/calendar/event-modal";
+import { BinLids } from "@/components/bin-lids";
 import { useRowContextMenu } from "@/components/ui/row-context-menu";
 import {
   eventCategoryClasses,
+  binCollections,
+  binNamesPhrase,
+  useBins,
   householdTasks$,
   groupEvents$,
   costItems$,
@@ -166,6 +170,14 @@ function CalendarPage() {
   // Pulled Google events need calendar and google-calendar; off, nothing is fetched.
   const showGoogleEvents = modules.feature("calendar.google-events");
   const viewingsGroupId = showViewings ? group?.id : undefined;
+  // Bin collection days need calendar and bins (module-features.ts).
+  const showBins = modules.feature("calendar.bins");
+  const binsApi = useBins(showBins ? group?.id : undefined, currentUserId);
+  const binDayOf = (date: Date) => {
+    if (!showBins || binsApi.streams.length === 0) return null;
+    const key = toDateKey(date);
+    return binCollections(binsApi.streams, binsApi.changes, key, key)[0] ?? null;
+  };
 
   const apts$ = apartments$(viewingsGroupId);
   const agentsStore$ = agents$(viewingsGroupId);
@@ -866,7 +878,9 @@ function CalendarPage() {
     subtitle?: string;
     subtitleTone?: "warning";
     /** The owner section's tile: "search" for a viewing, else the calendar's. Omitted for tasks (checkbox). */
-    sectionId?: "search" | "calendar";
+    sectionId?: "search" | "calendar" | "bins";
+    /** Bin night: the lid colours collected that day. */
+    lids?: string[];
     onClick: () => void;
     task?: HouseholdTask;
     /** A group event, for its forecast. */
@@ -925,6 +939,21 @@ function CalendarPage() {
         onClick: () => openEventDetail(ev),
       });
     });
+
+    const binDay = binDayOf(date);
+    if (binDay) {
+      items.push({
+        key: `bins-${binDay.date}`,
+        sortMinutes: -1,
+        timeLabel: "All day",
+        timed: false,
+        title: "Bin collection",
+        subtitle: binNamesPhrase(binDay.streams),
+        sectionId: "bins",
+        lids: binDay.streams.map((st) => st.lid),
+        onClick: () => router.push("/bins"),
+      });
+    }
 
     const dateKey = toDateKey(date);
     tasks
@@ -1065,6 +1094,17 @@ function CalendarPage() {
   // midnight edge, so they stay in view when the grid opens on the afternoon.
   type AllDayChip = { key: string; title: string; classes: string; onClick: () => void };
   const getAllDayChips = (day: Date): AllDayChip[] => [
+    ...(() => {
+      const binDay = binDayOf(day);
+      return binDay
+        ? [{
+            key: `bins-${binDay.date}`,
+            title: `Bins: ${binNamesPhrase(binDay.streams).toLowerCase()}`,
+            classes: "border border-border bg-muted text-foreground",
+            onClick: () => router.push("/bins"),
+          }]
+        : [];
+    })(),
     ...(calendarConnected ? getCalendarEventsForDay(day) : []).filter(isAllDayCalendarEvent).map((ev) => ({
       key: `gcal-${ev.id}`,
       title: ev.title || "Untitled event",
@@ -1596,7 +1636,7 @@ function CalendarPage() {
                         // Hearth v2 (§6 feed row): the owner section's tile.
                         <LeadingTile
                           sectionId={item.sectionId ?? "calendar"}
-                          Icon={item.sectionId === "search" ? Building2 : sectionIconFor("calendar")}
+                          Icon={item.sectionId === "search" ? Building2 : sectionIconFor(item.sectionId === "bins" ? "bins" : "calendar")}
                           size="md"
                         />
                       )}
@@ -1622,6 +1662,7 @@ function CalendarPage() {
                           </span>
                           {item.event && legOf(item.event.id) ? <LegLine leg={legOf(item.event.id)!} /> : null}
                         </span>
+                        {item.lids ? <BinLids lids={item.lids} className="ml-2" /> : null}
                       </button>
                     </div>
                   ))}

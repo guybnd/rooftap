@@ -39,6 +39,9 @@ export const STORE_MODULES = {
   occasions: ['occasions'],
   gift_ideas: ['occasions'],
   wishlist_items: ['occasions'],
+  bin_streams: ['bins'],
+  bin_changes: ['bins'],
+  bin_plans: ['bins'],
   // Home Search: listings, agents, viewings and the listing checklist.
   apartments: ['search'],
   agents: ['search'],

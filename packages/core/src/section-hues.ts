@@ -57,6 +57,7 @@ export type SectionHue =
   | 'lime'
   | 'orchid'
   | 'fern'
+  | 'olive'
   | 'indigo'
   | 'cherry'
   | 'slate';
@@ -82,6 +83,7 @@ export const SECTION_HUE_IDS: readonly SectionHue[] = [
   'lime',
   'orchid',
   'fern',
+  'olive',
   'indigo',
   'cherry',
   'slate',
@@ -135,6 +137,11 @@ export const SECTION_HUES: Record<SectionHue, Record<ColorScheme, SectionHueSwat
     dark: { tile: '#1C3A17', glyph: '#A8EE8E', glow: '#7FDB62' },
     light: { tile: '#E2F6DA', glyph: '#2F7A1C', glow: '#7FDB62' },
   },
+  // Bin night: a yellow-green between sun and lime, darker and duller than lime.
+  olive: {
+    dark: { tile: '#33350F', glyph: '#DDE47A', glow: '#C6CF4A' },
+    light: { tile: '#EEF0D0', glyph: '#636B12', glow: '#C6CF4A' },
+  },
   indigo: {
     dark: { tile: '#1B2152', glyph: '#A9B4FF', glow: '#7083FF' },
     light: { tile: '#E4E8FF', glyph: '#3A49B8', glow: '#7083FF' },
@@ -165,6 +172,7 @@ export const HUE_SETS: Record<HueSetId, Record<SectionHue, SectionHueSwatch>> = 
     lime: { tile: '#CFEAA4', glyph: '#507800', glow: '#A8D834' },
     orchid: { tile: '#FBCAFF', glyph: '#A33BB9', glow: '#F998FF' },
     fern: { tile: '#BAEFB4', glyph: '#008000', glow: '#74E269' },
+    olive: { tile: '#E3E79A', glyph: '#6B7300', glow: '#D2DA3C' },
     indigo: { tile: '#C8DBFF', glyph: '#4D5FE5', glow: '#9BB9FF' },
     cherry: { tile: '#FFC2CC', glyph: '#C4002B', glow: '#FF6F86' },
     slate: { tile: '#D4DFEE', glyph: '#5E738F', glow: '#B0C6E3' },
@@ -181,6 +189,7 @@ export const HUE_SETS: Record<HueSetId, Record<SectionHue, SectionHueSwatch>> = 
     lime: { tile: '#344C00', glyph: '#BFEA6A', glow: '#92C600' },
     orchid: { tile: '#5D2769', glyph: '#FFB3FF', glow: '#EB7BFF' },
     fern: { tile: '#0D5107', glyph: '#96F28C', glow: '#4DD141' },
+    olive: { tile: '#454A00', glyph: '#E4EC6E', glow: '#B9C200' },
     indigo: { tile: '#2D3A82', glyph: '#B3CFFF', glow: '#84A1FF' },
     cherry: { tile: '#701426', glyph: '#FFA3B3', glow: '#FF4D6A' },
     slate: { tile: '#384352', glyph: '#C6D9F3', glow: '#9AB3D4' },
@@ -199,6 +208,7 @@ export const HUE_SETS: Record<HueSetId, Record<SectionHue, SectionHueSwatch>> = 
     lime: { tile: '#E0EFC9', glyph: '#5A7801', glow: '#B2D277' },
     orchid: { tile: '#F8DDFE', glyph: '#8D4F9B', glow: '#E8AAF6' },
     fern: { tile: '#D5F1D1', glyph: '#377E31', glow: '#95D88E' },
+    olive: { tile: '#ECEDCB', glyph: '#6A6F14', glow: '#CDD27A' },
     indigo: { tile: '#DBE7FF', glyph: '#5264B8', glow: '#A8BFFF' },
     cherry: { tile: '#FFD9DF', glyph: '#A2354A', glow: '#F59AAA' },
     slate: { tile: '#E2E8F1', glyph: '#5F6D7F', glow: '#B7C6D8' },
@@ -215,6 +225,7 @@ export const HUE_SETS: Record<HueSetId, Record<SectionHue, SectionHueSwatch>> = 
     lime: { tile: '#344411', glyph: '#C9E39E', glow: '#96BA4E' },
     orchid: { tile: '#4E2F56', glyph: '#F4C4FF', glow: '#D28CE2' },
     fern: { tile: '#244720', glyph: '#B4E8AE', glow: '#73C16B' },
+    olive: { tile: '#3D4012', glyph: '#DDE1A0', glow: '#AEB447' },
     indigo: { tile: '#2F3A65', glyph: '#C1D4FF', glow: '#8CA4FF' },
     cherry: { tile: '#5A2632', glyph: '#FFC0CB', glow: '#E57A8C' },
     slate: { tile: '#373E47', glyph: '#CDD9E8', glow: '#9CACC2' },
@@ -287,6 +298,7 @@ export const SECTION_HUE_BY_SECTION: Readonly<Record<string, SectionHue>> = {
   checklists: 'lime',
   shopper: 'orchid',
   rewards: 'fern',
+  bins: 'olive',
   assistant: 'indigo',
   occasions: 'cherry',
   documents: 'slate',

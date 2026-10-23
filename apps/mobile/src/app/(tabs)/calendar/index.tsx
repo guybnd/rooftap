@@ -27,6 +27,8 @@ import { useLocalSearchParams } from 'expo-router';
 import { Building2, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, LayoutList, ListPlus, Plus } from 'lucide-react-native';
 import { Text, ActionMenu, type ActionMenuAnchor, BottomSheet, Button, HeroLede, Input, MonthDatePicker, ScreenBackground, SegmentedControl, cn, haptics, toast } from '@homeup/ui';
 import {
+  binCollections,
+  useBins,
   agents$,
   apartments$,
   appointments$,
@@ -62,6 +64,7 @@ import {
   type HouseholdTask,
 } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
+import { useOpenRoute } from '@/lib/tab-routes';
 import { NoGroupScreen } from '@/components/no-group-screen';
 import { AppointmentModal } from '@/features/appointments/appointment-modal';
 import { HouseholdTaskModal } from '@/features/tasks/household-task-modal';
@@ -120,6 +123,19 @@ export default function CalendarSectionScreen() {
   const viewingsGroupId = showViewings ? group?.id : undefined;
   // An event's ticket cost as a Budget line needs calendar and costs.
   const showBudget = modules.feature('calendar.budget');
+  // Bin collection days need calendar and bins (module-features.ts).
+  const showBins = modules.feature('calendar.bins');
+  const binsApi = useBins(showBins ? group?.id : undefined, currentUserId);
+  const openRoute = useOpenRoute();
+  const openBins = React.useCallback(() => openRoute('/bins'), [openRoute]);
+  const binDayOf = React.useCallback(
+    (date: Date) => {
+      if (!showBins || binsApi.streams.length === 0) return null;
+      const key = toDateKey(date);
+      return binCollections(binsApi.streams, binsApi.changes, key, key)[0] ?? null;
+    },
+    [showBins, binsApi.streams, binsApi.changes]
+  );
 
   const apts$ = apartments$(viewingsGroupId);
   const agentsStore$ = agents$(viewingsGroupId);
@@ -307,8 +323,8 @@ export default function CalendarSectionScreen() {
   );
 
   const agendaItems = React.useMemo(
-    () => getAgendaItems(currentDate, appointments, apartments, groupEvents, tasks, dayCalendarEvents),
-    [currentDate, appointments, apartments, groupEvents, tasks, dayCalendarEvents]
+    () => getAgendaItems(currentDate, appointments, apartments, groupEvents, tasks, dayCalendarEvents, binDayOf(currentDate)),
+    [currentDate, appointments, apartments, groupEvents, tasks, dayCalendarEvents, binDayOf]
   );
 
   // Day view opens scrolled to roughly the current time when viewing today,
@@ -371,11 +387,12 @@ export default function CalendarSectionScreen() {
           apartments,
           groupEvents,
           tasks,
-          calendarConnected ? calendarEvents.filter((ev) => isSameDay(new Date(ev.starts_at), day)) : []
+          calendarConnected ? calendarEvents.filter((ev) => isSameDay(new Date(ev.starts_at), day)) : [],
+          binDayOf(day)
         ),
       }))
       .filter((group) => group.items.length > 0 || span === 'day');
-  }, [listMode, spanDays, appointments, apartments, groupEvents, tasks, calendarConnected, calendarEvents, span]);
+  }, [listMode, spanDays, appointments, apartments, groupEvents, tasks, calendarConnected, calendarEvents, span, binDayOf]);
 
   const taskCountFor = React.useCallback(
     (day: Date) => {
@@ -736,6 +753,7 @@ export default function CalendarSectionScreen() {
                     onPressEvent={openEvent}
                     onPressCalendarEvent={setSelectedCalendarEvent}
                     onPressTask={openTask}
+              onPressBins={openBins}
                     onToggleTaskDone={toggleTaskDone}
                     addPhrase={calendarAddPhrase({ tasks: showTasks, viewings: showViewings })}
                     onAddSomething={() =>
@@ -798,6 +816,7 @@ export default function CalendarSectionScreen() {
               onPressEvent={openEvent}
               onPressCalendarEvent={setSelectedCalendarEvent}
               onPressTask={openTask}
+              onPressBins={openBins}
               onToggleTaskDone={toggleTaskDone}
               addPhrase={calendarAddPhrase({ tasks: showTasks, viewings: showViewings })}
               onAddSomething={() => openChooserAt(new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), new Date().getHours()))}

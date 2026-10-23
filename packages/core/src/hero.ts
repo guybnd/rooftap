@@ -49,13 +49,13 @@ export function heroRangeWindow(
   return { from: localDateISO(start), to: localDateISO(end) };
 }
 
-export type HeroItemType = 'task' | 'reminder' | 'appointment' | 'event' | 'calendar';
+export type HeroItemType = 'task' | 'reminder' | 'appointment' | 'event' | 'calendar' | 'bins';
 
 export interface HeroItem {
   id: string;
   type: HeroItemType;
   /** Which section owns this item — used for hiddenSections gating. */
-  ownerSection: 'household' | 'search';
+  ownerSection: 'household' | 'search' | 'bins';
   title: string;
   dueDate: string | null; // YYYY-MM-DD
   dueTime: string | null; // HH:MM wall-clock
@@ -79,6 +79,8 @@ export interface HeroItem {
   appointment?: Appointment; // present for appointments (inert)
   googleEvent?: GoogleCalendarEventWithAttribution; // present for pulled calendar events (inert)
   groupEvent?: GroupEvent; // present for the household's own calendar events (inert, opens the calendar)
+  /** Bin night (bins.ts): the collection whose bins go out tonight. Finishing it marks them out. */
+  binNight?: { collectionDate: string; lids: string[] };
 }
 
 /**
@@ -124,6 +126,11 @@ export function buildHeroItems(opts: {
    * as a task, as before modules).
    */
   reminderOwnersVisible?: Partial<Record<'costs' | 'documents', boolean>>;
+  /**
+   * Items other modules build for today (bin night, bins.ts binNightHeroItem),
+   * already gated on their hub feature. Added as they are.
+   */
+  extraItems?: HeroItem[];
 }): HeroItem[] {
   const { tasks, appointments, apartments, today, householdVisible, searchVisible } = opts;
   // Modules: checklist progress on a task needs household and checklists (module-features.ts).
@@ -260,6 +267,11 @@ export function buildHeroItems(opts: {
         googleEvent: ev,
       });
     }
+  }
+
+  for (const extra of opts.extraItems ?? []) {
+    if (extra.dueDate && (extra.dueDate < from || extra.dueDate > to)) continue;
+    taskItems.push(extra);
   }
 
   return taskItems;

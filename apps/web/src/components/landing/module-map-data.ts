@@ -8,7 +8,8 @@ import type { ScreenId } from "./screens";
 // or a line names a feature that does not join its two modules.
 
 // Occasions isn't on the map yet: it needs its own spot and demo frames.
-export type MapModule = Exclude<ModuleId, "mcp" | "money-insights" | "occasions">;
+// Bin night has no demo screens yet, so it isn't on the map (nor are its lines).
+export type MapModule = Exclude<ModuleId, "mcp" | "money-insights" | "occasions" | "bins">;
 
 /** Short names: the map has no room for "Tasks & Reminders". */
 export const MAP_LABEL: Record<MapModule, string> = {

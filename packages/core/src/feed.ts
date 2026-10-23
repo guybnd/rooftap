@@ -92,6 +92,7 @@ export function groupByFeedDay<T>(
  */
 export function heroItemSectionId(item: HeroItem): string {
   if (item.type === 'appointment') return 'search';
+  if (item.type === 'bins') return 'bins';
   if (item.type === 'calendar' || item.type === 'event') return 'calendar';
   if (item.checklistHref) return 'checklists';
   if (item.task) {
@@ -189,6 +190,7 @@ export function heroItemOpenTarget(item: HeroItem): HeroItemOpenTarget {
   if (item.appointment) return { kind: 'route', href: `/apartment/${item.appointment.apartment_id}` };
   if (item.googleEvent?.html_link) return { kind: 'external', url: item.googleEvent.html_link };
   if (item.groupEvent && item.dueDate) return { kind: 'route', href: `/calendar?date=${item.dueDate}` };
+  if (item.binNight) return { kind: 'route', href: '/bins' };
   return null;
 }
 

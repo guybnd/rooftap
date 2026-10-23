@@ -24,3 +24,4 @@ export * from './setup-items-store';
 export * from './shopper-stores';
 export * from './rewards-stores';
 export * from './occasions-stores';
+export * from './bins-stores';

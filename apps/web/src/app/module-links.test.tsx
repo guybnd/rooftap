@@ -297,6 +297,18 @@ function seed() {
       main_location: null,
       archived: false,
     }),
+    // Bin night: a collection tomorrow, so tonight's card is on Home.
+    bin_streams: byId({
+      ...base,
+      id: "bin-red",
+      name: "Red",
+      lid: "red",
+      weekday: (now.getDay() + 1) % 7,
+      every_weeks: 1,
+      anchor_date: TODAY,
+      sort_order: 0,
+      created_by: USER,
+    }),
     appointments: byId({
       ...base,
       id: "appt-1",
@@ -318,11 +330,11 @@ import HomeHubPage from "./home/page";
 const SURFACES: Record<string, { render: () => React.ReactElement; reaches: ModuleId[] }> = {
   "app shell": {
     render: () => <AppSidebar>{null}</AppSidebar>,
-    reaches: ["household", "calendar", "checklists", "documents", "groceries", "recipes", "costs", "setup", "search", "shopper", "rewards", "occasions", "assistant"],
+    reaches: ["household", "calendar", "checklists", "documents", "groceries", "recipes", "costs", "setup", "search", "shopper", "rewards", "occasions", "bins", "assistant"],
   },
   "home hub": {
     render: () => <HomeHubPage />,
-    reaches: ["household", "groceries", "costs", "setup", "search", "assistant"],
+    reaches: ["household", "groceries", "costs", "setup", "search", "bins", "assistant"],
   },
 };
 

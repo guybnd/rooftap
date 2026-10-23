@@ -24,6 +24,7 @@
 // button that wears a coral dot while any is on. Quick add went: the tab
 // bar's + already adds.
 
+import { BinLids } from '@/components/bin-lids';
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
@@ -712,7 +713,7 @@ function HeroRow({
   checklistItemsByChecklistId?: Record<string, ChecklistTaskItem[]>;
 }) {
   const router = useRouter();
-  const inert = item.type === 'appointment' || item.type === 'calendar' || item.type === 'event';
+  const inert = item.type === 'appointment' || item.type === 'calendar' || item.type === 'event' || item.type === 'bins';
 
   // Hearth §13.7 "Row menu": events and viewings get the shared right-click
   // menu too (task rows build theirs in HeroTaskRow).
@@ -769,9 +770,15 @@ function HeroRow({
     <ListItem
       {...withRowMenu(hold?.handlers ?? {}, rowMenu)}
       holdProgress={hold?.progress}
-      className={cn('gap-3 py-2.5', !item.groupEvent && 'cursor-default')}
-      // An event opens its day in the calendar.
-      onClick={item.groupEvent && item.dueDate ? () => router.push(`/calendar?date=${item.dueDate}`) : undefined}
+      className={cn('gap-3 py-2.5', !item.groupEvent && !item.binNight && 'cursor-default', item.done && 'opacity-60')}
+      // An event opens its day in the calendar, bin night the Bins page.
+      onClick={
+        item.groupEvent && item.dueDate
+          ? () => router.push(`/calendar?date=${item.dueDate}`)
+          : item.binNight
+            ? () => router.push('/bins')
+            : undefined
+      }
     >
       <ListItemLeading>
         <LeadingTile sectionId={tileSection} Icon={Icon} />
@@ -816,6 +823,7 @@ function HeroRow({
             <ChevronRight className="h-3 w-3" />
           </button>
         )}
+        {item.binNight && <BinLids lids={item.binNight.lids} />}
         <AvatarBubble userId={item.assignedTo} profiles={profiles} size={22} />
       </ListItemTrailing>
     </ListItem>

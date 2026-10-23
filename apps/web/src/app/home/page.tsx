@@ -38,6 +38,7 @@ import type {
   ChecklistItem,
   ChecklistResponse,
 } from '@homeup/core';
+import { useBins } from '@homeup/core';
 import { upcomingWindowDays, completion, completionLabel, hasVisibleReminders, hiddenWithDisabledModules, useModules, type TaskSnooze } from '@homeup/core';
 import { ALL_CLEAR_MOMENT_STORAGE_KEY, HOME_LENS_META, earnedAllClear, heroItemOpenTarget, type HomeLensKey } from '@homeup/core';
 import { shopperWants$, shopperPriceSnapshots$, shopperShortcutValue, summarizeWants, type ShopperWant, type ShopperPriceSnapshot } from '@homeup/core';
@@ -258,6 +259,10 @@ function HomeHub() {
   // Each person picks which Spaces Home shows (Customize your summary > Spaces).
   const spaceOn = (key: string) => isModuleShown(key, userSettings?.home_hero_modules, modules.feature);
   const documentsVisible = !isHidden('documents');
+  // Modules: bin night's card needs the Bin night module (module-features.ts).
+  const binsVisible = !isHidden('bins') && modules.feature('hub.bins');
+  const bins = useBins(binsVisible ? group?.id : undefined, currentUserId);
+  const binExtraItems = useMemo(() => (binsVisible && bins.heroItem ? [bins.heroItem] : []), [binsVisible, bins.heroItem]);
 
   // ── FLUX-236: Today hero range picker (Today / This Week / This Month / Upcoming) ───────
   // Session-only, resets to Upcoming (the user's look-ahead window) on a fresh
@@ -450,6 +455,7 @@ function HomeHub() {
         dismissedCalendarEventIds,
         range,
         upcomingDays,
+        extraItems: binExtraItems,
       }),
     [
       tasks,
@@ -470,6 +476,7 @@ function HomeHub() {
       showCalendarEventsInTodo,
       dismissedCalendarEventIds,
       upcomingDays,
+      binExtraItems,
     ]
   );
   const heroItems = useMemo(() => heroItemsFor(heroRange), [heroItemsFor, heroRange]);
@@ -497,6 +504,7 @@ function HomeHub() {
         showCalendarEventsInTodo,
         dismissedCalendarEventIds,
         range: 'today',
+        extraItems: binExtraItems,
       }),
     [
       tasks,
@@ -516,6 +524,7 @@ function HomeHub() {
       calendarEvents,
       showCalendarEventsInTodo,
       dismissedCalendarEventIds,
+      binExtraItems,
     ]
   );
   const todayCount = useMemo(() => todayHeroItems.filter((i) => !i.done).length, [todayHeroItems]);
@@ -609,6 +618,17 @@ function HomeHub() {
   // ── Hero callbacks ────────────────────────────────────────────────────────
   const onHeroToggle = (item: HeroItem) => {
     if (item.task) toggleTask(item.task);
+    else if (item.binNight) toggleBinsOut(item);
+  };
+  // Bin night: finishing its item marks the bins out, and Undo puts it back.
+  const toggleBinsOut = (item: HeroItem) => {
+    if (!item.binNight) return;
+    if (item.done) {
+      bins.undoOut();
+      return;
+    }
+    bins.markOut(item.binNight.collectionDate);
+    toastUndoAction('Bins out', () => bins.undoOut());
   };
   const onHeroSnooze = (item: HeroItem, dur: TaskSnooze) => {
     if (item.task) snoozeTask(item.task, dur);
@@ -634,6 +654,10 @@ function HomeHub() {
   };
   // The slide is deliberate, but a slip is still one click from undone.
   const onNowComplete = (item: HeroItem) => {
+    if (item.binNight) {
+      toggleBinsOut(item);
+      return;
+    }
     if (!item.task) return;
     const task = item.task;
     toggleTask(task);

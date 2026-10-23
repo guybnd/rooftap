@@ -31,6 +31,7 @@ const ROUTES: Record<string, RouteRule> = {
   "admin/keys/test": { auth: "operator", module: null, why: "server settings" },
   "admin/parsing-provider": { auth: "operator", module: null, why: "server settings" },
   "admin/users": { auth: "owner", module: null, why: "household members" },
+  "bins/home-assistant": { auth: "session", module: "bins" },
   "ai-keys": { auth: "session", module: null, why: "the household's AI keys serve several modules" },
 
   "assistant/chat": { auth: "session", module: "assistant" },
@@ -75,6 +76,7 @@ const ROUTES: Record<string, RouteRule> = {
   "oauth/token": { auth: "public", module: null, why: "the OAuth token exchange checks the code or refresh token itself" },
 
   "parse-event": { auth: "session", module: "calendar" },
+  "parse-bins": { auth: "session", module: "bins" },
   "parse-listing": { auth: "session", module: "search" },
   "parse-receipt": { auth: "session", module: "groceries" },
   "parse-recipe": { auth: "session", module: "recipes" },
