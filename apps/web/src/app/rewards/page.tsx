@@ -6,26 +6,22 @@
 // Hero to the answer, best perk first (H1). The Perks tab lists what the
 // cards get you, ending soon first. Tapping a card opens it ready to scan.
 // Native twin: apps/mobile/src/app/(tabs)/rewards/index.tsx.
-import { useMemo, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { Plus, Search, WalletCards } from 'lucide-react';
 import {
-  cardExpiryCaption,
+  REWARDS_TABS,
   cardFaceColor,
+  cardHolderLabel,
   cardTitle,
-  cardsForStore,
-  comparePerks,
   currencySymbol,
-  matchedStoreName,
   perkEndsCaption,
-  perkIsLive,
+  perkListGroups,
+  perkRowMeta,
   perkValueLabel,
-  perksEndingSoon,
-  popularStores,
-  storeCount,
-  todayISO,
   useHouseholdCurrency,
   useRewards,
-  walletOrder,
+  useRewardsScreen,
+  walletCardDetail,
   dialog,
   type LoyaltyCard,
   type RowMenu,
@@ -49,12 +45,6 @@ import { SchemeSheet } from './scheme-sheet';
 import { useWideLayout } from '@/lib/desktop-layout';
 import { cn } from '@/lib/utils';
 
-type Tab = 'cards' | 'perks';
-const TABS: { value: Tab; label: string }[] = [
-  { value: 'cards', label: 'Cards' },
-  { value: 'perks', label: 'Perks' },
-];
-
 const MICRO = 'px-1 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground';
 
 export default function RewardsPage() {
@@ -62,23 +52,16 @@ export default function RewardsPage() {
   const currency = useHouseholdCurrency();
   const symbol = currencySymbol(currency);
   const rewards = useRewards(group?.id, currentUserId);
-  const today = todayISO();
+  const screen = useRewardsScreen(rewards, currentUserId);
+  const { today, tab, setTab, query, setQuery, wallet, matches, livePerks, ending, quickStores, schemeById, partnerName, searching, topWithCard, lede } =
+    screen;
 
-  const [tab, setTab] = useState<Tab>('cards');
   const wide = useWideLayout();
-  const [query, setQuery] = useState('');
   const [shownId, setShownId] = useState<string | null>(null);
   const [editing, setEditing] = useState<{ id: string | null } | null>(null);
   const [schemeId, setSchemeId] = useState<string | null>(null);
 
   const { cards, schemes, partners, perks } = rewards;
-  const wallet = useMemo(() => walletOrder(cards, schemes), [cards, schemes]);
-  const matches = useMemo(() => cardsForStore(query, rewards, today), [query, rewards, today]);
-  const livePerks = useMemo(() => perks.filter((p) => perkIsLive(p, today)), [perks, today]);
-  const ending = useMemo(() => perksEndingSoon(livePerks, today), [livePerks, today]);
-  const quickStores = useMemo(() => popularStores(partners), [partners]);
-  const schemeById = useMemo(() => new Map(schemes.map((s) => [s.id, s])), [schemes]);
-  const partnerName = useMemo(() => new Map(partners.map((p) => [p.id, p.name])), [partners]);
 
   const shown = shownId ? cards.find((c) => c.id === shownId) : undefined;
   const editingCard = editing?.id ? cards.find((c) => c.id === editing.id) : undefined;
@@ -92,53 +75,18 @@ export default function RewardsPage() {
   if (cacheLoading || (!rewards.loaded && cards.length === 0)) return <div className="p-6 text-muted-foreground">Loading…</div>;
   if (!group) return <div className="p-6 text-muted-foreground">No group selected</div>;
 
-  const holder = (card: LoyaltyCard) => (card.private ? 'Just me' : 'Shared');
-  const searching = tab === 'cards' && query.trim().length >= 2;
+  const holder = cardHolderLabel;
 
-  // A card from before Rewards (Groceries' sheet) has no scheme yet: give it
-  // one named after the card, so it can gain stores and perks.
   const editStoresFor = (card: LoyaltyCard) => {
-    const existing = rewards.schemeOf(card);
-    if (existing) {
-      setSchemeId(existing.id);
-      return;
-    }
-    const id = rewards.addScheme({ name: card.name });
-    if (!id) return;
-    rewards.saveCard({ ...card, scheme_id: id });
-    setSchemeId(id);
+    const id = screen.storesSchemeFor(card);
+    if (id) setSchemeId(id);
   };
 
   const showMatch = (m: StoreMatch) => {
-    const mine = m.cards.find((c) => c.created_by === currentUserId) ?? m.cards[0];
-    if (mine) setShownId(mine.id);
-    else setSchemeId(m.scheme.id);
+    const target = screen.matchTarget(m);
+    if (target.kind === 'card') setShownId(target.id);
+    else setSchemeId(target.id);
   };
-  const topWithCard = matches.find((m) => m.cards.length > 0);
-
-  const lede = (() => {
-    if (tab === 'perks') {
-      return {
-        value: livePerks.length,
-        label: livePerks.length === 1 ? 'perk' : 'perks',
-        caption: ending.length ? `${ending.length} ending this month` : `across ${schemes.length} ${schemes.length === 1 ? 'scheme' : 'schemes'}`,
-      };
-    }
-    if (searching) {
-      const store = matchedStoreName(query, matches);
-      return {
-        value: matches.length,
-        label: `${matches.length === 1 ? 'works' : 'work'} at ${store}`,
-        caption: matches.length ? `${matches.filter((m) => m.cards.length).length} with a card` : 'Nothing listed there yet',
-      };
-    }
-    const stores = storeCount(partners);
-    return {
-      value: cards.length,
-      label: cards.length === 1 ? 'card' : 'cards',
-      caption: stores ? `works at ${stores} ${stores === 1 ? 'store' : 'stores'}` : 'Add the stores each card works at',
-    };
-  })();
 
   return (
     <div className={cn('mx-auto space-y-4 p-4 md:p-6 pb-24', wide ? 'max-w-[1400px] lg:px-8' : 'max-w-3xl')}>
@@ -172,7 +120,7 @@ export default function RewardsPage() {
       ) : (
         <div className="space-y-3">
           <div className={cn(wide && 'max-w-xl')}>
-            <SegmentedControl ariaLabel="Show" value={tab} onChange={setTab} options={TABS} />
+            <SegmentedControl ariaLabel="Show" value={tab} onChange={setTab} options={REWARDS_TABS} />
           </div>
 
           {tab === 'cards' && (
@@ -219,10 +167,7 @@ export default function RewardsPage() {
                 <div className={cn('grid gap-2.5', wide && 'grid-cols-2 gap-4 xl:grid-cols-3')}>
                   {wallet.map((card) => {
                     const scheme = rewards.schemeOf(card);
-                    const stores = scheme ? storeCount(partners, new Set([scheme.id])) : 0;
-                    const detail = [stores ? `${stores} ${stores === 1 ? 'store' : 'stores'}` : null, cardExpiryCaption(card.expires_on, today)]
-                      .filter(Boolean)
-                      .join(' · ');
+                    const detail = walletCardDetail(card, scheme, partners, today);
                     return (
                       <CardFace
                         key={card.id}
@@ -375,17 +320,12 @@ function PerksList({
       </div>
     );
   }
-  const endingIds = new Set(ending.map((p) => p.id));
-  const groups = schemes
-    .map((s) => ({ scheme: s, perks: perks.filter((p) => p.scheme_id === s.id && !endingIds.has(p.id)).sort(comparePerks) }))
-    .filter((g) => g.perks.length > 0)
-    .sort((a, b) => a.scheme.name.localeCompare(b.scheme.name));
+  const groups = perkListGroups(perks, ending, schemes);
   const schemeName = new Map(schemes.map((s) => [s.id, s.name]));
 
   const row = (perk: RewardPerk, showScheme: boolean) => {
-    const where = perk.partner_id ? partnerName.get(perk.partner_id) : 'Every store';
     const endsCaption = perkEndsCaption(perk.valid_until, today);
-    const meta = [showScheme ? schemeName.get(perk.scheme_id) : null, where, perk.conditions].filter(Boolean).join(' · ');
+    const meta = perkRowMeta(perk, { showScheme, schemeName, partnerName });
     return (
       <ListItem key={perk.id} asChild className="cursor-pointer hover:bg-muted/50">
         <button type="button" onClick={() => onOpen(perk)} className="text-left">

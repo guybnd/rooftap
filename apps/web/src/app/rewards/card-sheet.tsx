@@ -5,20 +5,16 @@
 // the scheme's perks sit underneath so the question "what do I get?" is
 // answered on the same sheet. Native twin:
 // apps/mobile/src/features/rewards/card-sheet.tsx.
-import { useMemo } from 'react';
 import { Store } from 'lucide-react';
 import {
-  cardExpiryCaption,
   cardFaceColor,
   cardTitle,
-  comparePerks,
   currencySymbol,
   formatLoyaltyNumber,
   perkEndsCaption,
-  perkIsLive,
   perkValueLabel,
-  storeCount,
-  todayISO,
+  schemePerkMeta,
+  useCardSheetDetail,
   useHouseholdCurrency,
   type LoyaltyCard,
   type RewardPartner,
@@ -59,15 +55,7 @@ export function CardSheet({
 }) {
   useWakeLock(open);
   const currency = useHouseholdCurrency();
-  const today = todayISO();
-  const schemePartners = useMemo(() => partners.filter((p) => scheme && p.scheme_id === scheme.id), [partners, scheme]);
-  const schemePerks = useMemo(
-    () => perks.filter((p) => scheme && p.scheme_id === scheme.id && perkIsLive(p, today)).sort(comparePerks),
-    [perks, scheme, today],
-  );
-  const partnerName = new Map(schemePartners.map((p) => [p.id, p.name]));
-  const stores = storeCount(schemePartners);
-  const caption = [holder, cardExpiryCaption(card.expires_on, today)].filter(Boolean).join(' · ');
+  const { today, schemePerks, partnerName, stores, caption } = useCardSheetDetail({ card, scheme, partners, perks, holder });
 
   return (
     <BottomSheet
@@ -98,8 +86,7 @@ export function CardSheet({
             <p className="px-1 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">Perks</p>
             <ListGroup className="border-0 bg-muted/50 shadow-none">
               {schemePerks.slice(0, 6).map((perk) => {
-                const where = perk.partner_id ? partnerName.get(perk.partner_id) : 'Every store';
-                const meta = [where, perk.conditions, perkEndsCaption(perk.valid_until, today)].filter(Boolean).join(' · ');
+                const meta = schemePerkMeta(perk, partnerName, perkEndsCaption(perk.valid_until, today));
                 return (
                   <ListItem key={perk.id}>
                     <ListItemContent>

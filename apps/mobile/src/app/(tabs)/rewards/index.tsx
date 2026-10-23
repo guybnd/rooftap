@@ -24,23 +24,19 @@ import {
 } from '@homeup/ui';
 import {
   MOTION_DURATIONS_MS,
-  cardExpiryCaption,
+  REWARDS_TABS,
   cardFaceColor,
+  cardHolderLabel,
   cardTitle,
-  cardsForStore,
-  comparePerks,
   currencySymbol,
-  matchedStoreName,
   perkEndsCaption,
-  perkIsLive,
+  perkListGroups,
+  perkRowMeta,
   perkValueLabel,
-  perksEndingSoon,
-  popularStores,
-  storeCount,
-  todayISO,
   useHouseholdCurrency,
   useRewards,
-  walletOrder,
+  useRewardsScreen,
+  walletCardDetail,
   type LoyaltyCard,
   type RewardPerk,
   type RewardScheme,
@@ -53,12 +49,6 @@ import { CardSheet } from '@/features/rewards/card-sheet';
 import { CardFormSheet } from '@/features/rewards/card-form-sheet';
 import { SchemeSheet } from '@/features/rewards/scheme-sheet';
 import { Chip } from '@/features/rewards/chip';
-
-type Tab = 'cards' | 'perks';
-const TABS: { value: Tab; label: string }[] = [
-  { value: 'cards', label: 'Cards' },
-  { value: 'perks', label: 'Perks' },
-];
 
 /**
  * One sheet's mount and open state, kept apart so its exit animation can play
@@ -89,22 +79,14 @@ export default function RewardsScreen() {
   const currency = useHouseholdCurrency();
   const symbol = currencySymbol(currency);
   const rewards = useRewards(group?.id, currentUserId);
-  const today = todayISO();
-
-  const [tab, setTab] = React.useState<Tab>('cards');
-  const [query, setQuery] = React.useState('');
+  const screen = useRewardsScreen(rewards, currentUserId);
+  const { today, tab, setTab, query, setQuery, wallet, matches, livePerks, ending, quickStores, schemeById, partnerName, searching, topWithCard, lede } =
+    screen;
   const cardSheet = useSheetState<string>();
   const formSheet = useSheetState<{ id: string | null }>();
   const schemeSheet = useSheetState<string>();
 
   const { cards, schemes, partners, perks } = rewards;
-  const wallet = React.useMemo(() => walletOrder(cards, schemes), [cards, schemes]);
-  const matches = React.useMemo(() => cardsForStore(query, rewards, today), [query, rewards, today]);
-  const livePerks = React.useMemo(() => perks.filter((p) => perkIsLive(p, today)), [perks, today]);
-  const ending = React.useMemo(() => perksEndingSoon(livePerks, today), [livePerks, today]);
-  const quickStores = React.useMemo(() => popularStores(partners), [partners]);
-  const schemeById = React.useMemo(() => new Map(schemes.map((s) => [s.id, s])), [schemes]);
-  const partnerName = React.useMemo(() => new Map(partners.map((p) => [p.id, p.name])), [partners]);
 
   if (cacheLoading || (!rewards.loaded && cards.length === 0)) {
     return (
@@ -118,56 +100,21 @@ export default function RewardsScreen() {
   const shown = cardSheet.value ? cards.find((c) => c.id === cardSheet.value) : undefined;
   const editingCard = formSheet.value?.id ? cards.find((c) => c.id === formSheet.value?.id) : undefined;
   const openScheme = schemeSheet.value ? schemeById.get(schemeSheet.value) : undefined;
-  const holder = (card: LoyaltyCard) => (card.private ? 'Just me' : 'Shared');
-  const searching = tab === 'cards' && query.trim().length >= 2;
+  const holder = cardHolderLabel;
 
   // One sheet at a time: close the open one, then open the next once it has gone.
   const after = (fn: () => void) => setTimeout(fn, MOTION_DURATIONS_MS.exit);
 
-  // A card from before Rewards (Groceries' sheet) has no scheme yet: give it
-  // one named after the card, so it can gain stores and perks.
   const editStoresFor = (card: LoyaltyCard) => {
-    const existing = rewards.schemeOf(card);
-    if (existing) {
-      schemeSheet.show(existing.id);
-      return;
-    }
-    const id = rewards.addScheme({ name: card.name });
-    if (!id) return;
-    rewards.saveCard({ ...card, scheme_id: id });
-    schemeSheet.show(id);
+    const id = screen.storesSchemeFor(card);
+    if (id) schemeSheet.show(id);
   };
 
   const showMatch = (m: StoreMatch) => {
-    const mine = m.cards.find((c) => c.created_by === currentUserId) ?? m.cards[0];
-    if (mine) cardSheet.show(mine.id);
-    else schemeSheet.show(m.scheme.id);
+    const target = screen.matchTarget(m);
+    if (target.kind === 'card') cardSheet.show(target.id);
+    else schemeSheet.show(target.id);
   };
-  const topWithCard = matches.find((m) => m.cards.length > 0);
-
-  const lede = (() => {
-    if (tab === 'perks') {
-      return {
-        value: livePerks.length,
-        label: livePerks.length === 1 ? 'perk' : 'perks',
-        caption: ending.length ? `${ending.length} ending this month` : `across ${schemes.length} ${schemes.length === 1 ? 'scheme' : 'schemes'}`,
-      };
-    }
-    if (searching) {
-      const store = matchedStoreName(query, matches);
-      return {
-        value: matches.length,
-        label: `${matches.length === 1 ? 'works' : 'work'} at ${store}`,
-        caption: matches.length ? `${matches.filter((m) => m.cards.length).length} with a card` : 'Nothing listed there yet',
-      };
-    }
-    const stores = storeCount(partners);
-    return {
-      value: cards.length,
-      label: cards.length === 1 ? 'card' : 'cards',
-      caption: stores ? `works at ${stores} ${stores === 1 ? 'store' : 'stores'}` : 'Add the stores each card works at',
-    };
-  })();
 
   return (
     <ScreenBackground>
@@ -203,7 +150,7 @@ export default function RewardsScreen() {
           />
         ) : (
           <>
-            <SegmentedControl accessibilityLabel="Show" value={tab} onChange={setTab} options={TABS} />
+            <SegmentedControl accessibilityLabel="Show" value={tab} onChange={setTab} options={REWARDS_TABS} />
 
             {tab === 'cards' && (
               <>
@@ -240,10 +187,7 @@ export default function RewardsScreen() {
                   <View className="gap-2.5">
                     {wallet.map((card) => {
                       const scheme = rewards.schemeOf(card);
-                      const stores = scheme ? storeCount(partners, new Set([scheme.id])) : 0;
-                      const detail = [stores ? `${stores} ${stores === 1 ? 'store' : 'stores'}` : null, cardExpiryCaption(card.expires_on, today)]
-                        .filter(Boolean)
-                        .join(' · ');
+                      const detail = walletCardDetail(card, scheme, partners, today);
                       return (
                         <CardFace
                           key={card.id}
@@ -369,17 +313,12 @@ function PerksList({
   if (perks.length === 0) {
     return <Text className="px-1 py-8 text-center text-sm text-muted-foreground">No perks yet. Open a card and add what it gets you.</Text>;
   }
-  const endingIds = new Set(ending.map((p) => p.id));
-  const groups = schemes
-    .map((s) => ({ scheme: s, perks: perks.filter((p) => p.scheme_id === s.id && !endingIds.has(p.id)).sort(comparePerks) }))
-    .filter((g) => g.perks.length > 0)
-    .sort((a, b) => a.scheme.name.localeCompare(b.scheme.name));
+  const groups = perkListGroups(perks, ending, schemes);
   const schemeName = new Map(schemes.map((s) => [s.id, s.name]));
 
   const row = (perk: RewardPerk, showScheme: boolean) => {
-    const where = perk.partner_id ? partnerName.get(perk.partner_id) : 'Every store';
     const endsCaption = perkEndsCaption(perk.valid_until, today);
-    const meta = [showScheme ? schemeName.get(perk.scheme_id) : null, where, perk.conditions].filter(Boolean).join(' · ');
+    const meta = perkRowMeta(perk, { showScheme, schemeName, partnerName });
     return (
       <ListItem key={perk.id} onPress={() => onOpen(perk)} accessibilityRole="button">
         <ListItemContent>

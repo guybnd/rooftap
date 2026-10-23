@@ -11,28 +11,13 @@ import { WalletCards } from 'lucide-react-native';
 import { Button, DateScrollField, FieldRow, FormSection, Input, ItemFormSheet, SegmentedControl } from '@homeup/ui';
 import {
   LOYALTY_CARD_FORMATS,
-  brandKey,
-  formatLoyaltyNumber,
-  loyaltyNumberError,
-  normalizeLoyaltyNumber,
-  rewardCatalogFor,
-  searchRewardCatalog,
-  useHouseholdCurrency,
+  useCardForm,
   type LoyaltyCard,
-  type LoyaltyCardFormat,
-  type RewardCatalogEntry,
   type RewardsApi,
 } from '@homeup/core';
-import { randomUUID } from '@/lib/uuid';
 import { Chip } from './chip';
 
 const REWARDS_SECTION = { id: 'rewards', Icon: WalletCards };
-
-type Visibility = 'shared' | 'private';
-const VISIBILITY = [
-  { value: 'shared' as const, label: 'Everyone' },
-  { value: 'private' as const, label: 'Just me' },
-];
 
 export function CardFormSheet({
   open,
@@ -52,56 +37,8 @@ export function CardFormSheet({
   currentUserId: string | null;
   onSaved: (card: LoyaltyCard) => void;
 }) {
-  const currency = useHouseholdCurrency();
-  const current = card ? rewards.schemeOf(card) : null;
-  const [schemeName, setSchemeName] = React.useState(current?.name ?? card?.name ?? '');
-  const [catalog, setCatalog] = React.useState<RewardCatalogEntry | null>(null);
-  const [number, setNumber] = React.useState(card ? formatLoyaltyNumber(card.number) : '');
-  const [format, setFormat] = React.useState<LoyaltyCardFormat>(card?.format ?? 'code128');
-  const [visibility, setVisibility] = React.useState<Visibility>(card?.private ? 'private' : 'shared');
-  const [expires, setExpires] = React.useState(card?.expires_on ?? '');
-  const [notes, setNotes] = React.useState(card?.notes ?? '');
-  const [tried, setTried] = React.useState(false);
-
-  // Only the person who added a card can make it theirs alone; anyone else
-  // would hide it from themselves.
-  const canMakePrivate = !card || card.created_by === currentUserId;
-  const normalized = normalizeLoyaltyNumber(number, format);
-  const numberError = loyaltyNumberError(normalized, format);
-
-  const suggestions = React.useMemo(() => {
-    const key = brandKey(schemeName);
-    const own = rewards.schemes.filter((s) => !key || brandKey(s.name).startsWith(key));
-    const ownKeys = new Set(rewards.schemes.map((s) => brandKey(s.name)));
-    const starters = searchRewardCatalog(rewardCatalogFor(currency), schemeName).filter((e) => !ownKeys.has(brandKey(e.name)));
-    const exact = own.some((s) => brandKey(s.name) === key) || starters.some((e) => brandKey(e.name) === key);
-    if (exact && !catalog) return { own: [], starters: [] };
-    return { own: own.slice(0, 4), starters: catalog ? [] : starters.slice(0, 4) };
-  }, [schemeName, rewards.schemes, currency, catalog]);
-
-  const submit = () => {
-    setTried(true);
-    if (!schemeName.trim() || numberError) return;
-    const key = brandKey(schemeName);
-    const existing = rewards.schemes.find((s) => brandKey(s.name) === key);
-    const starter = catalog ?? rewardCatalogFor(currency).find((e) => brandKey(e.name) === key);
-    const schemeId = existing?.id ?? rewards.addScheme(starter ? { name: starter.name, catalog: starter } : { name: schemeName });
-    const name = existing?.name ?? starter?.name ?? schemeName.trim();
-    const fields = {
-      name,
-      number: normalized,
-      format,
-      scheme_id: schemeId,
-      private: canMakePrivate && visibility === 'private',
-      expires_on: expires || null,
-      notes: notes.trim() || null,
-    };
-    const saved: LoyaltyCard = card
-      ? { ...card, ...fields }
-      : { id: randomUUID(), group_id: groupId, created_by: null, ...fields, deleted: false, created_at: '', updated_at: '' };
-    rewards.saveCard(saved);
-    onSaved(saved);
-  };
+  const form = useCardForm({ card, rewards, groupId, currentUserId, onSaved });
+  const { schemeName, catalog, number, format, visibility, expires, notes, tried, canMakePrivate, numberError, suggestions } = form;
 
   return (
     <ItemFormSheet
@@ -109,7 +46,7 @@ export function CardFormSheet({
       onOpenChange={onOpenChange}
       section={REWARDS_SECTION}
       title={card ? 'Edit card' : 'Add a card'}
-      onSubmit={submit}
+      onSubmit={form.submit}
       submitLabel={card ? 'Save' : 'Add card'}
       onDelete={
         card
@@ -127,15 +64,14 @@ export function CardFormSheet({
         <FieldRow
           label="Card"
           required
-          error={tried && !schemeName.trim() ? 'Name the card' : null}
+          error={form.nameError}
           hint={catalog ? `Comes with ${catalog.partners.length} ${catalog.partners.length === 1 ? 'store' : 'stores'}` : undefined}
         >
           <Input
             autoFocus={!card}
             value={schemeName}
             onChangeText={(text) => {
-              setSchemeName(text);
-              setCatalog(null);
+              form.typeSchemeName(text);
             }}
             placeholder="Flybuys, auto club, gym"
             maxLength={80}
@@ -144,15 +80,14 @@ export function CardFormSheet({
           {(suggestions.own.length > 0 || suggestions.starters.length > 0) && (
             <View className="flex-row flex-wrap gap-1.5 pt-1">
               {suggestions.own.map((s) => (
-                <Chip key={s.id} label={s.name} onPress={() => setSchemeName(s.name)} />
+                <Chip key={s.id} label={s.name} onPress={() => form.setSchemeName(s.name)} />
               ))}
               {suggestions.starters.map((e) => (
                 <Chip
                   key={e.id}
                   label={`${e.name} · ${e.partners.length}`}
                   onPress={() => {
-                    setSchemeName(e.name);
-                    setCatalog(e);
+                    form.pickStarter(e);
                   }}
                 />
               ))}
@@ -162,7 +97,7 @@ export function CardFormSheet({
         <FieldRow label="Card number" required error={tried ? numberError : null}>
           <Input
             value={number}
-            onChangeText={setNumber}
+            onChangeText={form.setNumber}
             placeholder="6008 1234 5678 9012"
             className="font-mono"
             autoComplete="off"
@@ -171,24 +106,24 @@ export function CardFormSheet({
           />
         </FieldRow>
         <FieldRow label="Code" hint="Barcode suits most cards. Pick QR if the card shows a square code, or EAN-13 only if it says so.">
-          <SegmentedControl options={LOYALTY_CARD_FORMATS} value={format} onChange={setFormat} accessibilityLabel="Code type" />
+          <SegmentedControl options={LOYALTY_CARD_FORMATS} value={format} onChange={form.setFormat} accessibilityLabel="Code type" />
         </FieldRow>
         <FieldRow label="Who can see it" hint={canMakePrivate ? undefined : 'Only the person who added it can make it theirs alone.'}>
           <SegmentedControl
-            options={canMakePrivate ? VISIBILITY : VISIBILITY.filter((v) => v.value === 'shared')}
+            options={form.visibilityOptions}
             value={visibility}
-            onChange={setVisibility}
+            onChange={form.setVisibility}
             accessibilityLabel="Who can see it"
           />
         </FieldRow>
         <FieldRow
           label="Expires"
-          action={expires !== '' && <Button size="xs" variant="ghost" onPress={() => setExpires('')}>Clear</Button>}
+          action={expires !== '' && <Button size="xs" variant="ghost" onPress={() => form.setExpires('')}>Clear</Button>}
         >
-          <DateScrollField value={expires} onChange={setExpires} emptyLabel="No expiry" maxYear={new Date().getFullYear() + 10} />
+          <DateScrollField value={expires} onChange={form.setExpires} emptyLabel="No expiry" maxYear={new Date().getFullYear() + 10} />
         </FieldRow>
         <FieldRow label="Notes" hint="Not for PINs or passwords.">
-          <Input value={notes} onChangeText={setNotes} placeholder="Optional" maxLength={200} />
+          <Input value={notes} onChangeText={form.setNotes} placeholder="Optional" maxLength={200} />
         </FieldRow>
       </FormSection>
     </ItemFormSheet>

@@ -18,17 +18,14 @@ import {
   Text,
 } from '@homeup/ui';
 import {
-  cardExpiryCaption,
   cardFaceColor,
   cardTitle,
-  comparePerks,
   currencySymbol,
   formatLoyaltyNumber,
   perkEndsCaption,
-  perkIsLive,
   perkValueLabel,
-  storeCount,
-  todayISO,
+  schemePerkMeta,
+  useCardSheetDetail,
   useHouseholdCurrency,
   type LoyaltyCard,
   type RewardPartner,
@@ -62,15 +59,7 @@ export function CardSheet({
 }) {
   useKeepAwakeWhile(open, 'rewards-card');
   const currency = useHouseholdCurrency();
-  const today = todayISO();
-  const schemePartners = React.useMemo(() => partners.filter((p) => scheme && p.scheme_id === scheme.id), [partners, scheme]);
-  const schemePerks = React.useMemo(
-    () => perks.filter((p) => scheme && p.scheme_id === scheme.id && perkIsLive(p, today)).sort(comparePerks),
-    [perks, scheme, today],
-  );
-  const partnerName = new Map(schemePartners.map((p) => [p.id, p.name]));
-  const stores = storeCount(schemePartners);
-  const caption = [holder, cardExpiryCaption(card.expires_on, today)].filter(Boolean).join(' · ');
+  const { today, schemePerks, partnerName, stores, caption } = useCardSheetDetail({ card, scheme, partners, perks, holder });
 
   return (
     <BottomSheet open={open} onOpenChange={onOpenChange} className="max-h-[88%]">
@@ -98,8 +87,7 @@ export function CardSheet({
             <Text className="px-1 text-micro-label uppercase text-muted-foreground">Perks</Text>
             <ListGroup bordered={false} className="rounded-2xl bg-muted/50">
               {schemePerks.slice(0, 6).map((perk) => {
-                const where = perk.partner_id ? partnerName.get(perk.partner_id) : 'Every store';
-                const meta = [where, perk.conditions, perkEndsCaption(perk.valid_until, today)].filter(Boolean).join(' · ');
+                const meta = schemePerkMeta(perk, partnerName, perkEndsCaption(perk.valid_until, today));
                 return (
                   <ListItem key={perk.id}>
                     <ListItemContent>

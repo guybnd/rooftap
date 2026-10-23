@@ -5,20 +5,11 @@
 // brings its stores), or a new name. Then the number and code type as in
 // Groceries' rewards sheet, who can see it, and when it expires. Native twin:
 // apps/mobile/src/features/rewards/card-form-sheet.tsx.
-import { useMemo, useState } from 'react';
 import { WalletCards } from 'lucide-react';
 import {
   LOYALTY_CARD_FORMATS,
-  brandKey,
-  formatLoyaltyNumber,
-  loyaltyNumberError,
-  normalizeLoyaltyNumber,
-  rewardCatalogFor,
-  searchRewardCatalog,
-  useHouseholdCurrency,
+  useCardForm,
   type LoyaltyCard,
-  type LoyaltyCardFormat,
-  type RewardCatalogEntry,
   type RewardsApi,
 } from '@homeup/core';
 import { ItemFormSheet, FormSection, FieldRow } from '@/components/ui/item-form-sheet';
@@ -26,12 +17,6 @@ import { Input } from '@/components/ui/input';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 
 const REWARDS_SECTION = { id: 'rewards', Icon: WalletCards };
-
-type Visibility = 'shared' | 'private';
-const VISIBILITY = [
-  { value: 'shared' as const, label: 'Everyone' },
-  { value: 'private' as const, label: 'Just me' },
-];
 
 export function CardFormSheet({
   isOpen,
@@ -51,56 +36,8 @@ export function CardFormSheet({
   currentUserId: string | null;
   onSaved: (card: LoyaltyCard) => void;
 }) {
-  const currency = useHouseholdCurrency();
-  const current = card ? rewards.schemeOf(card) : null;
-  const [schemeName, setSchemeName] = useState(current?.name ?? card?.name ?? '');
-  const [catalog, setCatalog] = useState<RewardCatalogEntry | null>(null);
-  const [number, setNumber] = useState(card ? formatLoyaltyNumber(card.number) : '');
-  const [format, setFormat] = useState<LoyaltyCardFormat>(card?.format ?? 'code128');
-  const [visibility, setVisibility] = useState<Visibility>(card?.private ? 'private' : 'shared');
-  const [expires, setExpires] = useState(card?.expires_on ?? '');
-  const [notes, setNotes] = useState(card?.notes ?? '');
-  const [tried, setTried] = useState(false);
-
-  // Only the person who added a card can make it theirs alone; anyone else
-  // would hide it from themselves.
-  const canMakePrivate = !card || card.created_by === currentUserId;
-  const normalized = normalizeLoyaltyNumber(number, format);
-  const numberError = loyaltyNumberError(normalized, format);
-
-  const suggestions = useMemo(() => {
-    const key = brandKey(schemeName);
-    const own = rewards.schemes.filter((s) => !key || brandKey(s.name).startsWith(key));
-    const ownKeys = new Set(rewards.schemes.map((s) => brandKey(s.name)));
-    const starters = searchRewardCatalog(rewardCatalogFor(currency), schemeName).filter((e) => !ownKeys.has(brandKey(e.name)));
-    const exact = own.some((s) => brandKey(s.name) === key) || starters.some((e) => brandKey(e.name) === key);
-    if (exact && !catalog) return { own: [], starters: [] };
-    return { own: own.slice(0, 4), starters: catalog ? [] : starters.slice(0, 4) };
-  }, [schemeName, rewards.schemes, currency, catalog]);
-
-  const submit = () => {
-    setTried(true);
-    if (!schemeName.trim() || numberError) return;
-    const key = brandKey(schemeName);
-    const existing = rewards.schemes.find((s) => brandKey(s.name) === key);
-    const starter = catalog ?? rewardCatalogFor(currency).find((e) => brandKey(e.name) === key);
-    const schemeId = existing?.id ?? rewards.addScheme(starter ? { name: starter.name, catalog: starter } : { name: schemeName });
-    const name = existing?.name ?? starter?.name ?? schemeName.trim();
-    const fields = {
-      name,
-      number: normalized,
-      format,
-      scheme_id: schemeId,
-      private: canMakePrivate && visibility === 'private',
-      expires_on: expires || null,
-      notes: notes.trim() || null,
-    };
-    const saved: LoyaltyCard = card
-      ? { ...card, ...fields }
-      : { id: crypto.randomUUID(), group_id: groupId, created_by: null, ...fields, deleted: false, created_at: '', updated_at: '' };
-    rewards.saveCard(saved);
-    onSaved(saved);
-  };
+  const form = useCardForm({ card, rewards, groupId, currentUserId, onSaved });
+  const { schemeName, catalog, number, format, visibility, expires, notes, tried, canMakePrivate, numberError, suggestions } = form;
 
   return (
     <ItemFormSheet
@@ -108,7 +45,7 @@ export function CardFormSheet({
       isOpen={isOpen}
       onClose={onClose}
       title={card ? 'Edit card' : 'Add a card'}
-      onSubmit={submit}
+      onSubmit={form.submit}
       submitLabel={card ? 'Save' : 'Add card'}
       onDelete={card ? () => { rewards.deleteCard(card.id); onClose(); } : undefined}
       deleteLabel="Remove card"
@@ -120,7 +57,7 @@ export function CardFormSheet({
           label="Card"
           htmlFor="reward-scheme"
           required
-          error={tried && !schemeName.trim() ? 'Name the card' : null}
+          error={form.nameError}
           hint={catalog ? `Comes with ${catalog.partners.length} ${catalog.partners.length === 1 ? 'store' : 'stores'}` : undefined}
         >
           <Input
@@ -128,8 +65,7 @@ export function CardFormSheet({
             autoFocus={!card}
             value={schemeName}
             onChange={(e) => {
-              setSchemeName(e.target.value);
-              setCatalog(null);
+              form.typeSchemeName(e.target.value);
             }}
             placeholder="Flybuys, auto club, gym"
             maxLength={80}
@@ -141,7 +77,7 @@ export function CardFormSheet({
                 <button
                   key={s.id}
                   type="button"
-                  onClick={() => setSchemeName(s.name)}
+                  onClick={() => form.setSchemeName(s.name)}
                   className="min-h-9 rounded-full bg-muted px-3 text-[12.5px] font-medium text-muted-foreground hover:text-foreground"
                 >
                   {s.name}
@@ -152,8 +88,7 @@ export function CardFormSheet({
                   key={e.id}
                   type="button"
                   onClick={() => {
-                    setSchemeName(e.name);
-                    setCatalog(e);
+                    form.pickStarter(e);
                   }}
                   className="min-h-9 rounded-full bg-muted px-3 text-[12.5px] font-medium text-muted-foreground hover:text-foreground"
                 >
@@ -168,7 +103,7 @@ export function CardFormSheet({
           <Input
             id="reward-number"
             value={number}
-            onChange={(e) => setNumber(e.target.value)}
+            onChange={(e) => form.setNumber(e.target.value)}
             placeholder="6008 1234 5678 9012"
             className="font-mono"
             autoComplete="off"
@@ -177,24 +112,24 @@ export function CardFormSheet({
           />
         </FieldRow>
         <FieldRow label="Code" hint="Barcode suits most cards. Pick QR if the card shows a square code, or EAN-13 only if it says so.">
-          <SegmentedControl options={LOYALTY_CARD_FORMATS} value={format} onChange={setFormat} ariaLabel="Code type" />
+          <SegmentedControl options={LOYALTY_CARD_FORMATS} value={format} onChange={form.setFormat} ariaLabel="Code type" />
         </FieldRow>
         <FieldRow
           label="Who can see it"
           hint={canMakePrivate ? undefined : 'Only the person who added it can make it theirs alone.'}
         >
           <SegmentedControl
-            options={canMakePrivate ? VISIBILITY : VISIBILITY.filter((v) => v.value === 'shared')}
+            options={form.visibilityOptions}
             value={visibility}
-            onChange={setVisibility}
+            onChange={form.setVisibility}
             ariaLabel="Who can see it"
           />
         </FieldRow>
         <FieldRow label="Expires" htmlFor="reward-expires">
-          <Input id="reward-expires" type="date" value={expires} onChange={(e) => setExpires(e.target.value)} />
+          <Input id="reward-expires" type="date" value={expires} onChange={(e) => form.setExpires(e.target.value)} />
         </FieldRow>
         <FieldRow label="Notes" htmlFor="reward-notes" hint="Not for PINs or passwords.">
-          <Input id="reward-notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional" maxLength={200} />
+          <Input id="reward-notes" value={notes} onChange={(e) => form.setNotes(e.target.value)} placeholder="Optional" maxLength={200} />
         </FieldRow>
       </FormSection>
     </ItemFormSheet>
