@@ -12,9 +12,10 @@ import type { CostCategory, CostItem } from '../../types';
  * category, else null (nothing to go on, so the person picks one).
  */
 export function paymentCategory(
-  t: Pick<SpendingTransaction, 'category' | 'costItemId'>,
+  t: Pick<SpendingTransaction, 'category' | 'costItemId'> & { costCategory?: CostCategory | null },
   itemById: ReadonlyMap<string, Pick<CostItem, 'category'>>,
 ): CostCategory | null {
+  if (t.costCategory) return t.costCategory;
   const line = t.costItemId ? itemById.get(t.costItemId) : undefined;
   if (line) return line.category;
   return t.category ? costCategoryFromUp(t.category) : null;
@@ -22,7 +23,7 @@ export function paymentCategory(
 
 /** A spending payment's category label, or null for money in and transfers. */
 export function paymentCategoryLabel(
-  t: Pick<SpendingTransaction, 'amountCents' | 'category' | 'costItemId'> & { isTransfer?: boolean },
+  t: Pick<SpendingTransaction, 'amountCents' | 'category' | 'costItemId'> & { isTransfer?: boolean; costCategory?: CostCategory | null },
   itemById: ReadonlyMap<string, Pick<CostItem, 'category'>>,
 ): string | null {
   if (t.isTransfer || t.amountCents > 0) return null;

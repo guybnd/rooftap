@@ -5,12 +5,15 @@
 // shops, recurring costs and costs added by hand, with what's still to come.
 // Every number comes from core costMonth (cost-month.ts), the same function
 // Home, the digest and the assistant read. A row's source is an icon only: a
-// bank for a connector, a pen for one added by hand. A long press offers
-// Edit, Ask the assistant and Archive. Web twin: apps/web/src/app/costs/costs-overview.tsx.
+// bank for a connector, a pen for one added by hand. A row moves to another
+// category in two taps (Guy, 2026-10-23): hold it for its menu (core
+// costRowMenu, "Move to" on top), or swipe right for the likely categories
+// first. Swipe left hides a shop's payments for the month, or archives a cost.
+// Web twin: apps/web/src/app/costs/costs-overview.tsx.
 import * as React from 'react';
 import { Pressable, View } from 'react-native';
-import { ChevronDown, ChevronRight, FileText, Landmark, MoreHorizontal, PenLine, Plus, Repeat } from 'lucide-react-native';
-import { BottomSheet, SegmentedControl, Switch, Text, cn, haptics } from '@homeup/ui';
+import { Archive, ArrowRight, ChevronDown, ChevronRight, EyeOff, FileText, Landmark, MessageSquare, MoreHorizontal, PenLine, Plus, Repeat, Sparkles, Target, Wallet, List, type LucideIcon } from 'lucide-react-native';
+import { BottomSheet, SegmentedControl, SwipeActions, Switch, Text, cn, haptics, toast } from '@homeup/ui';
 import {
   CADENCE_LABEL,
   bankDayLabel,
@@ -39,7 +42,18 @@ import {
   type CostMonthCategory,
   type CostMonthLine,
   type MoneySummaryPrefs,
+  CATEGORY_META,
+  costLineCategory,
+  costMoveKind,
+  costRowMenu,
+  hideShopMonth,
+  likelyCostCategories,
+  moveCostLine,
+  useCostCategoryChoices,
+  useModules,
 } from '@homeup/core';
+import { CategoryPickerSheet, type CategoryPick } from './category-picker';
+import { CostRowSheet, type CostRowSheetState } from './cost-row-sheet';
 import { CATEGORY_BAR_FILL, CategoryChip } from './cost-card';
 import { TransactionSheet } from './money-view';
 import { upBankApi } from './up-bank-api';
@@ -68,6 +82,8 @@ export interface CostsOverviewProps {
   canArchive: boolean;
   nameOf: (userId: string) => string;
   onSetAmount: (item: CostItem, cents: number) => void;
+  /** Saves a change to a cost line (a move to another category). */
+  onPatchItem: (item: CostItem, patch: Partial<CostItem>) => void;
   /** Rendered between the categories and the end of the page (suggestions). */
   footer?: React.ReactNode;
   /** The money-insights module's "Worth a look" card, shown on this month; null when it's off. */
@@ -105,8 +121,12 @@ export function CostsOverview(props: CostsOverviewProps) {
   const month = months.find((m) => m.month === picked) ?? months[CHART_BACK];
   const [open, setOpen] = React.useState<Set<string>>(new Set());
   const [shop, setShop] = React.useState<CostMonthLine | null>(null);
-  const [menu, setMenu] = React.useState<{ line?: CostMonthLine; category?: CostMonthCategory } | null>(null);
+  const [rowSheet, setRowSheet] = React.useState<CostRowSheetState | null>(null);
+  const [pick, setPick] = React.useState<CategoryPick | null>(null);
   const [moreOpen, setMoreOpen] = React.useState(false);
+  const { reload } = useUpOverview();
+  const quickMove = useModules().server('costs.quick-move');
+  const choices = useCostCategoryChoices();
   // A colour picked on the spend bar: the chart shows only that category.
   const [focus, setFocus] = React.useState<string | null>(null);
   const name = monthLongName(month.month);
@@ -128,8 +148,78 @@ export function CostsOverview(props: CostsOverviewProps) {
 
   const openRoute = useOpenRoute();
   const ask = (question: string) => {
-    setMenu(null);
     if (!openAssistantPopup({ ask: question })) openRoute(`/assistant/new?kind=quick&ask=${encodeURIComponent(question)}`);
+  };
+
+  const deps = { patchItem: props.onPatchItem, api: upBankApi, reload };
+  // A move says where the row went, with Undo back to where it was.
+  const move = (l: CostMonthLine, inCategory: CostCategory | null, to: CostCategory) => {
+    const from = costLineCategory(l, inCategory);
+    moveCostLine(l, to, quickMove, deps)
+      .then(() => {
+        haptics.success();
+        toast.message(`Moved ${l.name} to ${CATEGORY_META[to].label}`, {
+          duration: 5000,
+          action: from ? { label: 'Undo', onPress: () => void moveCostLine(l, from, quickMove, deps).catch(() => toast.error("Couldn't move it back.")) } : undefined,
+        });
+      })
+      .catch((err) => toast.error(err instanceof Error ? err.message : "Couldn't move it."));
+  };
+  const hide = (l: CostMonthLine) => {
+    haptics.remove();
+    hideShopMonth(l, month.month, { api: upBankApi, reload })
+      .then((done) => {
+        if (!done) return;
+        toast.message(`Hid ${l.name} in ${name}`, {
+          duration: 5000,
+          action: { label: 'Undo', onPress: () => void upBankApi.changeShop({ ids: done.ids, hidden: false }).then(reload) },
+        });
+      })
+      .catch((err) => toast.error(err instanceof Error ? err.message : "Couldn't hide it."));
+  };
+  const pickFor = (l: CostMonthLine, c: CostMonthCategory) => {
+    const current = costLineCategory(l, c.category);
+    haptics.select();
+    setPick({ title: `Move ${l.name}`, current, likely: likelyCostCategories(l, current, month, choices), onPick: (to) => move(l, c.category, to) });
+  };
+  const canHide = (l: CostMonthLine) => quickMove && l.kind === 'shop' && !!l.vendor && l.source === 'up';
+  const lineMenu = (l: CostMonthLine, c: CostMonthCategory) => {
+    haptics.commit();
+    setRowSheet({
+      category: costLineCategory(l, c.category),
+      amount: l.paidCents > 0 ? formatMoney(l.paidCents) : l.toComeCents > 0 ? `~${formatMoney(l.toComeCents)}` : undefined,
+      meta: [costCategoryLabel(costLineCategory(l, c.category)), lineMeta(l, name)].filter(Boolean).join(' · '),
+      menu: costRowMenu({
+        line: l,
+        category: c.category,
+        choices,
+        monthName: name,
+        quickMove,
+        onMove: (to) => move(l, c.category, to),
+        onPayments: l.kind === 'shop' && l.vendor ? () => setShop(l) : null,
+        onEdit: onOpenItem,
+        onAsk: ask,
+        onArchive: canArchive ? onArchive : null,
+        onHide: canHide(l) ? () => hide(l) : null,
+      }),
+    });
+  };
+  const categoryMenu = (c: CostMonthCategory) => {
+    haptics.commit();
+    const label = costCategoryLabel(c.category);
+    setRowSheet({
+      category: c.category,
+      amount: formatMoney(c.paidCents),
+      meta: name,
+      menu: {
+        title: label,
+        kind: 'Category',
+        actions: [
+          { id: 'ask', label: 'Ask the assistant', group: 'share', icon: 'comment', run: () => ask(`Help me make sense of my ${label} costs in ${name}.`) },
+          c.category && { id: 'add', label: c.category === 'income' ? 'Add income' : 'Add a cost', group: 'edit', icon: 'edit', run: () => onAdd(c.category as CostCategory) },
+        ],
+      },
+    });
   };
 
   return (
@@ -199,9 +289,13 @@ export function CostsOverview(props: CostsOverviewProps) {
                   isOpen={!!focus || open.has(c.category ?? 'none')}
                   monthName={name}
                   onToggle={() => toggle(c.category ?? 'none')}
-                  onLongPress={() => setMenu({ category: c })}
+                  onLongPress={() => categoryMenu(c)}
                   onLine={(l) => (l.kind === 'shop' ? setShop(l) : l.item ? onOpenItem(l.item) : undefined)}
-                  onLineLong={(l) => setMenu({ line: l, category: c })}
+                  onLineLong={(l) => lineMenu(l, c)}
+                  onLineMove={(l) => pickFor(l, c)}
+                  onLineAway={(l) => (canHide(l) ? hide(l) : canArchive && l.item && l.kind !== 'shop' ? onArchive(l.item, !l.item.archived) : undefined)}
+                  canMove={(l) => !!costMoveKind(l, quickMove)}
+                  awayOf={(l) => (canHide(l) ? 'hide' : canArchive && l.item && l.kind !== 'shop' ? 'archive' : null)}
                   onAdd={c.category ? () => onAdd(c.category as CostCategory) : undefined}
                 />
               ))}
@@ -219,9 +313,13 @@ export function CostsOverview(props: CostsOverviewProps) {
                 isOpen={open.has('income')}
                 monthName={name}
                 onToggle={() => toggle('income')}
-                onLongPress={() => setMenu({ category: month.income! })}
+                onLongPress={() => categoryMenu(month.income!)}
                 onLine={(l) => (l.kind === 'shop' ? setShop(l) : l.item ? onOpenItem(l.item) : undefined)}
-                onLineLong={(l) => setMenu({ line: l, category: month.income! })}
+                onLineLong={(l) => lineMenu(l, month.income!)}
+                onLineMove={(l) => pickFor(l, month.income!)}
+                onLineAway={(l) => (canHide(l) ? hide(l) : undefined)}
+                canMove={(l) => !!costMoveKind(l, quickMove)}
+                awayOf={(l) => (canHide(l) ? 'hide' : null)}
                 onAdd={() => onAdd('income')}
                 income
               />
@@ -233,61 +331,62 @@ export function CostsOverview(props: CostsOverviewProps) {
 
       {props.footer}
 
-      <ShopSheet line={shop} month={month.month} items={items} nameOf={props.nameOf} onClose={() => setShop(null)} onOpenItem={onOpenItem} onSetAmount={props.onSetAmount} />
+      <ShopSheet
+        line={shop}
+        month={month.month}
+        items={items}
+        nameOf={props.nameOf}
+        onClose={() => setShop(null)}
+        onOpenItem={onOpenItem}
+        onSetAmount={props.onSetAmount}
+        onMove={
+          shop && costMoveKind(shop, quickMove)
+            ? () => {
+                const l = shop;
+                const c = month.categories.find((x) => x.lines.some((y) => y.key === l.key)) ?? month.income;
+                setShop(null);
+                if (c) setTimeout(() => pickFor(l, c), 0);
+              }
+            : null
+        }
+      />
 
-      <BottomSheet open={!!menu} onOpenChange={(o) => { if (!o) setMenu(null); }} className="pb-3">
-        <View className="gap-1 px-4 pb-2">
-          <Text className="pb-2 font-heading text-title font-semibold text-foreground" numberOfLines={1}>
-            {menu?.line ? menu.line.name : costCategoryLabel(menu?.category?.category ?? null)}
-          </Text>
-          {menu?.line?.item ? (
-            <MenuRow label="Edit" onPress={() => { const it = menu.line!.item!; setMenu(null); onOpenItem(it); }} />
-          ) : null}
-          <MenuRow
-            label="Ask the assistant"
-            onPress={() =>
-              ask(
-                menu?.line
-                  ? `Help me make sense of ${menu.line.name} in my ${name} costs.`
-                  : `Help me make sense of my ${costCategoryLabel(menu?.category?.category ?? null)} costs in ${name}.`,
-              )
-            }
-          />
-          {canArchive && menu?.line?.item && menu.line.kind !== 'shop' ? (
-            <MenuRow
-              label={menu.line.item.archived ? 'Bring back' : 'Archive'}
-              hint={menu.line.item.archived ? undefined : 'Stays so bank payments still find it, but leaves every total.'}
-              onPress={() => { const it = menu.line!.item!; setMenu(null); onArchive(it, !it.archived); }}
-            />
-          ) : null}
-        </View>
-      </BottomSheet>
+      <CostRowSheet state={rowSheet} choices={choices} onClose={() => setRowSheet(null)} />
+      <CategoryPickerSheet pick={pick} choices={choices} onClose={() => setPick(null)} />
 
       <BottomSheet open={moreOpen} onOpenChange={setMoreOpen} className="pb-3">
         <View className="gap-1 px-4 pb-2">
-          {onOpenPayments ? <MenuRow label="All payments" hint="Every payment as a list, to search and fix categories." onPress={() => { setMoreOpen(false); onOpenPayments(); }} /> : null}
-          <MenuRow label="Ask the assistant" onPress={() => { setMoreOpen(false); ask(`Help me make sense of my costs in ${name}.`); }} />
-          {props.summaries ? (
-            <MenuRow label={`Summarise ${name}`} hint="The assistant sums up the month and what is worth a look." onPress={() => { setMoreOpen(false); ask(summaryAsk(name)); }} />
-          ) : null}
-          <MenuRow label={goalCents ? 'Change the monthly goal' : 'Set a monthly goal'} onPress={() => { setMoreOpen(false); onEditGoal(); }} />
-          {canArchive && !month.income ? <MenuRow label="Add income" hint="Pay or other money in. It never counts as a cost." onPress={() => { setMoreOpen(false); onAdd('income'); }} /> : null}
+          <Text className={cn(LABEL, 'px-1 pt-1')}>{name}</Text>
+          <View className="rounded-2xl bg-muted/40">
+            <MenuRow Icon={Target} label="Monthly goal" value={goalCents ? formatMoney(goalCents) : 'Not set'} onPress={() => { setMoreOpen(false); onEditGoal(); }} />
+            {canArchive && !month.income ? <MenuRow Icon={Wallet} label="Add income" hint="Pay or other money in. It never counts as a cost." divided onPress={() => { setMoreOpen(false); onAdd('income'); }} /> : null}
+          </View>
+          <Text className={cn(LABEL, 'px-1 pt-3')}>Look closer</Text>
+          <View className="rounded-2xl bg-muted/40">
+            {onOpenPayments ? <MenuRow Icon={List} label="All payments" hint="Every payment as a list, to search and move." onPress={() => { setMoreOpen(false); onOpenPayments(); }} /> : null}
+            {props.summaries ? (
+              <MenuRow Icon={Sparkles} label={`Summarise ${name}`} divided={!!onOpenPayments} onPress={() => { setMoreOpen(false); ask(summaryAsk(name)); }} />
+            ) : null}
+            <MenuRow Icon={MessageSquare} label="Ask the assistant" divided={!!onOpenPayments || !!props.summaries} onPress={() => { setMoreOpen(false); ask(`Help me make sense of my costs in ${name}.`); }} />
+          </View>
           {props.summaries?.onChange ? (
-            <View className="mt-2 gap-1 border-t border-border/60 pt-3">
-              <Text className={cn(LABEL, 'px-1')}>Summaries in the Household chat</Text>
-              <SwitchRow
-                label="Weekly"
-                hint="Sunday morning: the week, what is worth a look and the bills ahead."
-                checked={props.summaries.prefs.weekly ?? upWeekly}
-                onChange={(on) => props.summaries!.onChange!({ ...props.summaries!.prefs, weekly: on })}
-              />
-              <SwitchRow
-                label="Monthly"
-                hint="On the 1st: last month against the goal and the month before."
-                checked={!!props.summaries.prefs.monthly}
-                onChange={(on) => props.summaries!.onChange!({ ...props.summaries!.prefs, monthly: on })}
-              />
-            </View>
+            <>
+              <Text className={cn(LABEL, 'px-1 pt-3')}>Summaries in the Household chat</Text>
+              <View className="rounded-2xl bg-muted/40 px-3">
+                <SwitchRow
+                  label="Weekly"
+                  hint="Sunday morning: the week, what is worth a look and the bills ahead."
+                  checked={props.summaries.prefs.weekly ?? upWeekly}
+                  onChange={(on) => props.summaries!.onChange!({ ...props.summaries!.prefs, weekly: on })}
+                />
+                <SwitchRow
+                  label="Monthly"
+                  hint="On the 1st: last month against the goal and the month before."
+                  checked={!!props.summaries.prefs.monthly}
+                  onChange={(on) => props.summaries!.onChange!({ ...props.summaries!.prefs, monthly: on })}
+                />
+              </View>
+            </>
           ) : null}
         </View>
       </BottomSheet>
@@ -475,6 +574,10 @@ function CategoryRow({
   onLongPress,
   onLine,
   onLineLong,
+  onLineMove,
+  onLineAway,
+  canMove,
+  awayOf,
   onAdd,
   income,
 }: {
@@ -486,6 +589,12 @@ function CategoryRow({
   onLongPress: () => void;
   onLine: (l: CostMonthLine) => void;
   onLineLong: (l: CostMonthLine) => void;
+  /** Swipe right: pick a category. */
+  onLineMove: (l: CostMonthLine) => void;
+  /** Swipe left: hide a shop's payments, or archive a cost. */
+  onLineAway: (l: CostMonthLine) => void;
+  canMove: (l: CostMonthLine) => boolean;
+  awayOf: (l: CostMonthLine) => 'hide' | 'archive' | null;
   onAdd?: () => void;
   income?: boolean;
 }) {
@@ -533,12 +642,22 @@ function CategoryRow({
         {isOpen ? <ChevronDown size={16} className="text-muted-foreground" /> : <ChevronRight size={16} className="text-muted-foreground" />}
       </Pressable>
       {isOpen ? (
-        <View className="bg-muted/20 pb-1 pl-14 pr-4">
+        <View className="pb-1">
           {c.lines.map((l, i) => (
-            <LineRow key={l.key} l={l} divided={i > 0} monthName={name} onPress={() => onLine(l)} onLongPress={() => onLineLong(l)} />
+            <LineRow
+              key={l.key}
+              l={l}
+              divided={i > 0}
+              monthName={name}
+              onPress={() => onLine(l)}
+              onLongPress={() => onLineLong(l)}
+              onMove={canMove(l) ? () => onLineMove(l) : undefined}
+              away={awayOf(l)}
+              onAway={() => onLineAway(l)}
+            />
           ))}
           {onAdd ? (
-            <Pressable accessibilityRole="button" onPress={onAdd} className="min-h-11 flex-row items-center gap-2 border-t border-border/60">
+            <Pressable accessibilityRole="button" onPress={onAdd} className="ml-14 mr-4 min-h-11 flex-row items-center gap-2 border-t border-border/60">
               <Plus size={14} className="text-muted-foreground" />
               <Text className="text-sm text-muted-foreground">{income ? 'Add income' : 'Add a cost'}</Text>
             </Pressable>
@@ -549,19 +668,40 @@ function CategoryRow({
   );
 }
 
-function LineRow({ l, divided, monthName: name, onPress, onLongPress }: { l: CostMonthLine; divided: boolean; monthName: string; onPress: () => void; onLongPress: () => void }) {
+function LineRow({
+  l,
+  divided,
+  monthName: name,
+  onPress,
+  onLongPress,
+  onMove,
+  away,
+  onAway,
+}: {
+  l: CostMonthLine;
+  divided: boolean;
+  monthName: string;
+  onPress: () => void;
+  onLongPress: () => void;
+  onMove?: () => void;
+  away: 'hide' | 'archive' | null;
+  onAway: () => void;
+}) {
   const ghost = l.kind === 'usual' || l.kind === 'target' || (l.paidCents === 0 && l.toComeCents > 0);
   const meta = lineMeta(l, name);
   const SourceIcon = l.source === 'up' ? Landmark : l.source === 'csv' ? FileText : l.source === 'manual' ? PenLine : null;
   const pressable = l.kind !== 'usual';
-  return (
+  const row = (
     <Pressable
       accessibilityRole={pressable ? 'button' : undefined}
+      accessibilityHint={pressable ? 'Hold for more. Swipe right to move it.' : undefined}
+      accessibilityActions={pressable ? [{ name: 'longpress', label: 'More' }, ...(onMove ? [{ name: 'activate-move', label: 'Move to another category' }] : [])] : undefined}
+      onAccessibilityAction={(e) => (e.nativeEvent.actionName === 'longpress' ? onLongPress() : e.nativeEvent.actionName === 'activate-move' ? onMove?.() : undefined)}
       disabled={!pressable}
       onPress={onPress}
-      onLongPress={onLongPress}
-      className={cn('min-h-[52px] flex-row items-center gap-3 py-2', divided && 'border-t border-border/60')}
+      className="bg-card pl-14 pr-4"
     >
+      <View className={cn('min-h-[52px] flex-row items-center gap-3 py-2', divided && 'border-t border-border/60')}>
       <View className="min-w-0 flex-1 gap-0.5">
         <View className="flex-row items-center gap-1.5">
           <Text numberOfLines={1} className={cn('min-w-0 shrink text-sm font-medium', ghost ? 'italic text-muted-foreground' : 'text-foreground')}>
@@ -588,7 +728,26 @@ function LineRow({ l, divided, monthName: name, onPress, onLongPress }: { l: Cos
         ) : null}
       </View>
       {l.kind === 'shop' ? <ChevronRight size={14} className="text-muted-foreground" /> : null}
+      </View>
     </Pressable>
+  );
+  if (!pressable) return row;
+  return (
+    <SwipeActions
+      onLongPress={onLongPress}
+      onSwipeRight={onMove}
+      right={onMove ? { bg: 'bg-muted', activeBg: 'bg-muted-foreground/30', icon: <ArrowRight size={16} className="text-foreground" />, label: 'Move' } : undefined}
+      onSwipeLeft={away ? onAway : undefined}
+      left={
+        away === 'hide'
+          ? { bg: 'bg-muted', activeBg: 'bg-muted-foreground/30', icon: <EyeOff size={16} className="text-foreground" />, label: 'Hide' }
+          : away === 'archive'
+            ? { bg: 'bg-muted', activeBg: 'bg-muted-foreground/30', icon: <Archive size={16} className="text-foreground" />, label: l.item?.archived ? 'Bring back' : 'Archive' }
+            : undefined
+      }
+    >
+      {row}
+    </SwipeActions>
   );
 }
 
@@ -601,6 +760,7 @@ function ShopSheet({
   onClose,
   onOpenItem,
   onSetAmount,
+  onMove,
 }: {
   line: CostMonthLine | null;
   month: string;
@@ -609,11 +769,14 @@ function ShopSheet({
   onClose: () => void;
   onOpenItem: (item: CostItem) => void;
   onSetAmount: (item: CostItem, cents: number) => void;
+  /** Opens the category picker for the whole shop; null when it can't move. */
+  onMove: (() => void) | null;
 }) {
   const { scope, reload } = useUpOverview();
   const [rows, setRows] = React.useState<BankTransactionView[] | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [openId, setOpenId] = React.useState<string | null>(null);
+  const [nonce, setNonce] = React.useState(0);
 
   React.useEffect(() => {
     if (!line) return;
@@ -631,7 +794,7 @@ function ShopSheet({
     return () => {
       live = false;
     };
-  }, [line, month, scope]);
+  }, [line, month, scope, nonce]);
 
   const apply = async (id: string, patch: BankTransactionPatch) => {
     try {
@@ -660,7 +823,11 @@ function ShopSheet({
           <Text className="text-caption text-muted-foreground">
             {monthLongName(month)} · {line?.count ?? 0} payment{line?.count === 1 ? '' : 's'}
           </Text>
-          {line?.item ? (
+          {onMove ? (
+            <Pressable accessibilityRole="button" onPress={onMove} className="min-h-10 justify-center">
+              <Text className="text-sm font-medium text-primary">Move the shop to another category</Text>
+            </Pressable>
+          ) : line?.item ? (
             <Pressable accessibilityRole="button" onPress={() => { const it = line.item!; onClose(); onOpenItem(it); }} className="min-h-10 justify-center">
               <Text className="text-sm font-medium text-primary">Change its category</Text>
             </Pressable>
@@ -706,6 +873,7 @@ function ShopSheet({
           onOpenItem(item);
         }}
         onSetAmount={onSetAmount}
+        onShopMoved={() => setNonce((n) => n + 1)}
       />
     </>
   );
@@ -728,11 +896,16 @@ function summaryAsk(month: string): string {
   return `Summarise our costs for ${month}: what we spent against the goal, the biggest categories, how it compares with the month before, and anything worth a look.`;
 }
 
-function MenuRow({ label, hint, onPress }: { label: string; hint?: string; onPress: () => void }) {
+function MenuRow({ Icon, label, hint, value, divided, onPress }: { Icon: LucideIcon; label: string; hint?: string; value?: string; divided?: boolean; onPress: () => void }) {
   return (
-    <Pressable accessibilityRole="button" onPress={onPress} className="min-h-12 justify-center rounded-xl px-1 py-2">
-      <Text className="text-body font-medium text-foreground">{label}</Text>
-      {hint ? <Text className="text-caption text-muted-foreground">{hint}</Text> : null}
+    <Pressable accessibilityRole="button" onPress={onPress} className={cn('min-h-12 flex-row items-center gap-3 px-3 py-2', divided && 'border-t border-border/60')}>
+      <Icon size={16} className="text-muted-foreground" />
+      <View className="min-w-0 flex-1">
+        <Text className="text-body text-foreground">{label}</Text>
+        {hint ? <Text className="text-caption text-muted-foreground">{hint}</Text> : null}
+      </View>
+      {value ? <Text className="text-sm text-muted-foreground" style={TABULAR}>{value}</Text> : null}
+      <ChevronRight size={14} className="text-muted-foreground" />
     </Pressable>
   );
 }

@@ -6,6 +6,8 @@ import {
   costCategoryFromUp,
   guessCadence,
   normaliseBankMatch,
+  ownCostCategory,
+  squashVendor,
   type BankTransaction,
   type CostCategory,
   type MakeCostPreview,
@@ -65,6 +67,8 @@ export interface BankTransactionChange {
   note?: string | null;
   /** A cost line id files it by hand; null gives it back to the link rules. */
   costItemId?: string | null;
+  /** A Costs category for this payment alone; null follows its line again. */
+  costCategory?: CostCategory | null;
 }
 
 /** Hide, note or file one of the caller's own payments. */
@@ -90,6 +94,11 @@ export async function changeBankTransaction(
     patch.cost_item_id = change.costItemId;
     patch.link_kind = "manual";
   }
+  if (change.costCategory !== undefined) {
+    if (change.costCategory !== null && !ownCostCategory(change.costCategory))
+      return { error: "Pick a Costs category.", status: 400 };
+    patch.cost_category = change.costCategory;
+  }
   if (!Object.keys(patch).length)
     return { error: "Nothing to change.", status: 400 };
 
@@ -101,6 +110,14 @@ export async function changeBankTransaction(
     .single();
   if (error || !saved)
     return { error: error?.message ?? "Couldn't save.", status: 500 };
+  // A joint payment is stored once per person who reads it: they share a category.
+  if ("cost_category" in patch)
+    await c.admin
+      .from("bank_transactions")
+      .update({ cost_category: patch.cost_category })
+      .eq("group_id", c.groupId)
+      .eq("external_id", row.external_id)
+      .neq("id", id);
 
   // A payment given back to the rules gets whatever line they pick now; a
   // hidden or relinked payment can change a keep-in-step line's amount.
@@ -411,4 +428,169 @@ export async function mergeCostLine(
   if (error) return { error: error.message, status: 500 };
   await applyBankLinks(c.admin, c.groupId);
   return { ok: { into: intoId } };
+}
+
+type ShopRow = Pick<
+  BankTransaction,
+  | "id"
+  | "user_id"
+  | "external_id"
+  | "description"
+  | "amount_cents"
+  | "occurred_at"
+  | "is_transfer"
+  | "cost_item_id"
+  | "cost_category"
+>;
+
+/** The household's payments at one shop (the payee as the bank shows it) over the last year or so. */
+async function shopRows(c: BankCaller, vendor: string): Promise<ShopRow[]> {
+  const key = squashVendor(vendor.replace(/[\\\s]+$/, ""));
+  const { data } = await c.admin
+    .from("bank_transactions")
+    .select(
+      "id, user_id, external_id, description, amount_cents, occurred_at, is_transfer, cost_item_id, cost_category",
+    )
+    .eq("group_id", c.groupId)
+    .eq("is_transfer", false)
+    .gte("occurred_at", new Date(Date.now() - LOOKBACK_MS).toISOString())
+    .order("occurred_at", { ascending: false })
+    .limit(5000);
+  return ((data ?? []) as ShopRow[]).filter(
+    (r) => squashVendor(r.description.replace(/[\\\s]+$/, "")) === key,
+  );
+}
+
+/**
+ * Moves a shop to a Costs category: its payments now and later. A shop with
+ * a line of its own (one the bank made for it, or one named after it) moves
+ * that line, as editing the line does. A shop whose payments sit on a shared
+ * line (say a weekly Groceries line) keeps them there and gives each payment
+ * the category instead. A shop with no line gets one the way the bank's own
+ * filing makes them (bank_source, a one-off that only remembers its
+ * category), with a rule so its later payments land there too. Categories
+ * picked for single payments at the shop go, so the whole shop reads one way.
+ */
+export async function moveShopToCategory(
+  c: BankCaller,
+  vendor: string,
+  category: CostCategory,
+): Promise<BankResult<{ costItemId: string | null; ids: string[] }>> {
+  if (!ownCostCategory(category))
+    return { error: "Pick a Costs category.", status: 400 };
+  const name = vendor.replace(/[\\\s]+$/, "").trim();
+  if (!name) return { error: "Pick a shop.", status: 400 };
+  const key = squashVendor(name);
+  const rows = await shopRows(c, name);
+
+  const { data: lineData } = await c.admin
+    .from("cost_items")
+    .select("id, name, provider, bank_source, deleted")
+    .eq("group_id", c.groupId)
+    .eq("deleted", false);
+  const lines = (lineData ?? []) as {
+    id: string;
+    name: string;
+    provider: string | null;
+    bank_source?: string | null;
+  }[];
+  const named = (l: (typeof lines)[number]) =>
+    squashVendor(l.name) === key || squashVendor(l.provider ?? "") === key;
+  const filedOn = new Set(rows.map((r) => r.cost_item_id).filter((id): id is string => !!id));
+  const own =
+    lines.find((l) => filedOn.has(l.id) && (l.bank_source || named(l))) ??
+    lines.find((l) => l.bank_source && named(l));
+  const shared = rows.filter((r) => r.cost_item_id && r.cost_item_id !== own?.id);
+
+  let costItemId: string | null = own?.id ?? null;
+  if (own) {
+    const { error } = await c.admin
+      .from("cost_items")
+      .update({ category })
+      .eq("id", own.id)
+      .eq("group_id", c.groupId);
+    if (error) return { error: error.message, status: 500 };
+  } else if (!shared.length) {
+    const latest = rows.find((r) => r.amount_cents < 0);
+    const { data: made, error } = await c.admin
+      .from("cost_items")
+      .insert({
+        group_id: c.groupId,
+        name: name.slice(0, 200),
+        category,
+        amount: latest ? Math.abs(latest.amount_cents) : 0,
+        cadence: "one_off",
+        is_estimate: true,
+        start_date: (latest ?? rows[0])?.occurred_at.slice(0, 10) ?? null,
+        provider: name.slice(0, 200),
+        bank_source: "up",
+        created_by: c.userId,
+      })
+      .select("id")
+      .single();
+    if (error || !made)
+      return { error: `The shop couldn't be moved: ${error?.message}`, status: 500 };
+    costItemId = made.id as string;
+    const match = normaliseBankMatch(name);
+    if (match && match.length >= 4) {
+      const linked = await setBankLinkRule(c, costItemId, match, false);
+      if ("error" in linked) return linked;
+    } else if (rows.length) {
+      await c.admin
+        .from("bank_transactions")
+        .update({ cost_item_id: costItemId, link_kind: "manual" })
+        .in("id", rows.map((r) => r.id));
+    }
+  }
+
+  // Payments on a shared line take the category one by one; the rest follow the shop's line.
+  const sharedIds = shared.map((r) => r.id);
+  const restIds = rows.filter((r) => !sharedIds.includes(r.id) && r.cost_category).map((r) => r.id);
+  for (let i = 0; i < sharedIds.length; i += 500)
+    await c.admin.from("bank_transactions").update({ cost_category: category }).in("id", sharedIds.slice(i, i + 500));
+  for (let i = 0; i < restIds.length; i += 500)
+    await c.admin.from("bank_transactions").update({ cost_category: null }).in("id", restIds.slice(i, i + 500));
+  return { ok: { costItemId, ids: rows.map((r) => r.id) } };
+}
+
+/**
+ * Hides or shows the caller's own payments at a shop between two instants
+ * (a month on their device). A joint payment's other copies follow it.
+ */
+export async function hideShopPayments(
+  c: BankCaller,
+  input: { vendor: string; from: string; to: string } | { ids: string[] },
+  hidden: boolean,
+): Promise<BankResult<{ costItemId: null; ids: string[] }>> {
+  let mine: Pick<ShopRow, "id" | "user_id" | "external_id" | "occurred_at">[];
+  if ("ids" in input) {
+    const { data } = await c.admin
+      .from("bank_transactions")
+      .select("id, user_id, external_id, occurred_at")
+      .eq("group_id", c.groupId)
+      .in("id", input.ids.slice(0, 500));
+    mine = (data ?? []) as typeof mine;
+  } else {
+    const from = Date.parse(input.from);
+    const to = Date.parse(input.to);
+    if (!Number.isFinite(from) || !Number.isFinite(to))
+      return { error: "Pick a month.", status: 400 };
+    mine = (await shopRows(c, input.vendor)).filter((r) => {
+      const at = Date.parse(r.occurred_at);
+      return at >= from && at < to;
+    });
+  }
+  mine = mine.filter((r) => r.user_id === c.userId);
+  if (!mine.length)
+    return { error: "Only the person who connected the account can hide its payments.", status: 403 };
+  const externals = [...new Set(mine.map((r) => r.external_id))];
+  const { data: changed, error } = await c.admin
+    .from("bank_transactions")
+    .update({ hidden, updated_at: new Date().toISOString() })
+    .eq("group_id", c.groupId)
+    .in("external_id", externals)
+    .select("id");
+  if (error) return { error: error.message, status: 500 };
+  await applyBankLinks(c.admin, c.groupId, { userId: c.userId });
+  return { ok: { costItemId: null, ids: ((changed ?? []) as { id: string }[]).map((r) => r.id) } };
 }

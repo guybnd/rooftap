@@ -17,6 +17,7 @@
 
 import type { CostCadence, CostCategory, CostItem } from '../../types';
 import type { LedgerRow } from './cost-month';
+import { CATEGORY_META } from './costs';
 
 export const UP_API_BASE = 'https://api.up.com.au/api/v1';
 
@@ -104,6 +105,8 @@ export interface BankTransaction {
   /** Left out of every spending total. */
   hidden?: boolean;
   note?: string | null;
+  /** A Costs category picked for this payment alone; wins over its line's. Missing before 20261023080000_payment_cost_category. */
+  cost_category?: string | null;
 }
 
 /** A `bank_accounts` row: one Up account and its balance at the last read. */
@@ -229,8 +232,9 @@ export function ledgerRows(rows: readonly BankTransaction[], tzOffset = 0): Ledg
     // Up's raw text can end in a stray backslash ("LUNE FITZROY\\").
     const vendor = r.description.replace(/[\\\s]+$/, '').trim() || r.description;
     const costItemId = r.cost_item_id ?? null;
-    const key = `${month}|${costItemId ?? ''}|${squashVendor(vendor)}|${costItemId ? '' : (r.category ?? '')}`;
-    const cur = out.get(key) ?? { month, vendor, costItemId, sourceCategory: r.category ?? null, outCents: 0, inCents: 0, count: 0, lastAt: r.occurred_at, source: r.source };
+    const own = ownCostCategory(r.cost_category);
+    const key = `${month}|${costItemId ?? ''}|${squashVendor(vendor)}|${costItemId ? '' : (r.category ?? '')}|${own ?? ''}`;
+    const cur = out.get(key) ?? { month, vendor, costItemId, sourceCategory: r.category ?? null, ...(own ? { category: own } : {}), outCents: 0, inCents: 0, count: 0, lastAt: r.occurred_at, source: r.source };
     if (r.amount_cents < 0) {
       cur.outCents += -r.amount_cents;
       cur.count += 1;
@@ -239,6 +243,11 @@ export function ledgerRows(rows: readonly BankTransaction[], tzOffset = 0): Ledg
     out.set(key, cur);
   }
   return Array.from(out.values());
+}
+
+/** A stored payment category, when it names one Costs knows. */
+export function ownCostCategory(value: string | null | undefined): CostCategory | null {
+  return value && value in CATEGORY_META ? (value as CostCategory) : null;
 }
 
 /** How far apart the two sides of one transfer may be stamped. */
@@ -813,6 +822,8 @@ export interface BankTransactionView extends SpendingTransaction {
   note: string | null;
   hidden: boolean;
   costItemId: string | null;
+  /** A category picked for this payment alone, else null. */
+  costCategory: CostCategory | null;
   /** 'manual' when picked by hand, 'rule' when a link rule filed it. */
   linkKind: 'rule' | 'manual' | null;
   isTransfer: boolean;
@@ -826,12 +837,30 @@ export interface BankTransactionPage {
   next: string | null;
 }
 
+/** A change to every payment at one shop (the payee as the bank shows it). */
+export type ShopChange =
+  /** Every payment at the shop, and its later ones, to a category. */
+  | { vendor: string; category: CostCategory }
+  /** The viewer's own payments at the shop between two instants, hidden or shown. */
+  | { vendor: string; from: string; to: string; hidden: boolean }
+  /** Payments by id (an undo of the change above). */
+  | { ids: string[]; hidden: boolean };
+
+export interface ShopChangeResult {
+  /** The shop's own cost line, when the move made or changed one. */
+  costItemId: string | null;
+  /** The payments changed, for an undo. */
+  ids: string[];
+}
+
 /** What a person may change on one of their own transactions. */
 export interface BankTransactionPatch {
   hidden?: boolean;
   note?: string | null;
   /** A cost line picked by hand, or null to leave it to the link rules. */
   costItemId?: string | null;
+  /** A category for this payment alone, or null to follow its line again. Needs 'costs.quick-move'. */
+  costCategory?: CostCategory | null;
 }
 
 /** Maps a stored row to what the Money view shows. */
@@ -844,6 +873,7 @@ export function bankTransactionView(r: BankTransaction, viewerId: string): BankT
     note: r.note ?? null,
     hidden: !!r.hidden,
     costItemId: r.cost_item_id ?? null,
+    costCategory: ownCostCategory(r.cost_category),
     linkKind: r.link_kind ?? null,
     isTransfer: r.is_transfer,
     mine: r.user_id === viewerId,
@@ -1157,6 +1187,11 @@ export function createUpBankApi(call: UpBankCall) {
       }),
     updateTransaction: (id: string, patch: BankTransactionPatch) =>
       call<BankTransactionView>(`/api/up-bank/transactions/${encodeURIComponent(id)}`, { method: 'PATCH', body: patch }),
+    /**
+     * A shop's payments: move them all (and the shop's later ones) to a
+     * category, or hide the viewer's own ones in a month. Needs 'costs.quick-move'.
+     */
+    changeShop: (input: ShopChange) => call<ShopChangeResult>('/api/up-bank/shops', { method: 'POST', body: input }),
     removeCostLink: (costItemId: string) =>
       call<CostBankDetail>(`/api/up-bank/links/${encodeURIComponent(costItemId)}`, { method: 'DELETE' }),
     /** Folds a cost line into another: payees, payments and all. */

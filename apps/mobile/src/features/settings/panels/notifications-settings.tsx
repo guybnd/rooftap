@@ -11,13 +11,14 @@ import { Platform, View } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as SecureStore from 'expo-secure-store';
 import Constants from 'expo-constants';
-import { Bell, BellOff } from 'lucide-react-native';
-import { SegmentedControl, Text } from '@homeup/ui';
-import { LEAVE_ALERT_OPTIONS, leaveAlertMinutes, useModules } from '@homeup/core';
+import { Bell, BellOff, BellRing } from 'lucide-react-native';
+import { ListItem, ListItemContent, SegmentedControl, Text } from '@homeup/ui';
+import { LEAVE_ALERT_OPTIONS, leaveAlertMinutes, useModules, type ModuleId } from '@homeup/core';
 import { getCurrentSupabaseClient } from '@/lib/supabase-client';
 import { getStoredServer } from '@/lib/server-config';
 import { useDataCache } from '@/lib/data-cache';
-import { SettingsInset, SettingsPanel, SettingsSwitchRow } from './settings-panel';
+import { ReplyNotificationRows } from './assistant-settings';
+import { SettingsInset, SettingsLabel, SettingsPanel, SettingsSwitchRow } from './settings-panel';
 
 // HOUP-174: exported so the settings hub row (settings/index.tsx) can read
 // the same registered-token state for its E2 "Notifications  On/Off ›" value
@@ -130,8 +131,8 @@ export function NotificationsSettings() {
   return (
     <SettingsPanel
       icon={Bell}
-      title="Notifications"
-      description="A push when a task is due, assigned to you, or commented on. Tapping it opens the task."
+      title="Push notifications"
+      description="Rooftap sends these to this phone. Tapping one opens what it is about."
     >
       {osGranted === false && (
         <View className="flex-row items-start gap-3 rounded-xl bg-muted/30 px-3.5 py-3">
@@ -147,7 +148,7 @@ export function NotificationsSettings() {
 
       <SettingsInset>
         <SettingsSwitchRow
-          title="Task notifications"
+          title="On this phone"
           description={busy ? 'Working…' : enabled ? 'On for this device' : undefined}
           checked={enabled}
           onChange={() => void toggle()}
@@ -157,8 +158,68 @@ export function NotificationsSettings() {
 
       {!isOnline && <Text className="px-1 text-caption text-muted-foreground">Connect to change this setting.</Text>}
       {error && <Text className="px-1 text-caption text-destructive">{error}</Text>}
+    </SettingsPanel>
+  );
+}
 
-      <LeaveAlertSetting />
+/** A kind of push with no switch of its own: the switch above covers it. */
+function KindRow({ title, description }: { title: string; description: string }) {
+  return (
+    <ListItem disabled className="min-h-[52px] items-center px-3.5">
+      <ListItemContent>
+        <Text className="text-sm font-medium text-foreground">{title}</Text>
+        <Text className="text-caption text-muted-foreground">{description}</Text>
+      </ListItemContent>
+    </ListItem>
+  );
+}
+
+/** Every push the app sends, grouped by module, with the switches each one has. */
+export function NotificationKinds() {
+  const modules = useModules();
+  const has = (id: ModuleId) => modules.enabled.has(id);
+  const assistant = has('assistant') && modules.server('assistant.reply-notifications');
+  if (!has('household') && !has('calendar') && !assistant && !has('shopper')) return null;
+
+  return (
+    <SettingsPanel icon={BellRing} title="What you get" description="Pushes for the modules your home uses.">
+      {has('household') && (
+        <View className="gap-1.5">
+          <SettingsLabel>Tasks</SettingsLabel>
+          <SettingsInset>
+            <KindRow title="Due, assigned or commented" description="When a task is due, someone gives you one, or someone comments on yours." />
+          </SettingsInset>
+        </View>
+      )}
+      {has('calendar') && (
+        <View className="gap-1.5">
+          <SettingsLabel>Calendar</SettingsLabel>
+          <SettingsInset>
+            <KindRow title="Event reminders" description="A week and a day before, or on the days an event picks." />
+            <LeaveAlertSetting />
+          </SettingsInset>
+        </View>
+      )}
+      {assistant && (
+        <View className="gap-1.5">
+          <SettingsLabel>Assistant</SettingsLabel>
+          <ReplyNotificationRows
+            description={
+              has('money-insights')
+                ? 'When Rooftap answers after you leave, a new Household message, or a money note.'
+                : 'When Rooftap answers after you leave, or a new Household message.'
+            }
+          />
+        </View>
+      )}
+      {has('shopper') && (
+        <View className="gap-1.5">
+          <SettingsLabel>Shopper</SettingsLabel>
+          <SettingsInset>
+            <KindRow title="Scout results" description="When a search you started has its picks." />
+          </SettingsInset>
+        </View>
+      )}
     </SettingsPanel>
   );
 }
@@ -189,21 +250,23 @@ function LeaveAlertSetting() {
     }
   };
 
+  // The control sits under the text at full width: beside the label it ran
+  // past the card's edge on a phone.
   return (
-    <View className="gap-1.5">
-      <View className="flex-row items-center justify-between gap-3">
+    <View className="gap-2.5 px-3.5 py-3">
+      <View className="gap-0.5">
         <Text className="text-sm font-medium text-foreground">Time to leave</Text>
-        <SegmentedControl
-          options={LEAVE_ALERT_OPTIONS.map((o) => ({ value: String(o.value), label: o.label }))}
-          value={value}
-          onChange={(v) => void change(v)}
-          size="sm"
-          accessibilityLabel="Time to leave alert"
-        />
+        <Text className="text-caption text-muted-foreground">
+          How long before you need to set off, for events with Getting there on.
+        </Text>
       </View>
-      <Text className="px-1 text-caption text-muted-foreground">
-        How long before you need to set off the push comes, for events with Getting there on.
-      </Text>
+      <SegmentedControl
+        options={LEAVE_ALERT_OPTIONS.map((o) => ({ value: String(o.value), label: o.label }))}
+        value={value}
+        onChange={(v) => void change(v)}
+        size="sm"
+        accessibilityLabel="Time to leave alert"
+      />
     </View>
   );
 }

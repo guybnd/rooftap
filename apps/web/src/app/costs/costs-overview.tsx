@@ -7,13 +7,16 @@
 // shops, recurring costs and costs added by hand, with what's still to come.
 // Every number comes from core costMonth (cost-month.ts), the same function
 // Home, the digest and the assistant read. A row's source is an icon only: a
-// bank for a connector, a pen for one added by hand. Right-click (a long press
-// on touch) offers Edit, Ask the assistant and Archive. Phone twin:
-// apps/mobile/src/features/costs/costs-overview.tsx.
+// bank for a connector, a pen for one added by hand. A row moves to another
+// category in two steps (Guy, 2026-10-23): right-click (a hold on touch) for
+// its menu (core costRowMenu, "Move to" on top), or swipe right for the likely
+// categories first. Swipe left hides a shop's payments for the month, or
+// archives a cost. Phone twin: apps/mobile/src/features/costs/costs-overview.tsx.
 
 import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronDown, ChevronRight, FileText, Landmark, MoreHorizontal, PenLine, Plus, Repeat } from 'lucide-react';
+import { toast } from 'sonner';
+import { ChevronDown, ChevronRight, FileText, Landmark, List, MessageSquare, MoreHorizontal, PenLine, Plus, Repeat, Sparkles, Target, Wallet, type LucideIcon } from 'lucide-react';
 import {
   CADENCE_LABEL,
   CATEGORY_COLOR,
@@ -43,6 +46,16 @@ import {
   type CostMonthCategory,
   type CostMonthLine,
   type MoneySummaryPrefs,
+  type RowMenu,
+  CATEGORY_META,
+  costLineCategory,
+  costMoveKind,
+  costRowMenu,
+  hideShopMonth,
+  likelyCostCategories,
+  moveCostLine,
+  useCostCategoryChoices,
+  useModules,
 } from '@homeup/core';
 import { BottomSheet } from '@/components/ui/bottom-sheet';
 import { Switch } from '@/components/ui/switch';
@@ -52,6 +65,9 @@ import { cn } from '@/lib/utils';
 import { CategoryGlyph } from './category-glyph';
 import { CostInsightsCard, type CostInsightsCardProps } from './cost-insights';
 import { TransactionSheet } from './money-view';
+import { CategoryPickerSheet, type CategoryPick } from './category-picker';
+import { CostRowShell, CostRowSheet, type CostRowSheetState } from './cost-row-sheet';
+import { commit, success } from '@/lib/haptics';
 
 const LABEL = 'text-[10.5px] font-medium uppercase tracking-[0.1em] text-muted-foreground';
 const CARD = 'overflow-hidden rounded-3xl border border-border/60 bg-card shadow-[var(--card-shadow)]';
@@ -76,6 +92,8 @@ export interface CostsOverviewProps {
   canArchive: boolean;
   nameOf: (userId: string) => string;
   onSetAmount: (item: CostItem, cents: number) => void;
+  /** Saves a change to a cost line (a move to another category). */
+  onPatchItem: (item: CostItem, patch: Partial<CostItem>) => void;
   /** Rendered after the categories (suggestions). */
   footer?: ReactNode;
   /** Wide screens put the summary on the left and the categories on the right. */
@@ -132,8 +150,12 @@ export function CostsOverview(props: CostsOverviewProps) {
   const month = months.find((m) => m.month === picked) ?? months[CHART_BACK];
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [shop, setShop] = useState<CostMonthLine | null>(null);
-  const [menu, setMenu] = useState<{ line?: CostMonthLine; category?: CostMonthCategory } | null>(null);
+  const [rowSheet, setRowSheet] = useState<CostRowSheetState | null>(null);
+  const [pick, setPick] = useState<CategoryPick | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
+  const { reload } = useUpOverview();
+  const quickMove = useModules().server('costs.quick-move');
+  const choices = useCostCategoryChoices();
   // A colour picked on the spend bar: the chart shows only that category.
   const [focus, setFocus] = useState<string | null>(null);
   const name = monthLongName(month.month);
@@ -147,11 +169,93 @@ export function CostsOverview(props: CostsOverviewProps) {
     });
 
   const ask = (question: string) => {
-    setMenu(null);
     setMoreOpen(false);
     if (!openAssistantPopup({ ask: question })) router.push(`/assistant/new?kind=quick&ask=${encodeURIComponent(question)}`);
   };
   const onLine = (l: CostMonthLine) => (l.kind === 'shop' ? setShop(l) : l.item ? onOpenItem(l.item) : undefined);
+
+  const deps = { patchItem: props.onPatchItem, api: upBankApi, reload };
+  // A move says where the row went, with Undo back to where it was.
+  const move = (l: CostMonthLine, inCategory: CostCategory | null, to: CostCategory) => {
+    const from = costLineCategory(l, inCategory);
+    moveCostLine(l, to, quickMove, deps)
+      .then(() => {
+        success();
+        toast(`Moved ${l.name} to ${CATEGORY_META[to].label}`, {
+          duration: 5000,
+          action: from ? { label: 'Undo', onClick: () => void moveCostLine(l, from, quickMove, deps).catch(() => toast.error("Couldn't move it back.")) } : undefined,
+        });
+      })
+      .catch((err) => toast.error(err instanceof Error ? err.message : "Couldn't move it."));
+  };
+  const hide = (l: CostMonthLine) => {
+    hideShopMonth(l, month.month, { api: upBankApi, reload })
+      .then((done) => {
+        if (!done) return;
+        toast(`Hid ${l.name} in ${name}`, {
+          duration: 5000,
+          action: { label: 'Undo', onClick: () => void upBankApi.changeShop({ ids: done.ids, hidden: false }).then(reload) },
+        });
+      })
+      .catch((err) => toast.error(err instanceof Error ? err.message : "Couldn't hide it."));
+  };
+  const pickFor = (l: CostMonthLine, c: CostMonthCategory) => {
+    const current = costLineCategory(l, c.category);
+    setPick({ title: `Move ${l.name}`, current, likely: likelyCostCategories(l, current, month, choices), onPick: (to) => move(l, c.category, to) });
+  };
+  const canHide = (l: CostMonthLine) => quickMove && l.kind === 'shop' && !!l.vendor && l.source === 'up';
+  const lineMenu = (l: CostMonthLine, c: CostMonthCategory): RowMenu =>
+    costRowMenu({
+      line: l,
+      category: c.category,
+      choices,
+      monthName: name,
+      quickMove,
+      onMove: (to) => move(l, c.category, to),
+      onPayments: l.kind === 'shop' && l.vendor ? () => setShop(l) : null,
+      onEdit: onOpenItem,
+      onAsk: ask,
+      onArchive: canArchive ? onArchive : null,
+      onHide: canHide(l) ? () => hide(l) : null,
+    });
+  const lineSheet = (l: CostMonthLine, c: CostMonthCategory) => {
+    commit();
+    setRowSheet({
+      category: costLineCategory(l, c.category),
+      amount: l.paidCents > 0 ? formatMoney(l.paidCents) : l.toComeCents > 0 ? `~${formatMoney(l.toComeCents)}` : undefined,
+      meta: [costCategoryLabel(costLineCategory(l, c.category)), lineMeta(l, name)].filter(Boolean).join(' · '),
+      menu: lineMenu(l, c),
+    });
+  };
+  const categoryMenu = (c: CostMonthCategory) => {
+    const label = costCategoryLabel(c.category);
+    setRowSheet({
+      category: c.category,
+      amount: formatMoney(c.paidCents),
+      meta: name,
+      menu: {
+        title: label,
+        kind: 'Category',
+        actions: [
+          { id: 'ask', label: 'Ask the assistant', group: 'share', icon: 'comment', run: () => ask(`Help me make sense of my ${label} costs in ${name}.`) },
+          c.category && { id: 'add', label: c.category === 'income' ? 'Add income' : 'Add a cost', group: 'edit', icon: 'edit', run: () => onAdd(c.category as CostCategory) },
+        ],
+      },
+    });
+  };
+  const rowProps = (c: CostMonthCategory) => ({
+    onMenu: () => categoryMenu(c),
+    onLine,
+    onLineSheet: (l: CostMonthLine) => lineSheet(l, c),
+    lineMenu: (l: CostMonthLine) => lineMenu(l, c),
+    onLineMove: (l: CostMonthLine) => (costMoveKind(l, quickMove) ? () => pickFor(l, c) : undefined),
+    onLineAway: (l: CostMonthLine) =>
+      canHide(l)
+        ? { label: 'Hide', kind: 'hide' as const, run: () => hide(l) }
+        : canArchive && l.item && l.kind !== 'shop'
+          ? { label: l.item.archived ? 'Bring back' : 'Archive', kind: 'archive' as const, run: () => onArchive(l.item!, !l.item!.archived) }
+          : null,
+  });
   // An insight's "Show the category": this month, that category open, scrolled to.
   const openCategory = (category: CostCategory | null) => {
     const id = category ?? 'none';
@@ -192,9 +296,7 @@ export function CostsOverview(props: CostsOverviewProps) {
                 isOpen={!!focus || open.has(c.category ?? 'none')}
                 monthName={name}
                 onToggle={() => toggle(c.category ?? 'none')}
-                onMenu={() => setMenu({ category: c })}
-                onLine={onLine}
-                onLineMenu={(l) => setMenu({ line: l, category: c })}
+                {...rowProps(c)}
                 onAdd={c.category ? () => onAdd(c.category as CostCategory) : undefined}
               />
             ))}
@@ -212,9 +314,7 @@ export function CostsOverview(props: CostsOverviewProps) {
               isOpen={open.has('income')}
               monthName={name}
               onToggle={() => toggle('income')}
-              onMenu={() => setMenu({ category: month.income! })}
-              onLine={onLine}
-              onLineMenu={(l) => setMenu({ line: l, category: month.income! })}
+              {...rowProps(month.income)}
               onAdd={() => onAdd('income')}
               income
             />
@@ -277,65 +377,60 @@ export function CostsOverview(props: CostsOverviewProps) {
         </>
       )}
 
-      <ShopSheet line={shop} month={month.month} items={items} nameOf={props.nameOf} onClose={() => setShop(null)} onOpenItem={onOpenItem} onSetAmount={props.onSetAmount} />
+      <ShopSheet
+        line={shop}
+        month={month.month}
+        items={items}
+        nameOf={props.nameOf}
+        onClose={() => setShop(null)}
+        onOpenItem={onOpenItem}
+        onSetAmount={props.onSetAmount}
+        onMove={
+          shop && costMoveKind(shop, quickMove)
+            ? () => {
+                const l = shop;
+                const c = month.categories.find((x) => x.lines.some((y) => y.key === l.key)) ?? month.income;
+                setShop(null);
+                if (c) setTimeout(() => pickFor(l, c), 0);
+              }
+            : null
+        }
+      />
 
-      <BottomSheet open={!!menu} onOpenChange={(o) => { if (!o) setMenu(null); }} overlayClassName="bg-black/40" className={SHEET} handleClassName="sm:hidden" popupProps={{ 'aria-label': 'Cost menu' }}>
-        <div className="space-y-1 pb-2 pt-1">
-          <p className="truncate pb-2 text-lg font-semibold text-foreground">
-            {menu?.line ? menu.line.name : costCategoryLabel(menu?.category?.category ?? null)}
-          </p>
-          {menu?.line?.item ? (
-            <MenuRow label="Edit" onClick={() => { const it = menu.line!.item!; setMenu(null); onOpenItem(it); }} />
-          ) : null}
-          <MenuRow
-            label="Ask the assistant"
-            onClick={() =>
-              ask(
-                menu?.line
-                  ? `Help me make sense of ${menu.line.name} in my ${name} costs.`
-                  : `Help me make sense of my ${costCategoryLabel(menu?.category?.category ?? null)} costs in ${name}.`,
-              )
-            }
-          />
-          {canArchive && menu?.line?.item && menu.line.kind !== 'shop' ? (
-            <MenuRow
-              label={menu.line.item.archived ? 'Bring back' : 'Archive'}
-              hint={menu.line.item.archived ? undefined : 'Stays so bank payments still find it, but leaves every total.'}
-              onClick={() => { const it = menu.line!.item!; setMenu(null); onArchive(it, !it.archived); }}
-            />
-          ) : null}
-        </div>
-      </BottomSheet>
+      <CostRowSheet state={rowSheet} choices={choices} onClose={() => setRowSheet(null)} />
+      <CategoryPickerSheet pick={pick} choices={choices} onClose={() => setPick(null)} />
 
       <BottomSheet open={moreOpen} onOpenChange={setMoreOpen} overlayClassName="bg-black/40" className={SHEET} handleClassName="sm:hidden" popupProps={{ 'aria-label': 'More' }}>
         <div className="space-y-1 pb-2 pt-1">
-          {onOpenPayments ? <MenuRow label="All payments" hint="Every payment as a list, to search and fix categories." onClick={() => { setMoreOpen(false); onOpenPayments(); }} /> : null}
-          <MenuRow label="Ask the assistant" onClick={() => ask(`Help me make sense of my costs in ${name}.`)} />
-          {props.summaries ? (
-            <MenuRow
-              label={`Summarise ${name}`}
-              hint="The assistant sums up the month and what is worth a look."
-              onClick={() => ask(summaryAsk(name))}
-            />
-          ) : null}
-          <MenuRow label={goalCents ? 'Change the monthly goal' : 'Set a monthly goal'} onClick={() => { setMoreOpen(false); onEditGoal(); }} />
-          {canArchive && !month.income ? <MenuRow label="Add income" hint="Pay or other money in. It never counts as a cost." onClick={() => { setMoreOpen(false); onAdd('income'); }} /> : null}
+          <h3 className={cn(LABEL, 'px-1')}>{name}</h3>
+          <div className="overflow-hidden rounded-2xl bg-muted/40">
+            <MenuRow Icon={Target} label="Monthly goal" value={goalCents ? formatMoney(goalCents) : 'Not set'} onClick={() => { setMoreOpen(false); onEditGoal(); }} />
+            {canArchive && !month.income ? <MenuRow Icon={Wallet} label="Add income" hint="Pay or other money in. It never counts as a cost." divided onClick={() => { setMoreOpen(false); onAdd('income'); }} /> : null}
+          </div>
+          <h3 className={cn(LABEL, 'px-1 pt-3')}>Look closer</h3>
+          <div className="overflow-hidden rounded-2xl bg-muted/40">
+            {onOpenPayments ? <MenuRow Icon={List} label="All payments" hint="Every payment as a list, to search and move." onClick={() => { setMoreOpen(false); onOpenPayments(); }} /> : null}
+            {props.summaries ? <MenuRow Icon={Sparkles} label={`Summarise ${name}`} divided={!!onOpenPayments} onClick={() => ask(summaryAsk(name))} /> : null}
+            <MenuRow Icon={MessageSquare} label="Ask the assistant" divided={!!onOpenPayments || !!props.summaries} onClick={() => ask(`Help me make sense of my costs in ${name}.`)} />
+          </div>
           {props.summaries?.onChange ? (
-            <div className="mt-2 space-y-1 border-t border-border/60 pt-3">
-              <h3 className={cn(LABEL, 'px-2')}>Summaries in the Household chat</h3>
-              <SwitchRow
-                label="Weekly"
-                hint="Sunday morning: the week, what is worth a look and the bills ahead."
-                checked={props.summaries.prefs.weekly ?? upWeekly}
-                onChange={(on) => props.summaries!.onChange!({ ...props.summaries!.prefs, weekly: on })}
-              />
-              <SwitchRow
-                label="Monthly"
-                hint="On the 1st: last month against the goal and the month before."
-                checked={!!props.summaries.prefs.monthly}
-                onChange={(on) => props.summaries!.onChange!({ ...props.summaries!.prefs, monthly: on })}
-              />
-            </div>
+            <>
+              <h3 className={cn(LABEL, 'px-1 pt-3')}>Summaries in the Household chat</h3>
+              <div className="rounded-2xl bg-muted/40 px-1">
+                <SwitchRow
+                  label="Weekly"
+                  hint="Sunday morning: the week, what is worth a look and the bills ahead."
+                  checked={props.summaries.prefs.weekly ?? upWeekly}
+                  onChange={(on) => props.summaries!.onChange!({ ...props.summaries!.prefs, weekly: on })}
+                />
+                <SwitchRow
+                  label="Monthly"
+                  hint="On the 1st: last month against the goal and the month before."
+                  checked={!!props.summaries.prefs.monthly}
+                  onChange={(on) => props.summaries!.onChange!({ ...props.summaries!.prefs, monthly: on })}
+                />
+              </div>
+            </>
           ) : null}
         </div>
       </BottomSheet>
@@ -534,7 +629,10 @@ function CategoryRow({
   onToggle,
   onMenu,
   onLine,
-  onLineMenu,
+  onLineSheet,
+  lineMenu,
+  onLineMove,
+  onLineAway,
   onAdd,
   income,
 }: {
@@ -545,7 +643,14 @@ function CategoryRow({
   onToggle: () => void;
   onMenu: () => void;
   onLine: (l: CostMonthLine) => void;
-  onLineMenu: (l: CostMonthLine) => void;
+  /** A hold on touch: the row's menu as a sheet. */
+  onLineSheet: (l: CostMonthLine) => void;
+  /** Right-click: the row's menu at the pointer. */
+  lineMenu: (l: CostMonthLine) => RowMenu;
+  /** Swipe right, when the row can move. */
+  onLineMove: (l: CostMonthLine) => (() => void) | undefined;
+  /** Swipe left: hide a shop's payments, or archive a cost. */
+  onLineAway: (l: CostMonthLine) => { label: string; kind: 'hide' | 'archive'; run: () => void } | null;
   onAdd?: () => void;
   income?: boolean;
 }) {
@@ -584,12 +689,31 @@ function CategoryRow({
         {isOpen ? <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />}
       </button>
       {isOpen ? (
-        <div className="bg-muted/20 pb-1 pl-14 pr-4">
-          {c.lines.map((l, i) => (
-            <LineRow key={l.key} l={l} divided={i > 0} monthName={name} onClick={() => onLine(l)} onMenu={() => onLineMenu(l)} />
-          ))}
+        <div className="pb-1">
+          {c.lines.map((l, i) => {
+            const away = onLineAway(l);
+            return l.kind === 'usual' ? (
+              <div key={l.key} className="pl-14 pr-4">
+                <LineBody l={l} divided={i > 0} monthName={name} />
+              </div>
+            ) : (
+              <CostRowShell
+                key={l.key}
+                label={l.name}
+                className="pl-14 pr-4 hover:bg-muted/30"
+                onOpen={() => onLine(l)}
+                menu={() => lineMenu(l)}
+                onSheet={() => onLineSheet(l)}
+                onMove={onLineMove(l)}
+                away={away}
+                onAway={away?.run}
+              >
+                <LineBody l={l} divided={i > 0} monthName={name} />
+              </CostRowShell>
+            );
+          })}
           {onAdd ? (
-            <button type="button" onClick={onAdd} className="flex min-h-11 w-full items-center gap-2 border-t border-border/60 text-left text-sm text-muted-foreground hover:text-foreground">
+            <button type="button" onClick={onAdd} className="ml-14 mr-4 flex min-h-11 w-[calc(100%-4.5rem)] items-center gap-2 border-t border-border/60 text-left text-sm text-muted-foreground hover:text-foreground">
               <Plus className="h-3.5 w-3.5" />
               {income ? 'Add income' : 'Add a cost'}
             </button>
@@ -600,21 +724,14 @@ function CategoryRow({
   );
 }
 
-function LineRow({ l, divided, monthName: name, onClick, onMenu }: { l: CostMonthLine; divided: boolean; monthName: string; onClick: () => void; onMenu: () => void }) {
+function LineBody({ l, divided, monthName: name }: { l: CostMonthLine; divided: boolean; monthName: string }) {
   const ghost = l.kind === 'usual' || l.kind === 'target' || (l.paidCents === 0 && l.toComeCents > 0);
   const meta = lineMeta(l, name);
   const SourceIcon = l.source === 'up' ? Landmark : l.source === 'csv' ? FileText : l.source === 'manual' ? PenLine : null;
   const sourceLabel = l.source === 'up' ? 'From your bank' : l.source === 'csv' ? 'From a file' : l.source === 'manual' ? 'Added by hand' : undefined;
-  const pressable = l.kind !== 'usual';
   const recurring = l.kind === 'recurring' || (!!l.item && l.kind === 'cost' && l.item.cadence !== 'one_off');
   return (
-    <button
-      type="button"
-      disabled={!pressable}
-      onClick={onClick}
-      onContextMenu={pressable ? menuHandler(onMenu) : undefined}
-      className={cn('flex min-h-[52px] w-full items-center gap-3 py-2 text-left', divided && 'border-t border-border/60', pressable && 'hover:opacity-80')}
-    >
+    <div className={cn('flex min-h-[52px] w-full items-center gap-3 py-2 text-left', divided && 'border-t border-border/60')}>
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-1.5">
           <span className={cn('min-w-0 truncate text-sm font-medium', ghost ? 'italic text-muted-foreground' : 'text-foreground')}>{l.name}</span>
@@ -640,7 +757,7 @@ function LineRow({ l, divided, monthName: name, onClick, onMenu }: { l: CostMont
         {l.paidCents > 0 && l.toComeCents > 0 ? <span className="block text-xs tabular-nums text-muted-foreground">~{formatMoney(l.toComeCents)} to come</span> : null}
       </span>
       {l.kind === 'shop' ? <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" /> : null}
-    </button>
+    </div>
   );
 }
 
@@ -653,6 +770,7 @@ function ShopSheet({
   onClose,
   onOpenItem,
   onSetAmount,
+  onMove,
 }: {
   line: CostMonthLine | null;
   month: string;
@@ -661,11 +779,14 @@ function ShopSheet({
   onClose: () => void;
   onOpenItem: (item: CostItem) => void;
   onSetAmount: (item: CostItem, cents: number) => void;
+  /** Opens the category picker for the whole shop; null when it can't move. */
+  onMove: (() => void) | null;
 }) {
   const { scope, reload } = useUpOverview();
   const [rows, setRows] = useState<BankTransactionView[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [nonce, setNonce] = useState(0);
 
   useEffect(() => {
     if (!line) return;
@@ -683,7 +804,7 @@ function ShopSheet({
     return () => {
       live = false;
     };
-  }, [line, month, scope]);
+  }, [line, month, scope, nonce]);
 
   const apply = async (id: string, patch: BankTransactionPatch) => {
     try {
@@ -708,7 +829,11 @@ function ShopSheet({
           <p className="text-xs text-muted-foreground">
             {monthLongName(month)} · {line?.count ?? 0} payment{line?.count === 1 ? '' : 's'}
           </p>
-          {line?.item ? (
+          {onMove ? (
+            <button type="button" onClick={onMove} className="min-h-10 text-sm font-medium text-primary">
+              Move the shop to another category
+            </button>
+          ) : line?.item ? (
             <button type="button" onClick={() => { const it = line.item!; onClose(); onOpenItem(it); }} className="min-h-10 text-sm font-medium text-primary">
               Change its category
             </button>
@@ -754,6 +879,7 @@ function ShopSheet({
           onOpenItem(item);
         }}
         onSetAmount={onSetAmount}
+        onShopMoved={() => setNonce((n) => n + 1)}
       />
     </>
   );
@@ -776,11 +902,16 @@ function summaryAsk(month: string): string {
   return `Summarise our costs for ${month}: what we spent against the goal, the biggest categories, how it compares with the month before, and anything worth a look.`;
 }
 
-function MenuRow({ label, hint, onClick }: { label: string; hint?: string; onClick: () => void }) {
+function MenuRow({ Icon, label, hint, value, divided, onClick }: { Icon: LucideIcon; label: string; hint?: string; value?: string; divided?: boolean; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick} className="flex min-h-12 w-full flex-col justify-center rounded-xl px-2 py-2 text-left hover:bg-muted/50">
-      <span className="text-base font-medium text-foreground">{label}</span>
-      {hint ? <span className="text-xs text-muted-foreground">{hint}</span> : null}
+    <button type="button" onClick={onClick} className={cn('flex min-h-12 w-full items-center gap-3 px-3 py-2 text-left hover:bg-muted/60', divided && 'border-t border-border/60')}>
+      <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+      <span className="min-w-0 flex-1">
+        <span className="block text-base text-foreground">{label}</span>
+        {hint ? <span className="block text-xs text-muted-foreground">{hint}</span> : null}
+      </span>
+      {value ? <span className="text-sm tabular-nums text-muted-foreground">{value}</span> : null}
+      <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
     </button>
   );
 }

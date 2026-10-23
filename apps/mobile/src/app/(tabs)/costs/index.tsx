@@ -352,6 +352,7 @@ function CostsScreenBody() {
               canArchive={modules.server('costs.redesign')}
               nameOf={nameOf}
               onSetAmount={(item, cents) => patchRow(item.id, { amount: cents })}
+              onPatchItem={(item, patch) => patchRow(item.id, patch)}
               footer={suggestions}
               summaries={summariesOn ? { prefs: summaryPrefs, onChange: modules.server('costs.money-summaries') ? saveSummaryPrefs : null } : null}
               insights={insightsOn ? { marks: insightMarks, onMarks: updateMarks, onRemind: modules.feature('insights.reminders') ? remindToCancel : null } : null}

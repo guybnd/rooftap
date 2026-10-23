@@ -33,6 +33,8 @@ export interface LedgerRow {
   costItemId: string | null;
   /** The source's own category, for payments not filed under a line. */
   sourceCategory: string | null;
+  /** A category picked for these payments alone: wins over the line's, and never teaches the shop's others. */
+  category?: CostCategory | null;
   /** Money out, positive cents. */
   outCents: number;
   /** Money in (refunds and income), positive cents. */
@@ -99,6 +101,8 @@ export interface CostMonthLine {
   source: 'up' | 'csv' | 'manual' | null;
   /** The shop's name for a drilldown, for kind 'shop'. */
   vendor?: string;
+  /** The source's own category for a shop's payments (Up's), a hint when moving it. */
+  sourceCategory?: string | null;
 }
 
 export interface CostMonthCategory {
@@ -168,6 +172,7 @@ export function costMonth(input: CostMonthInput): CostMonth {
     if (item) vendorCategory.set(squashVendor(r.vendor), item.category);
   }
   const categoryOf = (r: LedgerRow): CostCategory | null => {
+    if (r.category) return r.category;
     const item = r.costItemId ? byId.get(r.costItemId) : undefined;
     if (item) return item.category;
     return vendorCategory.get(squashVendor(r.vendor)) ?? (r.sourceCategory ? costCategoryFromUp(r.sourceCategory) : null);
@@ -194,7 +199,8 @@ export function costMonth(input: CostMonthInput): CostMonth {
   for (const r of ledger) {
     if (r.month !== month) continue;
     const category = categoryOf(r);
-    const rec = recurringLine(r);
+    // A payment moved on its own leaves its bill: it shows as a shop in its new category.
+    const rec = r.category ? undefined : recurringLine(r);
     const net = r.outCents - (category === INCOME ? 0 : r.inCents);
     const incomeIn = category === INCOME ? r.inCents : r.outCents === 0 && r.inCents > 0 && category === null ? r.inCents : 0;
     if (incomeIn > 0 && net <= 0) {
@@ -209,7 +215,7 @@ export function costMonth(input: CostMonthInput): CostMonth {
     const line = lineIn(category, key, () =>
       rec
         ? { kind: 'recurring', key, name: rec.name, paidCents: 0, toComeCents: 0, count: 0, date: null, item: rec, source: r.source }
-        : { kind: 'shop', key, name: r.vendor, paidCents: 0, toComeCents: 0, count: 0, date: null, source: r.source, vendor: r.vendor, item: r.costItemId ? byId.get(r.costItemId) : undefined },
+        : { kind: 'shop', key, name: r.vendor, paidCents: 0, toComeCents: 0, count: 0, date: null, source: r.source, vendor: r.vendor, sourceCategory: r.sourceCategory, item: r.costItemId ? byId.get(r.costItemId) : undefined },
     );
     line.paidCents += net;
     line.count += r.count;

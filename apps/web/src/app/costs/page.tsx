@@ -351,6 +351,7 @@ export default function CostsPage() {
           canArchive={redesign}
           nameOf={nameOf}
           onSetAmount={setAmount}
+          onPatchItem={(item, patch) => patchRow(item.id, patch)}
           footer={suggestions}
           wide={wide}
           summaries={summariesOn ? { prefs: summaryPrefs, onChange: modules.server('costs.money-summaries') ? saveSummaryPrefs : null } : null}

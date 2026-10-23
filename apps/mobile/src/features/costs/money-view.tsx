@@ -16,7 +16,7 @@
 // Web twin: apps/web/src/app/costs/money-view.tsx.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
-import { ChevronLeft, ChevronRight, EyeOff } from 'lucide-react-native';
+import { ArrowRight, ChevronLeft, ChevronRight, EyeOff } from 'lucide-react-native';
 import {
   BottomSheet,
   HeroLede,
@@ -27,6 +27,8 @@ import {
   Switch,
   Text,
   cn,
+  haptics,
+  toast,
 } from '@homeup/ui';
 import {
   CATEGORY_META,
@@ -51,8 +53,15 @@ import {
   type BankTransactionView,
   type CostItem,
   type PaymentDirection,
+  costPaymentMenu,
+  likelyCostCategories,
+  useCostCategoryChoices,
+  useModules,
+  type CostCategory,
 } from '@homeup/core';
 import { upBankApi } from './up-bank-api';
+import { CategoryGrid, CategoryPickerSheet, type CategoryPick } from './category-picker';
+import { CostRowSheet, type CostRowSheetState } from './cost-row-sheet';
 
 const AUD = { currency: 'AUD' };
 const TABULAR = { fontVariant: ['tabular-nums' as const] };
@@ -113,6 +122,10 @@ export function MoneyView({
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<string | null>(null);
   const [direction, setDirection] = useState<PaymentDirection>('all');
+  const [rowSheet, setRowSheet] = useState<CostRowSheetState | null>(null);
+  const [pick, setPick] = useState<CategoryPick | null>(null);
+  const quickMove = useModules().server('costs.quick-move');
+  const choices = useCostCategoryChoices();
   const itemById = useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
   const thisMonth = monthStartOf(new Date());
 
@@ -140,6 +153,48 @@ export function MoneyView({
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't save.");
     }
+  };
+
+  // Swipe right or "Move to": this payment alone, or its whole shop with the switch.
+  const moveTo = async (t: BankTransactionView, c: CostCategory, wholeShop: boolean) => {
+    if (!wholeShop) return apply(t.id, { costCategory: c });
+    try {
+      await upBankApi.changeShop({ vendor: t.description, category: c });
+      reload();
+      await load();
+      toast.message(`Moved ${t.description} to ${CATEGORY_META[c].label}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't move the shop.");
+    }
+  };
+  const pickFor = (t: BankTransactionView) => {
+    const current = paymentCategory(t, itemById);
+    haptics.select();
+    setPick({
+      title: `Move ${t.description}`,
+      current,
+      likely: likelyCostCategories({ sourceCategory: t.category }, current, null, choices),
+      scope: { label: `Every payment at ${t.description}`, hint: 'Off moves this payment only' },
+      onPick: (c, whole) => void moveTo(t, c, whole),
+    });
+  };
+  const menuFor = (t: BankTransactionView) => {
+    haptics.commit();
+    const current = paymentCategory(t, itemById);
+    setRowSheet({
+      category: current,
+      amount: `${t.amountCents > 0 ? '+' : ''}${formatMoney(Math.abs(t.amountCents), AUD)}`,
+      meta: bankRowMeta(t, t.costItemId ? itemById.get(t.costItemId) ?? null : null, paymentCategoryLabel(t, itemById), t.mine ? null : nameOf(t.userId)),
+      menu: costPaymentMenu({
+        t,
+        category: current,
+        choices,
+        quickMove,
+        onMove: (c) => void moveTo(t, c, false),
+        onOpen: () => setOpenId(t.id),
+        onHide: t.mine ? () => void apply(t.id, { hidden: !t.hidden }) : null,
+      }),
+    });
   };
 
   if (status && !status.connection) return <Text className="text-sm text-muted-foreground">Connect Up in Settings, Connectors to see your money here.</Text>;
@@ -294,6 +349,8 @@ export function MoneyView({
                   owner={t.mine ? null : nameOf(t.userId)}
                   onOpen={() => setOpenId(t.id)}
                   onToggleHidden={t.mine ? () => apply(t.id, { hidden: !t.hidden }) : undefined}
+                  onMove={t.mine && quickMove && t.amountCents < 0 && !t.isTransfer ? () => pickFor(t) : undefined}
+                  onMenu={() => menuFor(t)}
                 />
               ))}
             </View>
@@ -301,7 +358,9 @@ export function MoneyView({
         </View>
       )}
       {!showHidden && rows && rows.length > 0 ? (
-        <Text className="text-center text-xs text-muted-foreground">Swipe left to hide a payment. Tap one to file it under a cost.</Text>
+        <Text className="text-center text-xs text-muted-foreground">
+          {quickMove ? 'Swipe right to move a payment, left to hide it. Hold one for more.' : 'Swipe left to hide a payment. Tap one to file it under a cost.'}
+        </Text>
       ) : null}
 
       <TransactionSheet
@@ -321,7 +380,10 @@ export function MoneyView({
           onOpenItem(item);
         }}
         onSetAmount={onSetAmount}
+        onShopMoved={() => void load()}
       />
+      <CostRowSheet state={rowSheet} choices={choices} onClose={() => setRowSheet(null)} />
+      <CategoryPickerSheet pick={pick} choices={choices} onClose={() => setPick(null)} />
     </View>
   );
 }
@@ -343,6 +405,8 @@ function MoneyRow({
   divided,
   onOpen,
   onToggleHidden,
+  onMove,
+  onMenu,
 }: {
   t: BankTransactionView;
   line: CostItem | null;
@@ -351,6 +415,8 @@ function MoneyRow({
   divided: boolean;
   onOpen: () => void;
   onToggleHidden?: () => void;
+  onMove?: () => void;
+  onMenu: () => void;
 }) {
   const body = (
     <Pressable
@@ -372,11 +438,13 @@ function MoneyRow({
       </Text>
     </Pressable>
   );
-  if (!onToggleHidden) return body;
   return (
     <SwipeActions
+      onLongPress={onMenu}
       onSwipeLeft={onToggleHidden}
-      left={{ bg: 'bg-muted', activeBg: 'bg-muted-foreground/30', icon: <EyeOff size={16} className="text-foreground" />, label: t.hidden ? 'Show' : 'Hide' }}
+      left={onToggleHidden ? { bg: 'bg-muted', activeBg: 'bg-muted-foreground/30', icon: <EyeOff size={16} className="text-foreground" />, label: t.hidden ? 'Show' : 'Hide' } : undefined}
+      onSwipeRight={onMove}
+      right={onMove ? { bg: 'bg-muted', activeBg: 'bg-muted-foreground/30', icon: <ArrowRight size={16} className="text-foreground" />, label: 'Move' } : undefined}
     >
       {body}
     </SwipeActions>
@@ -392,6 +460,7 @@ export function TransactionSheet({
   onMadeCost,
   onOpenItem,
   onSetAmount,
+  onShopMoved,
 }: {
   t: BankTransactionView | null;
   items: CostItem[];
@@ -401,6 +470,8 @@ export function TransactionSheet({
   onMadeCost: (saved: BankTransactionView) => void;
   onOpenItem: (item: CostItem) => void;
   onSetAmount: (item: CostItem, cents: number) => void;
+  /** A whole shop moved: read the payments again. */
+  onShopMoved?: () => void;
 }) {
   const { data, reload } = useUpOverview();
   const [note, setNote] = useState<string | null>(null);
@@ -409,11 +480,36 @@ export function TransactionSheet({
   const [costName, setCostName] = useState('');
   const [linkPayee, setLinkPayee] = useState(true);
   const [sheetError, setSheetError] = useState<string | null>(null);
+  const [moving, setMoving] = useState(false);
+  const [wholeShop, setWholeShop] = useState(false);
+  const quickMove = useModules().server('costs.quick-move');
+  const choices = useCostCategoryChoices();
   useEffect(() => {
     setNote(null);
     setMaking(null);
     setSheetError(null);
+    setMoving(false);
+    setWholeShop(false);
   }, [t?.id]);
+  const canMove = !!t && t.mine && t.amountCents < 0 && !t.isTransfer && quickMove;
+  // One payment moves on its own; with the switch on, its whole shop does.
+  const moveTo = async (c: CostCategory) => {
+    if (!t) return;
+    haptics.tick();
+    setMoving(false);
+    if (!wholeShop) {
+      onPatch({ costCategory: c });
+      return;
+    }
+    try {
+      await upBankApi.changeShop({ vendor: t.description, category: c });
+      reload();
+      onShopMoved?.();
+      toast.message(`Moved ${t.description} to ${CATEGORY_META[c].label}`);
+    } catch (err) {
+      setSheetError(err instanceof Error ? err.message : "Couldn't move the shop.");
+    }
+  };
 
   const startMaking = async () => {
     if (!t) return;
@@ -483,8 +579,49 @@ export function TransactionSheet({
           </View>
 
           <View className="rounded-2xl bg-muted/40">
-            <View className="min-h-12 flex-row items-center gap-3 px-4 py-2">
-              <Text className="flex-1 text-sm text-foreground">Counts as</Text>
+            {t.amountCents < 0 && !t.isTransfer ? (
+              <>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: moving }}
+                  disabled={!canMove}
+                  onPress={() => setMoving((v) => !v)}
+                  className="min-h-12 flex-row items-center gap-3 px-4 py-2"
+                >
+                  <Text className="flex-1 text-sm text-foreground">Category</Text>
+                  <View className="items-end">
+                    <Text className={cn('text-sm', canMove ? 'font-medium text-foreground' : 'text-muted-foreground')}>{category ? CATEGORY_META[category].label : 'None yet'}</Text>
+                    {t.costCategory ? (
+                      <Text className="text-xs text-muted-foreground">picked for this payment</Text>
+                    ) : line ? (
+                      <Text className="text-xs text-muted-foreground">from the {line.name} line</Text>
+                    ) : t.categoryLabel ? (
+                      <Text className="text-xs text-muted-foreground">from Up: {t.categoryLabel}</Text>
+                    ) : null}
+                  </View>
+                  {canMove ? <ChevronRight size={14} className={cn('text-muted-foreground', moving && 'rotate-90')} /> : null}
+                </Pressable>
+                {moving ? (
+                  <View className="gap-2 px-3 pb-3">
+                    <CategoryGrid choices={choices} current={category} onPick={(c) => void moveTo(c)} />
+                    <View className="min-h-12 flex-row items-center gap-3 px-1">
+                      <View className="min-w-0 flex-1">
+                        <Text className="text-sm text-foreground">Every payment at {t.description}</Text>
+                        <Text className="text-xs text-muted-foreground">{wholeShop ? 'Later ones too' : 'Off moves this payment only'}</Text>
+                      </View>
+                      <Switch checked={wholeShop} label="Every payment at this shop" onChange={setWholeShop} />
+                    </View>
+                    {t.costCategory ? (
+                      <Pressable accessibilityRole="button" onPress={() => { setMoving(false); onPatch({ costCategory: null }); }} className="min-h-11 justify-center px-1">
+                        <Text className="text-sm text-muted-foreground">Go back to the shop's category</Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                ) : null}
+              </>
+            ) : null}
+            <View className={cn('min-h-12 flex-row items-center gap-3 px-4 py-2', t.amountCents < 0 && !t.isTransfer && 'border-t border-border/60')}>
+              <Text className="flex-1 text-sm text-foreground">Bill or cost line</Text>
               {t.mine && t.amountCents < 0 && !t.isTransfer ? (
                 <View className="w-48">
                   <SearchablePicker
@@ -493,23 +630,13 @@ export function TransactionSheet({
                     onChange={(id) => onPatch({ costItemId: id })}
                     placeholder="Nothing"
                     searchPlaceholder="Search costs…"
-                    ariaLabel="Counts as"
+                    ariaLabel="Bill or cost line"
                   />
                 </View>
               ) : (
                 <Text className="text-sm font-semibold text-foreground">{line?.name ?? 'Nothing'}</Text>
               )}
             </View>
-            {t.amountCents < 0 && !t.isTransfer ? (
-              <View className="min-h-12 flex-row items-center gap-3 border-t border-border/60 px-4 py-2">
-                <Text className="flex-1 text-sm text-foreground">Category</Text>
-                <View className="items-end">
-                  <Text className="text-sm text-muted-foreground">{category ? CATEGORY_META[category].label : 'None yet'}</Text>
-                  {!line && t.categoryLabel ? <Text className="text-xs text-muted-foreground">from Up: {t.categoryLabel}</Text> : null}
-                  {line ? <Text className="text-xs text-muted-foreground">from the {line.name} line</Text> : null}
-                </View>
-              </View>
-            ) : null}
             {t.tags.length > 0 ? (
               <View className="min-h-12 flex-row items-center gap-3 border-t border-border/60 px-4 py-2">
                 <Text className="flex-1 text-sm text-foreground">Up tags</Text>

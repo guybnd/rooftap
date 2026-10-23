@@ -155,4 +155,11 @@ describe('costMonth', () => {
     const m = costMonth({ items: [coles], ledger: [...ledger, row({ vendor: 'Mystery', outCents: 1_000 })], month: '2026-10', now });
     expect(m.categories[0].category).toBeNull();
   });
+
+  it("files a payment moved on its own under its pick, outside its bill", () => {
+    const m = costMonth({ items: [internet, coles], ledger: [row({ vendor: 'Aussie Broadband', costItemId: 'net', category: 'insurance', outCents: 2_000 })], month: '2026-10', now });
+    const ins = m.categories.find((c) => c.category === 'insurance')!;
+    expect(ins.lines[0]).toMatchObject({ kind: 'shop', name: 'Aussie Broadband', paidCents: 2_000 });
+    expect(m.categories.find((c) => c.category === 'internet')!.lines[0]).toMatchObject({ kind: 'recurring', paidCents: 0 });
+  });
 });

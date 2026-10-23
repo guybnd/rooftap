@@ -530,4 +530,15 @@ describe('ledgerRows', () => {
     const [r] = ledgerRows([row({ amount_cents: -3800, description: 'Thieves Coffee', category: 'restaurants-and-cafes', cost_item_id: 'deleted-line' })]);
     expect(r).toMatchObject({ costItemId: 'deleted-line', sourceCategory: 'restaurants-and-cafes', outCents: 3800 });
   });
+
+  it("keeps a payment moved on its own apart from its shop's other payments", () => {
+    const rows = ledgerRows([
+      row({ external_id: 'a', amount_cents: -2000, description: 'Bunnings' }),
+      row({ external_id: 'b', amount_cents: -5000, description: 'Bunnings', cost_category: 'insurance' }),
+      row({ external_id: 'c', amount_cents: -1000, description: 'Bunnings', cost_category: 'not-a-category' }),
+    ]);
+    expect(rows).toHaveLength(2);
+    expect(rows.find((r) => r.category === 'insurance')).toMatchObject({ outCents: 5000, count: 1 });
+    expect(rows.find((r) => !r.category)).toMatchObject({ outCents: 3000, count: 2 });
+  });
 });

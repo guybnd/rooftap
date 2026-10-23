@@ -78,6 +78,7 @@ export * from './modules/money-insights/cost-insights';
 export * from './modules/money-insights/use-cost-insights';
 export * from './modules/money-insights/money-summary';
 export * from './modules/costs/month-spending';
+export * from './modules/costs/cost-row-actions';
 export * from './modules/costs/cost-month';
 export * from './modules/costs/cost-month-view';
 export * from './modules/documents/document-folders';

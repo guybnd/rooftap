@@ -233,6 +233,18 @@ export function AssistantSettings() {
 
 /** Your own say over pushes for replies that land after you left (not the household's). */
 function ReplyNotifications() {
+  return (
+    <SettingsPanel icon={Bell} title="When it answers after you leave" description="Just for you. Only sent if you weren't looking at the chat.">
+      <ReplyNotificationRows />
+    </SettingsPanel>
+  );
+}
+
+/**
+ * The two assistant_notify_prefs switches. Also shown in Settings > Notifications,
+ * so every switch for a push lives in one place too.
+ */
+export function ReplyNotificationRows({ description }: { description?: string }) {
   const [prefs, setPrefs] = useState<AssistantNotifyPrefs | null>(null);
   useEffect(() => {
     assistantApi
@@ -253,20 +265,17 @@ function ReplyNotifications() {
     }
   };
 
+  if (!prefs) return null;
   return (
-    <SettingsPanel icon={Bell} title="When it answers after you leave" description="Just for you. Only sent if you weren't looking at the chat.">
-      {prefs && (
-        <SettingsInset>
-          <SettingsSwitchRow title="Send a notification" checked={prefs.replies} onChange={(replies) => void save({ replies })} />
-          <SettingsSwitchRow
-            title="Include the answer"
-            description={'Off shows only "Rooftap answered".'}
-            checked={prefs.preview}
-            disabled={!prefs.replies}
-            onChange={(preview) => void save({ preview })}
-          />
-        </SettingsInset>
-      )}
-    </SettingsPanel>
+    <SettingsInset>
+      <SettingsSwitchRow title="Send a notification" description={description} checked={prefs.replies} onChange={(replies) => void save({ replies })} />
+      <SettingsSwitchRow
+        title="Include the answer"
+        description={'Off shows only "Rooftap answered".'}
+        checked={prefs.preview}
+        disabled={!prefs.replies}
+        onChange={(preview) => void save({ preview })}
+      />
+    </SettingsInset>
   );
 }

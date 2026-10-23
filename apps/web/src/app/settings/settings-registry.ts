@@ -5,7 +5,7 @@ import { SectionPreferences } from "@/components/section-preferences";
 import { GroupManager } from "@/components/group-manager";
 import { HomeProfileSettings } from "@/components/home-profile-settings";
 import { NavigationSettings } from "@/components/navigation-settings";
-import { NotificationsSettings } from "@/components/notifications-settings";
+import { NotificationKinds, NotificationsSettings } from "@/components/notifications-settings";
 import { CalendarSetup } from "@/components/calendar-setup";
 import { BudgetSettings } from "@/components/budget-settings";
 import { AppointmentSettings } from "@/components/appointment-settings";
@@ -45,7 +45,7 @@ export const globalMenus: GlobalMenu[] = [
   { key: "modules", label: "Modules", panels: [ModulesSettings] },
   { key: "users", label: "Users", panels: [GroupManager, UsersManager] },
   { key: "appearance", label: "Appearance", panels: [AppearanceSettings] },
-  { key: "notifications", label: "Notifications", panels: [NotificationsSettings] },
+  { key: "notifications", label: "Notifications", panels: [NotificationsSettings, NotificationKinds] },
   { key: "connectors", label: "Connectors", panels: [UpBankSettings] },
   { key: "integrations", label: "Integrations & keys", panels: [HouseholdAiKeys, AiProvidersSettings, ApiKeysSettings, FeedbackInbox, PatSettings, McpSettings] },
   { key: "whats-new", label: "What's new", panels: [WhatsNewHistory] },

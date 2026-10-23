@@ -97,6 +97,10 @@ export const SERVER_FEATURES = {
     minSchema: '20261023040000_money_summaries',
     label: 'weekly and monthly money summaries from the assistant',
   },
+  'costs.quick-move': {
+    minSchema: '20261023080000_payment_cost_category',
+    label: 'moving a shop or one payment to another Costs category',
+  },
 } as const satisfies Record<string, ServerFeatureDef>;
 
 export type ServerFeatureId = keyof typeof SERVER_FEATURES;

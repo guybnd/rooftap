@@ -108,6 +108,7 @@ const ROUTES: Record<string, RouteRule> = {
   "up-bank/spending": { auth: "session", module: null, why: "Up Bank is a connector in Settings, not a module" },
   "up-bank/transactions": { auth: "session", module: null, why: "Up Bank is a connector in Settings, not a module" },
   "up-bank/transactions/[id]": { auth: "session", module: null, why: "Up Bank is a connector in Settings, not a module" },
+  "up-bank/shops": { auth: "session", module: null, why: "Up Bank is a connector in Settings, not a module" },
   "up-bank/transactions/[id]/cost": { auth: "session", module: null, why: "Up Bank is a connector in Settings, not a module" },
   "up-bank/webhook/[hookId]": { auth: "signed", module: null, why: "Up's HMAC signature with the connection's secret" },
 

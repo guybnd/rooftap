@@ -15,7 +15,7 @@ import { AssistantSettings } from './panels/assistant-settings';
 import { AssistantSpending } from './panels/assistant-spending';
 import { AssistantTelegram } from './panels/assistant-telegram';
 import { AssistantHomeAssistant } from './panels/assistant-home-assistant';
-import { NotificationsSettings } from './panels/notifications-settings';
+import { NotificationKinds, NotificationsSettings } from './panels/notifications-settings';
 import { AiProvidersSettings } from './panels/ai-providers-settings';
 import { ApiKeysSettings } from './panels/api-keys-settings';
 import { FeedbackInbox } from './panels/feedback-inbox';
@@ -49,7 +49,7 @@ export const globalMenus: GlobalMenu[] = [
   { key: 'modules', label: 'Modules', panels: [ModulesSettings] },
   { key: 'users', label: 'Users', panels: [GroupManager, UsersManager] },
   { key: 'appearance', label: 'Appearance', panels: [AppearanceSettings, MotionSettings, HapticsSettings] },
-  { key: 'notifications', label: 'Notifications', panels: [NotificationsSettings] },
+  { key: 'notifications', label: 'Notifications', panels: [NotificationsSettings, NotificationKinds] },
   { key: 'connectors', label: 'Connectors', panels: [UpBankSettings] },
   { key: 'integrations', label: 'Integrations & keys', panels: [HouseholdAiKeys, AiProvidersSettings, ApiKeysSettings, FeedbackInbox, PatSettings, McpSettings] },
   { key: 'about', label: 'About & updates', panels: [AppUpdates] },

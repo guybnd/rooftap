@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { SettingsInset, SettingsPanel, SettingsSwitchRow } from "@/components/settings-panel";
-import { Bell, Smartphone } from "lucide-react";
+import { SettingsInset, SettingsLabel, SettingsPanel, SettingsSwitchRow } from "@/components/settings-panel";
+import { ReplyNotificationRows } from "@/components/assistant-settings";
+import { Bell, BellRing, Smartphone } from "lucide-react";
 import { useDataCache } from "@/lib/data-cache";
 import { OfflineHint } from "@/components/offline-hint";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { createClient } from "@/lib/supabase/client";
-import { LEAVE_ALERT_OPTIONS, leaveAlertMinutes, useModules } from "@homeup/core";
+import { LEAVE_ALERT_OPTIONS, leaveAlertMinutes, useModules, type ModuleId } from "@homeup/core";
 
 /**
  * FLUX-128: opt-in to Web Push task notifications. The toggle drives the browser
@@ -171,8 +172,8 @@ export function NotificationsSettings() {
   return (
     <SettingsPanel
       icon={Bell}
-      title="Notifications"
-      description="A push when a task is due, assigned to you, or commented on. Tapping it opens the task."
+      title="Push notifications"
+      description="Rooftap sends these to this browser. Clicking one opens what it is about."
     >
       {support.state === "ios-needs-install" && (
         <div className="flex items-start gap-3 rounded-xl bg-muted/30 px-3.5 py-3 text-sm">
@@ -208,7 +209,7 @@ export function NotificationsSettings() {
       {support.state === "ready" && (
         <SettingsInset>
           <SettingsSwitchRow
-            title="Task notifications"
+            title="In this browser"
             description={busy ? "Working…" : enabled ? "On for this browser" : undefined}
             checked={enabled}
             onChange={() => void (enabled ? disable() : enable())}
@@ -219,8 +220,68 @@ export function NotificationsSettings() {
       {support.state === "ready" && !isOnline && <OfflineHint />}
 
       {error && <p className="text-xs text-destructive">{error}</p>}
+    </SettingsPanel>
+  );
+}
 
-      <LeaveAlertSetting />
+/** A kind of push with no switch of its own: the switch above covers it. */
+function KindRow({ title, description }: { title: string; description: string }) {
+  return (
+    <div className="flex min-h-[52px] items-center px-3.5 py-3">
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium text-foreground">{title}</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
+      </div>
+    </div>
+  );
+}
+
+/** Every push the app sends, grouped by module, with the switches each one has. */
+export function NotificationKinds() {
+  const modules = useModules();
+  const has = (id: ModuleId) => modules.enabled.has(id);
+  const assistant = has("assistant") && modules.server("assistant.reply-notifications");
+  if (!has("household") && !has("calendar") && !assistant && !has("shopper")) return null;
+
+  return (
+    <SettingsPanel icon={BellRing} title="What you get" description="Pushes for the modules your home uses.">
+      {has("household") && (
+        <div className="space-y-1.5">
+          <SettingsLabel>Tasks</SettingsLabel>
+          <SettingsInset>
+            <KindRow title="Due, assigned or commented" description="When a task is due, someone gives you one, or someone comments on yours." />
+          </SettingsInset>
+        </div>
+      )}
+      {has("calendar") && (
+        <div className="space-y-1.5">
+          <SettingsLabel>Calendar</SettingsLabel>
+          <SettingsInset>
+            <KindRow title="Event reminders" description="A week and a day before, or on the days an event picks." />
+            <LeaveAlertSetting />
+          </SettingsInset>
+        </div>
+      )}
+      {assistant && (
+        <div className="space-y-1.5">
+          <SettingsLabel>Assistant</SettingsLabel>
+          <ReplyNotificationRows
+            description={
+              has("money-insights")
+                ? "When Rooftap answers after you leave, a new Household message, or a money note."
+                : "When Rooftap answers after you leave, or a new Household message."
+            }
+          />
+        </div>
+      )}
+      {has("shopper") && (
+        <div className="space-y-1.5">
+          <SettingsLabel>Shopper</SettingsLabel>
+          <SettingsInset>
+            <KindRow title="Scout results" description="When a search you started has its picks." />
+          </SettingsInset>
+        </div>
+      )}
     </SettingsPanel>
   );
 }
@@ -246,21 +307,21 @@ function LeaveAlertSetting() {
   };
 
   return (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-sm font-medium">Time to leave</span>
-        <SegmentedControl
-          ariaLabel="Time to leave alert"
-          size="sm"
-          value={value}
-          onChange={(v) => void change(v)}
-          options={LEAVE_ALERT_OPTIONS.map((o) => ({ value: String(o.value), label: o.label }))}
-        />
+    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-3.5 py-3">
+      <div className="min-w-0 flex-1 basis-48">
+        <p className="text-sm font-medium text-foreground">Time to leave</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          How long before you need to set off, for events with Getting there on.
+        </p>
+        {!isOnline && <OfflineHint />}
       </div>
-      <p className="text-xs text-muted-foreground">
-        How long before you need to set off the push comes, for events with Getting there on.
-      </p>
-      {!isOnline && <OfflineHint />}
+      <SegmentedControl
+        ariaLabel="Time to leave alert"
+        size="sm"
+        value={value}
+        onChange={(v) => void change(v)}
+        options={LEAVE_ALERT_OPTIONS.map((o) => ({ value: String(o.value), label: o.label }))}
+      />
     </div>
   );
 }

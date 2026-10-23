@@ -18,7 +18,8 @@
 // Native twin: apps/mobile/src/features/costs/money-view.tsx.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, EyeOff } from 'lucide-react';
+import { toast } from 'sonner';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import {
   CATEGORY_META,
   bankMatchParts,
@@ -42,11 +43,19 @@ import {
   type BankTransactionView,
   type CostItem,
   type PaymentDirection,
+  costPaymentMenu,
+  likelyCostCategories,
+  useCostCategoryChoices,
+  useModules,
+  type CostCategory,
+  type RowMenu,
 } from '@homeup/core';
+import { CategoryGrid, CategoryPickerSheet, type CategoryPick } from './category-picker';
+import { CostRowShell, CostRowSheet, type CostRowSheetState } from './cost-row-sheet';
+import { commit, tick } from '@/lib/haptics';
 import { upBankApi } from '@/lib/up-bank-client';
 import { HeroLede } from '@/components/ui/hero-lede';
 import { SegmentedControl } from '@/components/ui/segmented-control';
-import { SwipeActions } from '@/components/ui/swipe-actions';
 import { BottomSheet } from '@/components/ui/bottom-sheet';
 import { SearchablePicker } from '@/components/ui/searchable-picker';
 import { Switch } from '@/components/ui/switch';
@@ -112,6 +121,10 @@ export function MoneyView({
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<string | null>(null);
   const [direction, setDirection] = useState<PaymentDirection>('all');
+  const [rowSheet, setRowSheet] = useState<CostRowSheetState | null>(null);
+  const [pick, setPick] = useState<CategoryPick | null>(null);
+  const quickMove = useModules().server('costs.quick-move');
+  const choices = useCostCategoryChoices();
   const itemById = useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
   const thisMonth = monthStartOf(new Date());
 
@@ -143,6 +156,49 @@ export function MoneyView({
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't save.");
     }
+  };
+
+  // Swipe right or "Move to": this payment alone, or its whole shop with the switch.
+  const moveTo = async (t: BankTransactionView, c: CostCategory, wholeShop: boolean) => {
+    if (!wholeShop) return apply(t.id, { costCategory: c });
+    try {
+      await upBankApi.changeShop({ vendor: t.description, category: c });
+      reload();
+      await load();
+      toast(`Moved ${t.description} to ${CATEGORY_META[c].label}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't move the shop.");
+    }
+  };
+  const canMove = (t: BankTransactionView) => t.mine && quickMove && t.amountCents < 0 && !t.isTransfer;
+  const pickFor = (t: BankTransactionView) => {
+    const current = paymentCategory(t, itemById);
+    setPick({
+      title: `Move ${t.description}`,
+      current,
+      likely: likelyCostCategories({ sourceCategory: t.category }, current, null, choices),
+      scope: { label: `Every payment at ${t.description}`, hint: 'Off moves this payment only' },
+      onPick: (c, whole) => void moveTo(t, c, whole),
+    });
+  };
+  const menuFor = (t: BankTransactionView) =>
+    costPaymentMenu({
+      t,
+      category: paymentCategory(t, itemById),
+      choices,
+      quickMove,
+      onMove: (c) => void moveTo(t, c, false),
+      onOpen: () => setOpenId(t.id),
+      onHide: t.mine ? () => void apply(t.id, { hidden: !t.hidden }) : null,
+    });
+  const sheetFor = (t: BankTransactionView) => {
+    commit();
+    setRowSheet({
+      category: paymentCategory(t, itemById),
+      amount: `${t.amountCents > 0 ? '+' : ''}${formatMoney(Math.abs(t.amountCents), AUD)}`,
+      meta: bankRowMeta(t, t.costItemId ? itemById.get(t.costItemId) ?? null : null, paymentCategoryLabel(t, itemById), t.mine ? null : nameOf(t.userId)),
+      menu: menuFor(t),
+    });
   };
 
   if (status && !status.connection) return <p className="text-sm text-muted-foreground">Connect Up in Settings, Connectors to see your money here.</p>;
@@ -297,6 +353,9 @@ export function MoneyView({
                     owner={t.mine ? null : nameOf(t.userId)}
                     onOpen={() => setOpenId(t.id)}
                     onToggleHidden={t.mine ? () => apply(t.id, { hidden: !t.hidden }) : undefined}
+                    onMove={canMove(t) ? () => pickFor(t) : undefined}
+                    menu={() => menuFor(t)}
+                    onSheet={() => sheetFor(t)}
                   />
                 ))}
               </div>
@@ -305,7 +364,9 @@ export function MoneyView({
         </div>
       )}
       {!showHidden && rows && rows.length > 0 && (
-        <p className="text-center text-xs text-muted-foreground">Swipe left to hide a payment. Tap one to file it under a cost.</p>
+        <p className="text-center text-xs text-muted-foreground">
+          {quickMove ? 'Swipe right to move a payment, left to hide it. Right-click or hold one for more.' : 'Swipe left to hide a payment. Tap one to file it under a cost.'}
+        </p>
       )}
 
       <TransactionSheet
@@ -320,7 +381,10 @@ export function MoneyView({
         }}
         onOpenItem={onOpenItem}
         onSetAmount={onSetAmount}
+        onShopMoved={() => void load()}
       />
+      <CostRowSheet state={rowSheet} choices={choices} onClose={() => setRowSheet(null)} />
+      <CategoryPickerSheet pick={pick} choices={choices} onClose={() => setPick(null)} />
     </div>
   );
 }
@@ -341,6 +405,9 @@ function MoneyRow({
   owner,
   onOpen,
   onToggleHidden,
+  onMove,
+  menu,
+  onSheet,
 }: {
   t: BankTransactionView;
   line: CostItem | null;
@@ -348,9 +415,22 @@ function MoneyRow({
   owner: string | null;
   onOpen: () => void;
   onToggleHidden?: () => void;
+  onMove?: () => void;
+  menu: () => RowMenu;
+  onSheet: () => void;
 }) {
-  const body = (
-    <button type="button" onClick={onOpen} className="flex min-h-[52px] w-full items-center gap-3 bg-card px-4 py-2 text-left hover:bg-muted/40">
+  return (
+    <CostRowShell
+      label={t.description}
+      className="hover:bg-muted/40"
+      onOpen={onOpen}
+      menu={menu}
+      onSheet={onSheet}
+      onMove={onMove}
+      away={onToggleHidden ? { label: t.hidden ? 'Show' : 'Hide', kind: 'hide' } : null}
+      onAway={onToggleHidden}
+    >
+    <div className="flex min-h-[52px] w-full items-center gap-3 px-4 py-2 text-left">
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium text-foreground">{t.description}</p>
         <p className="truncate text-xs text-muted-foreground">{bankRowMeta(t, line, categoryLabel, owner)}</p>
@@ -359,16 +439,8 @@ function MoneyRow({
         {t.amountCents > 0 ? '+' : ''}
         {formatMoney(Math.abs(t.amountCents), AUD)}
       </span>
-    </button>
-  );
-  if (!onToggleHidden) return body;
-  return (
-    <SwipeActions
-      onSwipeLeft={onToggleHidden}
-      left={{ bg: 'bg-muted', activeBg: 'bg-muted-foreground/30', icon: <EyeOff className="h-4 w-4" />, label: t.hidden ? 'Show' : 'Hide' }}
-    >
-      {body}
-    </SwipeActions>
+    </div>
+    </CostRowShell>
   );
 }
 
@@ -381,6 +453,7 @@ export function TransactionSheet({
   onMadeCost,
   onOpenItem,
   onSetAmount,
+  onShopMoved,
 }: {
   t: BankTransactionView | null;
   items: CostItem[];
@@ -390,6 +463,8 @@ export function TransactionSheet({
   onMadeCost: (saved: BankTransactionView) => void;
   onOpenItem: (item: CostItem) => void;
   onSetAmount: (item: CostItem, cents: number) => void;
+  /** A whole shop moved: read the payments again. */
+  onShopMoved?: () => void;
 }) {
   const { data, reload } = useUpOverview();
   const [note, setNote] = useState<string | null>(null);
@@ -398,11 +473,36 @@ export function TransactionSheet({
   const [costName, setCostName] = useState('');
   const [linkPayee, setLinkPayee] = useState(true);
   const [sheetError, setSheetError] = useState<string | null>(null);
+  const [moving, setMoving] = useState(false);
+  const [wholeShop, setWholeShop] = useState(false);
+  const quickMove = useModules().server('costs.quick-move');
+  const choices = useCostCategoryChoices();
   useEffect(() => {
     setNote(null);
     setMaking(null);
     setSheetError(null);
+    setMoving(false);
+    setWholeShop(false);
   }, [t?.id]);
+  const canMove = !!t && t.mine && t.amountCents < 0 && !t.isTransfer && quickMove;
+  // One payment moves on its own; with the switch on, its whole shop does.
+  const moveTo = async (c: CostCategory) => {
+    if (!t) return;
+    tick();
+    setMoving(false);
+    if (!wholeShop) {
+      onPatch({ costCategory: c });
+      return;
+    }
+    try {
+      await upBankApi.changeShop({ vendor: t.description, category: c });
+      reload();
+      onShopMoved?.();
+      toast(`Moved ${t.description} to ${CATEGORY_META[c].label}`);
+    } catch (err) {
+      setSheetError(err instanceof Error ? err.message : "Couldn't move the shop.");
+    }
+  };
 
   const startMaking = async () => {
     if (!t) return;
@@ -479,8 +579,49 @@ export function TransactionSheet({
           </div>
 
           <div className="rounded-2xl bg-muted/40">
-            <div className="flex min-h-12 items-center gap-3 px-4 py-2">
-              <span className="flex-1 text-sm text-foreground">Counts as</span>
+            {t.amountCents < 0 && !t.isTransfer && (
+              <>
+                <button
+                  type="button"
+                  aria-expanded={moving}
+                  disabled={!canMove}
+                  onClick={() => setMoving((v) => !v)}
+                  className="flex min-h-12 w-full items-center gap-3 px-4 py-2 text-left enabled:hover:bg-muted/60"
+                >
+                  <span className="flex-1 text-sm text-foreground">Category</span>
+                  <span className="text-right text-sm">
+                    <span className={cn('block', canMove ? 'font-medium text-foreground' : 'text-muted-foreground')}>{category ? CATEGORY_META[category].label : 'None yet'}</span>
+                    {t.costCategory ? (
+                      <span className="block text-xs text-muted-foreground">picked for this payment</span>
+                    ) : line ? (
+                      <span className="block text-xs text-muted-foreground">from the {line.name} line</span>
+                    ) : t.categoryLabel ? (
+                      <span className="block text-xs text-muted-foreground">from Up: {t.categoryLabel}</span>
+                    ) : null}
+                  </span>
+                  {canMove ? <ChevronRight className={cn('h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform', moving && 'rotate-90')} /> : null}
+                </button>
+                {moving && (
+                  <div className="space-y-2 px-3 pb-3">
+                    <CategoryGrid choices={choices} current={category} onPick={(c) => void moveTo(c)} />
+                    <div className="flex min-h-12 items-center gap-3 px-1">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm text-foreground">Every payment at {t.description}</p>
+                        <p className="text-xs text-muted-foreground">{wholeShop ? 'Later ones too' : 'Off moves this payment only'}</p>
+                      </div>
+                      <Switch checked={wholeShop} label="Every payment at this shop" onChange={setWholeShop} />
+                    </div>
+                    {t.costCategory ? (
+                      <button type="button" onClick={() => { setMoving(false); onPatch({ costCategory: null }); }} className="min-h-11 px-1 text-sm text-muted-foreground hover:text-foreground">
+                        Go back to the shop&apos;s category
+                      </button>
+                    ) : null}
+                  </div>
+                )}
+              </>
+            )}
+            <div className={cn('flex min-h-12 items-center gap-3 px-4 py-2', t.amountCents < 0 && !t.isTransfer && 'border-t border-border/60')}>
+              <span className="flex-1 text-sm text-foreground">Bill or cost line</span>
               {t.mine && t.amountCents < 0 && !t.isTransfer ? (
                 <div className="w-48">
                   <SearchablePicker
@@ -489,23 +630,13 @@ export function TransactionSheet({
                     onChange={(id) => onPatch({ costItemId: id })}
                     placeholder="Nothing"
                     searchPlaceholder="Search costs…"
-                    ariaLabel="Counts as"
+                    ariaLabel="Bill or cost line"
                   />
                 </div>
               ) : (
                 <span className="text-sm font-semibold text-foreground">{line?.name ?? 'Nothing'}</span>
               )}
             </div>
-            {t.amountCents < 0 && !t.isTransfer && (
-              <div className="flex min-h-12 items-center gap-3 border-t border-border/60 px-4 py-2">
-                <span className="flex-1 text-sm text-foreground">Category</span>
-                <span className="text-right text-sm text-muted-foreground">
-                  {category ? CATEGORY_META[category].label : 'None yet'}
-                  {!line && t.categoryLabel ? <span className="block text-xs">from Up: {t.categoryLabel}</span> : null}
-                  {line ? <span className="block text-xs">from the {line.name} line</span> : null}
-                </span>
-              </div>
-            )}
             {t.tags.length > 0 && (
               <div className="flex min-h-12 items-center gap-3 border-t border-border/60 px-4 py-2">
                 <span className="flex-1 text-sm text-foreground">Up tags</span>
