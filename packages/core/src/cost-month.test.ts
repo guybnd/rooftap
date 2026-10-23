@@ -129,6 +129,28 @@ describe('costMonth', () => {
     expect(m.incomeExpectedCents).toBe(600_000);
   });
 
+  it('expects income only from regular payers, never from a one-off lump sum', () => {
+    const m = costMonth({
+      items: [],
+      ledger: [
+        row({ month: '2026-08', vendor: 'ACME Payroll', inCents: 500_000 }),
+        row({ month: '2026-09', vendor: 'ACME Payroll', inCents: 520_000 }),
+        row({ month: '2026-09', vendor: 'Savings move', inCents: 2_500_000 }),
+        row({ month: '2026-10', vendor: 'ACME Payroll', inCents: 200_000 }),
+      ],
+      month: '2026-10',
+      now,
+    });
+    expect(m.incomeCents).toBe(200_000);
+    // Median of 500,000 and 520,000 is 510,000, less 200,000 already in.
+    expect(m.incomeExpectedCents).toBe(510_000);
+  });
+
+  it("falls back to the bank's category when a payment's cost line is gone", () => {
+    const m = costMonth({ items: [], ledger: [row({ vendor: 'Thieves Coffee', costItemId: 'deleted-line', sourceCategory: 'restaurants-and-cafes', outCents: 3_800 })], month: '2026-10', now });
+    expect(m.categories.map((c) => c.category)).toEqual(['outing']);
+  });
+
   it('puts payments with no category in their own group first', () => {
     const m = costMonth({ items: [coles], ledger: [...ledger, row({ vendor: 'Mystery', outCents: 1_000 })], month: '2026-10', now });
     expect(m.categories[0].category).toBeNull();

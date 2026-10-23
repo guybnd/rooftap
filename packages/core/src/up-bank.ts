@@ -230,7 +230,7 @@ export function ledgerRows(rows: readonly BankTransaction[], tzOffset = 0): Ledg
     const vendor = r.description.replace(/[\\\s]+$/, '').trim() || r.description;
     const costItemId = r.cost_item_id ?? null;
     const key = `${month}|${costItemId ?? ''}|${squash(vendor)}|${costItemId ? '' : (r.category ?? '')}`;
-    const cur = out.get(key) ?? { month, vendor, costItemId, sourceCategory: costItemId ? null : r.category, outCents: 0, inCents: 0, count: 0, lastAt: r.occurred_at, source: r.source };
+    const cur = out.get(key) ?? { month, vendor, costItemId, sourceCategory: r.category ?? null, outCents: 0, inCents: 0, count: 0, lastAt: r.occurred_at, source: r.source };
     if (r.amount_cents < 0) {
       cur.outCents += -r.amount_cents;
       cur.count += 1;

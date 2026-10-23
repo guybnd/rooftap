@@ -29,28 +29,10 @@ import {
   type Group,
 } from '@homeup/core';
 import { CostModal } from '@/features/costs/cost-modal';
-import { CategoryChip } from '@/features/costs/cost-card';
+import { CATEGORY_BAR_FILL, CategoryChip } from '@/features/costs/cost-card';
 import { deriveBudgetPulseTone } from './budget-tile';
 import { TileHeader } from './section-tiles';
 
-const CATEGORY_BAR_FILL: Record<CostCategory | 'rest', string> = {
-  rent: 'bg-blue-300',
-  utilities: 'bg-amber-200',
-  internet: 'bg-cyan-300',
-  insurance: 'bg-violet-300',
-  subscription: 'bg-pink-300',
-  grocery_estimate: 'bg-lime-200',
-  moving: 'bg-orange-300',
-  purchase: 'bg-fuchsia-300',
-  outing: 'bg-sky-200',
-  transport: 'bg-indigo-300',
-  health: 'bg-teal-300',
-  pets: 'bg-emerald-200',
-  family: 'bg-rose-200',
-  other: 'bg-slate-400',
-  income: 'bg-green-400',
-  rest: 'bg-foreground/45',
-};
 
 const TONE_FILL = { success: 'bg-success', warning: 'bg-warning', danger: 'bg-destructive' } as const;
 

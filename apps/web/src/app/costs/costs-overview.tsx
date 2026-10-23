@@ -16,6 +16,8 @@ import { useRouter } from 'next/navigation';
 import { ChevronDown, ChevronRight, FileText, Landmark, MoreHorizontal, PenLine, Plus, Repeat } from 'lucide-react';
 import {
   CADENCE_LABEL,
+  CATEGORY_COLOR,
+  CATEGORY_META,
   bankDayLabel,
   costCategoryLabel,
   formatMoney,
@@ -80,6 +82,8 @@ export function CostsOverview(props: CostsOverviewProps) {
   const [shop, setShop] = useState<CostMonthLine | null>(null);
   const [menu, setMenu] = useState<{ line?: CostMonthLine; category?: CostMonthCategory } | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
+  // A colour picked on the spend bar: the chart shows only that category.
+  const [focus, setFocus] = useState<string | null>(null);
   const name = monthName(month.month);
 
   const toggle = (id: string) =>
@@ -99,8 +103,8 @@ export function CostsOverview(props: CostsOverviewProps) {
 
   const summary = (
     <div className="space-y-5">
-      <Hero month={month} goalCents={goalCents} onEditGoal={onEditGoal} />
-      <MonthChart months={months} picked={month.month} goalCents={goalCents} onPick={setPicked} />
+      <Hero month={month} goalCents={goalCents} onEditGoal={onEditGoal} focus={focus} onFocus={(k) => setFocus((cur) => (cur === k ? null : k))} />
+      <MonthChart months={months} picked={month.month} goalCents={goalCents} onPick={setPicked} focus={focus} onClearFocus={() => setFocus(null)} />
     </div>
   );
 
@@ -250,13 +254,26 @@ export function CostsOverview(props: CostsOverviewProps) {
   );
 }
 
-function Hero({ month, goalCents, onEditGoal }: { month: CostMonth; goalCents: number | null; onEditGoal: () => void }) {
+function Hero({
+  month,
+  goalCents,
+  onEditGoal,
+  focus,
+  onFocus,
+}: {
+  month: CostMonth;
+  goalCents: number | null;
+  onEditGoal: () => void;
+  focus: string | null;
+  onFocus: (key: string) => void;
+}) {
+  const [hover, setHover] = useState<string | null>(null);
+  const segments = month.categories.filter((c) => c.paidCents > 0);
   const name = monthName(month.month);
   const max = Math.max(goalCents ?? 0, month.expectedCents, 1);
   const pct = (v: number) => `${Math.min(100, (v / max) * 100)}%`;
   const vsGoal = goalCents ? goalCents - month.expectedCents : null;
-  const income = month.when === 'past' ? month.incomeCents : month.incomeExpectedCents;
-  const left = income != null ? income - month.expectedCents : null;
+  const flow = moneyFlow(month);
   return (
     <div className="space-y-2">
       <p className={LABEL}>{month.when === 'future' ? `Expected in ${name}` : `Spent in ${name}`}</p>
@@ -266,16 +283,36 @@ function Hero({ month, goalCents, onEditGoal }: { month: CostMonth; goalCents: n
         </span>
         <span className="text-lg tabular-nums text-muted-foreground">{goalCents ? `of ${formatMoney(goalCents)}` : 'Set a goal'}</span>
       </button>
-      <div className="relative h-2 rounded-full bg-muted">
+      <div className="relative h-3 rounded-full bg-muted" onMouseLeave={() => setHover(null)}>
         {month.toComeCents > 0 ? (
-          <div className="absolute inset-y-0 left-0 rounded-full border border-dashed border-foreground/50 bg-foreground/15" style={{ width: pct(month.expectedCents) }} />
+          <div className="absolute inset-y-0 left-0 rounded-full border border-dashed border-foreground/50 bg-foreground/10" style={{ width: pct(month.expectedCents) }} />
         ) : null}
-        <div className="absolute inset-y-0 left-0 rounded-full bg-foreground" style={{ width: pct(month.paidCents) }} />
-        {goalCents ? <div className="absolute -inset-y-1 w-0.5 rounded bg-foreground" style={{ left: pct(goalCents) }} /> : null}
+        <div className="absolute inset-y-0 left-0 flex overflow-hidden rounded-full" style={{ width: pct(month.paidCents) }}>
+          {segments.map((c) => {
+            const key = catKey(c.category);
+            const label = `${costCategoryLabel(c.category)} ${formatMoney(c.paidCents)}`;
+            return (
+              <button
+                key={key}
+                type="button"
+                aria-pressed={focus === key}
+                aria-label={`${label}. Show it on the chart`}
+                title={label}
+                onMouseEnter={() => setHover(label)}
+                onClick={() => onFocus(key)}
+                className={cn('h-full transition-opacity', fillOf(c.category), focus && focus !== key && 'opacity-30')}
+                style={{ width: `${(c.paidCents / Math.max(month.paidCents, 1)) * 100}%` }}
+              />
+            );
+          })}
+        </div>
+        {goalCents ? <div className="pointer-events-none absolute -inset-y-1 w-0.5 rounded bg-foreground" style={{ left: pct(goalCents) }} /> : null}
       </div>
       <div className="flex justify-between gap-2 text-xs tabular-nums">
         <span className="text-muted-foreground">
-          {month.when === 'current' ? (
+          {hover ? (
+            <span className="font-semibold text-foreground">{hover}</span>
+          ) : month.when === 'current' ? (
             <>
               Expected by {lastDayLabel(month.month)} <span className="font-semibold text-foreground">{formatMoney(month.expectedCents)}</span>
             </>
@@ -291,18 +328,37 @@ function Hero({ month, goalCents, onEditGoal }: { month: CostMonth; goalCents: n
           </span>
         ) : null}
       </div>
-      {income != null && left != null ? (
+      {flow ? (
         <div className="flex gap-2 pt-1">
-          <Stat
-            label="Income"
-            value={formatMoney(income)}
-            hint={month.when === 'current' && month.incomeCents < income ? `${formatMoney(month.incomeCents)} in so far` : undefined}
-          />
-          <Stat label={month.when === 'past' ? 'Left over' : 'Expected left'} value={signed(left)} tone={left < 0 ? 'danger' : 'success'} />
+          <Stat label={flow.incomeLabel} value={formatMoney(flow.income)} hint={flow.incomeHint} />
+          <Stat label={flow.leftLabel} value={signed(flow.left)} hint={flow.leftHint} tone={flow.left < 0 ? 'danger' : 'success'} />
         </div>
       ) : null}
     </div>
   );
+}
+
+/**
+ * The income and "in vs out" tiles: what actually came in and went out, with
+ * the month-end estimate as the subtitle. A future month has no actuals, so
+ * it shows the estimate itself.
+ */
+function moneyFlow(month: CostMonth): { incomeLabel: string; income: number; incomeHint?: string; leftLabel: string; left: number; leftHint?: string } | null {
+  const expected = month.incomeExpectedCents;
+  if (expected == null) return null;
+  if (month.when === 'future') {
+    return { incomeLabel: 'Expected income', income: expected, leftLabel: 'Expected left', left: expected - month.expectedCents };
+  }
+  const left = month.incomeCents - month.paidCents;
+  if (month.when === 'past') return { incomeLabel: 'Income', income: month.incomeCents, leftLabel: 'Left over', left };
+  return {
+    incomeLabel: 'Income so far',
+    income: month.incomeCents,
+    incomeHint: expected > month.incomeCents ? `About ${formatMoney(expected)} expected` : undefined,
+    leftLabel: 'In vs out so far',
+    left,
+    leftHint: `About ${signed(expected - month.expectedCents)} by month end`,
+  };
 }
 
 function Stat({ label, value, hint, tone }: { label: string; value: string; hint?: string; tone?: 'success' | 'danger' }) {
@@ -315,35 +371,72 @@ function Stat({ label, value, hint, tone }: { label: string; value: string; hint
   );
 }
 
-function MonthChart({ months, picked, goalCents, onPick }: { months: CostMonth[]; picked: string; goalCents: number | null; onPick: (key: string) => void }) {
-  const max = Math.max(goalCents ?? 0, ...months.map((m) => m.expectedCents), 1);
+function MonthChart({
+  months,
+  picked,
+  goalCents,
+  onPick,
+  focus,
+  onClearFocus,
+}: {
+  months: CostMonth[];
+  picked: string;
+  goalCents: number | null;
+  onPick: (key: string) => void;
+  focus: string | null;
+  onClearFocus: () => void;
+}) {
+  const [hover, setHover] = useState<string | null>(null);
+  const bars = months.map((m) => monthBar(m, focus));
+  const max = Math.max(focus ? 0 : goalCents ?? 0, ...bars.map((b) => b.paid + b.toCome), 1);
   const h = (v: number) => Math.round((v / max) * CHART_HEIGHT);
+  const focusLabel = focus ? costCategoryLabel(focus === 'none' ? null : (focus as CostCategory)) : null;
   return (
     <div role="group" aria-label="Costs by month" className="space-y-1">
-      <div className="relative flex items-end gap-1" style={{ height: CHART_HEIGHT }}>
-        {goalCents ? <div className="pointer-events-none absolute inset-x-0 border-t border-dashed border-muted-foreground/50" style={{ bottom: h(goalCents) }} /> : null}
-        {months.map((m) => {
+      <div className="flex min-h-5 items-center justify-between gap-2 text-xs tabular-nums">
+        <span className="truncate font-semibold text-foreground">{hover ?? ''}</span>
+        {focusLabel ? (
+          <button type="button" onClick={onClearFocus} className="shrink-0 rounded-full bg-muted px-2.5 py-0.5 text-muted-foreground hover:text-foreground">
+            {focusLabel} only · Show all
+          </button>
+        ) : null}
+      </div>
+      <div className="relative flex items-end gap-1" style={{ height: CHART_HEIGHT }} onMouseLeave={() => setHover(null)}>
+        {goalCents && !focus ? <div className="pointer-events-none absolute inset-x-0 border-t border-dashed border-muted-foreground/50" style={{ bottom: h(goalCents) }} /> : null}
+        {months.map((m, i) => {
           const on = m.month === picked;
+          const bar = bars[i];
+          const name = shortMonth(m.month);
           return (
             <button
               key={m.month}
               type="button"
               aria-pressed={on}
-              aria-label={`${monthName(m.month)}, ${formatMoney(m.expectedCents)}`}
-              title={`${monthName(m.month)} · ${formatMoney(m.expectedCents)}`}
+              aria-label={`${monthName(m.month)}, ${formatMoney(bar.paid + bar.toCome)}`}
               onClick={() => onPick(m.month)}
-              className="group flex h-full flex-1 flex-col justify-end"
+              onMouseEnter={() => setHover(`${name} · ${formatMoney(bar.paid)}${bar.toCome ? ` paid · ~${formatMoney(bar.toCome)} to come` : ''}`)}
+              className={cn('group flex h-full flex-1 flex-col justify-end transition-opacity', on ? 'opacity-100' : 'opacity-45 hover:opacity-80')}
             >
-              {m.toComeCents > 0 ? (
+              {bar.toCome > 0 ? (
                 <span
-                  className={cn('block rounded-t-[4px] border border-b-0 border-dashed', on ? 'border-foreground/70' : 'border-muted-foreground/50 group-hover:border-foreground/50')}
-                  style={{ height: Math.max(2, h(m.toComeCents)) }}
+                  className={cn('block rounded-t-[4px] border border-b-0 border-dashed', on ? 'border-foreground/70' : 'border-muted-foreground/60')}
+                  style={{ height: Math.max(2, h(bar.toCome)) }}
+                  onMouseEnter={() => setHover(`${name} · ~${formatMoney(bar.toCome)} still to come`)}
                 />
               ) : null}
-              <span
-                className={cn('block', m.toComeCents > 0 ? 'rounded-b-[3px]' : 'rounded-[4px]', on ? 'bg-foreground' : 'bg-muted-foreground/35 group-hover:bg-muted-foreground/60')}
-                style={{ height: Math.max(m.paidCents ? 2 : 0, h(m.paidCents)) }}
-              />
+              <span className={cn('flex flex-col-reverse overflow-hidden', bar.toCome > 0 ? 'rounded-b-[3px]' : 'rounded-[4px]')}>
+                {bar.segments.map((seg) => (
+                  <span
+                    key={seg.key}
+                    className={cn('block', fillOf(seg.category))}
+                    style={{ height: Math.max(1, h(seg.cents)) }}
+                    onMouseEnter={(e) => {
+                      e.stopPropagation();
+                      setHover(`${name} · ${costCategoryLabel(seg.category)} ${formatMoney(seg.cents)}`);
+                    }}
+                  />
+                ))}
+              </span>
             </button>
           );
         })}
@@ -357,6 +450,31 @@ function MonthChart({ months, picked, goalCents, onPick }: { months: CostMonth[]
       </div>
     </div>
   );
+}
+
+const CATEGORY_ORDER = Object.keys(CATEGORY_META) as CostCategory[];
+
+/** A month's chart bar: paid split by category (in a fixed order, so colours line up month to month) and what's to come. */
+function monthBar(m: CostMonth, focus: string | null): { paid: number; toCome: number; segments: { key: string; category: CostCategory | null; cents: number }[] } {
+  const cats = m.categories.filter((c) => !focus || catKey(c.category) === focus);
+  const rank = (c: CostCategory | null) => (c ? CATEGORY_ORDER.indexOf(c) : CATEGORY_ORDER.length);
+  const segments = cats
+    .filter((c) => c.paidCents > 0)
+    .sort((a, b) => rank(a.category) - rank(b.category))
+    .map((c) => ({ key: catKey(c.category), category: c.category, cents: c.paidCents }));
+  return {
+    paid: segments.reduce((s, x) => s + x.cents, 0),
+    toCome: focus ? cats.reduce((s, c) => s + c.toComeCents, 0) : m.toComeCents,
+    segments,
+  };
+}
+
+function catKey(category: CostCategory | null): string {
+  return category ?? 'none';
+}
+
+function fillOf(category: CostCategory | null): string {
+  return category ? CATEGORY_COLOR[category].fill : 'bg-muted-foreground/60';
 }
 
 function CategoryRow({

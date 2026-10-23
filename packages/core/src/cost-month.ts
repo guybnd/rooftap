@@ -287,8 +287,8 @@ export function costMonth(input: CostMonthInput): CostMonth {
   const incomePlanned = income?.toComeCents ?? 0;
   let incomeExpectedCents: number | null = income ? incomeCents + incomePlanned : null;
   if (when !== 'past' && ledger.length) {
-    const usual = usualIncome(input, categoryOf, now);
-    if (usual > 0) incomeExpectedCents = Math.max(incomeExpectedCents ?? 0, usual);
+    const regular = regularIncomeToCome(input, categoryOf, now);
+    if (regular > 0) incomeExpectedCents = (incomeExpectedCents ?? 0) + regular;
   }
 
   return { month, when, paidCents, toComeCents, expectedCents: paidCents + toComeCents, incomeCents, incomeExpectedCents, categories, income };
@@ -323,19 +323,45 @@ function usualShopSpend(
   return out;
 }
 
-function usualIncome(input: CostMonthInput, categoryOf: (r: LedgerRow) => CostCategory | null, now: Date): number {
-  const months = averageMonths(input.since, now);
-  const weights = months.reduce((s, m) => s + m.weight, 0);
-  if (!weights) return 0;
-  const weightOf = new Map(months.map((m) => [m.key, m.weight]));
-  let sum = 0;
-  for (const r of input.ledger) {
-    const w = weightOf.get(r.month);
-    if (!w) continue;
+/**
+ * Income still expected this month from regular payers only: a payer that
+ * paid in at least two of the averaged months is expected again at its
+ * typical (median) monthly amount, less what it has paid this month. A one-off
+ * deposit (a lump sum moved in from savings, a gift) never sets what a month
+ * should bring in.
+ */
+function regularIncomeToCome(input: CostMonthInput, categoryOf: (r: LedgerRow) => CostCategory | null, now: Date): number {
+  const months = new Set(averageMonths(input.since, now).map((m) => m.key));
+  if (months.size < 2) return 0;
+  const isIncome = (r: LedgerRow) => {
     const category = categoryOf(r);
-    if (category === INCOME || (category === null && r.outCents === 0)) sum += w * r.inCents;
+    return category === INCOME || (category === null && r.outCents === 0 && r.inCents > 0);
+  };
+  const past = new Map<string, Map<string, number>>();
+  const thisMonth = new Map<string, number>();
+  for (const r of input.ledger) {
+    if (!isIncome(r)) continue;
+    const key = squash(r.vendor);
+    if (r.month === input.month) thisMonth.set(key, (thisMonth.get(key) ?? 0) + r.inCents);
+    else if (months.has(r.month)) {
+      const byMonth = past.get(key) ?? new Map<string, number>();
+      byMonth.set(r.month, (byMonth.get(r.month) ?? 0) + r.inCents);
+      past.set(key, byMonth);
+    }
   }
-  return Math.round(sum / weights);
+  let toCome = 0;
+  for (const [key, byMonth] of past) {
+    if (byMonth.size < 2) continue;
+    const typical = median([...byMonth.values()]);
+    toCome += Math.max(0, typical - (thisMonth.get(key) ?? 0));
+  }
+  return toCome;
+}
+
+function median(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : Math.round((sorted[mid - 1] + sorted[mid]) / 2);
 }
 
 /** A run of months, for the chart: each one worked out by costMonth. */

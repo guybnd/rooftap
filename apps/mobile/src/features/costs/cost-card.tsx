@@ -134,6 +134,26 @@ const CADENCE_SEGMENTS = CADENCE_OPTIONS.map((c) => ({ value: c, label: CADENCE_
 // (the same hues the chart keys its series with). The group title takes the
 // darker text shade. Literal classes so NativeWind sees them; web reads the
 // same palette from core's CATEGORY_COLOR (apps/web/src/app/costs/category-glyph.tsx).
+/** Each category's solid bar colour (spend meters and the Costs chart). */
+export const CATEGORY_BAR_FILL: Record<CostCategory | 'rest', string> = {
+  rent: 'bg-blue-300',
+  utilities: 'bg-amber-200',
+  internet: 'bg-cyan-300',
+  insurance: 'bg-violet-300',
+  subscription: 'bg-pink-300',
+  grocery_estimate: 'bg-lime-200',
+  moving: 'bg-orange-300',
+  purchase: 'bg-fuchsia-300',
+  outing: 'bg-sky-200',
+  transport: 'bg-indigo-300',
+  health: 'bg-teal-300',
+  pets: 'bg-emerald-200',
+  family: 'bg-rose-200',
+  other: 'bg-slate-400',
+  income: 'bg-green-400',
+  rest: 'bg-foreground/45',
+};
+
 const CATEGORY_TILE: Record<'light' | 'dark', Record<CostCategory, { tile: string; glyph: string; title: string }>> = {
   light: {
     rent: { tile: 'bg-blue-300/20', glyph: 'text-blue-700', title: 'text-blue-600' },

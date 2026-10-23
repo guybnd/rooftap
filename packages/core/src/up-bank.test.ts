@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { CostItem } from './types';
 import {
+  ledgerRows,
   addBankMatch,
   actualsSinceOf,
   bankMatchParts,
@@ -510,5 +511,12 @@ describe('everyday Up categories', () => {
     expect(costCategoryFromUp('utilities')).toBe('utilities');
     expect(costCategoryFromUp(null)).toBe('other');
     expect(costCategoryFromUp('something-new')).toBe('other');
+  });
+});
+
+describe('ledgerRows', () => {
+  it("keeps Up's category on a payment filed under a cost line, for when that line is gone", () => {
+    const [r] = ledgerRows([row({ amount_cents: -3800, description: 'Thieves Coffee', category: 'restaurants-and-cafes', cost_item_id: 'deleted-line' })]);
+    expect(r).toMatchObject({ costItemId: 'deleted-line', sourceCategory: 'restaurants-and-cafes', outCents: 3800 });
   });
 });
