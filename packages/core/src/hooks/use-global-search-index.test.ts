@@ -418,9 +418,9 @@ describe('buildGlobalHits with a module switched off', () => {
     // Calendar has no rows of its own in search yet, Google Calendar and MCP
     // are integrations with no rows at all, assistant chats aren't searched,
     // Rewards answers store searches on its own screen, Occasions keeps gifts
-    // out of search for now, and Money insights
-    // only adds a card to Costs.
-    const noRows = new Set(['calendar', 'google-calendar', 'mcp', 'assistant', 'rewards', 'occasions', 'bins', 'money-insights', 'home-care']);
+    // out of search for now, Money insights only adds a card to Costs, and
+    // the meal plan's nights are found through their recipes.
+    const noRows = new Set(['calendar', 'google-calendar', 'mcp', 'assistant', 'rewards', 'occasions', 'bins', 'money-insights', 'home-care', 'meals']);
     expect([...modulesWithHits(hits)].sort()).toEqual(ALL_MODULE_IDS.filter((id) => !noRows.has(id)).sort());
   });
 

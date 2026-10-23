@@ -85,6 +85,10 @@ export const MODULE_FEATURES = {
     modules: ['setup'],
     what: 'Home setup progress in the summary hero.',
   },
+  'hub.meals': {
+    modules: ['recipes', 'meals'],
+    what: "Tonight's dinner from the meal plan on Home.",
+  },
   'hub.shopper': {
     modules: ['shopper'],
     what: 'Shopper good-deal count in the summary hero.',
@@ -112,6 +116,24 @@ export const MODULE_FEATURES = {
   'recipes.groceries': {
     modules: ['recipes', 'groceries'],
     what: 'Have and need from the shopping list, "Add missing", and the recipe chip on grocery items.',
+  },
+
+  // Meal plan lives in Recipes, so each of its features names both.
+  'recipes.meal-plan': {
+    modules: ['recipes', 'meals'],
+    what: 'The "This week" tab in Recipes, and the meal plan assistant tools.',
+  },
+  'meals.groceries': {
+    modules: ['recipes', 'meals', 'groceries'],
+    what: "The week's missing ingredients and adding them to Groceries.",
+  },
+  'meals.calendar': {
+    modules: ['recipes', 'meals', 'calendar'],
+    what: 'Busy evenings from the calendar as hints on the week.',
+  },
+  'meals.assistant-draft': {
+    modules: ['recipes', 'meals', 'assistant'],
+    what: 'Draft my week: the assistant plans the empty nights.',
   },
 
   // ── Shopper ──────────────────────────────────────────────────────────────

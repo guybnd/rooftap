@@ -172,6 +172,7 @@ import { useHeroModuleConfig } from '@/features/home/use-hero-module-config';
 import { HeroCustomizeSheet } from '@/features/home/hero-customize-sheet';
 import { GroceriesWidget } from '@/features/home/groceries-widget';
 import { FeedControls, type FeedTypeOption } from '@/features/home/feed-heading';
+import { TonightMeal } from '@/features/home/tonight-meal';
 import { BudgetSpace, BillsSpace } from '@/features/home/money-spaces';
 import { SetupTile, HomeSearchTile, ShopperTile, AssistantTile } from '@/features/home/section-tiles';
 import { formatTime12h, localDateISO } from '@homeup/core';
@@ -1338,6 +1339,9 @@ function HomeSectionBody() {
             <NowCardPager items={nowCards} />
           </View>
         )}
+
+        {/* Meal plan: tonight's dinner, one row (hub.meals). */}
+        <TonightMeal groupId={group?.id} style={showIf(!shownLens)} />
 
         {/* Hearth v2: filtered to a shortcut, Home shows only that Space, so
             the feed steps aside. Otherwise the feed: its title is

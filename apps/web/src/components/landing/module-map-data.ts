@@ -9,7 +9,7 @@ import type { ScreenId } from "./screens";
 
 // Occasions isn't on the map yet: it needs its own spot and demo frames.
 // Bin night has no demo screens yet, so it isn't on the map (nor are its lines).
-export type MapModule = Exclude<ModuleId, "mcp" | "money-insights" | "occasions" | "bins" | "home-care">;
+export type MapModule = Exclude<ModuleId, "mcp" | "money-insights" | "occasions" | "bins" | "home-care" | "meals">;
 
 /** Short names: the map has no room for "Tasks & Reminders". */
 export const MAP_LABEL: Record<MapModule, string> = {
@@ -269,7 +269,8 @@ export const MAP_MODULES = Object.keys(POS) as MapModule[];
 /**
  * Every two-module feature in core between modules on the map, so the test can
  * hold the map to it. Money insights is part of Costs on the map, so its
- * features (Compare with Scout, a reminder to cancel) have no line of their own.
+ * features (Compare with Scout, a reminder to cancel) have no line of their own;
+ * the same goes for Meal plan, a tab in Recipes.
  */
 export const PAIR_FEATURES = (Object.keys(MODULE_FEATURES) as ModuleFeatureId[]).filter(
   (id) => MODULE_FEATURES[id].modules.length === 2 && MODULE_FEATURES[id].modules.every((m) => m in POS),

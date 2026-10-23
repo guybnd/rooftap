@@ -13,6 +13,7 @@ export const MODULE_DEFAULTS: ReadonlyArray<{ id: string; defaultEnabled: boolea
   { id: "documents", defaultEnabled: true, requires: [] },
   { id: "groceries", defaultEnabled: false, requires: [] },
   { id: "recipes", defaultEnabled: false, requires: [] },
+  { id: "meals", defaultEnabled: true, requires: [] },
   { id: "costs", defaultEnabled: false, requires: [] },
   { id: "setup", defaultEnabled: false, requires: [] },
   { id: "search", defaultEnabled: false, requires: [] },

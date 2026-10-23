@@ -27,6 +27,7 @@ import {
   LayoutTemplate,
   ChefHat,
   Trash2,
+  Utensils,
 } from "lucide-react";
 import { getSection, profileSection } from "@homeup/core";
 
@@ -51,6 +52,7 @@ export const sectionIcons: Record<string, IconComponent> = {
   sparkles: Sparkles,
   "list-todo": ListTodo,
   "chef-hat": ChefHat,
+  utensils: Utensils,
   "folder-open": FolderOpen,
   "user-cog": UserCog,
   "plus-circle": PlusCircle,

@@ -9,7 +9,7 @@
 import { getCurrentSupabaseClient } from '@/lib/supabase-client';
 import { getStoredServer } from '@/lib/server-config';
 
-async function authedFetch(path: string, init?: RequestInit): Promise<Response> {
+export async function authedFetch(path: string, init?: RequestInit): Promise<Response> {
   const server = await getStoredServer();
   if (!server) throw new Error('No server configured.');
 

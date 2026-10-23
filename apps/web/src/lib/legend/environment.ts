@@ -50,8 +50,10 @@ const INDEXEDDB_TABLES = [
   'bin_streams',                // Bin night module
   'bin_changes',                // Bin night module
   'bin_plans',                  // Bin night module
+  'care_jobs',                  // Home care module
+  'meal_plan_entries',          // Meal plan (Recipes' This week)
 ];
-const INDEXEDDB_VERSION = 10; // bumped for the Occasions and Bin night tables (non-destructive upgrade)
+const INDEXEDDB_VERSION = 11; // bumped for the Home care and meal plan tables (non-destructive upgrade)
 
 let indexedDBPlugin: ReturnType<typeof observablePersistIndexedDB> | undefined;
 

@@ -79,6 +79,7 @@ const ROUTES: Record<string, RouteRule> = {
   "parse-bins": { auth: "session", module: "bins" },
   "parse-listing": { auth: "session", module: "search" },
   "parse-receipt": { auth: "session", module: "groceries" },
+  "meal-plan/draft": { auth: "session", module: "meals" },
   "parse-recipe": { auth: "session", module: "recipes" },
 
   pat: { auth: "session", module: null, why: "the person's bot key" },

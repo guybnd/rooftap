@@ -38,6 +38,8 @@ export const MCP_TOOLS: McpToolMeta[] = [
   { name: 'delete_grocery_item', kind: 'write', module: 'groceries' },
   { name: 'get_recipes', kind: 'read', module: 'recipes' },
   { name: 'add_recipe_to_groceries', kind: 'write', module: 'recipes' },
+  { name: 'get_meal_plan', kind: 'read', module: 'meals' },
+  { name: 'set_meal', kind: 'write', module: 'meals' },
   { name: 'get_checklists', kind: 'read', module: 'checklists' },
   { name: 'add_checklist_item', kind: 'write', module: 'checklists' },
   { name: 'check_checklist_item', kind: 'write', module: 'checklists' },

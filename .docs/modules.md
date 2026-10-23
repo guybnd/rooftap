@@ -42,6 +42,7 @@ Module ids reuse the existing section ids so `hidden_sections`, `section_order`,
 | `documents` | Documents | **On** | | `costs`, `setup`, `groceries` |
 | `groceries` | Groceries & Item Library | Off | | `costs`, `recipes` |
 | `recipes` | Recipes | Off | | `groceries` |
+| `meals` | Meal plan (the "This week" tab in Recipes: a dinner per night, who cooks, missing ingredients, Draft my week). Shows only in Recipes, so it locks nothing | **On** | | `recipes`, `groceries`, `calendar`, `assistant` |
 | `costs` | Costs & Budget | Off | | `setup`, `groceries`, `search` |
 | `setup` | Home Setup & Moving | Off | | `search`, `costs` |
 | `search` | Home Search (listings, agents, map, appointments, scoring) | Off | | `calendar`, `setup` |
@@ -68,6 +69,7 @@ Known soft features to gate (each must check both modules):
 - Setup → Home Search: the chosen apartment as the home being set up.
 - Rewards ↔ Groceries: both show the household's `loyalty_cards` (the table syncs while either is on). Groceries' rewards sheet works with Rewards off; Rewards adds schemes, partner stores, perks and "Just me" cards.
 - Shopper → Tasks, Costs: "Plan to buy" writes a to-do (`shopper.tasks`) and a planned purchase cost (`shopper.costs`).
+- Meal plan → Recipes, Groceries, Calendar, Assistant: the tab and the Home row need Recipes too (`recipes.meal-plan`, `hub.meals`); the missing ingredients card writes grocery items (`meals.groceries`); busy evenings come from Calendar (`meals.calendar`); Draft my week needs the Assistant (`meals.assistant-draft`).
 - Occasions → Shopper, Costs: "Watch the price" on a gift idea adds a Shopper watch with the idea's `hidden_from` (`occasions.shopper`), and "In the budget" keeps a one-off Purchase line named "Gift" until the day has passed (`occasions.costs`). A watch kept from someone is hidden from them with its offers and price history, and Plan to buy on it writes "Buy a gift" and a "Gift" cost with no store.
 - Assistant → Tasks, Calendar, Costs, Groceries: the assistant only gets tools for modules that are on (the same gating as `/api/mcp`), so switching one off removes it from what the assistant can read or change.
 

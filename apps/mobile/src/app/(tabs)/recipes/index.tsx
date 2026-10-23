@@ -17,11 +17,11 @@
 // into ListHeaderComponent, with ScreenBackground + safe-area padding applied
 // directly (matching tasks/groceries/costs/appointments/checklists).
 import * as React from 'react';
-import { ActivityIndicator, Pressable, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FlashList, type ListRenderItem } from '@shopify/flash-list';
 import { use$ } from '@legendapp/state/react';
-import { useRouter, type Href } from 'expo-router';
+import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import { Plus, ChefHat, Camera, ImagePlus, WifiOff } from 'lucide-react-native';
 import {
   Text,
@@ -31,6 +31,7 @@ import {
   Card,
   ScreenBackground,
   SectionSearchBar,
+  SegmentedControl,
   cn,
   flattenGroups,
   groupFrameClass,
@@ -64,12 +65,25 @@ import { getCurrentSupabaseClient } from '@/lib/supabase-client';
 import { RecipeFormSheet } from '@/features/recipes/recipe-form-sheet';
 import { RecipeRow } from '@/features/recipes/recipe-row';
 import { captureRecipeFromPhoto, discardRecipeDraftPhoto, type CaptureSource } from '@/features/recipes/recipe-capture';
+import { MealWeek } from '@/features/recipes/meal-week';
 
 export default function RecipesSectionScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { group, currentUserId, isOnline, loading: cacheLoading } = useDataCache();
+  const { group, currentUserId, isOnline, loading: cacheLoading, memberProfiles, groupMembers } = useDataCache();
   const modules = useModules();
+  // Meal plan: the "This week" tab (module-features.ts). ?tab=week opens it,
+  // so Home's Tonight row lands on the week.
+  const mealPlanOn = modules.feature('recipes.meal-plan');
+  const tabParam = useLocalSearchParams<{ tab?: string }>().tab;
+  const [tabPicked, setTabPicked] = React.useState<'all' | 'week'>(tabParam === 'week' ? 'week' : 'all');
+  // A later ?tab=week (Home's row while this screen stays mounted) switches too.
+  const [seenParam, setSeenParam] = React.useState(tabParam);
+  if (tabParam !== seenParam) {
+    setSeenParam(tabParam);
+    if (tabParam === 'week') setTabPicked('week');
+  }
+  const tab = mealPlanOn ? tabPicked : 'all';
   // Modules: have/need, "Can make now" and grocery writes need recipes and
   // groceries (module-features.ts). Off means the shopping list isn't read at all.
   const groceriesLinked = modules.feature('recipes.groceries');
@@ -280,6 +294,41 @@ export default function RecipesSectionScreen() {
 
   const hasFilters = selectedCuisines.size > 0 || selectedMethods.size > 0 || canMakeOnly;
 
+  const tabs = mealPlanOn ? (
+    <SegmentedControl
+      options={[
+        { value: 'all', label: 'All recipes' },
+        { value: 'week', label: 'This week' },
+      ]}
+      value={tab}
+      onChange={setTabPicked}
+      accessibilityLabel="Recipes view"
+    />
+  ) : null;
+
+  if (tab === 'week') {
+    return (
+      <ScreenBackground>
+        <ScrollView
+          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: insets.top + 16, paddingBottom: insets.bottom + 96, gap: 16 }}
+          keyboardShouldPersistTaps="handled"
+        >
+          <Text numberOfLines={1} className="text-micro-label uppercase text-muted-foreground">
+            Recipes
+          </Text>
+          {tabs}
+          <MealWeek
+            groupId={group.id}
+            currentUserId={currentUserId ?? null}
+            isOnline={isOnline}
+            memberProfiles={memberProfiles}
+            memberIds={groupMembers.map((m) => m.user_id)}
+          />
+        </ScrollView>
+      </ScreenBackground>
+    );
+  }
+
   const listHeader = (
     <View className="gap-4 pb-4">
       {/* H1: one lede. Hearth v2 (Pulse): the recipe count is a Hero number
@@ -325,6 +374,7 @@ export default function RecipesSectionScreen() {
           </Button>
         </View>
       </View>
+      {tabs}
       <HeroLede
         value={recipes.length}
         label={recipes.length === 1 ? 'recipe' : 'recipes'}

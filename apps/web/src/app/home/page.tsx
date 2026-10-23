@@ -58,6 +58,7 @@ import { useWideLayout } from '@/lib/desktop-layout';
 import { BudgetSpace, BillsSpace } from './money-spaces';
 import { isModuleShown } from './hero-modules';
 import { GroceriesWidget } from './groceries-widget';
+import { TonightMeal } from './tonight-meal';
 import { SetupTile, HomeSearchTile, ShopperTile, AssistantTile } from './section-tiles';
 import { DeskHome } from './desk-home';
 import { UpOverviewProvider } from '@homeup/core';
@@ -717,6 +718,7 @@ function HomeHub() {
         <DeskHome
           modules={{
             summary: { label: 'Today', node: (
+            <div className="space-y-4">
             <SummaryHero
                 lat={group.home_lat ?? null}
                 lng={group.home_lng ?? null}
@@ -739,6 +741,8 @@ function HomeHub() {
                 onLensChange={setLens}
                 wide={wide}
               />
+              <TonightMeal groupId={group.id} />
+            </div>
             ) },
             board: { label: 'Upcoming', node: agendaVisible ? (cols: number) => (
               <TodayHero
@@ -808,6 +812,7 @@ function HomeHub() {
             onLensChange={setLens}
             wide={wide}
           />
+          {!lens && <TonightMeal groupId={group.id} />}
           {!lens && agendaVisible && (
             <TodayHero
               addOnDayKinds={addOnDayKinds}

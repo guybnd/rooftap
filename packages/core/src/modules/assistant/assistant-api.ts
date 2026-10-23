@@ -305,8 +305,16 @@ const MODULE_NOUN: Partial<Record<ModuleId, string>> = {
   costs: 'Budget',
   checklists: 'Checklists',
   recipes: 'Recipes',
+  meals: 'the meal plan',
   shopper: 'Shopper',
 };
+
+/** "Thursday 30 Oct" for a YYYY-MM-DD night. */
+function mealNightName(dateISO: string): string {
+  const [y, m, d] = dateISO.split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  return `${date.toLocaleDateString('en-US', { weekday: 'long' })} ${d} ${date.toLocaleDateString('en-US', { month: 'short' })}`;
+}
 
 function quoted(value: unknown): string {
   return typeof value === 'string' && value.trim() ? `"${value.trim()}"` : 'an item';
@@ -348,6 +356,12 @@ export function describeProposal(tool: string, module: AssistantScope, args: Rec
   const bank = bankProposal(tool, args);
   if (bank) return bank;
   if (tool === 'add_recipe_to_groceries') return "Add a recipe's ingredients to Groceries";
+  if (tool === 'set_meal') {
+    const night = typeof args.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(args.date) ? ` for ${mealNightName(args.date)}` : '';
+    if (args.clear === true) return `Clear the dinner${night} on the meal plan`;
+    if (typeof args.label === 'string' && args.label.trim() && !args.recipe_id) return `Put ${quoted(args.label)}${night} on the meal plan`;
+    return `Plan a dinner${night} on the meal plan`;
+  }
   if (tool === 'add_checklist_item') return `Add ${quoted(args.label)} to a checklist`;
   if (tool === 'check_checklist_item') return args.done === false ? 'Untick a checklist item' : 'Tick a checklist item';
   if (tool.startsWith('create_')) return module === 'groceries' ? `Add ${quoted(name)} to Groceries` : `Add ${quoted(name)} to ${where}`;

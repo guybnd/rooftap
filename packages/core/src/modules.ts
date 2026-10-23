@@ -20,6 +20,7 @@ export type ModuleId =
   | 'documents'
   | 'groceries'
   | 'recipes'
+  | 'meals'
   | 'costs'
   | 'setup'
   | 'search'
@@ -101,6 +102,19 @@ export const MODULES: ModuleDef[] = [
     iconId: 'chef-hat',
     defaultEnabled: false,
     enhances: ['groceries'],
+  },
+  // A tab inside Recipes ("This week"), not a section of its own. Like
+  // Money insights it needs no switch of its own to lock Recipes on: with
+  // Recipes off there is nowhere to show it, so every gate names both
+  // (module-features.ts), and it is on for any household that has Recipes.
+  {
+    id: 'meals',
+    label: 'Meal plan',
+    description: "Plan the week's dinners from your recipes, and add what's missing to Groceries.",
+    iconId: 'utensils',
+    defaultEnabled: true,
+    enhances: ['recipes', 'groceries', 'calendar', 'assistant'],
+    minSchema: '20261023130000_meal_plan',
   },
   {
     id: 'costs',

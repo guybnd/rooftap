@@ -12,7 +12,7 @@
 // the new draft. Drafts (draft=true) are hidden from the main list and
 // surfaced via a small resume strip; Discard soft-deletes the draft + photo.
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { use$ } from '@legendapp/state/react';
 import { toast } from 'sonner';
 import { Plus, ChefHat, Camera, ImagePlus, Loader2 } from 'lucide-react';
@@ -39,10 +39,27 @@ import { OfflineHint } from '@/components/offline-hint';
 import { cn } from '@/lib/utils';
 import { useWideLayout } from '@/lib/desktop-layout';
 import { WideList } from '@/components/wide-list';
+import { SegmentedControl } from '@/components/ui/segmented-control';
+import { MealWeek } from './meal-week';
 
 export default function RecipesPage() {
-  const { group, currentUserId, isOnline, loading: cacheLoading } = useDataCache();
+  const { group, currentUserId, isOnline, loading: cacheLoading, memberProfiles, groupMembers } = useDataCache();
   const modules = useModules();
+  // Meal plan: the "This week" tab (module-features.ts). ?tab=week opens it,
+  // so Home's Tonight row lands on the week.
+  const mealPlanOn = modules.feature('recipes.meal-plan');
+  const [tabPicked, setTabPicked] = useState<'all' | 'week'>('all');
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('tab') === 'week') setTabPicked('week');
+  }, []);
+  const tab = mealPlanOn ? tabPicked : 'all';
+  const pickTab = (next: 'all' | 'week') => {
+    setTabPicked(next);
+    const url = new URL(window.location.href);
+    if (next === 'week') url.searchParams.set('tab', 'week');
+    else url.searchParams.delete('tab');
+    window.history.replaceState(window.history.state, '', url);
+  };
   // Modules: have/need, "Can make now" and grocery writes need recipes and
   // groceries (module-features.ts). Off means the shopping list isn't read at all.
   const groceriesLinked = modules.feature('recipes.groceries');
@@ -244,8 +261,37 @@ export default function RecipesPage() {
 
   const hasFilters = selectedCuisines.size > 0 || selectedMethods.size > 0 || canMakeOnly;
 
+  const tabs = mealPlanOn && (
+    <SegmentedControl
+      options={[
+        { value: 'all', label: 'All recipes' },
+        { value: 'week', label: 'This week' },
+      ]}
+      value={tab}
+      onChange={pickTab}
+      ariaLabel="Recipes view"
+      className="w-full max-w-xs"
+    />
+  );
+
+  if (tab === 'week') {
+    return (
+      <div className="mx-auto max-w-3xl space-y-4 p-4 md:p-6 pb-24">
+        {tabs}
+        <MealWeek
+          groupId={group.id}
+          currentUserId={currentUserId ?? null}
+          isOnline={isOnline}
+          memberProfiles={memberProfiles}
+          memberIds={groupMembers.map((m) => m.user_id)}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className={cn('mx-auto space-y-4 p-4 md:p-6 pb-24', wide ? 'max-w-[1400px] lg:px-8' : 'max-w-3xl')}>
+      {tabs}
       {/* Hearth v2 (Pulse, H1): the recipe count is the page's Hero lede;
           Scan + New recipe sit beside it. Mirrors mobile's grammar. */}
       <div className="flex items-end justify-between gap-3 flex-wrap">

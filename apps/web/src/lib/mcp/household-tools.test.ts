@@ -48,6 +48,10 @@ function fakeAdmin(tables: Record<string, Row[]>) {
       select: () => b,
       eq: (k: string, v: unknown) => (filters.push((r) => r[k] === v), b),
       in: (k: string, vs: unknown[]) => (filters.push((r) => vs.includes(r[k])), b),
+      gte: (k: string, v: string) => (filters.push((r) => String(r[k]) >= v), b),
+      lte: (k: string, v: string) => (filters.push((r) => String(r[k]) <= v), b),
+      lt: (k: string, v: string) => (filters.push((r) => String(r[k]) < v), b),
+      maybeSingle: () => Promise.resolve({ data: rows()[0] ?? null, error: null }),
       update: (patch: Row) => ((op = { kind: "update", patch }), b),
       insert: (row: Row) => ((op = { kind: "insert", row }), b),
       then: (resolve: (v: { data: Row[] | null; error: null }) => unknown) => {
@@ -108,6 +112,57 @@ describe("recipe tools", () => {
 
   it("refuses a recipe from another household", async () => {
     const { res } = await run(base(), "add_recipe_to_groceries", { recipe_id: "r2" });
+    expect(res.isError).toBe(true);
+  });
+});
+
+describe("meal plan tools", () => {
+  const today = new Date().toISOString().slice(0, 10);
+  const base = () => ({
+    recipes: [
+      { id: "r1", group_id: "g1", title: "Lasagna", cuisines: [], prep_minutes: 20, cook_minutes: 40, draft: false, deleted: false },
+      { id: "r2", group_id: "g2", title: "Other house soup", cuisines: [], draft: false, deleted: false },
+    ],
+    recipe_ingredients: [
+      { id: "i1", recipe_id: "r1", group_id: "g1", name: "mince", item_name: null, position: 0, deleted: false },
+      { id: "i2", recipe_id: "r1", group_id: "g1", name: "lasagna sheets", item_name: null, position: 1, deleted: false },
+    ],
+    grocery_items: [{ id: "g-mince", group_id: "g1", name: "mince", status: "needed", private: false, assigned_to: null, deleted: false }],
+    group_members: [{ group_id: "g1", user_id: "u2" }],
+    meal_plan_entries: [] as Row[],
+  });
+
+  it("plans a night, then edits the same row instead of adding another", async () => {
+    const tables = base();
+    const first = await run(tables, "set_meal", { date: today, recipe_id: "r1", cook_user_id: "u2" });
+    expect(first.res.isError).toBeFalsy();
+    expect(tables.meal_plan_entries).toHaveLength(1);
+    expect(tables.meal_plan_entries[0]).toMatchObject({ group_id: "g1", date: today, slot: "dinner", recipe_id: "r1", cook_user_id: "u2" });
+    await run(tables, "set_meal", { date: today, label: "Out" });
+    expect(tables.meal_plan_entries).toHaveLength(1);
+    expect(tables.meal_plan_entries[0]).toMatchObject({ recipe_id: null, label: "Out", cook_user_id: "u2" });
+    await run(tables, "set_meal", { date: today, clear: true });
+    expect(tables.meal_plan_entries[0].deleted).toBe(true);
+  });
+
+  it("refuses another household's recipe and a cook from outside the household", async () => {
+    expect((await run(base(), "set_meal", { date: today, recipe_id: "r2" })).res.isError).toBe(true);
+    expect((await run(base(), "set_meal", { date: today, recipe_id: "r1", cook_user_id: "stranger" })).res.isError).toBe(true);
+  });
+
+  it("reads the week with tonight's recipe and what is still missing", async () => {
+    const tables = base();
+    await run(tables, "set_meal", { date: today, recipe_id: "r1" });
+    const { body } = await run(tables, "get_meal_plan", {});
+    expect(body.today).toBe(today);
+    expect(body.nights).toHaveLength(7);
+    expect(body.nights.find((n: Row) => n.date === today)).toMatchObject({ recipe_id: "r1", title: "Lasagna", minutes: 60 });
+    expect(body.missing).toEqual([{ name: "lasagna sheets", recipe_id: "r1" }]);
+    expect(body.already_on_list).toBe(1);
+  });
+
+  it("is off with Recipes off", async () => {
+    const { res } = await run(base(), "get_meal_plan", {}, new Set(["meals", "groceries"] as const));
     expect(res.isError).toBe(true);
   });
 });

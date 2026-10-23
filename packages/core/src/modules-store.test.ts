@@ -298,8 +298,9 @@ describe('server schema', () => {
 
     act(() => setServerSchema(null));
     expect(result.current.server('mcp.connected-apps')).toBe(false);
-    // Shopper, Rewards, Occasions, Bin night and Assistant are modules newer than the baseline, so they are listed too.
+    // Meal plan, Shopper, Rewards, Occasions, Bin night, Home care and Assistant are modules newer than the baseline, so they are listed too.
     expect(result.current.serverUpdateAdds.map((f) => f.label)).toEqual([
+      'Meal plan',
       'Shopper',
       'Rewards',
       'Occasions',
@@ -343,6 +344,7 @@ describe('server schema', () => {
       expect(result.current.isEnabled('mcp')).toBe(false);
       expect(result.current.offered.some((m) => m.id === 'mcp')).toBe(false);
       expect(result.current.serverUpdateAdds.map((f) => f.label)).toEqual([
+        'Meal plan',
         'Shopper',
         'Rewards',
         'Occasions',
