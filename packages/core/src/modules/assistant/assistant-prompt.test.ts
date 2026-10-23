@@ -23,6 +23,10 @@ describe('buildAssistantSystemPrompt', () => {
     expect(prompt).toContain(PRIVACY_TEXT);
   });
 
+  it('tells the assistant to act now instead of promising to', () => {
+    expect(ASSISTANT_PERSONA).toContain('Never end a reply saying you will look something up');
+  });
+
   it('names the person, the members and each module with its trust level', () => {
     const prompt = buildAssistantSystemPrompt(base);
     expect(prompt).toContain('talking with Guy');

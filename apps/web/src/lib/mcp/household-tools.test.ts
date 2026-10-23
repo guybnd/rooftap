@@ -4,7 +4,7 @@ vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
 vi.mock("@/lib/member-names", () => ({ memberNames: vi.fn(async () => new Map([["u2", "Noa"]])) }));
 
 import { MCP_TOOLS } from "@/lib/mcp-tools";
-import { householdTools } from "./household-tools";
+import { costCategoryFrom, householdTools } from "./household-tools";
 import type { createAdminClient } from "@/lib/supabase/admin";
 
 const ctx = {
@@ -225,5 +225,14 @@ describe("task tools", () => {
     expect(body.tasks.map((t: Row) => t.id)).toEqual(["soon"]);
     expect(body).not.toHaveProperty("events");
     expect(body).not.toHaveProperty("bills");
+  });
+});
+
+describe("costCategoryFrom", () => {
+  it("reads a category by id or label, any case", () => {
+    expect(costCategoryFrom("outing")).toBe("outing");
+    expect(costCategoryFrom(" Going out ")).toBe("outing");
+    expect(costCategoryFrom("GROCERIES")).toBe("grocery_estimate");
+    expect(costCategoryFrom("Snacks")).toBeNull();
   });
 });

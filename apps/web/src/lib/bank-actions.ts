@@ -7,9 +7,14 @@ import {
   guessCadence,
   normaliseBankMatch,
   type BankTransaction,
+  type CostCategory,
   type MakeCostPreview,
 } from "@homeup/core";
-import { applyBankLinks, bankLinkRows, visibleBankTransactions } from "@/lib/up-bank";
+import {
+  applyBankLinks,
+  bankLinkRows,
+  visibleBankTransactions,
+} from "@/lib/up-bank";
 
 // The changes a person can make to bank data in Rooftap, shared by the app's
 // routes and the assistant's tools so both follow the same rules: only the
@@ -180,7 +185,7 @@ export async function bankCostPreview(
 export async function makeCostFromPayment(
   c: BankCaller,
   id: string,
-  input: { name?: string; linkPayee?: boolean },
+  input: { name?: string; linkPayee?: boolean; category?: CostCategory },
 ): Promise<
   BankResult<{ costItemId: string; name: string; transaction: BankTransaction }>
 > {
@@ -195,7 +200,7 @@ export async function makeCostFromPayment(
     .insert({
       group_id: c.groupId,
       name,
-      category: plan.category,
+      category: input.category ?? plan.category,
       amount: plan.amountCents,
       cadence: plan.cadence,
       is_estimate: plan.estimate,
@@ -229,6 +234,59 @@ export async function makeCostFromPayment(
       costItemId: item.id as string,
       name,
       transaction: (await bankTransactionRow(c, t!.id)) ?? t!,
+    },
+  };
+}
+
+/**
+ * Files a payment under a Costs category. A payment on its shop's own line
+ * (one the bank made for that payee) moves with the whole shop: the line
+ * takes the new category, as editing the line in the app does. Any other
+ * payment gets a line of its own in that category, so a shared line (say
+ * Groceries) keeps its other payments where they are.
+ */
+export async function filePaymentInCategory(
+  c: BankCaller,
+  id: string,
+  category: CostCategory,
+): Promise<
+  BankResult<{ costItemId: string; name: string; movedLine: boolean }>
+> {
+  const t = await bankTransactionRow(c, id);
+  const no = refuseCost(t, c.userId);
+  if (no) return no;
+  if (t!.cost_item_id) {
+    const { data: line } = await c.admin
+      .from("cost_items")
+      .select("id, name, category, bank_source")
+      .eq("id", t!.cost_item_id)
+      .eq("group_id", c.groupId)
+      .maybeSingle();
+    const l = line as {
+      id: string;
+      name: string;
+      category: string;
+      bank_source?: string | null;
+    } | null;
+    if (l?.category === category)
+      return { ok: { costItemId: l.id, name: l.name, movedLine: false } };
+    if (l?.bank_source) {
+      const { error } = await c.admin
+        .from("cost_items")
+        .update({ category })
+        .eq("id", l.id)
+        .eq("group_id", c.groupId);
+      if (error) return { error: error.message, status: 500 };
+      return { ok: { costItemId: l.id, name: l.name, movedLine: true } };
+    }
+  }
+  const made = await makeCostFromPayment(c, id, { category });
+  if ("error" in made) return made;
+  return {
+    ok: {
+      costItemId: made.ok.costItemId,
+      name: made.ok.name,
+      movedLine: false,
     },
   };
 }
@@ -307,7 +365,10 @@ export async function mergeCostLine(
   if (from) {
     const match = into ? addBankMatch(into.match, from.match) : from.match;
     if (match && match.length > MATCH_MAX)
-      return { error: "That line already matches too many payees.", status: 400 };
+      return {
+        error: "That line already matches too many payees.",
+        status: 400,
+      };
     if (match) {
       const { error } = await c.admin.from("bank_links").upsert(
         {
@@ -317,7 +378,11 @@ export async function mergeCostLine(
           keep_amount: into?.keep_amount ?? false,
           // Joint only while both sides were; a hand-made rule fits every account.
           ...(from.joint_only !== undefined
-            ? { joint_only: into ? !!into.joint_only && !!from.joint_only : !!from.joint_only }
+            ? {
+                joint_only: into
+                  ? !!into.joint_only && !!from.joint_only
+                  : !!from.joint_only,
+              }
             : {}),
           created_by: into?.created_by ?? c.userId,
           updated_at: new Date().toISOString(),
