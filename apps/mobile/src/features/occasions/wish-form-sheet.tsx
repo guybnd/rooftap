@@ -1,11 +1,9 @@
 // Occasions: add or edit something on your own wishlist. Everyone in the
 // household can read it, to drop hints. Web twin:
 // apps/web/src/app/occasions/wish-form-sheet.tsx.
-import * as React from 'react';
 import { Gift } from 'lucide-react-native';
 import { FieldRow, FormSection, Input, ItemFormSheet } from '@homeup/ui';
-import { buildWishlistItem, parsePriceInput, type OccasionsApi, type WishlistItem } from '@homeup/core';
-import { randomUUID } from '@/lib/uuid';
+import { useWishForm, type OccasionsApi, type WishlistItem } from '@homeup/core';
 
 const OCCASIONS_SECTION = { id: 'occasions', Icon: Gift };
 
@@ -24,21 +22,11 @@ export function WishFormSheet({
   groupId: string;
   currentUserId: string;
 }) {
-  const [title, setTitle] = React.useState(item?.title ?? '');
-  const [url, setUrl] = React.useState(item?.url ?? '');
-  const [price, setPrice] = React.useState(item?.price_cents ? String(item.price_cents / 100) : '');
-  const [notes, setNotes] = React.useState(item?.notes ?? '');
-  const [tried, setTried] = React.useState(false);
+  const form = useWishForm({ item, api, groupId, currentUserId });
+  const { title, setTitle, url, setUrl, price, setPrice, notes, setNotes, tried } = form;
 
   const submit = () => {
-    setTried(true);
-    if (!title.trim()) return;
-    const fields = { title: title.trim(), url: url.trim() || null, price_cents: parsePriceInput(price), notes: notes.trim() || null };
-    const saved: WishlistItem = item
-      ? { ...item, ...fields }
-      : { ...buildWishlistItem({ id: randomUUID(), groupId, userId: currentUserId, title: fields.title }), ...fields, created_at: '', updated_at: '' };
-    api.saveWish(saved);
-    onOpenChange(false);
+    if (form.submit()) onOpenChange(false);
   };
 
   return (

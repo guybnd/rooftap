@@ -177,6 +177,8 @@ export * from './modules/calendar/use-event-lookups';
 export * from './modules/rewards/use-rewards';
 export * from './modules/rewards/use-rewards-view';
 export * from './modules/occasions/use-occasions';
+export * from './modules/occasions/occasions-view';
+export * from './modules/occasions/use-occasions-view';
 export * from './modules/bins/use-bins';
 export * from './modules/bins/use-bins-view';
 export * from './modules/recipes/use-recipe-match';

@@ -23,23 +23,19 @@ import {
 } from '@homeup/ui';
 import {
   MOTION_DURATIONS_MS,
-  daysBetweenISO,
   formatMoney,
-  ideaStatusLine,
-  ideasForOccasion,
-  isOwnOccasion,
-  keptFromLabel,
+  ideaRowMeta,
   memberFirstName,
-  nextOccasionDay,
-  occasionSpend,
+  occasionFocusView,
   occasionSubtitle,
   occasionTitle,
   occasionWhenLabel,
-  personName,
   takenBy,
   useModules,
   useOccasions,
-  weekdayDayMonthLabel,
+  useOccasionsScreen,
+  wishMeta,
+  wishTakenLabel,
   type GiftIdea,
   type Occasion,
   type OccasionsApi,
@@ -85,22 +81,11 @@ export default function OccasionsScreen() {
     [modules],
   );
   const api = useOccasions(group?.id, currentUserId, features);
-  const { today } = api;
+  const { today, focus, setFocusId, mine, othersLists, lede, empty } = useOccasionsScreen(api, currentUserId);
 
-  const [focusId, setFocusId] = React.useState<string | null>(null);
   const occasionSheet = useSheetState<{ id: string | null }>();
   const ideaSheet = useSheetState<{ id: string | null; occasionId: string | null }>();
   const wishSheet = useSheetState<{ id: string | null }>();
-
-  const next = React.useMemo(() => api.occasions.find((o) => nextOccasionDay(o, today)) ?? null, [api.occasions, today]);
-  const othersLists = React.useMemo(() => {
-    const byUser = new Map<string, WishlistItem[]>();
-    for (const w of api.wishlist) {
-      if (w.user_id === currentUserId) continue;
-      byUser.set(w.user_id, [...(byUser.get(w.user_id) ?? []), w]);
-    }
-    return [...byUser.entries()];
-  }, [api.wishlist, currentUserId]);
 
   if (cacheLoading || (!api.loaded && api.occasions.length === 0)) {
     return (
@@ -111,20 +96,10 @@ export default function OccasionsScreen() {
   }
   if (!group || !currentUserId) return <NoGroupScreen />;
 
-  const focus = (focusId ? api.occasionById.get(focusId) : null) ?? next ?? api.occasions[0] ?? null;
-  const mine = api.wishlist.filter((w) => w.user_id === currentUserId);
-  const nextDay = next ? nextOccasionDay(next, today) : null;
-  const days = nextDay ? daysBetweenISO(today, nextDay) : null;
-  const lede =
-    next && nextDay && days !== null
-      ? { value: days === 0 ? 'Today' : days, label: days === 0 ? undefined : days === 1 ? 'day' : 'days', caption: `${occasionTitle(next, currentUserId)} · ${weekdayDayMonthLabel(nextDay)}` }
-      : { value: api.occasions.length, label: api.occasions.length === 1 ? 'occasion' : 'occasions', caption: 'Nothing coming up' };
-
   const editingOccasion = occasionSheet.value?.id ? api.occasionById.get(occasionSheet.value.id) : undefined;
   const editingIdea = ideaSheet.value?.id ? api.ideas.find((i) => i.id === ideaSheet.value?.id) : undefined;
   const ideaOccasion = ideaSheet.value?.occasionId ? api.occasionById.get(ideaSheet.value.occasionId) ?? null : null;
   const editingWish = wishSheet.value?.id ? api.wishlist.find((w) => w.id === wishSheet.value?.id) : undefined;
-  const empty = api.occasions.length === 0 && api.wishlist.length === 0;
 
   return (
     <ScreenBackground>
@@ -302,26 +277,13 @@ function FocusBlock({
   onAddIdea: () => void;
   onOpenIdea: (idea: GiftIdea) => void;
 }) {
-  const own = isOwnOccasion(occasion, me);
-  const ideas = ideasForOccasion(api.ideas, occasion.id);
-  const who = personName({ userId: occasion.person_id, name: occasion.person_name }, profiles);
-  // "Kept from Tegan" heads the list when every idea is kept from the person it's for.
-  const person = occasion.person_id && occasion.person_id !== me ? occasion.person_id : null;
-  const allKept = !!person && ideas.length > 0 && ideas.every((i) => i.hidden_from.includes(person));
-  const kept = allKept ? keptFromLabel([person], profiles) : null;
-  const { spent } = occasionSpend(ideas);
-  const budget = occasion.budget_cents
-    ? spent
-      ? `${formatMoney(spent)} of ${formatMoney(occasion.budget_cents)}`
-      : `${formatMoney(occasion.budget_cents)} budget`
-    : null;
-  const head = [kept, budget].filter(Boolean).join(' · ');
+  const { own, ideas, allKept, heading, head } = occasionFocusView(occasion, api.ideas, me, profiles);
 
   return (
     <View className="gap-1.5">
       <View className="flex-row items-center justify-between gap-2 px-1">
         <Text numberOfLines={1} className="shrink text-micro-label uppercase text-muted-foreground">
-          {own ? occasionTitle(occasion, me) : who ? `Ideas for ${who}` : occasion.title}
+          {heading}
         </Text>
         <Pressable onPress={onEditOccasion} accessibilityRole="button" hitSlop={8} className="min-h-9 justify-center">
           <Text className="text-[12.5px] font-medium text-primary">Edit</Text>
@@ -341,9 +303,7 @@ function FocusBlock({
                 <ListItemTitle numberOfLines={1}>{idea.title}</ListItemTitle>
                 <ListItemMeta>
                   <Text numberOfLines={1} className="text-caption text-muted-foreground">
-                    {[ideaStatusLine(idea, (c) => formatMoney(c)), forLabel(idea, occasion, profiles), allKept ? null : keptFromLabel(idea.hidden_from, profiles)]
-                      .filter(Boolean)
-                      .join(' · ')}
+                    {ideaRowMeta(idea, occasion, profiles, allKept)}
                   </Text>
                 </ListItemMeta>
               </ListItemContent>
@@ -359,13 +319,6 @@ function FocusBlock({
       )}
     </View>
   );
-}
-
-/** Only when the idea is for someone other than the occasion's person (Christmas lists). */
-function forLabel(idea: GiftIdea, occasion: Occasion, profiles: MemberProfiles): string | null {
-  if (idea.for_user_id && idea.for_user_id === occasion.person_id) return null;
-  const name = personName({ userId: idea.for_user_id, name: idea.for_name }, profiles);
-  return name ? `for ${name}` : null;
 }
 
 /** Another member's wishlist, with "I'll get this" on each wish nobody has taken. */
@@ -389,7 +342,7 @@ function OtherWishlist({
       <ListGroup>
         {items.map((w) => {
           const taken = takenBy(w, api.ideas);
-          const meta = [w.price_cents ? formatMoney(w.price_cents) : null, w.notes].filter(Boolean).join(' · ');
+          const meta = wishMeta(w);
           return (
             <ListItem
               key={w.id}
@@ -408,7 +361,7 @@ function OtherWishlist({
               </ListItemContent>
               {taken ? (
                 <Text className="shrink-0 text-xs text-muted-foreground">
-                  {taken.created_by === me ? "You're getting it" : `${memberFirstName(taken.created_by ?? '', profiles)} is getting it`}
+                  {wishTakenLabel(taken, me, profiles)}
                 </Text>
               ) : (
                 <Pressable

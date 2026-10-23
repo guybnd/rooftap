@@ -3,9 +3,8 @@
 // Occasions: add or edit something on your own wishlist. Everyone in the
 // household can read it, to drop hints. Native twin:
 // apps/mobile/src/features/occasions/wish-form-sheet.tsx.
-import { useState } from 'react';
 import { Gift } from 'lucide-react';
-import { buildWishlistItem, parsePriceInput, type OccasionsApi, type WishlistItem } from '@homeup/core';
+import { useWishForm, type OccasionsApi, type WishlistItem } from '@homeup/core';
 import { ItemFormSheet, FormSection, FieldRow } from '@/components/ui/item-form-sheet';
 import { Input } from '@/components/ui/input';
 
@@ -26,21 +25,11 @@ export function WishFormSheet({
   groupId: string;
   currentUserId: string;
 }) {
-  const [title, setTitle] = useState(item?.title ?? '');
-  const [url, setUrl] = useState(item?.url ?? '');
-  const [price, setPrice] = useState(item?.price_cents ? String(item.price_cents / 100) : '');
-  const [notes, setNotes] = useState(item?.notes ?? '');
-  const [tried, setTried] = useState(false);
+  const form = useWishForm({ item, api, groupId, currentUserId });
+  const { title, setTitle, url, setUrl, price, setPrice, notes, setNotes, tried } = form;
 
   const submit = () => {
-    setTried(true);
-    if (!title.trim()) return;
-    const fields = { title: title.trim(), url: url.trim() || null, price_cents: parsePriceInput(price), notes: notes.trim() || null };
-    const saved: WishlistItem = item
-      ? { ...item, ...fields }
-      : { ...buildWishlistItem({ id: crypto.randomUUID(), groupId, userId: currentUserId, title: fields.title }), ...fields, created_at: '', updated_at: '' };
-    api.saveWish(saved);
-    onClose();
+    if (form.submit()) onClose();
   };
 
   return (

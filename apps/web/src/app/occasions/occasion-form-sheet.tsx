@@ -4,17 +4,13 @@
 // for (a member or a name), the day, whether it comes round every year, and
 // a gift budget. "Keep it from" sits behind the details for a surprise party.
 // Native twin: apps/mobile/src/features/occasions/occasion-form-sheet.tsx.
-import { useState } from 'react';
 import { Gift } from 'lucide-react';
 import {
   OCCASION_KINDS,
-  buildOccasion,
   memberFirstName,
-  parsePriceInput,
-  suggestedOccasionTitle,
+  useOccasionForm,
   type GroupMember,
   type Occasion,
-  type OccasionKind,
   type OccasionsApi,
 } from '@homeup/core';
 import { ItemFormSheet, FormSection, FieldRow, DetailsDisclosure } from '@/components/ui/item-form-sheet';
@@ -27,8 +23,6 @@ const OCCASIONS_SECTION = { id: 'occasions', Icon: Gift };
 const CHIP = 'min-h-9 rounded-full px-3 text-[12.5px] font-medium';
 
 type MemberProfiles = Record<string, { email: string; name: string | null; avatar: string | null }>;
-/** A member's id, a typed name, or nobody (a shared day like Christmas). */
-type Who = { kind: 'member'; id: string } | { kind: 'name' } | { kind: 'nobody' };
 
 export function OccasionFormSheet({
   isOpen,
@@ -54,44 +48,13 @@ export function OccasionFormSheet({
   /** Offer the Calendar switch: calendar.occasions is on and the server has the column. */
   calendar?: boolean;
 }) {
-  const [kind, setKind] = useState<OccasionKind>(occasion?.kind ?? 'birthday');
-  const [who, setWho] = useState<Who>(
-    occasion?.person_id ? { kind: 'member', id: occasion.person_id } : occasion?.person_name ? { kind: 'name' } : occasion ? { kind: 'nobody' } : { kind: 'name' },
-  );
-  const [personName, setPersonName] = useState(occasion?.person_name ?? '');
-  const [title, setTitle] = useState(occasion?.title ?? '');
-  const [titleTouched, setTitleTouched] = useState(!!occasion);
-  const [date, setDate] = useState(occasion?.date ?? '');
-  const [repeats, setRepeats] = useState(occasion?.repeats ?? true);
-  const [onCalendar, setOnCalendar] = useState(occasion?.on_calendar !== false);
-  const [budget, setBudget] = useState(occasion?.budget_cents ? String(occasion.budget_cents / 100) : '');
-  const [hidden, setHidden] = useState<string[]>(occasion?.hidden_from ?? []);
-  const [tried, setTried] = useState(false);
-
+  const form = useOccasionForm({ occasion, api, groupId, currentUserId, profiles, calendar, initialDate: '' });
+  const { kind, setKind, who, setWho, personName, setPersonName, shownTitle, typeTitle, date, setDate, repeats, setRepeats, onCalendar, setOnCalendar, budget, setBudget, hidden, keepFrom, tried } = form;
   const others = members.filter((m) => m.user_id !== currentUserId);
-  const person = who.kind === 'member' ? memberFirstName(who.id, profiles) : who.kind === 'name' ? personName.trim() || null : null;
-  const shownTitle = titleTouched ? title : suggestedOccasionTitle(kind, person);
-  const budgetCents = parsePriceInput(budget);
 
   const submit = () => {
-    setTried(true);
-    if (!shownTitle.trim() || !date) return;
-    const fields = {
-      title: shownTitle.trim(),
-      kind,
-      date,
-      repeats,
-      person_id: who.kind === 'member' ? who.id : null,
-      person_name: who.kind === 'name' ? personName.trim() || null : null,
-      budget_cents: budgetCents,
-      hidden_from: hidden.filter((id) => id !== currentUserId),
-      // Only to a server with the column (occasions.calendar).
-      ...(calendar ? { on_calendar: onCalendar } : {}),
-    };
-    const saved: Occasion = occasion
-      ? { ...occasion, ...fields }
-      : { ...buildOccasion({ id: crypto.randomUUID(), groupId, title: fields.title, kind, date, createdBy: currentUserId }), ...fields, created_at: '', updated_at: '' };
-    api.saveOccasion(saved);
+    const saved = form.submit();
+    if (!saved) return;
     onSaved?.(saved);
     onClose();
   };
@@ -136,10 +99,7 @@ export function OccasionFormSheet({
           <Input
             id="occasion-title"
             value={shownTitle}
-            onChange={(e) => {
-              setTitleTouched(true);
-              setTitle(e.target.value);
-            }}
+            onChange={(e) => typeTitle(e.target.value)}
             placeholder="Christmas"
             maxLength={80}
           />
@@ -171,7 +131,7 @@ export function OccasionFormSheet({
                 <Switch
                   checked={hidden.includes(m.user_id)}
                   label={`Keep it from ${memberFirstName(m.user_id, profiles)}`}
-                  onChange={(next) => setHidden((h) => (next ? [...h, m.user_id] : h.filter((id) => id !== m.user_id)))}
+                  onChange={(next) => keepFrom(m.user_id, next)}
                 />
               </div>
             ))}

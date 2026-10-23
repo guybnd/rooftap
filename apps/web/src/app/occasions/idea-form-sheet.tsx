@@ -5,21 +5,15 @@
 // member, on by default for the member it is for. The database hides a kept
 // idea from them, and its price watch and Budget line follow (core
 // occasions.ts). Native twin: apps/mobile/src/features/occasions/idea-form-sheet.tsx.
-import { useState } from 'react';
 import { Gift } from 'lucide-react';
 import {
   GIFT_IDEA_STATUSES,
   JOINT_ACCOUNT_GIFT_WARNING,
-  buildGiftIdea,
-  defaultHiddenFrom,
   formatMoney,
-  keepFromHints,
   memberFirstName,
   occasionTitle,
-  parsePriceInput,
-  revealDay,
+  useIdeaForm,
   type GiftIdea,
-  type GiftIdeaStatus,
   type GroupMember,
   type Occasion,
   type OccasionsApi,
@@ -60,69 +54,39 @@ export function IdeaFormSheet({
   profiles: MemberProfiles;
   features: { costs: boolean; shopper: boolean };
 }) {
-  const memberIds = members.map((m) => m.user_id);
   const others = members.filter((m) => m.user_id !== currentUserId);
-  const startFor = idea ? idea.for_user_id : occasion?.person_id ?? null;
-  const [title, setTitle] = useState(idea?.title ?? '');
-  const [occasionId, setOccasionId] = useState<string | null>(idea ? idea.occasion_id : occasion?.id ?? null);
-  const [forUserId, setForUserId] = useState<string | null>(startFor);
-  const [forName, setForName] = useState(idea ? idea.for_name ?? '' : occasion?.person_name ?? '');
-  const [status, setStatus] = useState<GiftIdeaStatus>(idea?.status ?? 'idea');
-  const [price, setPrice] = useState(idea?.price_cents ? String(idea.price_cents / 100) : '');
-  const [url, setUrl] = useState(idea?.url ?? '');
-  const [notes, setNotes] = useState(idea?.notes ?? '');
-  const [hidden, setHidden] = useState<string[]>(idea ? idea.hidden_from : defaultHiddenFrom(startFor, currentUserId, memberIds));
-  // Who it's kept from follows who it's for until the person touches a switch.
-  const [hiddenTouched, setHiddenTouched] = useState(!!idea);
-  const [inBudget, setInBudget] = useState(!!api.linkedCostOf(idea));
-  const [watch, setWatch] = useState(false);
-  const [tried, setTried] = useState(false);
-
-  const chosen = occasionId ? api.occasionById.get(occasionId) ?? null : null;
-  const priceCents = parsePriceInput(price);
-  const hasWant = !!api.linkedWantOf(idea);
-  const hints = keepFromHints({
-    names: hidden.map((id) => memberFirstName(id, profiles)),
-    revealOn: revealDay(chosen, api.today),
-    budget: features.costs && inBudget,
-  });
-
-  const pickFor = (userId: string | null) => {
-    setForUserId(userId);
-    if (!hiddenTouched) setHidden(defaultHiddenFrom(userId, currentUserId, memberIds));
-  };
-
-  const pickOccasion = (o: Occasion | null) => {
-    setOccasionId(o?.id ?? null);
-    if (!idea && o) {
-      if (o.person_id) pickFor(o.person_id);
-      else if (o.person_name) {
-        pickFor(null);
-        setForName(o.person_name);
-      }
-    }
-  };
+  const form = useIdeaForm({ idea, occasion, api, groupId, currentUserId, memberIds: members.map((m) => m.user_id), profiles, features });
+  const {
+    title,
+    setTitle,
+    occasionId,
+    pickOccasion,
+    forUserId,
+    pickFor,
+    forName,
+    setForName,
+    status,
+    setStatus,
+    price,
+    setPrice,
+    priceCents,
+    url,
+    setUrl,
+    notes,
+    setNotes,
+    hidden,
+    keepFrom,
+    hints,
+    hasWant,
+    inBudget,
+    setInBudget,
+    watch,
+    setWatch,
+    tried,
+  } = form;
 
   const submit = () => {
-    setTried(true);
-    if (!title.trim()) return;
-    const fields = {
-      title: title.trim(),
-      occasion_id: occasionId,
-      for_user_id: forUserId,
-      for_name: forUserId ? null : forName.trim() || null,
-      status,
-      price_cents: priceCents,
-      url: url.trim() || null,
-      notes: notes.trim() || null,
-      // Never kept from yourself: you would lose it too.
-      hidden_from: hidden.filter((id) => id !== currentUserId),
-    };
-    const next: GiftIdea = idea
-      ? { ...idea, ...fields }
-      : { ...buildGiftIdea({ id: crypto.randomUUID(), groupId, title: fields.title, occasionId, hiddenFrom: [], createdBy: currentUserId }), ...fields, created_at: '', updated_at: '' };
-    api.saveIdea(next, { inBudget, watch });
-    onClose();
+    if (form.submit()) onClose();
   };
 
   return (
@@ -202,10 +166,7 @@ export function IdeaFormSheet({
                 <Switch
                   checked={on}
                   label={`Keep it from ${memberFirstName(m.user_id, profiles)}`}
-                  onChange={(next) => {
-                    setHiddenTouched(true);
-                    setHidden((h) => (next ? [...h, m.user_id] : h.filter((id) => id !== m.user_id)));
-                  }}
+                  onChange={(next) => keepFrom(m.user_id, next)}
                 />
               </div>
             );
