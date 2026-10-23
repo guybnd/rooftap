@@ -101,6 +101,10 @@ export const SERVER_FEATURES = {
     minSchema: '20261023080000_payment_cost_category',
     label: 'moving a shop or one payment to another Costs category',
   },
+  'recipes.steps': {
+    minSchema: '20261023160000_recipe_steps',
+    label: 'recipe steps with timers',
+  },
 } as const satisfies Record<string, ServerFeatureDef>;
 
 export type ServerFeatureId = keyof typeof SERVER_FEATURES;

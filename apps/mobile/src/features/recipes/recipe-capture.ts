@@ -25,6 +25,8 @@ import {
   itemMatchLibrary,
   instructionsFromSteps,
   rankItemMatches,
+  methodFields,
+  stepsFromParsed,
   uploadDocument,
   linkDocument,
   listDocumentsForEntity,
@@ -79,6 +81,8 @@ export interface CaptureRecipeFromPhotoArgs {
   /** Active grocery items + existing recipe ingredients — for name canonicalization. */
   groceryItems: GroceryItem[];
   existingIngredients: RecipeIngredient[];
+  /** The server has the `recipes.steps` column (server feature), so keep the parsed timers and links. */
+  withSteps?: boolean;
 }
 
 /**
@@ -95,6 +99,7 @@ export async function captureRecipeFromPhoto({
   source,
   groceryItems,
   existingIngredients,
+  withSteps = false,
 }: CaptureRecipeFromPhotoArgs): Promise<CaptureRecipeResult | null> {
   const picked = await pickPhoto(source);
   if (!picked.photo) {
@@ -145,19 +150,30 @@ export async function captureRecipeFromPhoto({
     createdBy,
   });
 
+  // Keep each built row's id by its position in the parsed list, so the
+  // structured steps' ingredient positions turn into ids.
+  const idAt = new Map<number, string>();
   const ingredients = (parsed.ingredients ?? [])
-    .filter((ing) => ing.name.trim())
-    .map((ing, idx) =>
-      buildRecipeIngredient({
+    .map((ing, idx) => ({ ing, idx }))
+    .filter(({ ing }) => ing.name.trim())
+    .map(({ ing, idx }, position) => {
+      const row = buildRecipeIngredient({
         recipeId: recipe.id,
         groupId,
         name: ing.name,
         itemName: itemNameFor(ing.item || ing.name),
         quantity: ing.quantity ?? null,
         unit: ing.unit ?? null,
-        position: idx,
-      }),
-    );
+        position,
+      });
+      idAt.set(idx, row.id);
+      return row;
+    });
+
+  // Recipes v2: timers, ingredient links and the original wording, when
+  // this server can store them (an older server answers without them too).
+  const steps = withSteps ? stepsFromParsed(parsed.structuredSteps, (i) => idAt.get(i)) : null;
+  if (steps) Object.assign(recipe, methodFields(steps, true));
 
   const doc = await uploadDocument({
     supabase,

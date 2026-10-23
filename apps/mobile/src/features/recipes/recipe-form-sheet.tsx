@@ -15,7 +15,7 @@
 // mounts it here as well.
 import * as React from 'react';
 import { Pressable, View } from 'react-native';
-import { X, Plus, ChevronUp, ChevronDown, Check } from 'lucide-react-native';
+import { X, Plus, ChevronUp, ChevronDown, Check, Timer } from 'lucide-react-native';
 import { IngredientQuickEditorSheet } from './ingredient-quick-editor-sheet';
 import {
   Text,
@@ -45,8 +45,14 @@ import {
   buildRecipeIngredient,
   recipeCuisines,
   stepForUnit,
-  stepsFromInstructions,
-  instructionsFromSteps,
+  emptyStepRow,
+  stepRowsFromRecipe,
+  stepsFromRows,
+  methodFields,
+  suggestedTimer,
+  useModules,
+  type StepFormRow,
+  type RecipeStepTimer,
   type GroceryItem,
   type Recipe,
   type RecipeIngredient,
@@ -118,20 +124,11 @@ interface Row {
   unit: string;
 }
 
-interface StepRow {
-  key: string;
-  text: string;
-}
-
 let rowSeq = 0;
 const freshRowKey = () => `row-${rowSeq++}`;
 
 function emptyRow(): Row {
   return { key: freshRowKey(), name: '', itemName: null, quantity: null, unit: '' };
-}
-
-function emptyStep(): StepRow {
-  return { key: freshRowKey(), text: '' };
 }
 
 export function RecipeFormSheet({
@@ -162,15 +159,12 @@ export function RecipeFormSheet({
         quantity: i.quantity,
         unit: i.unit ?? '',
       }));
-    const steps: StepRow[] = stepsFromInstructions(recipe?.instructions).map((text) => ({
-      key: freshRowKey(),
-      text,
-    }));
+    const steps = stepRowsFromRecipe(recipe);
     return {
       title: recipe?.title ?? '',
       cuisines: recipeCuisines(recipe),
       method: (recipe?.method ?? null) as RecipeMethod | null,
-      steps: steps.length ? steps : [emptyStep()],
+      steps,
       servings: recipe?.servings ?? null,
       prepMinutes: recipe?.prep_minutes ?? null,
       cookMinutes: recipe?.cook_minutes ?? null,
@@ -180,6 +174,8 @@ export function RecipeFormSheet({
   }, [recipe, ingredients]);
 
   const [form, setForm] = React.useState(buildInitial);
+  // Recipes v2: timers are kept only where the server stores structured steps.
+  const withSteps = useModules().server('recipes.steps');
   const [saving, setSaving] = React.useState(false);
 
   // Re-seed the form every closed->open transition (the sheet instance is reused).
@@ -282,13 +278,13 @@ export function RecipeFormSheet({
       }).length
     : 0;
 
-  const setStep = (key: string, text: string) =>
-    setForm((f) => ({ ...f, steps: f.steps.map((s) => (s.key === key ? { ...s, text } : s)) }));
-  const addStep = () => setForm((f) => ({ ...f, steps: [...f.steps, emptyStep()] }));
+  const setStep = (key: string, patch: Partial<StepFormRow>) =>
+    setForm((f) => ({ ...f, steps: f.steps.map((s) => (s.key === key ? { ...s, ...patch } : s)) }));
+  const addStep = () => setForm((f) => ({ ...f, steps: [...f.steps, emptyStepRow()] }));
   const removeStep = (key: string) =>
     setForm((f) => {
       const steps = f.steps.filter((s) => s.key !== key);
-      return { ...f, steps: steps.length ? steps : [emptyStep()] };
+      return { ...f, steps: steps.length ? steps : [emptyStepRow()] };
     });
   const moveStep = (key: string, dir: -1 | 1) =>
     setForm((f) => {
@@ -306,14 +302,15 @@ export function RecipeFormSheet({
     if (!form.title.trim()) return;
     setSaving(true);
     try {
-      const instructions = instructionsFromSteps(form.steps.map((s) => s.text));
+      const method = methodFields(stepsFromRows(form.steps), withSteps);
+      const instructions = method.instructions;
       const savedRecipe: Recipe = recipe
         ? {
             ...recipe,
             title: form.title.trim(),
             cuisines: form.cuisines,
             method: form.method,
-            instructions,
+            ...method,
             servings: form.servings,
             prep_minutes: form.prepMinutes,
             cook_minutes: form.cookMinutes,
@@ -332,6 +329,7 @@ export function RecipeFormSheet({
             source: form.source,
             sourceType: 'manual',
           });
+      if (!recipe && method.steps !== undefined) savedRecipe.steps = method.steps;
 
       const rows = form.rows.filter((r) => r.name.trim());
       const savedIngredients = rows.map((r, idx) =>
@@ -590,14 +588,22 @@ export function RecipeFormSheet({
               <Text className="mt-2.5 w-4 shrink-0 text-right text-xs font-medium text-muted-foreground">
                 {idx + 1}.
               </Text>
-              <Input
-                className="min-w-0 flex-1"
-                value={step.text}
-                onChangeText={(text) => setStep(step.key, text)}
-                placeholder={`Step ${idx + 1}…`}
-                multiline
-                numberOfLines={2}
-              />
+              <View className="min-w-0 flex-1 gap-1.5">
+                <Input
+                  value={step.text}
+                  onChangeText={(text) => setStep(step.key, { text })}
+                  placeholder={`Step ${idx + 1}…`}
+                  multiline
+                  numberOfLines={2}
+                />
+                {withSteps && (
+                  <StepTimersEditor
+                    timers={step.timers}
+                    stepText={step.text}
+                    onChange={(timers) => setStep(step.key, { timers })}
+                  />
+                )}
+              </View>
               {/* M2: the reorder pair splits the step's height between two
                   28px targets rather than two 15px glyphs. */}
               <View className="shrink-0">
@@ -685,5 +691,75 @@ export function RecipeFormSheet({
       />
     )}
     </>
+  );
+}
+
+/**
+ * Recipes v2: a step's timers in the form. Each timer is a name and minutes;
+ * "Add timer" starts from the time the step's text names, if any.
+ */
+function StepTimersEditor({
+  timers,
+  stepText,
+  onChange,
+}: {
+  timers: RecipeStepTimer[];
+  stepText: string;
+  onChange: (timers: RecipeStepTimer[]) => void;
+}) {
+  const patch = (i: number, p: Partial<RecipeStepTimer>) =>
+    onChange(timers.map((t, j) => (j === i ? { ...t, ...p } : t)));
+  const add = () => onChange([...timers, suggestedTimer(stepText) ?? { label: 'Timer', seconds: 300 }]);
+  return (
+    <View className="gap-1.5">
+      {timers.map((t, i) => (
+        <View key={i} className="flex-row items-center gap-2">
+          <Timer size={14} className="text-muted-foreground" />
+          <Input
+            className="h-9 min-w-0 flex-1"
+            value={t.label}
+            onChangeText={(label) => patch(i, { label })}
+            accessibilityLabel="Timer name"
+          />
+          <MinutesInput seconds={t.seconds} onChange={(seconds) => patch(i, { seconds })} />
+          <Text className="text-xs text-muted-foreground">min</Text>
+          <Pressable
+            onPress={() => onChange(timers.filter((_, j) => j !== i))}
+            hitSlop={4}
+            accessibilityLabel="Remove timer"
+            className="-mr-1 h-9 w-9 items-center justify-center rounded-lg"
+          >
+            <X size={14} className="text-muted-foreground" />
+          </Pressable>
+        </View>
+      ))}
+      <Pressable
+        onPress={add}
+        accessibilityRole="button"
+        className="h-9 flex-row items-center gap-1.5 self-start rounded-lg px-2"
+      >
+        <Plus size={13} className="text-muted-foreground" />
+        <Text className="text-xs text-muted-foreground">Add timer</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+/** Minutes as typed text, so "1." and an empty field survive while typing. */
+function MinutesInput({ seconds, onChange }: { seconds: number; onChange: (seconds: number) => void }) {
+  const [text, setText] = React.useState(String(Math.round((seconds / 60) * 10) / 10));
+  return (
+    <Input
+      className="h-9 w-16 text-right"
+      style={{ fontVariant: ['tabular-nums'] }}
+      keyboardType="decimal-pad"
+      value={text}
+      onChangeText={(next) => {
+        setText(next);
+        const minutes = Number(next.replace(',', '.'));
+        if (Number.isFinite(minutes) && minutes > 0) onChange(Math.round(minutes * 60));
+      }}
+      accessibilityLabel="Timer minutes"
+    />
   );
 }

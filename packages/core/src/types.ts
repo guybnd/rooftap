@@ -769,6 +769,26 @@ export type RecipeMethod = "cooking" | "baking" | "roasting" | "other";
 // further migration.
 export type RecipeSourceType = "photo" | "pdf" | "url" | "manual";
 
+/** Recipes v2: a timer on a recipe step. */
+export interface RecipeStepTimer {
+  /** A short name for the timer: "Simmer", "Rest". */
+  label: string;
+  seconds: number;
+}
+
+/** Recipes v2: one structured step (recipes.steps jsonb). */
+export interface RecipeStep {
+  /** The step, tidied up. One line, no newlines. */
+  text: string;
+  /** The wording from the book or page, when the tidy text differs. */
+  original?: string | null;
+  timers: RecipeStepTimer[];
+  /** `recipe_ingredients.id`s this step uses. */
+  ingredientIds: string[];
+  /** Oven or pan temperature, as written ("200°C"). */
+  temp?: string | null;
+}
+
 export interface Recipe {
   id: string;
   group_id: string;
@@ -776,6 +796,8 @@ export interface Recipe {
   cuisines: string[];              // free-text cuisine tags (multi-select)
   method: RecipeMethod | null;     // null → unset/other
   instructions: string | null;     // optional free-text prep steps, newline-delimited steps
+  /** Recipes v2: structured steps; absent on servers without the column (read via recipeSteps). */
+  steps?: RecipeStep[] | null;
   servings: number | null;         // FLUX-202
   prep_minutes: number | null;     // FLUX-202
   cook_minutes: number | null;     // FLUX-202

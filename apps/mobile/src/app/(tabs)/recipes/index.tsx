@@ -267,6 +267,7 @@ export default function RecipesSectionScreen() {
         source,
         groceryItems,
         existingIngredients: allIngredients,
+        withSteps: modules.server('recipes.steps'),
       });
       if (!result) return; // user cancelled the picker
       writeRecipe(result.recipe);

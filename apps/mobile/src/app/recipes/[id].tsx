@@ -25,6 +25,7 @@ import {
   ListGroup,
   ProgressBar,
   ScreenBackground,
+  SegmentedControl,
   haptics,
   useHoldFill,
   cn,
@@ -46,6 +47,7 @@ import {
   buildNeededGroceryItem,
   groceryStatusPatch,
   recipeCuisines,
+  recipeSteps,
   trimQty,
   type GroceryItem,
   type Recipe,
@@ -56,6 +58,7 @@ import { useDataCache } from '@/lib/data-cache';
 import { NoGroupScreen } from '@/components/no-group-screen';
 import { RecipeFormSheet } from '@/features/recipes/recipe-form-sheet';
 import { IngredientQuickEditorSheet } from '@/features/recipes/ingredient-quick-editor-sheet';
+import { RecipeSteps } from '@/features/recipes/recipe-steps';
 import { useOpenRoute } from '@/lib/tab-routes';
 
 function nowISO(): string {
@@ -113,6 +116,9 @@ export default function RecipeDetailScreen() {
   }, [allRecipes]);
 
   const [isEditOpen, setIsEditOpen] = React.useState(false);
+  // Recipes v2: ingredients and steps are two tabs.
+  const [pane, setPane] = React.useState<'ingredients' | 'steps'>('ingredients');
+  const steps = React.useMemo(() => (recipe ? recipeSteps(recipe) : []), [recipe]);
 
   const [quickEditorId, setQuickEditorId] = React.useState<string | null>(null);
   const [quickEditorOpen, setQuickEditorOpen] = React.useState(false);
@@ -323,7 +329,20 @@ export default function RecipeDetailScreen() {
           </Card>
         )}
 
+        {steps.length > 0 && (
+          <SegmentedControl
+            options={[
+              { value: 'ingredients', label: 'Ingredients' },
+              { value: 'steps', label: `Steps · ${steps.length}` },
+            ]}
+            value={pane}
+            onChange={setPane}
+            accessibilityLabel="Recipe view"
+          />
+        )}
+
         {/* Ingredients: one list card with hairline rows (H4), not a card per row. */}
+        {(pane === 'ingredients' || steps.length === 0) && (
         <View className="gap-2">
           <Text className="px-1 text-micro-label uppercase text-muted-foreground">Ingredients</Text>
           {ingredients.length === 0 ? (
@@ -344,25 +363,10 @@ export default function RecipeDetailScreen() {
             </ListGroup>
           )}
         </View>
+        )}
 
-        {/* Instructions: steps, one per line */}
-        {recipe.instructions && (
-          <Card className="gap-2 rounded-3xl px-4">
-            <Text className="text-micro-label uppercase text-muted-foreground">Instructions</Text>
-            <View className="gap-1.5">
-              {recipe.instructions
-                .split('\n')
-                .filter(Boolean)
-                .map((step, i) => (
-                  <View key={i} className="flex-row gap-2">
-                    <Text className="text-sm font-medium text-muted-foreground" style={{ fontVariant: ['tabular-nums'] }}>
-                      {i + 1}.
-                    </Text>
-                    <Text className="flex-1 text-sm text-foreground">{step}</Text>
-                  </View>
-                ))}
-            </View>
-          </Card>
+        {pane === 'steps' && steps.length > 0 && (
+          <RecipeSteps steps={steps} ingredients={ingredients} onOpenIngredient={(ing) => openQuickEditor(ing)} />
         )}
 
         <RecipeFormSheet

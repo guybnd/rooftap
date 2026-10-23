@@ -43,6 +43,8 @@ export interface ParsedRecipe {
   title?: string;
   ingredients?: ParsedRecipeIngredient[];
   steps?: string[];
+  /** Recipes v2: steps with timers and ingredient positions; read with core's stepsFromParsed. */
+  structuredSteps?: unknown;
   servings?: number;
   prep_minutes?: number;
   cook_minutes?: number;

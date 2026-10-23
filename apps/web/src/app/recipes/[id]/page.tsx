@@ -28,6 +28,7 @@ import {
   buildNeededGroceryItem,
   groceryStatusPatch,
   recipeCuisines,
+  recipeSteps,
   trimQty,
 } from '@homeup/core';
 import { ProgressBar } from '@/components/ui/progress-bar';
@@ -35,6 +36,8 @@ import { ListGroup } from '@/components/ui/list-item';
 import { navLinkClickHandler, clearPortalMorphOnSettle } from '@/lib/view-transitions';
 import { EntityPhotoThumbnail } from '@/components/documents/entity-photo-thumbnail';
 import { RecipeFormSheet } from '../recipe-form-sheet';
+import { RecipeSteps } from '../recipe-steps';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { IngredientQuickEditorSheet } from '../ingredient-quick-editor-sheet';
 import { useLongPress } from '@/hooks/use-long-press';
 import { PopMenu, MenuItem } from '@/app/setup/pop-menu';
@@ -114,6 +117,10 @@ export default function RecipeDetailPage() {
   }, [allRecipes]);
 
   const [isEditOpen, setIsEditOpen] = useState(false);
+  // Recipes v2: on a narrow screen ingredients and steps are two tabs; wide
+  // screens show both side by side.
+  const [pane, setPane] = useState<'ingredients' | 'steps'>('ingredients');
+  const steps = useMemo(() => (recipe ? recipeSteps(recipe) : []), [recipe]);
 
   // ── Quick-editor sheet (FLUX-205 D5) — per-row descriptor/qty/unit edit +
   //    match picker. Same key-remount convention as RecipeFormSheet below: the
@@ -316,7 +323,20 @@ export default function RecipeDetailPage() {
       {/* Hearth §13.7 "Desktop shell": on a wide screen the ingredients and
           the method sit side by side, the method holding still as you scroll. */}
       <div className={wide ? 'grid grid-cols-2 items-start gap-6' : 'space-y-4'}>
+      {!wide && steps.length > 0 && (
+        <SegmentedControl
+          options={[
+            { value: 'ingredients', label: 'Ingredients' },
+            { value: 'steps', label: `Steps · ${steps.length}` },
+          ]}
+          value={pane}
+          onChange={setPane}
+          ariaLabel="Recipe view"
+          className="w-full"
+        />
+      )}
       {/* Ingredients: one list card with hairline rows (H4), not a card per row. */}
+      {(wide || pane === 'ingredients' || steps.length === 0) && (
       <div className="space-y-2">
         <h2 className="px-1 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
           Ingredients
@@ -339,20 +359,12 @@ export default function RecipeDetailPage() {
           </ListGroup>
         )}
       </div>
+      )}
 
+      {(wide || pane === 'steps' || steps.length === 0) && (
       <div className={cn('space-y-4', wide && 'sticky top-4')}>
-      {/* Instructions — steps, one per line (FLUX-202: parsed and manual entry alike) */}
-      {recipe.instructions && (
-        <div className="rounded-3xl border border-border/60 bg-card p-4 shadow-[var(--card-shadow)]">
-          <h2 className="mb-2 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-            Instructions
-          </h2>
-          <ol className="list-decimal space-y-1.5 pl-4 text-sm text-foreground marker:tabular-nums marker:text-muted-foreground">
-            {recipe.instructions.split('\n').filter(Boolean).map((step, i) => (
-              <li key={i}>{step}</li>
-            ))}
-          </ol>
-        </div>
+      {steps.length > 0 && (
+        <RecipeSteps steps={steps} ingredients={ingredients} onOpenIngredient={(ing) => openQuickEditor(ing, false)} />
       )}
 
       {/* Source photo (FLUX-202) */}
@@ -360,6 +372,7 @@ export default function RecipeDetailPage() {
         <EntityPhotoThumbnail entityType="recipe" entityId={recipe.id} label="View original photo" />
       )}
       </div>
+      )}
       </div>
 
       <RecipeFormSheet

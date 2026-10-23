@@ -205,17 +205,29 @@ export interface ParsedRecipeIngredient {
   unit?: string;
 }
 
+/** Recipes v2: one structured step; `ingredients` are positions in the ingredients list. */
+export interface ParsedRecipeStep {
+  text: string;
+  original?: string;
+  timers?: { label: string; seconds: number }[];
+  ingredients?: number[];
+  temp?: string;
+}
+
 export interface ParsedRecipe {
   title?: string;
   ingredients?: ParsedRecipeIngredient[];
+  /** The steps as plain text, tidied. Older apps read only this. */
   steps?: string[];
+  /** Recipes v2: the same steps with timers, ingredient links and the original wording. */
+  structuredSteps?: ParsedRecipeStep[];
   servings?: number;
   prep_minutes?: number;
   cook_minutes?: number;
   source?: string;
 }
 
-const RECIPE_SYSTEM_PROMPT = `You are a recipe parser. Given photo(s) of a recipe (cookbook page, handwritten card, or screenshot), extract structured data. Put ONLY the recipe's name in "title" — a few words, never ingredients, steps, or commentary. Every ingredient goes in the "ingredients" array as its own object: "name" is the full line as written, including prep/descriptor words (e.g. "thinly sliced blood oranges, peeled"); "item" is the base grocery item you'd actually buy for it, stripped of prep/descriptor words (e.g. "blood oranges" — but keep meaningful qualifiers that change what you'd buy, like "brown sugar" vs "sugar"). When a list of existing household item names is provided, reuse one of them verbatim for "item" ONLY when it genuinely is the item called for — never force a match. Also include optional quantity as a number + optional unit. Every instruction goes in the "steps" array, one string per step — split multi-step paragraphs into separate steps. Extract servings (a number if stated), prep_minutes and cook_minutes (numbers, converting hours to minutes if needed) when visible; omit optional fields you can't determine. Transcribe exactly what's on the page — no invented values. If the image is not a recipe, return an empty title and empty arrays.`;
+const RECIPE_SYSTEM_PROMPT = `You are a recipe parser. Given photo(s) of a recipe (cookbook page, handwritten card, or screenshot), extract structured data. Put ONLY the recipe's name in "title" — a few words, never ingredients, steps, or commentary. Every ingredient goes in the "ingredients" array as its own object: "name" is the full line as written, including prep/descriptor words (e.g. "thinly sliced blood oranges, peeled"); "item" is the base grocery item you'd actually buy for it, stripped of prep/descriptor words (e.g. "blood oranges" — but keep meaningful qualifiers that change what you'd buy, like "brown sugar" vs "sugar"). When a list of existing household item names is provided, reuse one of them verbatim for "item" ONLY when it genuinely is the item called for — never force a match. Also include optional quantity as a number + optional unit. Every instruction goes in the "steps" array as its own object — split multi-step paragraphs into separate steps, one action or a few closely linked actions each. For each step: "original" is the wording exactly as printed; "text" is the same step rewritten neatly in short plain sentences (keep every quantity, time and temperature, add nothing new); "timers" lists each wait the cook would time, with a short "label" naming what is timed (one or two words, e.g. "Simmer", "Rest") and "seconds" (use the low end of a range; no timers for vague waits like "until golden"); "ingredients" lists the positions (0-based) in the ingredients array of the ingredients this step uses; "temp" is an oven or pan temperature if the step states one, as written (e.g. "200°C"). Extract servings (a number if stated), prep_minutes and cook_minutes (numbers, converting hours to minutes if needed) when visible; omit optional fields you can't determine. Transcribe exactly what's on the page — no invented values. If the image is not a recipe, return an empty title and empty arrays.`;
 
 const RECIPE_SCHEMA_NAME = "parsed_recipe";
 
@@ -252,7 +264,32 @@ const RECIPE_SCHEMA = {
     },
     steps: {
       type: "array",
-      items: { type: "string" },
+      items: {
+        type: "object",
+        properties: {
+          text: { type: "string", description: "The step rewritten neatly in short plain sentences" },
+          original: { type: "string", description: "The step's wording exactly as printed" },
+          timers: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                label: { type: "string", description: "What is timed, one or two words" },
+                seconds: { type: "number", description: "Duration in seconds" },
+              },
+              required: ["label", "seconds"],
+            },
+            description: "Waits the cook would time in this step",
+          },
+          ingredients: {
+            type: "array",
+            items: { type: "number" },
+            description: "0-based positions in the ingredients array of the ingredients this step uses",
+          },
+          temp: { type: "string", description: "Oven or pan temperature, as written" },
+        },
+        required: ["text", "original", "timers", "ingredients"],
+      },
       description: "Ordered instruction steps, one per step",
     },
     servings: { type: "number", description: "Number of servings" },
@@ -306,9 +343,35 @@ export async function parseRecipeFromImages(dataUrls: string[], libraryNames: st
       });
   }
   if (Array.isArray(parsed.steps) && parsed.steps.length > 0) {
-    result.steps = parsed.steps
-      .map((s: unknown) => String(s).trim())
-      .filter((s: string) => s.length > 0);
+    // Recipes v2: steps come back as objects. `steps` stays plain text for
+    // apps that predate structured steps; `structuredSteps` carries the rest
+    // (core's stepsFromParsed cleans it on the client).
+    const structured: ParsedRecipeStep[] = [];
+    for (const raw of parsed.steps as unknown[]) {
+      if (typeof raw === "string") {
+        if (raw.trim()) structured.push({ text: raw.trim() });
+        continue;
+      }
+      if (!raw || typeof raw !== "object") continue;
+      const step = raw as Record<string, unknown>;
+      const text = String(step.text ?? step.original ?? "").replace(/\s+/g, " ").trim();
+      if (!text) continue;
+      const item: ParsedRecipeStep = { text };
+      if (step.original) item.original = String(step.original).replace(/\s+/g, " ").trim();
+      if (Array.isArray(step.timers)) {
+        item.timers = step.timers
+          .map((t) => t as Record<string, unknown>)
+          .filter((t) => t && Number(t.seconds) > 0)
+          .map((t) => ({ label: String(t.label ?? "Timer").trim() || "Timer", seconds: Math.round(Number(t.seconds)) }));
+      }
+      if (Array.isArray(step.ingredients)) {
+        item.ingredients = step.ingredients.map(Number).filter((n) => Number.isInteger(n) && n >= 0);
+      }
+      if (step.temp) item.temp = String(step.temp).trim();
+      structured.push(item);
+    }
+    result.steps = structured.map((st) => st.text);
+    result.structuredSteps = structured;
   }
   if (parsed.servings != null && !Number.isNaN(Number(parsed.servings))) result.servings = Number(parsed.servings);
   if (parsed.prep_minutes != null && !Number.isNaN(Number(parsed.prep_minutes))) result.prep_minutes = Number(parsed.prep_minutes);

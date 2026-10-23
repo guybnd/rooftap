@@ -244,6 +244,7 @@ export default function RecipesPage() {
         file,
         groceryItems,
         existingIngredients: allIngredients,
+        withSteps: modules.server('recipes.steps'),
       });
       writeRecipe(recipe);
       ingredients.forEach(writeIngredient);

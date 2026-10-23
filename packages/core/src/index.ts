@@ -33,6 +33,7 @@ export * from './modules/groceries/grocery-icons';
 export * from './modules/groceries/grocery-sessions';
 export * from './modules/rewards/loyalty-cards';
 export * from './modules/recipes/recipes';
+export * from './modules/recipes/steps';
 export * from './modules/meals/meal-plan';
 export * from './modules/meals/use-meal-week';
 export * from './modules/shopper/shopper';

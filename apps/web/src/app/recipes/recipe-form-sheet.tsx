@@ -18,7 +18,7 @@
 // (Save already exists on the sheet and flips draft -> false, i.e. publishes).
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { X, Plus, ChevronUp, ChevronDown, Check } from 'lucide-react';
+import { X, Plus, ChevronUp, ChevronDown, Check, Timer } from 'lucide-react';
 import type { GroceryItem, Recipe, RecipeIngredient, RecipeMethod } from '@homeup/core';
 import {
   RECIPE_METHODS,
@@ -34,9 +34,15 @@ import {
   buildRecipe,
   buildRecipeIngredient,
   recipeCuisines,
-  stepsFromInstructions,
-  instructionsFromSteps,
+  emptyStepRow,
+  stepRowsFromRecipe,
+  stepsFromRows,
+  methodFields,
+  suggestedTimer,
+  useModules,
   type ScoredMatch,
+  type StepFormRow,
+  type RecipeStepTimer,
 } from '@homeup/core';
 import { EntityPhotoThumbnail } from '@/components/documents/entity-photo-thumbnail';
 import { ItemFormSheet, FormSection, FieldRow } from '@/components/ui/item-form-sheet';
@@ -118,20 +124,11 @@ interface Row {
   unit: string;
 }
 
-interface StepRow {
-  key: string;
-  text: string;
-}
-
 let rowSeq = 0;
 const freshRowKey = () => `row-${rowSeq++}`;
 
 function emptyRow(): Row {
   return { key: freshRowKey(), name: '', itemName: null, quantity: null, unit: '' };
-}
-
-function emptyStep(): StepRow {
-  return { key: freshRowKey(), text: '' };
 }
 
 export function RecipeFormSheet({
@@ -162,15 +159,12 @@ export function RecipeFormSheet({
         quantity: i.quantity,
         unit: i.unit ?? '',
       }));
-    const steps: StepRow[] = stepsFromInstructions(recipe?.instructions).map((text) => ({
-      key: freshRowKey(),
-      text,
-    }));
+    const steps = stepRowsFromRecipe(recipe);
     return {
       title: recipe?.title ?? '',
       cuisines: recipeCuisines(recipe),
       method: (recipe?.method ?? null) as RecipeMethod | null,
-      steps: steps.length ? steps : [emptyStep()],
+      steps,
       servings: recipe?.servings ?? null,
       prepMinutes: recipe?.prep_minutes ?? null,
       cookMinutes: recipe?.cook_minutes ?? null,
@@ -180,6 +174,8 @@ export function RecipeFormSheet({
   }, [recipe, ingredients]);
 
   const [form, setForm] = useState(buildInitial);
+  // Recipes v2: timers are kept only where the server stores structured steps.
+  const withSteps = useModules().server('recipes.steps');
   const [saving, setSaving] = useState(false);
 
   // Re-seed the form every closed→open transition (the sheet instance is reused).
@@ -279,13 +275,13 @@ export function RecipeFormSheet({
     : 0;
 
   // ── Step rows (FLUX-202) ─────────────────────────────────────────────────────
-  const setStep = (key: string, text: string) =>
-    setForm((f) => ({ ...f, steps: f.steps.map((s) => (s.key === key ? { ...s, text } : s)) }));
-  const addStep = () => setForm((f) => ({ ...f, steps: [...f.steps, emptyStep()] }));
+  const setStep = (key: string, patch: Partial<StepFormRow>) =>
+    setForm((f) => ({ ...f, steps: f.steps.map((s) => (s.key === key ? { ...s, ...patch } : s)) }));
+  const addStep = () => setForm((f) => ({ ...f, steps: [...f.steps, emptyStepRow()] }));
   const removeStep = (key: string) =>
     setForm((f) => {
       const steps = f.steps.filter((s) => s.key !== key);
-      return { ...f, steps: steps.length ? steps : [emptyStep()] };
+      return { ...f, steps: steps.length ? steps : [emptyStepRow()] };
     });
   const moveStep = (key: string, dir: -1 | 1) =>
     setForm((f) => {
@@ -304,14 +300,15 @@ export function RecipeFormSheet({
     if (!form.title.trim()) return;
     setSaving(true);
     try {
-      const instructions = instructionsFromSteps(form.steps.map((s) => s.text));
+      const method = methodFields(stepsFromRows(form.steps), withSteps);
+      const instructions = method.instructions;
       const savedRecipe: Recipe = recipe
         ? {
             ...recipe,
             title: form.title.trim(),
             cuisines: form.cuisines,
             method: form.method,
-            instructions,
+            ...method,
             servings: form.servings,
             prep_minutes: form.prepMinutes,
             cook_minutes: form.cookMinutes,
@@ -331,6 +328,7 @@ export function RecipeFormSheet({
             source: form.source,
             sourceType: 'manual',
           });
+      if (!recipe && method.steps !== undefined) savedRecipe.steps = method.steps;
 
       const rows = form.rows.filter((r) => r.name.trim());
       const savedIngredients = rows.map((r, idx) =>
@@ -587,13 +585,22 @@ export function RecipeFormSheet({
               <span className="mt-1.5 w-4 shrink-0 text-right text-xs font-medium tabular-nums text-muted-foreground">
                 {idx + 1}.
               </span>
-              <textarea
-                value={step.text}
-                onChange={(e) => setStep(step.key, e.target.value)}
-                placeholder={`Step ${idx + 1}…`}
-                rows={2}
-                className="min-w-0 flex-1 resize-y rounded-lg border border-border bg-background px-3 py-1.5 text-sm outline-none focus:border-ring placeholder:text-muted-foreground"
-              />
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <textarea
+                  value={step.text}
+                  onChange={(e) => setStep(step.key, { text: e.target.value })}
+                  placeholder={`Step ${idx + 1}…`}
+                  rows={2}
+                  className="w-full resize-y rounded-lg border border-border bg-background px-3 py-1.5 text-sm outline-none focus:border-ring placeholder:text-muted-foreground"
+                />
+                {withSteps && (
+                  <StepTimersEditor
+                    timers={step.timers}
+                    stepText={step.text}
+                    onChange={(timers) => setStep(step.key, { timers })}
+                  />
+                )}
+              </div>
               {/* M2: the reorder pair splits the two-line step's height
                   between two 28px targets rather than two 14px glyphs. */}
               <div className="flex shrink-0 flex-col">
@@ -677,5 +684,68 @@ export function RecipeFormSheet({
       />
     )}
     </>
+  );
+}
+
+/**
+ * Recipes v2: a step's timers in the form. Each timer is a name and minutes;
+ * "Add timer" starts from the time the step's text names, if any.
+ */
+function StepTimersEditor({
+  timers,
+  stepText,
+  onChange,
+}: {
+  timers: RecipeStepTimer[];
+  stepText: string;
+  onChange: (timers: RecipeStepTimer[]) => void;
+}) {
+  const patch = (i: number, p: Partial<RecipeStepTimer>) =>
+    onChange(timers.map((t, j) => (j === i ? { ...t, ...p } : t)));
+  const add = () => onChange([...timers, suggestedTimer(stepText) ?? { label: 'Timer', seconds: 300 }]);
+  return (
+    <div className="space-y-1.5">
+      {timers.map((t, i) => (
+        <div key={i} className="flex items-center gap-2">
+          <Timer className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <input
+            value={t.label}
+            onChange={(e) => patch(i, { label: e.target.value })}
+            aria-label="Timer name"
+            className="h-9 min-w-0 flex-1 rounded-lg border border-border bg-background px-2.5 text-sm outline-none focus:border-ring"
+          />
+          <input
+            type="number"
+            inputMode="decimal"
+            min={0.5}
+            step={0.5}
+            value={Math.round((t.seconds / 60) * 10) / 10}
+            onChange={(e) => {
+              const minutes = Number(e.target.value);
+              if (Number.isFinite(minutes) && minutes > 0) patch(i, { seconds: Math.round(minutes * 60) });
+            }}
+            aria-label="Timer minutes"
+            className="h-9 w-16 rounded-lg border border-border bg-background px-2 text-right text-sm tabular-nums outline-none focus:border-ring"
+          />
+          <span className="text-xs text-muted-foreground">min</span>
+          <button
+            type="button"
+            onClick={() => onChange(timers.filter((_, j) => j !== i))}
+            aria-label="Remove timer"
+            className="-mr-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-destructive"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={add}
+        className="inline-flex h-9 items-center gap-1.5 rounded-lg px-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+      >
+        <Plus className="h-3.5 w-3.5" />
+        Add timer
+      </button>
+    </div>
   );
 }
