@@ -3,18 +3,25 @@
 
 import { daysBetweenISO } from '../../date-utils';
 import { formatMoney } from '../../money-format';
+import type { RowMenu } from '../../row-actions';
+import type { ShopperWant } from '../shopper/shopper';
 import {
+  GIFT_IDEA_STATUSES,
   ideaStatusLine,
   ideasForOccasion,
+  isGiftSettled,
   isOwnOccasion,
   keptFromLabel,
   memberFirstName,
   nextOccasionDay,
+  occasionKindLabel,
   occasionSpend,
   occasionTitle,
+  occasionWhenLabel,
   personName,
   weekdayDayMonthLabel,
   type GiftIdea,
+  type GiftIdeaStatus,
   type MemberProfileMap,
   type Occasion,
   type WishlistItem,
@@ -103,4 +110,151 @@ export function wishMeta(item: Pick<WishlistItem, 'price_cents' | 'notes'>): str
 /** Who is getting a taken wish: "You're getting it" or "Sam is getting it". */
 export function wishTakenLabel(taken: Pick<GiftIdea, 'created_by'>, me: string | null, profiles: MemberProfileMap): string {
   return taken.created_by === me ? "You're getting it" : `${memberFirstName(taken.created_by ?? '', profiles)} is getting it`;
+}
+
+// ── The gift idea card ──────────────────────────────────────────────────────
+
+/** "Birthday in 17 days", "Christmas tomorrow", "Party has passed". */
+function occasionWhenPhrase(occasion: Occasion, name: string, today: string): string {
+  const when = occasionWhenLabel(occasion, today);
+  if (when === 'Passed') return `${name} has passed`;
+  if (when === 'Today' || when === 'Tomorrow') return `${name} ${when.toLowerCase()}`;
+  return `${name} in ${when}`;
+}
+
+/**
+ * The gift budget meter on an idea's card (Hearth: meters are local): what
+ * the occasion's other settled gifts cost, and this idea on top. A bought
+ * idea counts with the rest. Shares are of the budget, clamped to fit.
+ */
+export interface GiftBudgetMeter {
+  budget: number;
+  bought: number;
+  thisIdea: number;
+  total: number;
+  over: boolean;
+  boughtShare: number;
+  ideaShare: number;
+  /** "$129 of $200". */
+  label: string;
+  /** "Bought $50", "This idea $79": only the parts that are there. */
+  legend: { part: 'bought' | 'idea'; label: string }[];
+}
+
+export function giftBudgetMeter(idea: GiftIdea, occasion: Occasion | null, ideas: readonly GiftIdea[]): GiftBudgetMeter | null {
+  if (!occasion?.budget_cents || idea.occasion_id !== occasion.id) return null;
+  const budget = occasion.budget_cents;
+  const others = ideas.filter((i) => i.occasion_id === occasion.id && i.id !== idea.id);
+  let bought = occasionSpend(others).spent;
+  let thisIdea = idea.price_cents ?? 0;
+  if (isGiftSettled(idea)) {
+    bought += thisIdea;
+    thisIdea = 0;
+  }
+  const total = bought + thisIdea;
+  const boughtShare = Math.min(1, bought / budget);
+  const ideaShare = Math.min(1 - boughtShare, thisIdea / budget);
+  return {
+    budget,
+    bought,
+    thisIdea,
+    total,
+    over: total > budget,
+    boughtShare,
+    ideaShare,
+    label: `${formatMoney(total)} of ${formatMoney(budget)}`,
+    legend: [
+      bought ? { part: 'bought' as const, label: `Bought ${formatMoney(bought)}` } : null,
+      thisIdea ? { part: 'idea' as const, label: `This idea ${formatMoney(thisIdea)}` } : null,
+    ].filter((l): l is { part: 'bought' | 'idea'; label: string } => !!l),
+  };
+}
+
+/**
+ * What a gift idea's card shows: the name, who and what it's for, the price,
+ * the budget meter, the best price its Shopper watch found, and where it came
+ * from. Each part is edited in place on the card (useGiftIdeaCard).
+ */
+export function giftIdeaCardView(input: {
+  idea: GiftIdea;
+  occasion: Occasion | null;
+  ideas: readonly GiftIdea[];
+  want: Pick<ShopperWant, 'best_cents' | 'best_store'> | null;
+  me: string | null;
+  profiles: MemberProfileMap;
+  today: string;
+}) {
+  const { idea, occasion, ideas, want, me, profiles, today } = input;
+  const who = personName({ userId: idea.for_user_id, name: idea.for_name }, profiles);
+  // "For Tegan · Birthday in 17 days": the occasion's own title would say Tegan twice.
+  const samePerson = !!occasion?.person_id && occasion.person_id === idea.for_user_id;
+  const occasionName = occasion ? (samePerson ? occasionKindLabel(occasion.kind) : occasionTitle(occasion, me)) : null;
+  const occasionPart = occasion && occasionName ? occasionWhenPhrase(occasion, occasionName, today) : null;
+  const context = [who ? `For ${who}` : null, occasionPart].filter(Boolean).join(' · ') || null;
+
+  let bestPrice: string | null = null;
+  let bestHint: string | null = null;
+  if (want) {
+    if (want.best_cents == null) bestPrice = 'Not checked yet';
+    else {
+      bestPrice = want.best_store ? `${formatMoney(want.best_cents)} at ${want.best_store}` : formatMoney(want.best_cents);
+      const diff = (idea.price_cents ?? 0) - want.best_cents;
+      if (idea.price_cents && diff > 0) bestHint = `${formatMoney(diff)} under your price`;
+    }
+  }
+
+  return {
+    title: idea.title,
+    context,
+    price: idea.price_cents ? formatMoney(idea.price_cents) : null,
+    status: idea.status,
+    settled: isGiftSettled(idea),
+    kept: keptFromLabel(idea.hidden_from, profiles),
+    meter: giftBudgetMeter(idea, occasion, ideas),
+    bestPrice,
+    bestHint,
+    fromWishlist: idea.wishlist_item_id ? (who ? `From ${who}'s wishlist` : 'From a wishlist') : null,
+    notes: idea.notes,
+    url: idea.url,
+  };
+}
+
+/**
+ * A gift idea row's menu (Hearth §13.7): web right-click, phone long press.
+ * Open the card, open its link, mark it bought (or not), where it's at, edit
+ * every field, remove.
+ */
+export function giftIdeaRowMenu(
+  idea: GiftIdea,
+  h: {
+    onOpen?: () => void;
+    onOpenLink?: (url: string) => void;
+    onStatus: (status: GiftIdeaStatus) => void;
+    onEdit?: () => void;
+    onRemove?: () => void;
+  },
+): RowMenu {
+  const settled = isGiftSettled(idea);
+  const current = GIFT_IDEA_STATUSES.find((s) => s.value === idea.status);
+  return {
+    title: idea.title,
+    kind: 'Gift idea',
+    actions: [
+      h.onOpen && { id: 'open', label: 'Open', group: 'open', icon: 'open', run: h.onOpen },
+      !!idea.url && h.onOpenLink && { id: 'link', label: 'Open link', group: 'open', icon: 'open', run: () => h.onOpenLink!(idea.url!) },
+      settled
+        ? { id: 'unbuy', label: 'Not bought yet', group: 'state', icon: 'undo', run: () => h.onStatus(idea.shopper_want_id ? 'watching' : 'idea') }
+        : { id: 'bought', label: 'Mark bought', group: 'state', icon: 'done', run: () => h.onStatus('bought') },
+      {
+        id: 'status',
+        label: "Where it's at",
+        group: 'set',
+        icon: 'status',
+        value: current?.label,
+        options: GIFT_IDEA_STATUSES.map((s) => ({ id: s.value, label: s.label, checked: s.value === idea.status, run: () => h.onStatus(s.value) })),
+      },
+      h.onEdit && { id: 'edit', label: 'Edit', group: 'edit', icon: 'edit', run: h.onEdit },
+      h.onRemove && { id: 'remove', label: 'Remove idea', group: 'danger', icon: 'delete', run: h.onRemove },
+    ],
+  };
 }

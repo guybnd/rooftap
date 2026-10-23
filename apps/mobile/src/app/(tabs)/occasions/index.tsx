@@ -20,16 +20,20 @@ import {
   ListItemTitle,
   ScreenBackground,
   Text,
+  useRowMenuSheet,
 } from '@homeup/ui';
 import {
   MOTION_DURATIONS_MS,
+  confirmRemoveIdea,
   formatMoney,
+  giftIdeaRowMenu,
   ideaRowMeta,
   memberFirstName,
   occasionFocusView,
   occasionSubtitle,
   occasionTitle,
   occasionWhenLabel,
+  setIdeaStatus,
   takenBy,
   useModules,
   useOccasions,
@@ -43,6 +47,7 @@ import {
 } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
 import { NoGroupScreen } from '@/components/no-group-screen';
+import { IdeaCard } from '@/features/occasions/idea-card';
 import { IdeaFormSheet } from '@/features/occasions/idea-form-sheet';
 import { OccasionFormSheet } from '@/features/occasions/occasion-form-sheet';
 import { WishFormSheet } from '@/features/occasions/wish-form-sheet';
@@ -86,6 +91,8 @@ export default function OccasionsScreen() {
   const occasionSheet = useSheetState<{ id: string | null }>();
   const ideaSheet = useSheetState<{ id: string | null; occasionId: string | null }>();
   const wishSheet = useSheetState<{ id: string | null }>();
+  const ideaCard = useSheetState<{ id: string }>();
+  const rowMenu = useRowMenuSheet();
 
   if (cacheLoading || (!api.loaded && api.occasions.length === 0)) {
     return (
@@ -143,7 +150,18 @@ export default function OccasionsScreen() {
                 profiles={memberProfiles}
                 onEditOccasion={() => occasionSheet.show({ id: focus.id })}
                 onAddIdea={() => ideaSheet.show({ id: null, occasionId: focus.id })}
-                onOpenIdea={(idea) => ideaSheet.show({ id: idea.id, occasionId: idea.occasion_id })}
+                onOpenIdea={(idea) => ideaCard.show({ id: idea.id })}
+                onHoldIdea={(idea) =>
+                  rowMenu.open(
+                    giftIdeaRowMenu(idea, {
+                      onOpen: () => ideaCard.show({ id: idea.id }),
+                      onOpenLink: (url) => void Linking.openURL(url),
+                      onStatus: (status) => setIdeaStatus(api, idea, status),
+                      onEdit: () => ideaSheet.show({ id: idea.id, occasionId: idea.occasion_id }),
+                      onRemove: () => void confirmRemoveIdea(api, idea),
+                    }),
+                  )
+                }
               />
             )}
 
@@ -228,6 +246,26 @@ export default function OccasionsScreen() {
         />
       )}
 
+      {ideaCard.value && (
+        <IdeaCard
+          key={ideaCard.value.id}
+          ideaId={ideaCard.value.id}
+          open={ideaCard.open}
+          onOpenChange={(open) => !open && ideaCard.hide()}
+          onEditAll={(idea) => {
+            ideaCard.hide();
+            ideaSheet.show({ id: idea.id, occasionId: idea.occasion_id });
+          }}
+          api={api}
+          currentUserId={currentUserId}
+          members={groupMembers}
+          profiles={memberProfiles}
+          features={features}
+        />
+      )}
+
+      {rowMenu.sheet}
+
       {ideaSheet.value && (
         <IdeaFormSheet
           key={ideaSheet.value.id ?? 'new'}
@@ -268,6 +306,7 @@ function FocusBlock({
   onEditOccasion,
   onAddIdea,
   onOpenIdea,
+  onHoldIdea,
 }: {
   occasion: Occasion;
   api: OccasionsApi;
@@ -276,6 +315,8 @@ function FocusBlock({
   onEditOccasion: () => void;
   onAddIdea: () => void;
   onOpenIdea: (idea: GiftIdea) => void;
+  /** A long press: the row menu, with Edit. */
+  onHoldIdea: (idea: GiftIdea) => void;
 }) {
   const { own, ideas, allKept, heading, head } = occasionFocusView(occasion, api.ideas, me, profiles);
 
@@ -298,7 +339,7 @@ function FocusBlock({
         <ListGroup>
           {!!head && <Text className="px-3.5 py-2 text-xs text-muted-foreground">{head}</Text>}
           {ideas.map((idea) => (
-            <ListItem key={idea.id} onPress={() => onOpenIdea(idea)} accessibilityRole="button">
+            <ListItem key={idea.id} onPress={() => onOpenIdea(idea)} onLongPress={() => onHoldIdea(idea)} accessibilityRole="button">
               <ListItemContent>
                 <ListItemTitle numberOfLines={1}>{idea.title}</ListItemTitle>
                 <ListItemMeta>

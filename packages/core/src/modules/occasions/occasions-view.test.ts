@@ -1,6 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { buildGiftIdea, buildOccasion, buildWishlistItem, type MemberProfileMap } from './occasions';
 import {
+  giftBudgetMeter,
+  giftIdeaCardView,
+  giftIdeaRowMenu,
   ideaForLabel,
   ideaRowMeta,
   nextOccasion,
@@ -82,5 +85,40 @@ describe('occasionFocusView', () => {
   it('names who an idea is for only when it is someone else', () => {
     expect(ideaForLabel(idea('a'), birthday, profiles)).toBeNull();
     expect(ideaForLabel(idea('b', { forUserId: null, forName: 'Mum' }), birthday, profiles)).toBe('for Mum');
+  });
+});
+
+describe('gift idea card', () => {
+  const budgeted = buildOccasion({ id: 'o3', groupId: 'g', title: "Tegan's birthday", kind: 'birthday', date: '1990-11-09', personId: TEGAN, budgetCents: 20000, createdBy: ME });
+  const robe = { ...buildGiftIdea({ id: 'i1', groupId: 'g', title: 'Linen robe', occasionId: 'o3', forUserId: TEGAN, priceCents: 8900, hiddenFrom: [TEGAN], createdBy: ME }), status: 'watching' as const };
+  const tickets = buildGiftIdea({ id: 'i2', groupId: 'g', title: 'Concert tickets', occasionId: 'o3', forUserId: TEGAN, status: 'bought', priceCents: 5000, hiddenFrom: [TEGAN], createdBy: ME });
+
+  it('meters the other bought gifts with this idea on top', () => {
+    const meter = giftBudgetMeter(robe, budgeted, [robe, tickets]);
+    expect(meter).toMatchObject({ bought: 5000, thisIdea: 8900, total: 13900, over: false, boughtShare: 0.25 });
+    expect(meter?.legend.map((l) => l.label)).toEqual(['Bought $50', 'This idea $89']);
+    expect(giftBudgetMeter({ ...robe, status: 'bought' }, budgeted, [robe, tickets])).toMatchObject({ bought: 13900, thisIdea: 0 });
+    expect(giftBudgetMeter(robe, birthday, [robe])).toBeNull();
+  });
+
+  it('says who and when without naming them twice, and what the watch found', () => {
+    const view = giftIdeaCardView({ idea: robe, occasion: budgeted, ideas: [robe, tickets], want: { best_cents: 7900, best_store: 'The Iconic' }, me: ME, profiles, today: TODAY });
+    expect(view.context).toBe('For Tegan · Birthday in 17 days');
+    expect(view.price).toBe('$89');
+    expect(view.kept).toBe('Kept from Tegan');
+    expect(view.bestPrice).toBe('$79 at The Iconic');
+    expect(view.bestHint).toBe('$10 under your price');
+    expect(view.fromWishlist).toBeNull();
+  });
+
+  it('builds a row menu that marks it bought and back', () => {
+    const onStatus = vi.fn();
+    const menu = giftIdeaRowMenu(robe, { onStatus, onEdit: () => {}, onRemove: () => {} });
+    const bought = menu.actions.find((a) => a && a.id === 'bought');
+    (bought as { run: () => void }).run();
+    expect(onStatus).toHaveBeenCalledWith('bought');
+    const back = giftIdeaRowMenu(tickets, { onStatus }).actions.find((a) => a && a.id === 'unbuy');
+    (back as { run: () => void }).run();
+    expect(onStatus).toHaveBeenLastCalledWith('idea');
   });
 });

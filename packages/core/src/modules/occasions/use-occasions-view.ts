@@ -6,6 +6,7 @@
 
 import { useMemo, useState } from 'react';
 import { envRandomUUID } from '../../data/store-environment';
+import { dialog } from '../../dialog-store';
 import { parsePriceInput } from '../shopper/shopper';
 import {
   buildGiftIdea,
@@ -23,7 +24,7 @@ import {
   type OccasionKind,
   type WishlistItem,
 } from './occasions';
-import { nextOccasion, occasionsLede, othersWishlists } from './occasions-view';
+import { giftIdeaCardView, nextOccasion, occasionsLede, othersWishlists } from './occasions-view';
 import type { OccasionsApi } from './use-occasions';
 
 /**
@@ -269,4 +270,97 @@ export function useWishForm(input: { item?: WishlistItem; api: Pick<OccasionsApi
   };
 
   return { title, setTitle, url, setUrl, price, setPrice, notes, setNotes, tried, submit };
+}
+
+/** Move an idea along (Mark bought from its row menu), keeping its Budget line. */
+export function setIdeaStatus(api: Pick<OccasionsApi, 'saveIdea' | 'linkedCostOf'>, idea: GiftIdea, status: GiftIdeaStatus): void {
+  if (idea.status !== status) api.saveIdea({ ...idea, status }, { inBudget: !!api.linkedCostOf(idea), watch: false });
+}
+
+/** Ask, then remove an idea (and its Budget line). Resolves true when it went. */
+export async function confirmRemoveIdea(api: Pick<OccasionsApi, 'deleteIdea' | 'linkedCostOf'>, idea: GiftIdea): Promise<boolean> {
+  const ok = await dialog.confirm({
+    title: `Remove ${idea.title}?`,
+    message: api.linkedCostOf(idea) ? 'Its budget line goes too.' : undefined,
+    confirmLabel: 'Remove',
+    destructive: true,
+  });
+  if (ok) api.deleteIdea(idea);
+  return ok;
+}
+
+/**
+ * A gift idea's card (Guy, 2026-10-23: "each section should be interactable"):
+ * the view plus one editor per part, each saving as soon as it changes, with
+ * its Budget line and price watch. Keeping it from someone new replaces the
+ * row (saveIdea), so the card follows the idea's id as saves return it.
+ * `idea` is null once it is gone.
+ */
+export function useGiftIdeaCard(input: {
+  ideaId: string;
+  api: Pick<OccasionsApi, 'ideas' | 'occasionById' | 'today' | 'linkedCostOf' | 'linkedWantOf' | 'saveIdea'>;
+  currentUserId: string | null;
+  memberIds: readonly string[];
+  profiles: MemberProfileMap;
+  features: { costs: boolean; shopper: boolean };
+}) {
+  const { ideaId, api, currentUserId, memberIds, profiles, features } = input;
+  const [id, setId] = useState(ideaId);
+  const idea = api.ideas.find((i) => i.id === id) ?? null;
+  const occasion = idea?.occasion_id ? api.occasionById.get(idea.occasion_id) ?? null : null;
+  const want = api.linkedWantOf(idea);
+  const inBudget = !!api.linkedCostOf(idea);
+
+  const view = useMemo(
+    () => (idea ? giftIdeaCardView({ idea, occasion, ideas: api.ideas, want, me: currentUserId, profiles, today: api.today }) : null),
+    [idea, occasion, api.ideas, want, currentUserId, profiles, api.today],
+  );
+
+  const save = (patch: Partial<GiftIdea>, opts?: { inBudget?: boolean; watch?: boolean }) => {
+    if (!idea) return;
+    const next = api.saveIdea({ ...idea, ...patch }, { inBudget: opts?.inBudget ?? inBudget, watch: opts?.watch ?? false });
+    if (next.id !== id) setId(next.id);
+  };
+
+  /** False when the text isn't a price; an empty field clears it. */
+  const setPrice = (text: string): boolean => {
+    const cents = text.trim() ? parsePriceInput(text) : null;
+    if (text.trim() && cents === null) return false;
+    if (cents !== idea?.price_cents) save({ price_cents: cents }, { inBudget: inBudget && !!cents });
+    return true;
+  };
+
+  const setText = (field: 'title' | 'url' | 'notes', text: string) => {
+    const value = text.trim() || null;
+    if (field === 'title' && !value) return;
+    if (idea && (idea[field] ?? null) !== value) save({ [field]: value });
+  };
+
+  const hidden = idea?.hidden_from ?? [];
+  return {
+    idea,
+    occasion,
+    view,
+    inBudget,
+    hasWant: !!want,
+    /** Everyone but you: the "Keep it from" switches. */
+    others: memberIds.filter((m) => m !== currentUserId),
+    hints: keepFromHints({
+      names: hidden.map((m) => memberFirstName(m, profiles)),
+      revealOn: revealDay(occasion, api.today),
+      budget: features.costs && inBudget,
+    }),
+    setTitle: (text: string) => setText('title', text),
+    setUrl: (text: string) => setText('url', text),
+    setNotes: (text: string) => setText('notes', text),
+    setPrice,
+    setStatus: (status: GiftIdeaStatus) => idea?.status !== status && save({ status }),
+    // Never kept from yourself: you would lose it too.
+    keepFrom: (userId: string, on: boolean) => {
+      if (userId === currentUserId) return;
+      save({ hidden_from: on ? [...new Set([...hidden, userId])] : hidden.filter((m) => m !== userId) });
+    },
+    setInBudget: (on: boolean) => features.costs && save({}, { inBudget: on }),
+    watchPrice: () => features.shopper && !want && save({}, { watch: true }),
+  };
 }

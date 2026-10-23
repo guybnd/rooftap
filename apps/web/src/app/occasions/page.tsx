@@ -6,16 +6,19 @@
 // the wishlists. A gift kept from someone never reaches their device (the
 // database drops it), so on their own day a member sees only their wishlist.
 // Native twin: apps/mobile/src/app/(tabs)/occasions/index.tsx.
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Gift, Plus } from 'lucide-react';
 import {
+  confirmRemoveIdea,
   formatMoney,
+  giftIdeaRowMenu,
   ideaRowMeta,
   memberFirstName,
   occasionFocusView,
   occasionSubtitle,
   occasionTitle,
   occasionWhenLabel,
+  setIdeaStatus,
   takenBy,
   useModules,
   useOccasions,
@@ -34,7 +37,9 @@ import { LeadingTile } from '@/components/ui/leading-tile';
 import { EmptyState } from '@/components/ui/empty-state';
 import { OfflineHint } from '@/components/offline-hint';
 import { useWideLayout } from '@/lib/desktop-layout';
+import { useRowContextMenu } from '@/components/ui/row-context-menu';
 import { cn } from '@/lib/utils';
+import { IdeaCard } from './idea-card';
 import { IdeaFormSheet } from './idea-form-sheet';
 import { OccasionFormSheet } from './occasion-form-sheet';
 import { WishFormSheet } from './wish-form-sheet';
@@ -54,6 +59,8 @@ export default function OccasionsPage() {
   const [editingOccasion, setEditingOccasion] = useState<{ id: string | null } | null>(null);
   const [editingIdea, setEditingIdea] = useState<{ id: string | null; occasionId: string | null } | null>(null);
   const [editingWish, setEditingWish] = useState<{ id: string | null } | null>(null);
+  const [openIdea, setOpenIdea] = useState<string | null>(null);
+  const closeIdea = useCallback(() => setOpenIdea(null), []);
 
   if (cacheLoading || (!api.loaded && api.occasions.length === 0)) return <div className="p-6 text-muted-foreground">Loading…</div>;
   if (!group || !currentUserId) return <div className="p-6 text-muted-foreground">No group selected</div>;
@@ -103,7 +110,8 @@ export default function OccasionsPage() {
                 profiles={memberProfiles}
                 onEditOccasion={() => setEditingOccasion({ id: focus.id })}
                 onAddIdea={() => setEditingIdea({ id: null, occasionId: focus.id })}
-                onOpenIdea={(idea) => setEditingIdea({ id: idea.id, occasionId: idea.occasion_id })}
+                onOpenIdea={(idea) => setOpenIdea(idea.id)}
+                onEditIdea={(idea) => setEditingIdea({ id: idea.id, occasionId: idea.occasion_id })}
               />
             )}
 
@@ -190,6 +198,23 @@ export default function OccasionsPage() {
         />
       )}
 
+      {openIdea && (
+        <IdeaCard
+          key={openIdea}
+          ideaId={openIdea}
+          onClose={closeIdea}
+          onEditAll={(idea) => {
+            setOpenIdea(null);
+            setEditingIdea({ id: idea.id, occasionId: idea.occasion_id });
+          }}
+          api={api}
+          currentUserId={currentUserId}
+          members={groupMembers}
+          profiles={memberProfiles}
+          features={features}
+        />
+      )}
+
       {editingIdea && (
         <IdeaFormSheet
           key={editingIdea.id ?? 'new'}
@@ -230,6 +255,7 @@ function FocusBlock({
   onEditOccasion,
   onAddIdea,
   onOpenIdea,
+  onEditIdea,
 }: {
   occasion: Occasion;
   api: OccasionsApi;
@@ -238,6 +264,7 @@ function FocusBlock({
   onEditOccasion: () => void;
   onAddIdea: () => void;
   onOpenIdea: (idea: GiftIdea) => void;
+  onEditIdea: (idea: GiftIdea) => void;
 }) {
   const { own, ideas, allKept, heading, head } = occasionFocusView(occasion, api.ideas, me, profiles);
 
@@ -260,20 +287,14 @@ function FocusBlock({
             <div className="px-3.5 py-2 text-xs text-muted-foreground">{head}</div>
           )}
           {ideas.map((idea) => (
-            <ListItem key={idea.id} asChild className="cursor-pointer hover:bg-muted/50">
-              <button type="button" onClick={() => onOpenIdea(idea)} className="text-left">
-                <ListItemContent>
-                  <ListItemTitle>
-                    <span className="truncate">{idea.title}</span>
-                  </ListItemTitle>
-                  <ListItemMeta>
-                    <span className="truncate">
-                      {ideaRowMeta(idea, occasion, profiles, allKept)}
-                    </span>
-                  </ListItemMeta>
-                </ListItemContent>
-              </button>
-            </ListItem>
+            <IdeaRow
+              key={idea.id}
+              idea={idea}
+              meta={ideaRowMeta(idea, occasion, profiles, allKept)}
+              api={api}
+              onOpen={() => onOpenIdea(idea)}
+              onEdit={() => onEditIdea(idea)}
+            />
           ))}
           <ListItem asChild className="cursor-pointer hover:bg-muted/50">
             <button type="button" onClick={onAddIdea} className="text-left text-primary">
@@ -286,6 +307,62 @@ function FocusBlock({
         </ListGroup>
       )}
     </div>
+  );
+}
+
+/**
+ * A gift idea row: a tap opens its card; right-click (or a long press on a
+ * touch screen) brings the row menu with Edit (Hearth §13.7).
+ */
+function IdeaRow({
+  idea,
+  meta,
+  api,
+  onOpen,
+  onEdit,
+}: {
+  idea: GiftIdea;
+  meta: string;
+  api: OccasionsApi;
+  onOpen: () => void;
+  onEdit: () => void;
+}) {
+  const rowMenu = useRowContextMenu(() =>
+    giftIdeaRowMenu(idea, {
+      onOpen,
+      onOpenLink: (url) => window.open(url, '_blank', 'noopener,noreferrer'),
+      onStatus: (status) => setIdeaStatus(api, idea, status),
+      onEdit,
+      onRemove: () => void confirmRemoveIdea(api, idea),
+    }),
+  );
+  // The menu renders beside the row: clicks inside it must not reach the row's button.
+  return (
+    <>
+      <ListItem asChild className="cursor-pointer hover:bg-muted/50">
+        <button
+          type="button"
+          onClick={onOpen}
+          onContextMenu={(e) => {
+            if (rowMenu.onContextMenu(e)) return;
+            // Touch: a long press opens the full edit form.
+            e.preventDefault();
+            onEdit();
+          }}
+          className="text-left"
+        >
+          <ListItemContent>
+            <ListItemTitle>
+              <span className="truncate">{idea.title}</span>
+            </ListItemTitle>
+            <ListItemMeta>
+              <span className="truncate">{meta}</span>
+            </ListItemMeta>
+          </ListItemContent>
+        </button>
+      </ListItem>
+      {rowMenu.menu}
+    </>
   );
 }
 

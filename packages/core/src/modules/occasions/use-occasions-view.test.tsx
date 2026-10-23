@@ -4,7 +4,7 @@ import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { buildGiftIdea, buildOccasion, buildWishlistItem, type MemberProfileMap, type Occasion } from './occasions';
 import type { OccasionsApi } from './use-occasions';
-import { useIdeaForm, useOccasionForm, useOccasionsScreen, useWishForm } from './use-occasions-view';
+import { useGiftIdeaCard, useIdeaForm, useOccasionForm, useOccasionsScreen, useWishForm } from './use-occasions-view';
 
 const ME = 'u-me';
 const TEGAN = 'u-tegan';
@@ -177,5 +177,43 @@ describe('useWishForm', () => {
     });
     expect(ok).toBe(true);
     expect(api.saveWish).toHaveBeenCalledWith(expect.objectContaining({ title: 'Shoes', url: null, price_cents: 12000, user_id: ME }));
+  });
+});
+
+describe('useGiftIdeaCard', () => {
+  const robe = buildGiftIdea({ id: 'i1', groupId: 'g', title: 'Robe', occasionId: 'o1', forUserId: TEGAN, priceCents: 8900, hiddenFrom: [], createdBy: ME });
+  const setup = () => {
+    const saveIdea = vi.fn((next) => (next.hidden_from.length ? { ...next, id: 'i1-new' } : next));
+    const api = {
+      ideas: [robe, { ...robe, id: 'i1-new', hidden_from: [TEGAN] }],
+      occasionById: new Map([[tegan.id, tegan]]),
+      today: TODAY,
+      linkedCostOf: () => null,
+      linkedWantOf: () => null,
+      saveIdea,
+    } as unknown as Parameters<typeof useGiftIdeaCard>[0]['api'];
+    const hook = renderHook(() => useGiftIdeaCard({ ideaId: 'i1', api, currentUserId: ME, memberIds: [ME, TEGAN], profiles, features: { costs: true, shopper: true } }));
+    return { saveIdea, ...hook };
+  };
+
+  it('saves each part as it changes and skips no-op edits', () => {
+    const { result, saveIdea } = setup();
+    expect(result.current.view?.title).toBe('Robe');
+    expect(result.current.others).toEqual([TEGAN]);
+    act(() => void result.current.setNotes('  '));
+    expect(saveIdea).not.toHaveBeenCalled();
+    act(() => void result.current.setNotes('Size M'));
+    expect(saveIdea).toHaveBeenLastCalledWith(expect.objectContaining({ notes: 'Size M' }), { inBudget: false, watch: false });
+    expect(result.current.setPrice('abc')).toBe(false);
+    act(() => void result.current.setPrice('79'));
+    expect(saveIdea).toHaveBeenLastCalledWith(expect.objectContaining({ price_cents: 7900 }), expect.anything());
+  });
+
+  it('follows the idea when keeping it from someone replaces the row', () => {
+    const { result } = setup();
+    act(() => result.current.keepFrom(TEGAN, true));
+    expect(result.current.idea?.id).toBe('i1-new');
+    act(() => result.current.keepFrom(ME, true));
+    expect(result.current.idea?.hidden_from).toEqual([TEGAN]);
   });
 });
