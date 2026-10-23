@@ -103,6 +103,8 @@ export interface CostMonthLine {
   vendor?: string;
   /** The source's own category for a shop's payments (Up's), a hint when moving it. */
   sourceCategory?: string | null;
+  /** For kind 'shop': nobody has filed it yet, so its category is only the bank's guess (or none). */
+  guessed?: boolean;
 }
 
 export interface CostMonthCategory {
@@ -212,11 +214,13 @@ export function costMonth(input: CostMonthInput): CostMonth {
     }
     if (net === 0) continue;
     const key = rec ? `r:${rec.id}` : `s:${squashVendor(r.vendor)}`;
+    const guessed = !r.category && !r.costItemId && !vendorCategory.has(squashVendor(r.vendor));
     const line = lineIn(category, key, () =>
       rec
         ? { kind: 'recurring', key, name: rec.name, paidCents: 0, toComeCents: 0, count: 0, date: null, item: rec, source: r.source }
-        : { kind: 'shop', key, name: r.vendor, paidCents: 0, toComeCents: 0, count: 0, date: null, source: r.source, vendor: r.vendor, sourceCategory: r.sourceCategory, item: r.costItemId ? byId.get(r.costItemId) : undefined },
+        : { kind: 'shop', key, name: r.vendor, paidCents: 0, toComeCents: 0, count: 0, date: null, source: r.source, vendor: r.vendor, sourceCategory: r.sourceCategory, item: r.costItemId ? byId.get(r.costItemId) : undefined, guessed },
     );
+    if (!guessed) line.guessed = false;
     line.paidCents += net;
     line.count += r.count;
     line.date = later(line.date, r.lastAt);

@@ -58,6 +58,7 @@ import { CATEGORY_BAR_FILL, CategoryChip } from './cost-card';
 import { TransactionSheet } from './money-view';
 import { upBankApi } from './up-bank-api';
 import { CostInsightsCard, type CostInsightsCardProps } from './cost-insights';
+import { ToSortCard } from './to-sort-card';
 import { useOpenRoute } from '@/lib/tab-routes';
 
 const TABULAR = { fontVariant: ['tabular-nums' as const] };
@@ -268,6 +269,19 @@ export function CostsOverview(props: CostsOverviewProps) {
 
         {props.insights && month.when === 'current' ? (
           <CostInsightsCard items={items} goalCents={goalCents} onOpenItem={onOpenItem} onOpenCategory={openCategory} {...props.insights} />
+        ) : null}
+
+        {quickMove && month.when === 'current' ? (
+          <ToSortCard
+            month={month}
+            monthName={name}
+            choices={choices}
+            onSort={(l, to) => move(l, null, to)}
+            onOther={(l, _guess, then) => {
+              haptics.select();
+              setPick({ title: `Where does ${l.name} go?`, current: null, likely: likelyCostCategories(l, null, month, choices), onPick: (to) => { then(); move(l, null, to); } });
+            }}
+          />
         ) : null}
 
         {month.categories.length === 0 ? (

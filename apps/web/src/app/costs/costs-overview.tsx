@@ -64,6 +64,7 @@ import { upBankApi } from '@/lib/up-bank-client';
 import { cn } from '@/lib/utils';
 import { CategoryGlyph } from './category-glyph';
 import { CostInsightsCard, type CostInsightsCardProps } from './cost-insights';
+import { ToSortCard } from './to-sort-card';
 import { TransactionSheet } from './money-view';
 import { CategoryPickerSheet, type CategoryPick } from './category-picker';
 import { CostRowShell, CostRowSheet, type CostRowSheetState } from './cost-row-sheet';
@@ -271,6 +272,17 @@ export function CostsOverview(props: CostsOverviewProps) {
       <MonthChart months={months} picked={month.month} goalCents={goalCents} onPick={setPicked} focus={focus} onClearFocus={() => setFocus(null)} />
       {props.insights && month.when === 'current' && (
         <CostInsightsCard items={items} goalCents={goalCents} onOpenItem={onOpenItem} onOpenCategory={openCategory} {...props.insights} />
+      )}
+      {quickMove && month.when === 'current' && (
+        <ToSortCard
+          month={month}
+          monthName={name}
+          choices={choices}
+          onSort={(l, to) => move(l, null, to)}
+          onOther={(l, _guess, then) =>
+            setPick({ title: `Where does ${l.name} go?`, current: null, likely: likelyCostCategories(l, null, month, choices), onPick: (to) => { then(); move(l, null, to); } })
+          }
+        />
       )}
     </div>
   );
