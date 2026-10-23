@@ -216,14 +216,20 @@ export function costActuals(rows: readonly BankTransaction[], tzOffset = 0): Cos
 /**
  * Payments per shop and month for costMonth (core cost-month.ts): money out
  * and money in, one Up transaction counted once (a joint account read by two
- * people arrives twice), transfers and hidden payments left out. Months are
- * the viewer's (tzOffset as in monthKeyAt).
+ * people arrives twice), hidden payments left out. Months are the viewer's
+ * (tzOffset as in monthKeyAt).
+ *
+ * `rows` are the accounts in view. A transfer between two of them shows up
+ * on both sides and is left out. A transfer in from an account outside the
+ * view (a person's own account paying into the joint one) is money in, like
+ * a deposit from another bank; one out to such an account is left out.
  */
 export function ledgerRows(rows: readonly BankTransaction[], tzOffset = 0): LedgerRow[] {
   const seen = new Set<string>();
   const out = new Map<string, LedgerRow>();
+  const transfersIn = transfersFromOutside(rows);
   for (const r of rows) {
-    if (r.is_transfer || r.hidden || seen.has(r.external_id)) continue;
+    if ((r.is_transfer && !transfersIn.has(r.external_id)) || r.hidden || seen.has(r.external_id)) continue;
     seen.add(r.external_id);
     const month = monthKeyAt(r.occurred_at, tzOffset);
     // Up's raw text can end in a stray backslash ("LUNE FITZROY\\").
@@ -239,6 +245,23 @@ export function ledgerRows(rows: readonly BankTransaction[], tzOffset = 0): Ledg
     out.set(key, cur);
   }
   return Array.from(out.values());
+}
+
+/** How far apart the two sides of one transfer may be stamped. */
+const TRANSFER_PAIR_MS = 15 * 60_000;
+
+/** Incoming transfers with no matching outgoing transfer among `rows`: money that came from an account outside them. */
+function transfersFromOutside(rows: readonly BankTransaction[]): Set<string> {
+  const outs = rows.filter((r) => r.is_transfer && r.amount_cents < 0).map((r) => ({ cents: -r.amount_cents, at: Date.parse(r.occurred_at), used: false }));
+  const found = new Set<string>();
+  for (const r of rows) {
+    if (!r.is_transfer || r.amount_cents <= 0 || found.has(r.external_id)) continue;
+    const at = Date.parse(r.occurred_at);
+    const pair = outs.find((o) => !o.used && o.cents === r.amount_cents && Math.abs(o.at - at) <= TRANSFER_PAIR_MS);
+    if (pair) pair.used = true;
+    else found.add(r.external_id);
+  }
+  return found;
 }
 
 /** The first whole month after the oldest row (device months, as in monthKeyAt): the months the bank data fully covers start there. */

@@ -515,6 +515,17 @@ describe('everyday Up categories', () => {
 });
 
 describe('ledgerRows', () => {
+  it('counts a transfer in from an account outside the view as money in, and leaves out one between two accounts in view', () => {
+    const rows = ledgerRows([
+      row({ external_id: 'in', amount_cents: 150000, description: 'Transfer from Guy', is_transfer: true, occurred_at: '2026-10-05T01:00:00Z' }),
+      row({ external_id: 'save-out', amount_cents: -20000, description: 'Transfer to Bills', is_transfer: true, occurred_at: '2026-10-06T01:00:00Z' }),
+      row({ external_id: 'save-in', amount_cents: 20000, description: 'Transfer from Spending', is_transfer: true, occurred_at: '2026-10-06T01:00:05Z' }),
+      row({ external_id: 'away', amount_cents: -5000, description: 'Transfer to Guy', is_transfer: true, occurred_at: '2026-10-07T01:00:00Z' }),
+    ]);
+    expect(rows).toEqual([expect.objectContaining({ vendor: 'Transfer from Guy', inCents: 150000, outCents: 0 })]);
+  });
+
+
   it("keeps Up's category on a payment filed under a cost line, for when that line is gone", () => {
     const [r] = ledgerRows([row({ amount_cents: -3800, description: 'Thieves Coffee', category: 'restaurants-and-cafes', cost_item_id: 'deleted-line' })]);
     expect(r).toMatchObject({ costItemId: 'deleted-line', sourceCategory: 'restaurants-and-cafes', outCents: 3800 });

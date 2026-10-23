@@ -141,12 +141,12 @@ export function CostsOverview(props: CostsOverviewProps) {
             <Text className={LABEL}>{month.when === 'past' ? 'Paid' : 'Paid · to come'}</Text>
           </View>
           <View className={CARD}>
-            {month.categories.map((c, n) => (
+            {month.categories.filter((c) => !focus || catKey(c.category) === focus).map((c, n) => (
               <CategoryRow
                 key={c.category ?? 'none'}
                 c={c}
                 divided={n > 0}
-                isOpen={open.has(c.category ?? 'none')}
+                isOpen={!!focus || open.has(c.category ?? 'none')}
                 monthName={name}
                 onToggle={() => toggle(c.category ?? 'none')}
                 onLongPress={() => setMenu({ category: c })}
@@ -352,7 +352,8 @@ function MonthChart({
   focus: string | null;
   onClearFocus: () => void;
 }) {
-  const bars = months.map((m) => monthBar(m, focus));
+  const ranks = React.useMemo(() => lineRanks(months, focus), [months, focus]);
+  const bars = months.map((m) => monthBar(m, focus, ranks));
   const max = Math.max(focus ? 0 : goalCents ?? 0, ...bars.map((b) => b.paid + b.toCome), 1);
   const h = (v: number) => Math.round((v / max) * CHART_HEIGHT);
   const pickedBar = bars[months.findIndex((m) => m.month === picked)];
@@ -391,7 +392,7 @@ function MonthChart({
               ) : null}
               <View className={cn('flex-col-reverse overflow-hidden', bar.toCome > 0 ? 'rounded-b-[3px]' : 'rounded-[4px]')}>
                 {bar.segments.map((seg) => (
-                  <View key={seg.key} className={fillOf(seg.category)} style={{ height: Math.max(1, h(seg.cents)) }} />
+                  <View key={seg.key} className={cn(fillOf(seg.category), focus && SHADES[seg.shade % SHADES.length], focus && 'border-t border-background/40')} style={{ height: Math.max(1, h(seg.cents)) }} />
                 ))}
               </View>
             </Pressable>
@@ -411,20 +412,53 @@ function MonthChart({
 
 const CATEGORY_ORDER = Object.keys(CATEGORY_META) as CostCategory[];
 
-/** A month's chart bar: paid split by category (in a fixed order, so colours line up month to month) and what's to come. */
-function monthBar(m: CostMonth, focus: string | null): { paid: number; toCome: number; segments: { key: string; category: CostCategory | null; cents: number }[] } {
+interface BarSegment {
+  key: string;
+  category: CostCategory | null;
+  cents: number;
+  label: string;
+  /** 0 for a category; a line's place in its category, for its shade. */
+  shade: number;
+}
+
+/**
+ * A month's chart bar: paid split by category (in a fixed order, so colours
+ * line up month to month) and what's to come. With a category picked, its
+ * shops and costs instead, each in a shade of the category's colour, in the
+ * order `lineRank` gives (biggest over the chart first).
+ */
+function monthBar(m: CostMonth, focus: string | null, lineRank: ReadonlyMap<string, number>): { paid: number; toCome: number; segments: BarSegment[] } {
   const cats = m.categories.filter((c) => !focus || catKey(c.category) === focus);
+  const toCome = focus ? cats.reduce((s, c) => s + c.toComeCents, 0) : m.toComeCents;
+  if (focus) {
+    const c = cats[0];
+    const segments = (c?.lines ?? [])
+      .filter((l) => l.paidCents > 0)
+      .sort((a, b) => (lineRank.get(a.key) ?? 99) - (lineRank.get(b.key) ?? 99))
+      .map((l) => ({ key: l.key, category: c.category, cents: l.paidCents, label: l.name, shade: lineRank.get(l.key) ?? 0 }));
+    return { paid: c?.paidCents ?? 0, toCome, segments };
+  }
   const rank = (c: CostCategory | null) => (c ? CATEGORY_ORDER.indexOf(c) : CATEGORY_ORDER.length);
   const segments = cats
     .filter((c) => c.paidCents > 0)
     .sort((a, b) => rank(a.category) - rank(b.category))
-    .map((c) => ({ key: catKey(c.category), category: c.category, cents: c.paidCents }));
-  return {
-    paid: segments.reduce((s, x) => s + x.cents, 0),
-    toCome: focus ? cats.reduce((s, c) => s + c.toComeCents, 0) : m.toComeCents,
-    segments,
-  };
+    .map((c) => ({ key: catKey(c.category), category: c.category, cents: c.paidCents, label: costCategoryLabel(c.category), shade: 0 }));
+  return { paid: segments.reduce((s, x) => s + x.cents, 0), toCome, segments };
 }
+
+/** A picked category's lines ranked by what they paid over the chart, biggest first. */
+function lineRanks(months: CostMonth[], focus: string | null): Map<string, number> {
+  const totals = new Map<string, number>();
+  if (focus) {
+    for (const m of months) {
+      for (const l of m.categories.find((c) => catKey(c.category) === focus)?.lines ?? []) totals.set(l.key, (totals.get(l.key) ?? 0) + l.paidCents);
+    }
+  }
+  return new Map([...totals.entries()].sort((a, b) => b[1] - a[1]).map(([k], i) => [k, i]));
+}
+
+/** Shades for a category's lines, so neighbours in a bar stand apart. */
+const SHADES = ['opacity-100', 'opacity-70', 'opacity-50', 'opacity-85', 'opacity-60', 'opacity-40'];
 
 function catKey(category: CostCategory | null): string {
   return category ?? 'none';
