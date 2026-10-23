@@ -86,10 +86,43 @@ export interface CostsOverviewProps {
   summaries?: { prefs: MoneySummaryPrefs; onChange: ((next: MoneySummaryPrefs) => void) | null } | null;
 }
 
+// Before the bank payments land: shapes where the total, chart and
+// categories go, so no total shows that leaves the bank out.
+function Waiting({ wide }: { wide?: boolean }) {
+  const block = 'animate-pulse rounded-2xl bg-muted';
+  const left = (
+    <div className="space-y-5">
+      <div className="space-y-3 px-1">
+        <div className="h-3 w-24 animate-pulse rounded bg-muted" />
+        <div className="h-10 w-40 animate-pulse rounded-lg bg-muted" />
+        <div className="h-2 w-full animate-pulse rounded-full bg-muted" />
+      </div>
+      <div className={`h-40 ${block}`} />
+    </div>
+  );
+  const right = (
+    <div className="space-y-2">
+      <p className="px-1 text-sm text-muted-foreground">Reading your bank payments</p>
+      <div className={`h-56 ${block}`} />
+    </div>
+  );
+  return wide ? (
+    <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] items-start gap-8" aria-busy="true">
+      {left}
+      {right}
+    </div>
+  ) : (
+    <div className="space-y-5" aria-busy="true">
+      {left}
+      {right}
+    </div>
+  );
+}
+
 export function CostsOverview(props: CostsOverviewProps) {
   const { items, goalCents, onEditGoal, onOpenItem, onAdd, onArchive, onOpenPayments, canArchive, wide } = props;
   const router = useRouter();
-  const { scope, setScope, data, status } = useUpOverview();
+  const { scope, setScope, data, ready, status } = useUpOverview();
   // Someone sharing Up who never set the weekly switch gets the bank's weekly digest.
   const upWeekly = !!status?.connection && status.connection.shareMode !== 'none' && status.connection.weeklyDigest !== false;
   const now = useMemo(() => new Date(), []);
@@ -230,7 +263,9 @@ export function CostsOverview(props: CostsOverviewProps) {
         </button>
       </div>
 
-      {wide ? (
+      {!ready ? (
+        <Waiting wide={wide} />
+      ) : wide ? (
         <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] items-start gap-8">
           <div className="sticky top-4">{summary}</div>
           {categories}

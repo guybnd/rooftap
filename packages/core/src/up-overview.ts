@@ -8,7 +8,10 @@
 // spending call. Each app passes its own client (createUpBankApi). The month
 // and the Household | Mine scope live here too, so the card and the Money
 // view step through the same month; the scope goes to servers with
-// 'connectors.up-bank-sharing' only.
+// 'connectors.up-bank-sharing' only. The last read of each month and scope
+// stays in memory for the app session, so coming back to Costs or Home shows
+// it straight away (the read still runs and replaces it); sign-out clears it
+// (clearUpOverviewCache).
 
 export type UpViewScope = Exclude<BankScope, 'all'>;
 
@@ -24,6 +27,12 @@ export interface UpOverviewState {
   /** The spending, plus balances and links on newer servers. */
   data: (UpSpending & Partial<UpOverview>) | null;
   error: string | null;
+  /**
+   * The first read has settled: bank data is in, or there is none to wait
+   * for (off, not connected, or it failed). Totals drawn before this would
+   * leave the bank's payments out and jump once they land.
+   */
+  ready: boolean;
   /** The server can link payments to cost lines. */
   linking: boolean;
   /** Read the stored data again (after a link changes). */
@@ -36,10 +45,28 @@ export interface UpOverviewState {
   setScope: (scope: UpViewScope) => void;
 }
 
+// Memory only: bank payments never go to device storage from here.
+let lastStatus: UpBankStatus | null = null;
+const lastReads = new Map<string, UpOverviewState['data']>();
+const readKey = (month: string, scope: UpViewScope | null) => `${month}|${scope ?? ''}`;
+
+/** Forget the last bank reads (on sign-out, so the next person never sees them). */
+export function clearUpOverviewCache(): void {
+  lastStatus = null;
+  lastReads.clear();
+}
+
+/** The scope Costs opens on: Mine for someone who shares nothing, else Household. */
+function openingScope(status: UpBankStatus | null, sharing: boolean): UpViewScope | null {
+  if (!sharing || !status?.connection) return null;
+  return status.connection.shareMode === 'none' ? 'mine' : 'household';
+}
+
 const UpOverviewContext = createContext<UpOverviewState>({
   status: null,
   data: null,
   error: null,
+  ready: true,
   linking: false,
   reload: () => {},
   month: monthStartOf(new Date()),
@@ -62,17 +89,25 @@ export function UpOverviewProvider({
   sharing?: boolean;
   children: ReactNode;
 }) {
-  const [status, setStatus] = useState<UpBankStatus | null>(null);
-  const [data, setData] = useState<UpOverviewState['data']>(null);
+  const [status, setStatus] = useState<UpBankStatus | null>(() => (enabled ? lastStatus : null));
+  const [data, setData] = useState<UpOverviewState['data']>(() =>
+    enabled ? lastReads.get(readKey(monthStartOf(new Date()), openingScope(lastStatus, sharing))) ?? null : null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [round, setRound] = useState(0);
   const [month, setMonth] = useState(() => monthStartOf(new Date()));
   const [picked, setScope] = useState<UpViewScope | null>(null);
   // Someone who shares nothing starts on Mine: Household would leave them out.
-  const scope: UpViewScope | null = !sharing || !status?.connection
-    ? null
-    : picked ?? (status.connection.shareMode === 'none' ? 'mine' : 'household');
-  const read = (m: string, s: UpViewScope | null) => (linking ? api.overview(m, s ?? undefined) : api.spending(m));
+  const scope: UpViewScope | null = !sharing || !status?.connection ? null : picked ?? openingScope(status, sharing);
+  const read = async (m: string, s: UpViewScope | null) => {
+    const next = await (linking ? api.overview(m, s ?? undefined) : api.spending(m));
+    lastReads.set(readKey(m, s), next);
+    return next;
+  };
+  const keepStatus = (s: UpBankStatus) => {
+    lastStatus = s;
+    setStatus(s);
+  };
   const opened = status?.connection != null;
 
   useEffect(() => {
@@ -81,19 +116,27 @@ export function UpOverviewProvider({
     const month = monthStartOf(new Date());
     void (async () => {
       try {
+        // Seen connected before: read the stored payments while the status
+        // call is out, instead of one after the other.
+        const guess = lastStatus?.allowed && lastStatus.connection ? openingScope(lastStatus, sharing) : undefined;
+        const early = guess === undefined ? null : read(month, guess);
+        early?.catch(() => {});
         const s = await api.status();
         if (!live) return;
-        setStatus(s);
-        if (!s.allowed || !s.connection) return;
-        const opening: UpViewScope | null = sharing ? (s.connection.shareMode === 'none' ? 'mine' : 'household') : null;
-        const first = await read(month, opening);
+        keepStatus(s);
+        if (!s.allowed || !s.connection) {
+          setData(null);
+          return;
+        }
+        const opening = openingScope(s, sharing);
+        const first = early && opening === guess ? await early : await read(month, opening);
         if (live) setData(first);
         const synced = await api.sync().catch((err: unknown) => {
           if (live) setError(err instanceof Error ? err.message : "Couldn't reach Up.");
           return null;
         });
         if (synced && live) {
-          setStatus(synced.status);
+          keepStatus(synced.status);
           if (synced.saved > 0) {
             const next = await read(month, opening);
             if (live) setData(next);
@@ -120,6 +163,9 @@ export function UpOverviewProvider({
       return;
     }
     if (shown === key) return;
+    // Seen this month and scope before: show it while the read runs.
+    const seen = lastReads.get(readKey(month, scope));
+    if (seen) setData(seen);
     let live = true;
     read(month, scope)
       .then((next) => {
@@ -139,6 +185,7 @@ export function UpOverviewProvider({
       status,
       data,
       error,
+      ready: !enabled || !!error || !!data || (status !== null && (!status.allowed || !status.connection)),
       linking: enabled && linking,
       reload: () => setRound((r) => r + 1),
       month,

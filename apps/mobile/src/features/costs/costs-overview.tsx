@@ -76,9 +76,26 @@ export interface CostsOverviewProps {
   summaries?: { prefs: MoneySummaryPrefs; onChange: ((next: MoneySummaryPrefs) => void) | null } | null;
 }
 
+// Before the bank payments land: shapes where the total, chart and
+// categories go, so no total shows that leaves the bank out.
+function Waiting() {
+  return (
+    <View className="gap-5" accessibilityLabel="Reading your bank payments">
+      <View className="gap-3 px-1">
+        <View className="h-3 w-24 rounded bg-muted" />
+        <View className="h-10 w-40 rounded-lg bg-muted" />
+        <View className="h-2 w-full rounded-full bg-muted" />
+      </View>
+      <View className="h-40 rounded-2xl bg-muted" />
+      <Text className="px-1 text-sm text-muted-foreground">Reading your bank payments</Text>
+      <View className="h-56 rounded-2xl bg-muted" />
+    </View>
+  );
+}
+
 export function CostsOverview(props: CostsOverviewProps) {
   const { items, goalCents, onEditGoal, onOpenItem, onAdd, onArchive, onOpenPayments, canArchive } = props;
-  const { scope, setScope, data, status } = useUpOverview();
+  const { scope, setScope, data, ready, status } = useUpOverview();
   // Someone sharing Up who never set the weekly switch gets the bank's weekly digest.
   const upWeekly = !!status?.connection && status.connection.shareMode !== 'none' && status.connection.weeklyDigest !== false;
   const now = React.useMemo(() => new Date(), []);
@@ -151,62 +168,68 @@ export function CostsOverview(props: CostsOverviewProps) {
         </Pressable>
       </View>
 
-      <Hero month={month} goalCents={goalCents} onEditGoal={onEditGoal} focus={focus} onFocus={(k) => { haptics.select(); setFocus((cur) => (cur === k ? null : k)); }} />
-
-      <MonthChart months={months} picked={month.month} goalCents={goalCents} onPick={(k) => { haptics.select(); setPicked(k); }} focus={focus} onClearFocus={() => setFocus(null)} />
-
-      {props.insights && month.when === 'current' ? (
-        <CostInsightsCard items={items} goalCents={goalCents} onOpenItem={onOpenItem} onOpenCategory={openCategory} {...props.insights} />
-      ) : null}
-
-      {month.categories.length === 0 ? (
-        <Text className="px-1 text-sm text-muted-foreground">
-          {data || items.length ? `Nothing in ${name} yet.` : 'No costs yet. Add your rent, bills and shopping, or connect a bank in Settings.'}
-        </Text>
+      {!ready ? (
+        <Waiting />
       ) : (
-        <View className="gap-2">
-          <View className="flex-row justify-between px-1">
-            <Text className={LABEL}>Categories</Text>
-            <Text className={LABEL}>{month.when === 'past' ? 'Paid' : 'Paid · to come'}</Text>
-          </View>
-          <View className={CARD}>
-            {month.categories.filter((c) => !focus || costCategoryKey(c.category) === focus).map((c, n) => (
-              <CategoryRow
-                key={c.category ?? 'none'}
-                c={c}
-                divided={n > 0}
-                isOpen={!!focus || open.has(c.category ?? 'none')}
-                monthName={name}
-                onToggle={() => toggle(c.category ?? 'none')}
-                onLongPress={() => setMenu({ category: c })}
-                onLine={(l) => (l.kind === 'shop' ? setShop(l) : l.item ? onOpenItem(l.item) : undefined)}
-                onLineLong={(l) => setMenu({ line: l, category: c })}
-                onAdd={c.category ? () => onAdd(c.category as CostCategory) : undefined}
-              />
-            ))}
-          </View>
-        </View>
-      )}
+        <>
+        <Hero month={month} goalCents={goalCents} onEditGoal={onEditGoal} focus={focus} onFocus={(k) => { haptics.select(); setFocus((cur) => (cur === k ? null : k)); }} />
 
-      {month.income ? (
-        <View className="gap-2">
-          <Text className={cn(LABEL, 'px-1')}>Money in · not counted in costs</Text>
-          <View className={CARD}>
-            <CategoryRow
-              c={month.income}
-              divided={false}
-              isOpen={open.has('income')}
-              monthName={name}
-              onToggle={() => toggle('income')}
-              onLongPress={() => setMenu({ category: month.income! })}
-              onLine={(l) => (l.kind === 'shop' ? setShop(l) : l.item ? onOpenItem(l.item) : undefined)}
-              onLineLong={(l) => setMenu({ line: l, category: month.income! })}
-              onAdd={() => onAdd('income')}
-              income
-            />
+        <MonthChart months={months} picked={month.month} goalCents={goalCents} onPick={(k) => { haptics.select(); setPicked(k); }} focus={focus} onClearFocus={() => setFocus(null)} />
+
+        {props.insights && month.when === 'current' ? (
+          <CostInsightsCard items={items} goalCents={goalCents} onOpenItem={onOpenItem} onOpenCategory={openCategory} {...props.insights} />
+        ) : null}
+
+        {month.categories.length === 0 ? (
+          <Text className="px-1 text-sm text-muted-foreground">
+            {data || items.length ? `Nothing in ${name} yet.` : 'No costs yet. Add your rent, bills and shopping, or connect a bank in Settings.'}
+          </Text>
+        ) : (
+          <View className="gap-2">
+            <View className="flex-row justify-between px-1">
+              <Text className={LABEL}>Categories</Text>
+              <Text className={LABEL}>{month.when === 'past' ? 'Paid' : 'Paid · to come'}</Text>
+            </View>
+            <View className={CARD}>
+              {month.categories.filter((c) => !focus || costCategoryKey(c.category) === focus).map((c, n) => (
+                <CategoryRow
+                  key={c.category ?? 'none'}
+                  c={c}
+                  divided={n > 0}
+                  isOpen={!!focus || open.has(c.category ?? 'none')}
+                  monthName={name}
+                  onToggle={() => toggle(c.category ?? 'none')}
+                  onLongPress={() => setMenu({ category: c })}
+                  onLine={(l) => (l.kind === 'shop' ? setShop(l) : l.item ? onOpenItem(l.item) : undefined)}
+                  onLineLong={(l) => setMenu({ line: l, category: c })}
+                  onAdd={c.category ? () => onAdd(c.category as CostCategory) : undefined}
+                />
+              ))}
+            </View>
           </View>
-        </View>
-      ) : null}
+        )}
+
+        {month.income ? (
+          <View className="gap-2">
+            <Text className={cn(LABEL, 'px-1')}>Money in · not counted in costs</Text>
+            <View className={CARD}>
+              <CategoryRow
+                c={month.income}
+                divided={false}
+                isOpen={open.has('income')}
+                monthName={name}
+                onToggle={() => toggle('income')}
+                onLongPress={() => setMenu({ category: month.income! })}
+                onLine={(l) => (l.kind === 'shop' ? setShop(l) : l.item ? onOpenItem(l.item) : undefined)}
+                onLineLong={(l) => setMenu({ line: l, category: month.income! })}
+                onAdd={() => onAdd('income')}
+                income
+              />
+            </View>
+          </View>
+        ) : null}
+        </>
+      )}
 
       {props.footer}
 
