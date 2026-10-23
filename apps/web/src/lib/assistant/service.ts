@@ -7,6 +7,7 @@ import {
   MODEL_PRICES,
   PLUS_ASSISTANT_ALLOWANCE_CENTS,
   SUMMARY_SYSTEM_PROMPT,
+  WEB_SEARCH_TOOL,
   assistantAccess,
   buildAssistantSystemPrompt,
   checkBudget,
@@ -64,6 +65,7 @@ import { householdKeys } from "@/lib/ai/household-keys";
 import { assistantTools } from "./tools";
 import { homeAssistantTools } from "./home-assistant";
 import { feedbackTool } from "./feedback-tool";
+import { webTools } from "./web-tools";
 import { isUnread, markConversationRead, readStates } from "./reads";
 import { memberNames } from "@/lib/member-names";
 
@@ -131,8 +133,8 @@ export async function assistantContextFor(
 
 /**
  * Everything the assistant may call this turn: the household tools for its
- * switched-on modules, Home Assistant's when the household connected it, and
- * sending feedback to the Rooftap team.
+ * switched-on modules, Home Assistant's when the household connected it, web
+ * search when the server offers it, and sending feedback to the Rooftap team.
  */
 async function turnTools(
   ctx: AssistantContext,
@@ -144,11 +146,11 @@ async function turnTools(
     { admin: ctx.admin, userId: ctx.userId, groupId: ctx.groupId, enabled: ctx.enabled, deviceId, shared },
     { settings, readOnly }
   );
-  const homeAssistant = await homeAssistantTools(ctx.admin, ctx.groupId, { readOnly });
+  const [homeAssistant, web] = await Promise.all([homeAssistantTools(ctx.admin, ctx.groupId, { readOnly }), webTools(ctx.admin, ctx.groupId)]);
   const feedback = feedbackTool(ctx.admin, ctx.userId, ctx.groupId);
   // Filing a chat photo in Documents, so it outlives the chat's keep time.
   const filing = ctx.enabled.has("documents") && !readOnly ? photoTool(ctx.admin, ctx.userId, ctx.groupId, trustFor(settings.trust, "documents")) : null;
-  return { tools: [...household, ...(homeAssistant?.tools ?? []), feedback, ...(filing ? [filing] : [])], homeAssistant };
+  return { tools: [...household, ...(homeAssistant?.tools ?? []), ...web, feedback, ...(filing ? [filing] : [])], homeAssistant };
 }
 
 /** The cook mode section of the prompt: the recipe, its steps and the person's timers on it. */
@@ -764,6 +766,7 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
     summary: conversation.summary,
     cooking,
     screen: input.screen,
+    web: tools.some((t) => t.name === WEB_SEARCH_TOOL),
   }) + (photos.length || lookAgain ? PHOTO_PROMPT : "");
 
   const channel = input.channel ?? "app";

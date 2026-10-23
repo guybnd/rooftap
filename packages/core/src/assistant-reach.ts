@@ -145,6 +145,7 @@ export const TABLE_REACH: Record<string, Reach> = {
   assistant_telegram_codes: { none: ACCOUNT },
   assistant_telegram_links: { none: ACCOUNT },
   assistant_telegram_updates: { none: SERVER },
+  assistant_web_lookups: { none: SERVER },
 
   // new-module:table-reach (scripts/new-module.mjs adds above this line)
 };
