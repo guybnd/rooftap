@@ -9,7 +9,7 @@
 import { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { FieldRow, FormSection, Input, Switch, Text, cn } from '@homeup/ui';
-import { bankLineAmount, formatMoney, timeAgo, useCostMergeTargets, useUpConnected, useUpOverview, bankMatchLabel, type BankPayee, type CostBankDetail, type CostCategory, type CostItem } from '@homeup/core';
+import { formatMoney, timeAgo, useCostMergeTargets, useUpConnected, useUpOverview, usePaidFromUp, bankMatchLabel, type BankPayee, type CostCategory, type CostItem } from '@homeup/core';
 import { upBankApi } from './up-bank-api';
 
 const TABULAR = { fontVariant: ['tabular-nums' as const] };
@@ -37,71 +37,11 @@ export function CostBankLink({
 }) {
   const connected = useUpConnected();
   const mergeTargets = useCostMergeTargets(line, category);
-  const { linking, reload } = useUpOverview();
-  const [detail, setDetail] = useState<CostBankDetail | null>(null);
-  const [picking, setPicking] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
+  const { linking } = useUpOverview();
   const show = connected && linking;
-  useEffect(() => {
-    if (!show) return;
-    let live = true;
-    upBankApi
-      .costLink(costItemId)
-      .then((d) => {
-        if (live) setDetail(d);
-      })
-      .catch((err: unknown) => {
-        if (live) setError(err instanceof Error ? err.message : "Couldn't read Up payments.");
-      });
-    return () => {
-      live = false;
-    };
-  }, [show, costItemId]);
-
-  // Turning Estimate on or off in the editor changes what a kept-in-step
-  // line should carry (the latest payment, or the average of three).
-  useEffect(() => {
-    if (!detail?.rule?.keepAmount) return;
-    const settled = detail.payments.filter((p) => !p.pending).map((p) => p.amountCents);
-    const next = bankLineAmount(settled, estimate);
-    if (next != null && next !== amountCents) onAmount(next);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [estimate, detail]);
+  const { detail, picking, setPicking, busy, error, change, merge, rule } = usePaidFromUp(upBankApi, { show, costItemId, amountCents, estimate, onAmount, onMerged });
 
   if (!show) return null;
-
-  const change = async (run: () => Promise<CostBankDetail>) => {
-    setBusy(true);
-    setError(null);
-    try {
-      const next = await run();
-      setDetail(next);
-      if (next.rule?.keepAmount && next.amountCents != null && next.amountCents !== amountCents) onAmount(next.amountCents);
-      setPicking(false);
-      reload();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't save the link.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const rule = detail?.rule ?? null;
-
-  const merge = async (into: CostItem) => {
-    setBusy(true);
-    setError(null);
-    try {
-      await upBankApi.mergeCostLine(costItemId, into.id);
-      reload();
-      onMerged?.();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't merge the lines.");
-      setBusy(false);
-    }
-  };
 
   return (
     <FormSection title="Paid from Up">

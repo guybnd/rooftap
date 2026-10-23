@@ -14,7 +14,7 @@
 // shows its category (its cost line's, else the closest fit to Up's), and
 // the sheet opens the line to edit it.
 // Web twin: apps/web/src/app/costs/money-view.tsx.
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { ArrowRight, ChevronLeft, ChevronRight, EyeOff } from 'lucide-react-native';
 import {
@@ -32,27 +32,23 @@ import {
 } from '@homeup/ui';
 import {
   CATEGORY_META,
-  bankMatchParts,
   bankDayLabel,
-  costItemsToOptions,
-  filterBankTransactions,
   formatMoney,
   groupByDay,
   monthLabel,
   monthStartOf,
-  moneyIn,
   paymentCategory,
   paymentCategoryLabel,
-  paymentGoes,
   shiftMonth,
   useUpConnected,
   useUpOverview,
+  useMoneyTransactions,
+  useTransactionSheet,
   bankRowMeta,
   type BankTransactionPatch,
   type MakeCostPreview,
   type BankTransactionView,
   type CostItem,
-  type PaymentDirection,
   costPaymentMenu,
   likelyCostCategories,
   useCostCategoryChoices,
@@ -114,59 +110,36 @@ export function MoneyView({
   onOpenItem: (item: CostItem) => void;
   onSetAmount: (item: CostItem, cents: number) => void;
 }) {
-  const { status, data, reload, month, setMonth, scope } = useUpOverview();
-  const [showHidden, setShowHidden] = useState(false);
-  const [rows, setRows] = useState<BankTransactionView[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [openId, setOpenId] = useState<string | null>(null);
-  const [query, setQuery] = useState('');
-  const [category, setCategory] = useState<string | null>(null);
-  const [direction, setDirection] = useState<PaymentDirection>('all');
+  const { status, data, month, setMonth } = useUpOverview();
+  const {
+    rows,
+    error,
+    showHidden,
+    setShowHidden,
+    setOpenId,
+    query,
+    setQuery,
+    category,
+    setCategory,
+    direction,
+    setDirection,
+    itemById,
+    load,
+    apply,
+    moveTo,
+    madeCost,
+    accounts,
+    total,
+    open,
+    shown,
+    income,
+  } = useMoneyTransactions(upBankApi, items, (m) => toast.message(m));
   const [rowSheet, setRowSheet] = useState<CostRowSheetState | null>(null);
   const [pick, setPick] = useState<CategoryPick | null>(null);
   const quickMove = useModules().server('costs.quick-move');
   const choices = useCostCategoryChoices();
-  const itemById = useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
   const thisMonth = monthStartOf(new Date());
 
-  const load = useCallback(async () => {
-    try {
-      const page = await upBankApi.transactions({ month, scope: scope ?? undefined, hidden: showHidden });
-      setRows(page.transactions);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't read your transactions.");
-    }
-  }, [month, scope, showHidden]);
-
-  useEffect(() => {
-    setRows(null);
-    void load();
-  }, [load, status?.connection?.lastSyncedAt]);
-  useEffect(() => setCategory(null), [month, scope]);
-
-  const apply = async (id: string, patch: BankTransactionPatch) => {
-    try {
-      const saved = await upBankApi.updateTransaction(id, patch);
-      setRows((cur) => (cur ?? []).map((r) => (r.id === id ? saved : r)).filter((r) => r.hidden === showHidden));
-      reload();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't save.");
-    }
-  };
-
-  // Swipe right or "Move to": this payment alone, or its whole shop with the switch.
-  const moveTo = async (t: BankTransactionView, c: CostCategory, wholeShop: boolean) => {
-    if (!wholeShop) return apply(t.id, { costCategory: c });
-    try {
-      await upBankApi.changeShop({ vendor: t.description, category: c });
-      reload();
-      await load();
-      toast.message(`Moved ${t.description} to ${CATEGORY_META[c].label}`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't move the shop.");
-    }
-  };
   const pickFor = (t: BankTransactionView) => {
     const current = paymentCategory(t, itemById);
     haptics.select();
@@ -199,16 +172,7 @@ export function MoneyView({
 
   if (status && !status.connection) return <Text className="text-sm text-muted-foreground">Connect Up in Settings, Connectors to see your money here.</Text>;
   if (!data) return <Text className="text-sm text-muted-foreground">Reading your Up accounts…</Text>;
-  const accounts = data.accounts ?? [];
-  const total = (data.everydayCents ?? 0) + (data.saversCents ?? 0);
   const monthName = monthLabel(month);
-  const open = rows?.find((r) => r.id === openId) ?? null;
-  const shown = rows ? filterBankTransactions(rows, { query, category }).filter((r) => paymentGoes(r, direction)) : null;
-  // Household only: what came into the joint accounts this month.
-  const income =
-    scope === 'household' && rows && !showHidden
-      ? moneyIn(rows, accounts.filter((a) => a.joint).map((a) => a.name))
-      : null;
 
   return (
     <View className="gap-4">
@@ -371,10 +335,7 @@ export function MoneyView({
         onPatch={(patch) => {
           if (open) void apply(open.id, patch);
         }}
-        onMadeCost={(saved) => {
-          setRows((cur) => (cur ?? []).map((r) => (r.id === saved.id ? saved : r)));
-          reload();
-        }}
+        onMadeCost={madeCost}
         onOpenItem={(item) => {
           setOpenId(null);
           onOpenItem(item);
@@ -473,91 +434,37 @@ export function TransactionSheet({
   /** A whole shop moved: read the payments again. */
   onShopMoved?: () => void;
 }) {
-  const { data, reload } = useUpOverview();
-  const [note, setNote] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [making, setMaking] = useState<MakeCostPreview | null>(null);
-  const [costName, setCostName] = useState('');
-  const [linkPayee, setLinkPayee] = useState(true);
-  const [sheetError, setSheetError] = useState<string | null>(null);
-  const [moving, setMoving] = useState(false);
-  const [wholeShop, setWholeShop] = useState(false);
   const quickMove = useModules().server('costs.quick-move');
   const choices = useCostCategoryChoices();
-  useEffect(() => {
-    setNote(null);
-    setMaking(null);
-    setSheetError(null);
-    setMoving(false);
-    setWholeShop(false);
-  }, [t?.id]);
-  const canMove = !!t && t.mine && t.amountCents < 0 && !t.isTransfer && quickMove;
-  // One payment moves on its own; with the switch on, its whole shop does.
-  const moveTo = async (c: CostCategory) => {
-    if (!t) return;
+  const sheet = useTransactionSheet(upBankApi, { t, items, quickMove, onPatch, onMadeCost, onShopMoved, notify: (m) => toast.message(m) });
+  const {
+    note,
+    setNote,
+    busy,
+    making,
+    setMaking,
+    costName,
+    setCostName,
+    linkPayee,
+    setLinkPayee,
+    sheetError,
+    moving,
+    setMoving,
+    wholeShop,
+    setWholeShop,
+    canMove,
+    startMaking,
+    saveCost,
+    line,
+    category,
+    always,
+    options,
+    paid,
+    setAlways,
+  } = sheet;
+  const moveTo = (c: CostCategory) => {
     haptics.tick();
-    setMoving(false);
-    if (!wholeShop) {
-      onPatch({ costCategory: c });
-      return;
-    }
-    try {
-      await upBankApi.changeShop({ vendor: t.description, category: c });
-      reload();
-      onShopMoved?.();
-      toast.message(`Moved ${t.description} to ${CATEGORY_META[c].label}`);
-    } catch (err) {
-      setSheetError(err instanceof Error ? err.message : "Couldn't move the shop.");
-    }
-  };
-
-  const startMaking = async () => {
-    if (!t) return;
-    setBusy(true);
-    setSheetError(null);
-    try {
-      const plan = await upBankApi.costPreview(t.id);
-      setMaking(plan);
-      setCostName(plan.name);
-      setLinkPayee(plan.seen > 1);
-    } catch (err) {
-      setSheetError(err instanceof Error ? err.message : "Couldn't read that payment.");
-    } finally {
-      setBusy(false);
-    }
-  };
-  const saveCost = async () => {
-    if (!t || !making) return;
-    setBusy(true);
-    setSheetError(null);
-    try {
-      const made = await upBankApi.makeCost(t.id, { name: costName.trim() || making.name, linkPayee });
-      setMaking(null);
-      onMadeCost(made.transaction);
-    } catch (err) {
-      setSheetError(err instanceof Error ? err.message : "Couldn't make the cost.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const line = t?.costItemId ? items.find((i) => i.id === t.costItemId) ?? null : null;
-  const category = t ? paymentCategory(t, new Map(line ? [[line.id, line]] : [])) : null;
-  const rule = line ? data?.links?.find((l) => l.costItemId === line.id) ?? null : null;
-  const always = !!rule && !!t && bankMatchParts(rule.match).some((m) => m.toUpperCase() === t.description.toUpperCase());
-  const options = useMemo(() => costItemsToOptions(items.filter((i) => !i.deleted)), [items]);
-  const paid = t ? -t.amountCents : 0;
-
-  const setAlways = async (on: boolean) => {
-    if (!t || !line) return;
-    setBusy(true);
-    try {
-      if (on) await upBankApi.setCostLink(line.id, { match: t.description, keepAmount: rule?.keepAmount ?? false });
-      else await upBankApi.removeCostLink(line.id);
-      reload();
-    } finally {
-      setBusy(false);
-    }
+    void sheet.moveTo(c);
   };
 
   return (

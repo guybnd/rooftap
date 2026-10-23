@@ -13,7 +13,7 @@
 // categories first. Swipe left hides a shop's payments for the month, or
 // archives a cost. Phone twin: apps/mobile/src/features/costs/costs-overview.tsx.
 
-import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'react';
+import { useMemo, useState, type MouseEvent, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { ChevronDown, ChevronRight, FileText, Landmark, List, MessageSquare, MoreHorizontal, PenLine, Plus, Repeat, Sparkles, Target, Wallet, type LucideIcon } from 'lucide-react';
@@ -27,6 +27,9 @@ import {
   openAssistantPopup,
   useCostMonths,
   useUpOverview,
+  useShopPayments,
+  moveBankPayment,
+  costsSummaryAsk,
   costCategoryKey,
   costDayLabel,
   lineMeta,
@@ -37,9 +40,6 @@ import {
   monthShortName,
   moneyFlow,
   signedMoney,
-  squashVendor,
-  type BankTransactionPatch,
-  type BankTransactionView,
   type CostCategory,
   type CostItem,
   type CostMonth,
@@ -217,12 +217,11 @@ export function CostsOverview(props: CostsOverviewProps) {
   const lineById = useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
   const latest = (data?.recent ?? []).slice(0, 3);
   const movePayment = (t: SpendingTransaction, to: CostCategory, wholeShop: boolean) => {
-    const done = wholeShop ? upBankApi.changeShop({ vendor: t.description, category: to }) : upBankApi.updateTransaction(t.id, { costCategory: to });
-    done
-      .then(() => {
+    moveBankPayment(upBankApi, t, to, wholeShop)
+      .then((message) => {
         success();
         reload();
-        toast(`Moved ${wholeShop ? t.description : 'the payment'} to ${CATEGORY_META[to].label}`);
+        toast(message);
       })
       .catch((err) => toast.error(err instanceof Error ? err.message : "Couldn't move it."));
   };
@@ -476,7 +475,7 @@ export function CostsOverview(props: CostsOverviewProps) {
           <h3 className={cn(LABEL, 'px-1 pt-3')}>Look closer</h3>
           <div className="overflow-hidden rounded-2xl bg-muted/40">
             {onOpenPayments ? <MenuRow Icon={List} label="All payments" hint="Every payment as a list, to search and move." onClick={() => { setMoreOpen(false); onOpenPayments(); }} /> : null}
-            {props.summaries ? <MenuRow Icon={Sparkles} label={`Summarise ${name}`} divided={!!onOpenPayments} onClick={() => ask(summaryAsk(name))} /> : null}
+            {props.summaries ? <MenuRow Icon={Sparkles} label={`Summarise ${name}`} divided={!!onOpenPayments} onClick={() => ask(costsSummaryAsk(name))} /> : null}
             <MenuRow Icon={MessageSquare} label="Ask the assistant" divided={!!onOpenPayments || !!props.summaries} onClick={() => ask(`Help me make sense of my costs in ${name}.`)} />
           </div>
           {props.summaries?.onChange ? (
@@ -848,40 +847,7 @@ function ShopSheet({
   /** Opens the category picker for the whole shop; null when it can't move. */
   onMove: (() => void) | null;
 }) {
-  const { scope, reload } = useUpOverview();
-  const [rows, setRows] = useState<BankTransactionView[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [openId, setOpenId] = useState<string | null>(null);
-  const [nonce, setNonce] = useState(0);
-
-  useEffect(() => {
-    if (!line) return;
-    setRows(null);
-    setError(null);
-    let live = true;
-    upBankApi
-      .transactions({ month: `${month}-01`, scope: scope ?? undefined })
-      .then((page) => {
-        if (!live) return;
-        const key = squashVendor(line.vendor ?? line.name);
-        setRows(page.transactions.filter((t) => !t.isTransfer && !t.hidden && squashVendor(t.description.replace(/[\\\s]+$/, '')) === key));
-      })
-      .catch((err) => live && setError(err instanceof Error ? err.message : "Couldn't read the payments."));
-    return () => {
-      live = false;
-    };
-  }, [line, month, scope, nonce]);
-
-  const apply = async (id: string, patch: BankTransactionPatch) => {
-    try {
-      const saved = await upBankApi.updateTransaction(id, patch);
-      setRows((cur) => (cur ?? []).map((r) => (r.id === id ? saved : r)));
-      reload();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't save.");
-    }
-  };
-  const t = rows?.find((r) => r.id === openId) ?? null;
+  const { rows, error, openId, setOpenId, apply, madeCost, refresh, open: t } = useShopPayments(upBankApi, line, month);
   const now = new Date();
 
   return (
@@ -935,17 +901,14 @@ function ShopSheet({
         onPatch={(patch) => {
           if (t) void apply(t.id, patch);
         }}
-        onMadeCost={(saved) => {
-          setRows((cur) => (cur ?? []).map((r) => (r.id === saved.id ? saved : r)));
-          reload();
-        }}
+        onMadeCost={madeCost}
         onOpenItem={(item) => {
           setOpenId(null);
           onClose();
           onOpenItem(item);
         }}
         onSetAmount={onSetAmount}
-        onShopMoved={() => setNonce((n) => n + 1)}
+        onShopMoved={refresh}
       />
     </>
   );
@@ -964,10 +927,6 @@ function SwitchRow({ label, hint, checked, onChange }: { label: string; hint: st
 }
 
 /** What "Summarise <month>" asks the assistant. */
-function summaryAsk(month: string): string {
-  return `Summarise our costs for ${month}: what we spent against the goal, the biggest categories, how it compares with the month before, and anything worth a look.`;
-}
-
 function MenuRow({ Icon, label, hint, value, divided, onClick }: { Icon: LucideIcon; label: string; hint?: string; value?: string; divided?: boolean; onClick: () => void }) {
   return (
     <button type="button" onClick={onClick} className={cn('flex min-h-12 w-full items-center gap-3 px-3 py-2 text-left hover:bg-muted/60', divided && 'border-t border-border/60')}>
