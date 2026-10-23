@@ -330,3 +330,49 @@ describe("costCategoryFrom", () => {
     expect(costCategoryFrom("Snacks")).toBeNull();
   });
 });
+
+describe("cooking tools", () => {
+  const base = () => ({
+    recipes: [
+      { id: "r1", group_id: "g1", title: "Dal", servings: 4, instructions: "Rinse the lentils\nSimmer for 20 minutes", draft: false, deleted: false },
+      { id: "r2", group_id: "g2", title: "Other house soup", instructions: "Boil", draft: false, deleted: false },
+    ],
+    recipe_ingredients: [] as Row[],
+    cook_sessions: [] as Row[],
+  });
+
+  it("reads a recipe's steps with their timers", async () => {
+    const { body } = await run(base(), "get_recipe_steps", { recipe_id: "r1" });
+    expect(body.steps).toHaveLength(2);
+    expect(body.steps[1].timers).toEqual([{ label: "Simmer", minutes: 20 }]);
+    expect((await run(base(), "get_recipe_steps", { recipe_id: "r2" })).res.isError).toBe(true);
+  });
+
+  it("starts a step's timer, starting the cook, and lists it as running", async () => {
+    const tables = base();
+    const { body } = await run(tables, "start_timer", { recipe_id: "r1", step: 2 });
+    expect(body).toMatchObject({ ok: true, step: 2, label: "Simmer", minutes: 20, rings: false });
+    expect(tables.cook_sessions).toHaveLength(1);
+    expect(tables.cook_sessions[0]).toMatchObject({ user_id: "u1", recipe_id: "r1", step: 1 });
+    const cooks = (await run(tables, "get_running_cooks", {})).body;
+    expect(cooks).toHaveLength(1);
+    expect(cooks[0].timers[0]).toMatchObject({ label: "Simmer", step: 2, state: "running" });
+  });
+
+  it("adds a timer of its own length and rings where the person last set one", async () => {
+    const tables = base();
+    tables.cook_sessions.push({
+      id: "c1", group_id: "g1", user_id: "u1", recipe_id: "r1", step: 0, deleted: false,
+      timers: [{ id: "t1", step: 1, index: 0, label: "Simmer", seconds: 1200, endsAt: new Date(Date.now() + 60_000).toISOString(), pausedRemaining: null, deviceId: "phone" }],
+    });
+    const { body } = await run(tables, "start_timer", { recipe_id: "r1", label: "Rice", minutes: 12 });
+    expect(body).toMatchObject({ ok: true, step: 1, label: "Rice", minutes: 12, rings: true });
+    const timers = tables.cook_sessions[0].timers as { label: string; deviceId: string }[];
+    expect(timers.map((t) => t.label)).toEqual(["Simmer", "Rice"]);
+    expect(timers[1].deviceId).toBe("phone");
+  });
+
+  it("asks for minutes when the step has no timer", async () => {
+    expect((await run(base(), "start_timer", { recipe_id: "r1", step: 1 })).res.isError).toBe(true);
+  });
+});

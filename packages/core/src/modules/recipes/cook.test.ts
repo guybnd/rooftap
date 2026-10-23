@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   addTimerMinute,
+  assistantTimer,
+  cookingPromptText,
+  parseCookAskContext,
   clampStep,
   cookBadge,
   cookInitials,
@@ -116,5 +119,42 @@ describe('head dock', () => {
     expect(parseHeadDock('junk')).toEqual(DEFAULT_HEAD_DOCK);
     expect(overStopTarget(200, 700, 400, 800, 36)).toBe(true);
     expect(overStopTarget(200, 400, 400, 800, 36)).toBe(false);
+  });
+});
+
+describe('assistant in cook mode', () => {
+  const step = { text: 'Simmer for 10 minutes', timers: [{ label: 'Simmer', seconds: 600 }], ingredientIds: [] };
+
+  it('reads a cook context and refuses junk', () => {
+    expect(parseCookAskContext({ recipeId: 'r1', step: 2.4, deviceId: 'd' })).toEqual({ recipeId: 'r1', step: 2, deviceId: 'd' });
+    expect(parseCookAskContext({ recipeId: 'r1' })).toEqual({ recipeId: 'r1', step: 0, deviceId: null });
+    expect(parseCookAskContext({ step: 1 })).toBeNull();
+    expect(parseCookAskContext('r1')).toBeNull();
+  });
+
+  it('marks the step on screen and lists running timers', () => {
+    const timers = startTimer([], { step: 1, index: 0, label: 'Simmer', seconds: 600 }, 'd', T0);
+    const text = cookingPromptText({
+      title: 'Dal',
+      servings: 4,
+      ingredients: [{ name: 'lentils', quantity: 200, unit: 'g' }],
+      steps: [{ text: 'Rinse', timers: [], ingredientIds: [] }, step],
+      step: 1,
+      timers,
+      now: T0 + 60_000,
+    });
+    expect(text).toContain('"Dal"');
+    expect(text).toContain('serves 4');
+    expect(text).toContain('200 g lentils');
+    expect(text).toContain('> Step 2 (on screen now): Simmer for 10 minutes');
+    expect(text).toContain('Simmer (step 2), 9:00 left');
+  });
+
+  it("uses the step's own timer when it matches, else adds one", () => {
+    expect(assistantTimer(step, 1, [], { label: 'simmer' })).toEqual({ step: 1, index: 0, label: 'Simmer', seconds: 600 });
+    expect(assistantTimer(step, 1, [], {})).toEqual({ step: 1, index: 0, label: 'Simmer', seconds: 600 });
+    expect(assistantTimer(step, 1, [], { minutes: 10 })).toEqual({ step: 1, index: 0, label: 'Simmer', seconds: 600 });
+    expect(assistantTimer(step, 1, [], { label: 'Rice', minutes: 12 })).toEqual({ step: 1, index: 1, label: 'Rice', seconds: 720 });
+    expect(assistantTimer(undefined, 0, [], {})).toBeNull();
   });
 });

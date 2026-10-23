@@ -240,7 +240,14 @@ export function createAssistantApi(call: AssistantCall, stream?: AssistantStream
      * stream call), the reply shows up as it is written.
      */
     send: async (
-      input: { text: string; conversationId?: string | null; kind?: ConversationKind; reopen?: boolean },
+      input: {
+        text: string;
+        conversationId?: string | null;
+        kind?: ConversationKind;
+        reopen?: boolean;
+        /** Asked from cook mode (Recipes v2 R7); older servers ignore it. */
+        cook?: { recipeId: string; step: number; deviceId?: string | null };
+      },
       onEvent?: (event: AssistantProgressEvent) => void
     ) => {
       const started = Date.now();
@@ -356,6 +363,10 @@ export function describeProposal(tool: string, module: AssistantScope, args: Rec
   const bank = bankProposal(tool, args);
   if (bank) return bank;
   if (tool === 'add_recipe_to_groceries') return "Add a recipe's ingredients to Groceries";
+  if (tool === 'start_timer') {
+    const minutes = typeof args.minutes === 'number' && args.minutes > 0 ? ` for ${Math.round(args.minutes)} min` : '';
+    return `Start a cooking timer${typeof args.label === 'string' && args.label.trim() ? ` ${quoted(args.label)}` : ''}${minutes}`;
+  }
   if (tool === 'set_meal') {
     const night = typeof args.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(args.date) ? ` for ${mealNightName(args.date)}` : '';
     if (args.clear === true) return `Clear the dinner${night} on the meal plan`;

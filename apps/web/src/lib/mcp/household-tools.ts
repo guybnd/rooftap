@@ -50,6 +50,18 @@ import {
   removeBankLinkRule,
   setBankLinkRule,
 } from "@/lib/bank-actions";
+import {
+  assistantTimer,
+  buildCookSession,
+  clampStep,
+  cookTimers,
+  recipeSteps,
+  startTimer,
+  stepIngredients,
+  timerRemainingMs,
+  timerState,
+  type CookSession,
+} from "@homeup/core";
 import { loadMealWeek, personTimeZone, todayIn } from "@/lib/meal-plan-server";
 import {
   buildMealPlanEntry,
@@ -133,6 +145,8 @@ export interface HouseholdToolContext {
   groupId: string | null;
   /** The household's switched-on modules; task tools hide reminders whose owner module is off. */
   enabled: ReadonlySet<ModuleId>;
+  /** The device asking (cook mode sends it), so a timer the tools start rings there. */
+  deviceId?: string | null;
 }
 
 const COST_CATEGORIES = Object.keys(CATEGORY_META) as [
@@ -348,6 +362,7 @@ export function householdTools({
   userId,
   groupId,
   enabled,
+  deviceId,
 }: HouseholdToolContext): HouseholdTool[] {
   const tools: HouseholdTool[] = [];
 
@@ -1548,6 +1563,148 @@ export function householdTools({
           {
             type: "text",
             text: JSON.stringify({ recipe: recipe.title, added, skipped }),
+          },
+        ],
+      };
+    },
+  );
+
+  // ── Cooking (Recipes v2 R7) ─────────────────────────────────────────────────
+  // So "how long is left on the rice" and "start a 10 minute timer" work from
+  // cook mode, or from any chat. A cook is the person's own (cook_sessions,
+  // user_id); the admin client bypasses RLS, so every read filters on it.
+
+  async function liveRecipe(recipeId: string) {
+    const { data } = await admin.from("recipes").select("*").eq("id", recipeId).eq("group_id", groupId!).eq("deleted", false);
+    return ((data ?? []) as Recipe[])[0] ?? null;
+  }
+
+  async function myCooks() {
+    const { data, error } = await admin.from("cook_sessions").select("*").eq("group_id", groupId!).eq("user_id", userId).eq("deleted", false);
+    return { cooks: (data ?? []) as CookSession[], error };
+  }
+
+  tool(
+    "get_recipe_steps",
+    {
+      description:
+        "One recipe's method as numbered steps (1-based), each with its timers (label, minutes) and the ingredients it uses, plus the step the person is on if they are cooking it. Use before start_timer, or to answer \"what's next\".",
+      inputSchema: { recipe_id: z.string() },
+    },
+    async ({ recipe_id }) => {
+      if (!groupId) return noGroupError();
+      const recipe = await liveRecipe(recipe_id);
+      if (!recipe) return toolError("Recipe not found");
+      const [{ data: ingredientRows }, { cooks }] = await Promise.all([
+        admin.from("recipe_ingredients").select("*").eq("group_id", groupId).eq("recipe_id", recipe.id).eq("deleted", false),
+        myCooks(),
+      ]);
+      const ingredients = (ingredientRows ?? []) as RecipeIngredient[];
+      const steps = recipeSteps(recipe);
+      const cook = cooks.find((c) => c.recipe_id === recipe.id);
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              recipe_id: recipe.id,
+              title: recipe.title,
+              servings: recipe.servings,
+              ...(cook ? { cooking_step: clampStep(cook.step, steps.length) + 1 } : {}),
+              steps: steps.map((st, i) => ({
+                step: i + 1,
+                text: st.text,
+                timers: st.timers.map((t) => ({ label: t.label, minutes: Math.round((t.seconds / 60) * 10) / 10 })),
+                ingredients: stepIngredients(st, ingredients).map((ing) => basic(ing, ["name", "quantity", "unit"] as const)),
+              })),
+            }),
+          },
+        ],
+      };
+    },
+  );
+
+  tool(
+    "get_running_cooks",
+    {
+      description:
+        "The recipes the person is cooking right now: each with the step they are on (1-based) and its timers (label, step, state running/paused/done, seconds_left).",
+    },
+    async () => {
+      if (!groupId) return noGroupError();
+      const { cooks, error } = await myCooks();
+      if (error) return toolError(error.message);
+      const ids = [...new Set(cooks.map((c) => c.recipe_id))];
+      const { data: recipeRows } = ids.length
+        ? await admin.from("recipes").select("*").eq("group_id", groupId).in("id", ids)
+        : { data: [] };
+      const recipes = new Map(((recipeRows ?? []) as Recipe[]).map((r) => [r.id, r]));
+      const now = Date.now();
+      const out = cooks
+        .filter((c) => recipes.has(c.recipe_id))
+        .map((c) => {
+          const recipe = recipes.get(c.recipe_id)!;
+          const steps = recipeSteps(recipe);
+          return {
+            cook_id: c.id,
+            recipe_id: recipe.id,
+            title: recipe.title,
+            step: clampStep(c.step, steps.length) + 1,
+            steps: steps.length,
+            timers: cookTimers(c).map((t) => ({
+              label: t.label,
+              step: t.step + 1,
+              state: timerState(t, now),
+              seconds_left: Math.round(timerRemainingMs(t, now) / 1000),
+            })),
+          };
+        });
+      return { content: [{ type: "text", text: JSON.stringify(out) }] };
+    },
+  );
+
+  tool(
+    "start_timer",
+    {
+      description:
+        "Start a cooking timer on a recipe the person is cooking (it starts cooking the recipe if needed). Pass step (1-based, defaults to the step they are on), and label and/or minutes: a step's own timer is used when the label or minutes match one, else a new timer is added. It rings on the device they asked from, or the one they last started a timer on (rings false: it only shows in the app).",
+      inputSchema: {
+        recipe_id: z.string(),
+        step: z.number().int().min(1).optional(),
+        label: z.string().max(40).optional(),
+        minutes: z.number().positive().max(24 * 60).optional(),
+      },
+    },
+    async ({ recipe_id, step, label, minutes }) => {
+      if (!groupId) return noGroupError();
+      if (!enabled.has("recipes")) return toolError("The Recipes module is off for this household");
+      const recipe = await liveRecipe(recipe_id);
+      if (!recipe) return toolError("Recipe not found");
+      const { cooks, error } = await myCooks();
+      if (error) return toolError(error.message);
+      const steps = recipeSteps(recipe);
+      const existing = cooks.find((c) => c.recipe_id === recipe.id) ?? null;
+      const stepIndex = clampStep(step != null ? step - 1 : existing?.step ?? 0, steps.length);
+      const timers = existing ? cookTimers(existing) : [];
+      const pick = assistantTimer(steps[stepIndex], stepIndex, timers, { label, minutes });
+      if (!pick) return toolError("Say how many minutes: this step has no timer of its own");
+      // Rings on the asking device, else on the device the person last started a timer from.
+      const startedAt = (t: { endsAt: string | null; seconds: number }) => (t.endsAt ? Date.parse(t.endsAt) - t.seconds * 1000 : 0);
+      const lastDevice = cooks
+        .flatMap((c) => cookTimers(c))
+        .filter((t) => t.deviceId)
+        .sort((a, b) => startedAt(b) - startedAt(a))[0]?.deviceId;
+      const ringOn = deviceId ?? lastDevice ?? null;
+      const next = startTimer(timers, pick, ringOn, Date.now());
+      const { error: writeError } = existing
+        ? await admin.from("cook_sessions").update({ timers: next }).eq("id", existing.id).eq("group_id", groupId).eq("user_id", userId)
+        : await admin.from("cook_sessions").insert({ ...buildCookSession({ groupId, userId, recipeId: recipe.id }), step: stepIndex, timers: next });
+      if (writeError) return toolError(writeError.message);
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({ ok: true, recipe: recipe.title, step: pick.step + 1, label: pick.label, minutes: Math.round((pick.seconds / 60) * 10) / 10, rings: Boolean(ringOn) }),
           },
         ],
       };

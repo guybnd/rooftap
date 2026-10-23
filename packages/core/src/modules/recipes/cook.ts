@@ -318,3 +318,93 @@ export function isCookModePath(pathname: string | null | undefined): boolean {
 export function stepSpeech(stepIndex: number, stepCount: number, text: string): string {
   return stepCount > 1 ? `Step ${stepIndex + 1}. ${text}` : text;
 }
+
+// ── Assistant in cook mode (R7) ─────────────────────────────────────────────
+
+/** What cook mode tells the Assistant about the cook: the recipe and the step it is on. */
+export interface CookAskContext {
+  recipeId: string;
+  /** 0-based step on screen. */
+  step: number;
+  /** The device asking, so a timer the Assistant starts rings here. */
+  deviceId?: string | null;
+}
+
+/** Read a cook context from a request body, or null when it is missing or malformed. */
+export function parseCookAskContext(raw: unknown): CookAskContext | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const v = raw as Record<string, unknown>;
+  if (typeof v.recipeId !== 'string' || !v.recipeId || v.recipeId.length > 100) return null;
+  const step = typeof v.step === 'number' && Number.isFinite(v.step) ? Math.max(0, Math.round(v.step)) : 0;
+  const deviceId = typeof v.deviceId === 'string' && v.deviceId.length <= 100 ? v.deviceId : null;
+  return { recipeId: v.recipeId, step, deviceId };
+}
+
+/**
+ * The system prompt section for a question asked from cook mode: the recipe,
+ * its ingredients, every step with the current one marked, and the timers.
+ */
+export function cookingPromptText(input: {
+  title: string;
+  servings?: number | null;
+  ingredients: readonly { name: string; quantity?: number | string | null; unit?: string | null }[];
+  steps: readonly RecipeStep[];
+  step: number;
+  timers: readonly CookTimer[];
+  now: number;
+}): string {
+  const step = clampStep(input.step, input.steps.length);
+  const lines = [
+    `The person is cooking "${input.title}" in cook mode right now${input.servings ? ` (serves ${input.servings})` : ''}. ` +
+      'They have their hands busy: answer in one or two short sentences, about this recipe unless they ask otherwise. ' +
+      'For a swap or a scaled amount, give the amounts. To start a timer use start_timer; to add something to the list use the Groceries tools.',
+  ];
+  if (input.ingredients.length) {
+    lines.push(
+      `Ingredients: ${input.ingredients
+        .map((i) => [i.quantity, i.unit, i.name].filter((p) => p != null && String(p).trim()).join(' '))
+        .join('; ')}.`,
+    );
+  }
+  input.steps.forEach((s, i) => {
+    lines.push(`${i === step ? '> ' : ''}Step ${i + 1}${i === step ? ' (on screen now)' : ''}: ${s.text}`);
+  });
+  const running = input.timers.filter((t) => timerState(t, input.now) !== 'done');
+  if (running.length) {
+    lines.push(
+      `Timers: ${running
+        .map((t) => {
+          const left = `${formatCountdown(timerRemainingMs(t, input.now))} left`;
+          return `${t.label} (step ${t.step + 1}), ${timerState(t, input.now) === 'paused' ? `paused with ${left}` : left}`;
+        })
+        .join('; ')}.`,
+    );
+  }
+  return `## Cooking now\n${lines.join('\n')}`;
+}
+
+/**
+ * A timer the Assistant starts: a step's own timer when the label or length
+ * matches one, else a new one on that step (index past the step's own).
+ */
+export function assistantTimer(
+  step: RecipeStep | undefined,
+  stepIndex: number,
+  timers: readonly CookTimer[],
+  ask: { label?: string | null; minutes?: number | null },
+): { step: number; index: number; label: string; seconds: number } | null {
+  const own = step?.timers ?? [];
+  const wanted = ask.label?.trim().toLowerCase();
+  const seconds = ask.minutes != null && ask.minutes > 0 ? Math.round(ask.minutes * 60) : null;
+  const match = own.findIndex(
+    (t) => (wanted && t.label.toLowerCase().includes(wanted)) || (seconds != null && !wanted && t.seconds === seconds),
+  );
+  if (match >= 0) return { step: stepIndex, index: match, label: own[match].label, seconds: seconds ?? own[match].seconds };
+  if (seconds == null) {
+    if (own.length === 1) return { step: stepIndex, index: 0, label: own[0].label, seconds: own[0].seconds };
+    return null;
+  }
+  const used = timers.filter((t) => t.step === stepIndex).map((t) => t.index);
+  const index = Math.max(own.length, ...used.map((i) => i + 1));
+  return { step: stepIndex, index, label: ask.label?.trim() || 'Timer', seconds };
+}

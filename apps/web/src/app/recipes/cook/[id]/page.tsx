@@ -9,6 +9,7 @@
 // Opening cook mode starts the recipe's cook, so its step and timers are
 // the same as the head's and the other device's. Without running cooks
 // (module feature off, or an older server) it still steps through locally.
+// With the Assistant on, the sparkle asks about the recipe (R7, cook-ask.tsx).
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -35,6 +36,7 @@ import {
 import { useDataCache } from '@/lib/data-cache';
 import { cn } from '@/lib/utils';
 import { askTimerNotificationPermission } from '@/components/cook/cook-alarms';
+import { CookAsk } from '@/components/cook/cook-ask';
 
 function useWakeLock(active: boolean): void {
   useEffect(() => {
@@ -188,6 +190,7 @@ export default function CookModePage() {
           <div className="min-w-0 flex-1 truncate text-center text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
             {recipe.title}
           </div>
+          <CookAsk recipeId={recipeId} step={step} />
           {canSpeak() ? (
             <button
               type="button"

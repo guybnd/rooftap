@@ -144,6 +144,8 @@ export interface ThreadHost {
   presence: () => ThreadPresence;
   onAway?: (answer: AnsweredElsewhere) => void;
   toast: { error: (message: string) => void; message: (message: string) => void };
+  /** Cook mode's ask (Recipes v2 R7): the recipe and step on screen, read at each send. */
+  cook?: () => { recipeId: string; step: number; deviceId?: string | null } | null;
 }
 
 function pendingMessage(text: string): AssistantMessage {
@@ -276,8 +278,10 @@ export function useAssistantThread(target: ThreadTarget, host: ThreadHost) {
       setThinking(wantsAssistantReply(kind, 'app', text));
       try {
         const pacer = createDraftPacer(setDraft);
-        const res = await api.send({ text, conversationId: conversationIdRef.current, kind, reopen: resumedRef.current || undefined }, (event) =>
-          pacer.push(event)
+        const cook = hostRef.current.cook?.() ?? undefined;
+        const res = await api.send(
+          { text, conversationId: conversationIdRef.current, kind, reopen: resumedRef.current || undefined, ...(cook ? { cook } : {}) },
+          (event) => pacer.push(event)
         );
         // A lead-in still on screen gets its moment before the stored reply replaces it.
         await pacer.settled();

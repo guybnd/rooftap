@@ -7,7 +7,8 @@
 //
 // Opening cook mode starts the recipe's cook, so its step and timers match
 // the head and the other device. Without running cooks it still steps
-// through locally.
+// through locally. With the Assistant on, the sparkle asks about the
+// recipe (R7, features/cook/cook-ask.tsx).
 import * as React from 'react';
 import { PanResponder, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -35,6 +36,7 @@ import {
 import { useDataCache } from '@/lib/data-cache';
 import { useOpenRoute } from '@/lib/tab-routes';
 import { askTimerNotificationPermission } from '@/features/cook/cook-alarms';
+import { CookAsk } from '@/features/cook/cook-ask';
 
 const TABULAR = { fontVariant: ['tabular-nums' as const] };
 
@@ -135,7 +137,7 @@ export default function CookModeScreen() {
             <Text numberOfLines={1} className="min-w-0 flex-1 text-center text-micro-label uppercase text-muted-foreground">
               {recipe.title}
             </Text>
-            <View className="w-11" />
+            <CookAsk recipeId={recipeId} step={step} />
           </View>
 
           {steps.length === 0 ? (

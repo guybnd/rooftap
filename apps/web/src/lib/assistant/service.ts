@@ -38,6 +38,13 @@ import {
   type ModuleId,
   type ProposalItem,
   type ProposalState,
+  cookTimers,
+  cookingPromptText,
+  recipeSteps,
+  type CookAskContext,
+  type CookSession,
+  type Recipe,
+  type RecipeIngredient,
 } from "@homeup/core";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSessionUser } from "@/lib/supabase/session";
@@ -118,14 +125,35 @@ export async function assistantContextFor(
  * switched-on modules, Home Assistant's when the household connected it, and
  * sending feedback to the Rooftap team.
  */
-async function turnTools(ctx: AssistantContext, settings: AssistantSettings, readOnly: boolean) {
+async function turnTools(ctx: AssistantContext, settings: AssistantSettings, readOnly: boolean, deviceId?: string | null) {
   const household = assistantTools(
-    { admin: ctx.admin, userId: ctx.userId, groupId: ctx.groupId, enabled: ctx.enabled },
+    { admin: ctx.admin, userId: ctx.userId, groupId: ctx.groupId, enabled: ctx.enabled, deviceId },
     { settings, readOnly }
   );
   const homeAssistant = await homeAssistantTools(ctx.admin, ctx.groupId, { readOnly });
   const feedback = feedbackTool(ctx.admin, ctx.userId, ctx.groupId);
   return { tools: [...household, ...(homeAssistant?.tools ?? []), feedback], homeAssistant };
+}
+
+/** The cook mode section of the prompt: the recipe, its steps and the person's timers on it. */
+async function cookingContext(ctx: AssistantContext, cook: CookAskContext, now: number): Promise<string | null> {
+  const [{ data: recipeRows }, { data: ingredientRows }, { data: cookRows }] = await Promise.all([
+    ctx.admin.from("recipes").select("*").eq("id", cook.recipeId).eq("group_id", ctx.groupId).eq("deleted", false),
+    ctx.admin.from("recipe_ingredients").select("*").eq("recipe_id", cook.recipeId).eq("group_id", ctx.groupId).eq("deleted", false),
+    ctx.admin.from("cook_sessions").select("*").eq("recipe_id", cook.recipeId).eq("group_id", ctx.groupId).eq("user_id", ctx.userId).eq("deleted", false),
+  ]);
+  const recipe = ((recipeRows ?? []) as Recipe[])[0];
+  if (!recipe) return null;
+  const session = ((cookRows ?? []) as CookSession[])[0];
+  return cookingPromptText({
+    title: recipe.title,
+    servings: recipe.servings,
+    ingredients: ((ingredientRows ?? []) as RecipeIngredient[]).sort((a, b) => a.position - b.position),
+    steps: recipeSteps(recipe),
+    step: cook.step,
+    timers: session ? cookTimers(session) : [],
+    now,
+  });
 }
 
 // ── Rows to DTOs ──────────────────────────────────────────────────────────
@@ -469,6 +497,8 @@ export interface ChatInput {
   lastWaitMs?: number;
   /** The turn as it happens, for a streamed reply (HOUP-509). */
   onStream?: (event: TurnStreamEvent) => void;
+  /** Asked from cook mode (Recipes v2 R7): the recipe and step on screen. */
+  cook?: CookAskContext | null;
 }
 
 export type ChatOutcome =
@@ -565,7 +595,7 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
   // The tools (Home Assistant's may be a round trip away) are gathered while
   // the conversation and its history are read.
   const toolsStarted = Date.now();
-  const gathering = turnTools(ctx, settings, limits.readOnly).then((r) => ({ ...r, ms: Date.now() - toolsStarted }));
+  const gathering = turnTools(ctx, settings, limits.readOnly, input.cook?.deviceId).then((r) => ({ ...r, ms: Date.now() - toolsStarted }));
   // Settled here so a failed read below can't leave it rejecting unheard.
   gathering.catch(() => {});
 
@@ -583,7 +613,7 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
     conversation = await startConversation(ctx, input.kind === "chat" ? "chat" : "quick", text, settings.quickAskIdleMinutes);
   }
 
-  const [{ data: recent }, { data: memoryRows }, names, timeZone] = await Promise.all([
+  const [{ data: recent }, { data: memoryRows }, names, timeZone, cooking] = await Promise.all([
     ctx.admin
       .from("assistant_messages")
       .select("*")
@@ -593,6 +623,7 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
     ctx.admin.from("assistant_memories").select("text").eq("group_id", ctx.groupId).eq("deleted", false).order("created_at").limit(60),
     memberNames(ctx.admin, ctx.groupId),
     userTimeZone(ctx.admin, ctx.userId),
+    input.cook && ctx.enabled.has("recipes") ? cookingContext(ctx, input.cook, now.getTime()) : Promise.resolve(null),
     // Sending is reading: anything before this turn is no longer news to them.
     markConversationRead(ctx, conversation.id, { at: now }),
   ]);
@@ -626,6 +657,7 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
     kind: conversation.kind,
     channel: input.channel ?? "app",
     summary: conversation.summary,
+    cooking,
   });
 
   const useCheap = budget.action === "cheap" || conversation.kind === "quick";

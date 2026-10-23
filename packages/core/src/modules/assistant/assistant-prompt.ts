@@ -79,6 +79,8 @@ export interface AssistantPromptInput {
   channel: MessageChannel;
   /** Rolling summary of older messages in a long thread. */
   summary?: string | null;
+  /** Asked from cook mode: the recipe and step on screen (recipes cook.ts cookingPromptText). */
+  cooking?: string | null;
 }
 
 /** Assembles the system prompt for one turn. Never empty. */
@@ -119,6 +121,7 @@ export function buildAssistantSystemPrompt(input: AssistantPromptInput): string 
   if (input.summary?.trim()) {
     sections.push(`## Earlier in this conversation\n${input.summary.trim()}`);
   }
+  if (input.cooking?.trim()) sections.push(input.cooking.trim());
 
   return sections.join('\n\n');
 }

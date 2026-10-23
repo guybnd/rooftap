@@ -1,5 +1,5 @@
 import { NextResponse, after } from "next/server";
-import { SSE_PING, encodeSseEvent, type AssistantStreamEvent, type ConversationKind } from "@homeup/core";
+import { SSE_PING, encodeSseEvent, parseCookAskContext, type AssistantStreamEvent, type ConversationKind } from "@homeup/core";
 import { assistantErrorResponse, assistantRequest, runChat, type AssistantContext, type ChatOutcome } from "@/lib/assistant/service";
 import { notifyHousehold, notifyIfAway } from "@/lib/assistant/reads";
 
@@ -30,7 +30,7 @@ function afterTurn(ctx: AssistantContext, out: Extract<ChatOutcome, { ok: true }
 
 export async function POST(request: Request) {
   const receivedAt = Date.now();
-  const body = (await request.json().catch(() => ({}))) as { text?: unknown; conversationId?: unknown; kind?: unknown; reopen?: unknown; lastWaitMs?: unknown };
+  const body = (await request.json().catch(() => ({}))) as { text?: unknown; conversationId?: unknown; kind?: unknown; reopen?: unknown; lastWaitMs?: unknown; cook?: unknown };
   if (typeof body.text !== "string" || !body.text.trim()) return assistantErrorResponse(400, "text is required");
   if (body.text.length > 4000) return assistantErrorResponse(400, "That message is too long.");
   const ctx = await assistantRequest();
@@ -43,6 +43,8 @@ export async function POST(request: Request) {
     reopen: body.reopen === true,
     receivedAt,
     lastWaitMs: typeof body.lastWaitMs === "number" && Number.isFinite(body.lastWaitMs) ? Math.round(body.lastWaitMs) : undefined,
+    // Asked from cook mode (Recipes v2 R7): the recipe and step on screen.
+    cook: parseCookAskContext(body.cook),
   };
 
   if (!request.headers.get("accept")?.includes("text/event-stream")) {
