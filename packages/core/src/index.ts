@@ -44,6 +44,7 @@ export * from './modules/rewards/rewards';
 export * from './modules/rewards/rewards-view';
 export * from './modules/occasions/occasions';
 export * from './modules/bins/bins';
+export * from './modules/bins/bins-view';
 export * from './modules/shopper/shopper-sources';
 export * from './modules/shopper/shopper-relevance';
 export * from './modules/shopper/shopper-scout';
@@ -148,6 +149,8 @@ export * from './data/setup-stores';
 export * from './hero';
 export * from './feed';
 export * from './modules/search/photos';
+export * from './modules/search/appointments-view';
+export * from './modules/search/use-appointments-view';
 export * from './weather-tips';
 export * from './home-lens';
 export * from './home/hero-modules';
@@ -175,6 +178,7 @@ export * from './modules/rewards/use-rewards';
 export * from './modules/rewards/use-rewards-view';
 export * from './modules/occasions/use-occasions';
 export * from './modules/bins/use-bins';
+export * from './modules/bins/use-bins-view';
 export * from './modules/recipes/use-recipe-match';
 
 // hooks/use-debounce + hooks/use-fuzzy-search are deliberately NOT exported

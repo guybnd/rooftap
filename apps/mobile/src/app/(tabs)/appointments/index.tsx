@@ -48,7 +48,11 @@ import {
   useReconnectSync,
   useStoreHelpers,
   useStoreLoaded,
+  appointmentClockTime,
+  bookableApartments,
   formatRelativeDay,
+  relativeDayFragment,
+  useAppointmentsOverview,
   toISODate,
   type Agent,
   type Apartment,
@@ -68,19 +72,6 @@ type AppointmentFlatRow =
   | { kind: 'upcoming'; id: string; appointment: Appointment; pos: RowPos }
   | { kind: 'past-toggle'; id: string; count: number }
   | { kind: 'past'; id: string; appointment: Appointment; pos: RowPos };
-
-/** H6: a relative day read mid-caption ("Next: tomorrow 6:30 PM"). Today and
- * Tomorrow drop their capital; weekday and dated labels keep theirs. Mirrors
- * apps/web/src/app/appointments/page.tsx. */
-function relativeDayFragment(date: Date): string {
-  const day = formatRelativeDay(date);
-  return day === 'Today' || day === 'Tomorrow' ? day.toLowerCase() : day;
-}
-
-/** H6: a 12-hour clock time, "10:30 AM". Mirrors web's clockTime. */
-function clockTime(date: Date): string {
-  return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-}
 
 function appointmentRowSpacing(prev: AppointmentFlatRow | undefined, current: AppointmentFlatRow): string | undefined {
   if (!prev) return undefined;
@@ -128,32 +119,9 @@ export default function AppointmentsSectionScreen() {
 
   const durationMinutes = userSettings?.appointment_duration_minutes ?? 20;
 
-  const { upcomingGroups, upcomingCount, past } = React.useMemo(() => {
-    const now = new Date();
-    const sorted = [...appointments].sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
-    const upcomingList = sorted.filter((a) => new Date(a.scheduled_at) >= now);
-    const pastList = sorted.filter((a) => new Date(a.scheduled_at) < now).reverse();
-    const groups: Appointment[][] = [];
-    for (const appt of upcomingList) {
-      const dateStr = toISODate(new Date(appt.scheduled_at));
-      const lastGroup = groups[groups.length - 1];
-      if (lastGroup && toISODate(new Date(lastGroup[0].scheduled_at)) === dateStr) lastGroup.push(appt);
-      else groups.push([appt]);
-    }
-    return { upcomingGroups: groups, upcomingCount: upcomingList.length, past: pastList };
-  }, [appointments]);
-
   // Hero lede caption (the next viewing) + pulse strip (Hearth H1/H3, mirrors apps/web).
-  const upcomingFlat = React.useMemo(() => upcomingGroups.flat(), [upcomingGroups]);
-  const nextAppt = upcomingFlat[0] ?? null;
-  const nextApartment = nextAppt ? apartments.find((a) => a.id === nextAppt.apartment_id) ?? null : null;
-  const nextDate = nextAppt ? new Date(nextAppt.scheduled_at) : null;
-  const thisWeekCount = React.useMemo(() => {
-    const weekFromNow = new Date();
-    weekFromNow.setDate(weekFromNow.getDate() + 7);
-    return upcomingFlat.filter((a) => new Date(a.scheduled_at) <= weekFromNow).length;
-  }, [upcomingFlat]);
-  const optionalCount = React.useMemo(() => upcomingFlat.filter((a) => a.status === 'optional').length, [upcomingFlat]);
+  const { upcomingGroups, upcomingCount, past, nextApartment, nextDate, thisWeekCount, optionalCount, showWeek, showOptional } =
+    useAppointmentsOverview(appointments, apartments);
 
   const apartmentById = React.useCallback((id: string) => apartments.find((a) => a.id === id) ?? null, [apartments]);
   const agentFor = React.useCallback(
@@ -161,13 +129,7 @@ export default function AppointmentsSectionScreen() {
     [agents]
   );
 
-  const filteredApartments = apartments.filter(
-    (a) =>
-      !a.archived &&
-      (!pickerSearch.trim() ||
-        a.address.toLowerCase().includes(pickerSearch.toLowerCase()) ||
-        (a.suburb && a.suburb.toLowerCase().includes(pickerSearch.toLowerCase())))
-  );
+  const filteredApartments = bookableApartments(apartments, pickerSearch);
 
   // HOUP-208: flatten day-grouped upcoming rows + the past-section toggle +
   // (once expanded) past rows into one FlashList data array. Past rows with
@@ -238,7 +200,7 @@ export default function AppointmentsSectionScreen() {
             <>
               Next: {relativeDayFragment(nextDate)}{' '}
               <Text className="text-data-fragment text-muted-foreground" style={{ fontVariant: ['tabular-nums'] }}>
-                {clockTime(nextDate)}
+                {appointmentClockTime(nextDate)}
               </Text>
               {nextApartment?.address ? ` · ${nextApartment.address}` : null}
             </>
@@ -248,14 +210,14 @@ export default function AppointmentsSectionScreen() {
 
       {/* H1: no Upcoming tile, the Hero already counts it; "This week" only
           when fewer than all upcoming, "Optional" only when any. */}
-      {(thisWeekCount > 0 && thisWeekCount < upcomingCount) || optionalCount > 0 ? (
+      {showWeek || showOptional ? (
         <View className="flex-row gap-2">
-          {thisWeekCount > 0 && thisWeekCount < upcomingCount && (
+          {showWeek && (
             <View className="flex-1">
               <PulseTile label="This week" value={thisWeekCount} />
             </View>
           )}
-          {optionalCount > 0 && (
+          {showOptional && (
             <View className="flex-1">
               <PulseTile label="Optional" value={optionalCount} tone="warning" />
             </View>
@@ -317,7 +279,7 @@ export default function AppointmentsSectionScreen() {
             {apt.address}
           </Text>
           <Text className="text-caption text-muted-foreground" style={{ fontVariant: ['tabular-nums'] }}>
-            {formatRelativeDay(date)} · {clockTime(date)}
+            {formatRelativeDay(date)} · {appointmentClockTime(date)}
           </Text>
         </View>
       );

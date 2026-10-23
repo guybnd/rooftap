@@ -13,26 +13,29 @@ import { ListItem, ListGroup } from "@/components/ui/list-item";
 import type { WaypointCardAction } from "@/components/waypoint-card";
 import { TransitLeg, TransitLegNoRoute } from "@/components/transit-leg";
 import { useMultiRoute } from "@/hooks/use-multi-route";
-import { appointments$, apartmentComments$, apartments$, agents$, formatRelativeDay, toISODate, useModules, useReconnectSync, useStoreHelpers, useStoreLoaded } from "@homeup/core";
+import {
+  appointments$,
+  apartmentComments$,
+  apartments$,
+  agents$,
+  appointmentClockTime,
+  bookableApartments,
+  formatRelativeDay,
+  relativeDayFragment,
+  toISODate,
+  toggledViewedStatus,
+  useAppointmentsOverview,
+  useModules,
+  useReconnectSync,
+  useStoreHelpers,
+  useStoreLoaded,
+} from "@homeup/core";
 import { downloadIcs } from "@/lib/ics";
 import type { Agent, Apartment, ApartmentComment, Appointment, ApartmentWithScore } from '@homeup/core';
 import { PulseTile } from "@/components/ui/pulse-tile";
 import { HeroLede } from "@/components/ui/hero-lede";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-
-/** H6: a 12-hour clock time, "10:30 AM" (never "10:30 am" or a 24h pair). */
-function clockTime(date: Date): string {
-  return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-}
-
-/** H6: a relative day read mid-caption ("Next: tomorrow 6:30 PM"). Today and
- * Tomorrow drop their capital; weekday and dated labels keep theirs. Mirrors
- * apps/mobile/src/app/(tabs)/appointments/index.tsx. */
-function relativeDayFragment(date: Date): string {
-  const day = formatRelativeDay(date);
-  return day === "Today" || day === "Tomorrow" ? day.toLowerCase() : day;
-}
 
 function DayGroup({
   appointments,
@@ -106,9 +109,9 @@ function DayGroup({
       </div>
       <div className="space-y-0">
         {waypoints.map((w) => {
-          const time = clockTime(new Date(w.appointment.scheduled_at));
+          const time = appointmentClockTime(new Date(w.appointment.scheduled_at));
           const endDate = new Date(new Date(w.appointment.scheduled_at).getTime() + durationMinutes * 60000);
-          const endTime = clockTime(endDate);
+          const endTime = appointmentClockTime(endDate);
           const agent = agents.find((a) => a.id === w.apartment.agent_id);
           const isViewed = w.appointment.status === "viewed";
           const isSkipped = w.appointment.status === "skipped";
@@ -314,27 +317,8 @@ export default function AppointmentsPage() {
   const [pickerSearch, setPickerSearch] = useState("");
   const [showPast, setShowPast] = useState(false);
 
-  const { upcomingGroups, past } = useMemo(() => {
-    const now = new Date();
-    const sorted = [...appointments].sort(
-      (a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime()
-    );
-    const upcomingList = sorted.filter((a) => new Date(a.scheduled_at) >= now);
-    const pastList = sorted.filter((a) => new Date(a.scheduled_at) < now).reverse();
-
-    const groups: Appointment[][] = [];
-    for (const appt of upcomingList) {
-      const dateStr = toISODate(new Date(appt.scheduled_at));
-      const lastGroup = groups[groups.length - 1];
-      if (lastGroup && toISODate(new Date(lastGroup[0].scheduled_at)) === dateStr) {
-        lastGroup.push(appt);
-      } else {
-        groups.push([appt]);
-      }
-    }
-
-    return { upcomingGroups: groups, past: pastList };
-  }, [appointments]);
+  const { upcomingGroups, upcomingCount, past, nextApartment: nextApt, nextDate, thisWeekCount, optionalCount, showWeek, showOptional } =
+    useAppointmentsOverview(appointments, apartments);
 
   const durationMinutes = userSettings?.appointment_duration_minutes ?? 20;
 
@@ -344,8 +328,7 @@ export default function AppointmentsPage() {
   };
 
   const handleToggleViewed = (appointment: Appointment) => {
-    const newStatus = appointment.status === "viewed" ? "scheduled" : "viewed";
-    patchRow(appointment.id, { status: newStatus });
+    patchRow(appointment.id, { status: toggledViewedStatus(appointment.status) });
   };
 
   const handleCycleStatus = (appointment: Appointment) => {
@@ -390,20 +373,6 @@ export default function AppointmentsPage() {
     );
   }
 
-  const upcomingCount = upcomingGroups.reduce((sum, g) => sum + g.length, 0);
-
-  // Hero lede caption (the next viewing) + pulse strip (Hearth 5 / FLUX-279).
-  const upcomingFlat = upcomingGroups.flat();
-  const nextAppt = upcomingFlat[0] ?? null;
-  const nextApt = nextAppt ? apartments.find((a) => a.id === nextAppt.apartment_id) ?? null : null;
-  const nextDate = nextAppt ? new Date(nextAppt.scheduled_at) : null;
-  const weekFromNow = new Date(Date.now() + 7 * 86400000);
-  const thisWeekCount = upcomingFlat.filter((a) => new Date(a.scheduled_at) <= weekFromNow).length;
-  // No explicit "confirmed" field on Appointment — "optional" (booking you may
-  // skip) is the closest existing status to a not-yet-firm booking; labelled
-  // to match the real field rather than inventing an "unconfirmed" concept.
-  const optionalCount = upcomingFlat.filter((a) => a.status === "optional").length;
-
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-3xl mx-auto space-y-5">
       {/* Hearth v2 (Pulse, H1): the upcoming count is the page's Hero lede,
@@ -416,7 +385,7 @@ export default function AppointmentsPage() {
             nextDate ? (
               <>
                 Next: {relativeDayFragment(nextDate)}{" "}
-                <span className="font-mono tabular-nums">{clockTime(nextDate)}</span>
+                <span className="font-mono tabular-nums">{appointmentClockTime(nextDate)}</span>
                 {nextApt?.address ? ` · ${nextApt.address}` : null}
               </>
             ) : undefined
@@ -436,8 +405,6 @@ export default function AppointmentsPage() {
           only when it says something the Hero doesn't (fewer than all), and
           "Optional" only when there are any (empty chrome hides at zero). */}
       {(() => {
-        const showWeek = thisWeekCount > 0 && thisWeekCount < upcomingCount;
-        const showOptional = optionalCount > 0;
         if (!showWeek && !showOptional) return null;
         return (
           <div className="grid grid-cols-2 gap-2">
@@ -471,8 +438,7 @@ export default function AppointmentsPage() {
             className="mb-2 h-10 w-full rounded-xl border border-border bg-background px-3 text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-ring/30"
           />
           <div className="max-h-48 overflow-y-auto space-y-1">
-            {apartments
-              .filter((a) => !a.archived && (!pickerSearch.trim() || a.address.toLowerCase().includes(pickerSearch.toLowerCase()) || (a.suburb && a.suburb.toLowerCase().includes(pickerSearch.toLowerCase()))))
+            {bookableApartments(apartments, pickerSearch)
               .slice(0, 20)
               .map((apt) => (
                 <button
@@ -545,7 +511,7 @@ export default function AppointmentsPage() {
                       <ListItem key={a.id} className="gap-3 py-2.5 text-sm">
                         <span className="truncate flex-1">{apt.address}</span>
                         <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-                          {formatRelativeDay(date)} · {clockTime(date)}
+                          {formatRelativeDay(date)} · {appointmentClockTime(date)}
                         </span>
                       </ListItem>
                     );

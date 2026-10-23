@@ -11,7 +11,7 @@
 // is interactive, so Optional reads amber, Viewed green, the rest muted).
 import * as React from 'react';
 import { View } from 'react-native';
-import { dialog } from '@homeup/core';
+import { appointmentClockTime, dialog } from '@homeup/core';
 import { Trash2 } from 'lucide-react-native';
 import { Text, ListItem, ListItemContent, ListItemLeading, ListItemMeta, ListItemTitle, ListItemTrailing, SwipeActions, cn } from '@homeup/ui';
 import type { Agent, Apartment, Appointment } from '@homeup/core';
@@ -34,7 +34,7 @@ interface AppointmentRowProps {
 }
 
 export function AppointmentRow({ appointment, apartment, agent, onEdit, onDelete }: AppointmentRowProps) {
-  const time = new Date(appointment.scheduled_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  const time = appointmentClockTime(new Date(appointment.scheduled_at));
   const isDefault = appointment.status === 'scheduled';
   const isViewed = appointment.status === 'viewed';
 

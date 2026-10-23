@@ -10,27 +10,24 @@ import { useRef, useState } from 'react';
 import { Camera, Plus, Trash2, X } from 'lucide-react';
 import {
   BIN_LIDS,
+  binChangeDraftDetail,
   binDraftWeekOffset,
-  binDraftsFrom,
   binShortDate,
-  newBinStreamDraft,
   nextWeekdayISO,
-  realignBinAnchor,
+  useBinSetup,
   useModules,
   type BinChangeDraft,
   type BinLid,
-  type BinSource,
-  type BinStreamDraft,
   type BinsApi,
+  type BinStreamDraft,
   type GroupMember,
-  type ParsedBinSetup,
 } from '@homeup/core';
 import { ItemFormSheet, FormSection, FieldRow } from '@/components/ui/item-form-sheet';
 import { Input } from '@/components/ui/input';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Switch } from '@/components/ui/switch';
 import { memberLabel } from '@/app/setup/member-label';
-import { readCouncilCalendar, readHomeAssistantBins, type HomeAssistantBinCalendar } from '@/lib/bins-api';
+import { readCouncilCalendar, readHomeAssistantBins } from '@/lib/bins-api';
 import { cn } from '@/lib/utils';
 
 const BINS_SECTION = { id: 'bins', Icon: Trash2 };
@@ -66,96 +63,21 @@ export function BinSetupSheet({
 }) {
   const modules = useModules();
   const haOn = modules.feature('bins.home-assistant');
-  const saved = binDraftsFrom(bins.streams, bins.changes, today);
-  const [method, setMethod] = useState<Method>((bins.plan?.setup_source as Method) ?? 'manual');
-  const [streams, setStreams] = useState<BinStreamDraft[]>(() => (saved.streams.length ? saved.streams : [newBinStreamDraft('new-0', today)]));
-  const [changes, setChanges] = useState<BinChangeDraft[]>(saved.changes);
-  const [remindAt, setRemindAt] = useState(bins.plan?.remind_at ?? '19:00');
-  const [pushOn, setPushOn] = useState(bins.plan ? bins.plan.push_at !== null : true);
-  const [pushAt, setPushAt] = useState(bins.plan?.push_at ?? '21:00');
-  const [rotation, setRotation] = useState<string[]>(bins.plan?.rotation ?? []);
-  const [reading, setReading] = useState(false);
-  const [readNote, setReadNote] = useState<string | null>(null);
-  const [readError, setReadError] = useState<string | null>(null);
-  const [haCalendars, setHaCalendars] = useState<HomeAssistantBinCalendar[]>([]);
-  const [tried, setTried] = useState(false);
+  const setup = useBinSetup({ bins, today, readHomeAssistantBins });
+  const { method, streams, changes, remindAt, pushOn, pushAt, rotation, reading, readNote, readError, haCalendars, tried } = setup;
+  const { updateStream, readHomeAssistant, toggleMember, streamLabel } = setup;
   const fileRef = useRef<HTMLInputElement>(null);
-  const nextKey = useRef(1);
-  const key = (prefix: string) => `${prefix}-${nextKey.current++}`;
 
-  const updateStream = (k: string, patch: Partial<BinStreamDraft>) =>
-    setStreams((all) => all.map((s) => (s.key === k ? realignBinAnchor({ ...s, ...patch }, today) : s)));
-
-  const applyRead = (setup: ParsedBinSetup, source: BinSource) => {
-    // Keep ids of bins already saved under the same name, so their changes and history stay put.
-    const byName = new Map(saved.streams.map((s) => [s.name.toLowerCase(), s]));
-    const keyMap = new Map<string, string>();
-    const merged = setup.streams.map((s) => {
-      const existing = byName.get(s.name.toLowerCase());
-      const k = existing?.key ?? key('read');
-      keyMap.set(s.key, k);
-      return { ...s, key: k, id: existing?.id };
-    });
-    setStreams(merged);
-    setChanges(setup.changes.map((c) => ({ ...c, key: key('rc'), streamKey: c.streamKey === null ? null : (keyMap.get(c.streamKey) ?? null) })));
-    const n = merged.length;
-    const m = setup.changes.length;
-    setReadNote(`Found ${n} ${n === 1 ? 'bin' : 'bins'}${m ? ` and ${m} ${m === 1 ? 'change' : 'changes'}` : ''}. Check them below, then save.`);
-    setMethod(source === 'council' ? 'council' : 'home-assistant');
-  };
-
-  const onFile = async (file: File | undefined) => {
+  const onFile = (file: File | undefined) => {
     if (!file) return;
-    setReading(true);
-    setReadError(null);
-    setReadNote(null);
-    const result = await readCouncilCalendar(file);
-    setReading(false);
-    if (!result.ok) setReadError(result.error);
-    else applyRead(result.setup, 'council');
+    return setup.readCouncil(() => readCouncilCalendar(file));
   };
 
-  const readHomeAssistant = async (entityId?: string) => {
-    setReading(true);
-    setReadError(null);
-    setReadNote(null);
-    const result = await readHomeAssistantBins(entityId);
-    setReading(false);
-    if (!result.ok) {
-      setReadError(result.error);
-      return;
-    }
-    setHaCalendars(result.calendars);
-    if (result.setup.streams.length === 0) {
-      setReadError(
-        result.calendars.length
-          ? 'No bin calendar found by name. Pick the one that has your bin days.'
-          : 'Home Assistant has no calendars. Add the Waste Collection Schedule integration there first.',
-      );
-      return;
-    }
-    applyRead(result.setup, 'home-assistant');
-  };
-
-  const invalid = streams.some((s) => !s.name.trim());
   const submit = () => {
-    setTried(true);
-    if (invalid || streams.length === 0) return;
-    bins.saveSetup({
-      streams,
-      changes,
-      remindAt,
-      pushAt: pushOn ? pushAt : null,
-      rotation,
-      rotationAnchor: rotation.length > 1 ? (rotation[0] === bins.plan?.rotation[0] ? bins.plan?.rotation_anchor : today) : null,
-      source: method,
-    });
-    onClose();
+    if (setup.submit()) onClose();
   };
 
-  const toggleMember = (id: string) => setRotation((r) => (r.includes(id) ? r.filter((m) => m !== id) : [...r, id]));
   const nameOf = (id: string) => (id === currentUserId ? 'You' : memberLabel(id, memberProfiles));
-  const streamLabel = (k: string | null) => (k === null ? 'Every bin' : (streams.find((s) => s.key === k)?.name ?? 'Bin'));
 
   return (
     <ItemFormSheet
@@ -172,11 +94,7 @@ export function BinSetupSheet({
           <SegmentedControl
             ariaLabel="Where the days come from"
             value={method}
-            onChange={(m) => {
-              setMethod(m);
-              setReadError(null);
-              setReadNote(null);
-            }}
+            onChange={setup.pickMethod}
             wrap
             options={[
               { value: 'manual', label: "I'll enter them" },
@@ -236,10 +154,7 @@ export function BinSetupSheet({
                   <button
                     type="button"
                     aria-label={`Remove ${s.name || 'bin'}`}
-                    onClick={() => {
-                      setStreams((all) => all.filter((x) => x.key !== s.key));
-                      setChanges((all) => all.filter((c) => c.streamKey !== s.key));
-                    }}
+                    onClick={() => setup.removeStream(s.key)}
                     className="inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
                   >
                     <X className="h-4 w-4" />
@@ -302,11 +217,7 @@ export function BinSetupSheet({
       <FormSection>
         <button
           type="button"
-          onClick={() => {
-            const used = new Set(streams.map((s) => s.lid));
-            const lid = (['yellow', 'green', 'blue', 'purple', 'red', 'grey'] as BinLid[]).find((l) => !used.has(l)) ?? 'other';
-            setStreams((all) => [...all, { ...newBinStreamDraft(key('new'), today, lid, all[0]?.weekday), every_weeks: 2 }]);
-          }}
+          onClick={setup.addStream}
           className={cn(CHIP, 'inline-flex items-center gap-1.5')}
         >
           <Plus className="h-4 w-4" />
@@ -323,12 +234,12 @@ export function BinSetupSheet({
               <div key={c.key} className="flex items-center gap-2 text-sm">
                 <span className="min-w-0 flex-1 truncate">
                   {binShortDate(c.on_date)} · {streamLabel(c.streamKey)}
-                  <span className="text-muted-foreground"> · {c.moved_to ? (c.moved_to === c.on_date ? 'extra' : `to ${binShortDate(c.moved_to)}`) : 'none'}{c.note ? ` · ${c.note}` : ''}</span>
+                  <span className="text-muted-foreground"> · {binChangeDraftDetail(c)}</span>
                 </span>
                 <button
                   type="button"
                   aria-label="Remove change"
-                  onClick={() => setChanges((all) => all.filter((x) => x.key !== c.key))}
+                  onClick={() => setup.removeChange(c.key)}
                   className="inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
                 >
                   <X className="h-4 w-4" />
@@ -337,18 +248,18 @@ export function BinSetupSheet({
             ))}
           </div>
         )}
-        <AddChange streams={streams} today={today} onAdd={(c) => setChanges((all) => [...all, { ...c, key: key('nc') }].sort((a, b) => a.on_date.localeCompare(b.on_date)))} />
+        <AddChange streams={streams} today={today} onAdd={setup.addChange} />
       </FormSection>
 
       <FormSection title="Reminders">
         <FieldRow label="Show on Home from" htmlFor="bins-remind" hint="On the night before a collection.">
-          <Input id="bins-remind" type="time" value={remindAt} onChange={(e) => setRemindAt(e.target.value || '19:00')} className="w-36 font-mono" />
+          <Input id="bins-remind" type="time" value={remindAt} onChange={(e) => setup.setRemindAt(e.target.value || '19:00')} className="w-36 font-mono" />
         </FieldRow>
         <FieldRow label="Notification if they're not out">
           <div className="flex items-center gap-3">
-            <Switch checked={pushOn} onChange={setPushOn} label="Notification if they're not out" />
+            <Switch checked={pushOn} onChange={setup.setPushOn} label="Notification if they're not out" />
             {pushOn && (
-              <Input aria-label="Notification time" type="time" value={pushAt} onChange={(e) => setPushAt(e.target.value || '21:00')} className="w-36 font-mono" />
+              <Input aria-label="Notification time" type="time" value={pushAt} onChange={(e) => setup.setPushAt(e.target.value || '21:00')} className="w-36 font-mono" />
             )}
           </div>
         </FieldRow>

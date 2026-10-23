@@ -10,20 +10,18 @@
 import { useMemo, useState } from 'react';
 import { Check, Pencil, Trash2, Undo2, X } from 'lucide-react';
 import {
+  BIN_DAY_LETTERS,
   binCadenceLabel,
-  binChangeLabel,
-  binDayLabel,
+  binChangeMeta,
+  binChangeTitle,
+  binCollectionMeta,
+  binCollectionWhen,
   binNamesPhrase,
-  binShortDate,
-  binStripWeeks,
   binTurn,
-  binCollections,
-  upcomingBinCollections,
-  todayISO,
-  useBins,
-  weekdayOfISO,
-  addDaysISO,
   dialog,
+  useBins,
+  useBinsScreen,
+  weekdayOfISO,
   type BinCollection,
 } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
@@ -41,52 +39,23 @@ import { cn } from '@/lib/utils';
 import { BinSetupSheet } from './setup-sheet';
 
 const MICRO = 'px-1 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground';
-const DAY_LETTERS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export default function BinsPage() {
   const { group, currentUserId, groupMembers, memberProfiles, isOnline, loading: cacheLoading } = useDataCache();
   const bins = useBins(group?.id, currentUserId);
-  const today = todayISO();
   const wide = useWideLayout();
   const [setupOpen, setSetupOpen] = useState(false);
 
   const { streams, changes, plan, night } = bins;
-  const upcoming = useMemo(() => upcomingBinCollections(streams, changes, today, 6), [streams, changes, today]);
-  const stripDays = useMemo(() => {
-    const weeks = binStripWeeks(today, 2);
-    const byDate = new Map(binCollections(streams, changes, today, weeks[1][6]).map((c) => [c.date, c]));
-    return weeks.map((week) => week.map((date) => ({ date, collection: byDate.get(date) ?? null })));
-  }, [streams, changes, today]);
-  const comingChanges = useMemo(
-    () => changes.filter((c) => (c.moved_to ?? c.on_date) >= today).sort((a, b) => a.on_date.localeCompare(b.on_date)),
-    [changes, today],
-  );
-  const streamName = useMemo(() => new Map(streams.map((s) => [s.id, s.name])), [streams]);
+  const screen = useBinsScreen(bins, currentUserId, (id) => memberLabel(id, memberProfiles));
+  const { today, upcoming, stripDays, comingChanges, streamName, who, lede } = screen;
 
   if (cacheLoading || (!bins.loaded && streams.length === 0)) return <div className="p-6 text-muted-foreground">Loading…</div>;
   if (!group) return <div className="p-6 text-muted-foreground">No group selected</div>;
 
-  const who = (id: string | null) => (id === currentUserId ? 'You' : memberLabel(id, memberProfiles));
-  const turnCaption = (id: string | null) => (id ? (id === currentUserId ? 'your turn' : `${memberLabel(id, memberProfiles)}'s turn`) : null);
 
   const collection = night.collection;
-  const lede = collection
-    ? {
-        value: binDayLabel(collection.date, today),
-        caption: [
-          night.tonight ? `Out tonight: ${binNamesPhrase(collection.streams).toLowerCase()}` : binNamesPhrase(collection.streams),
-          turnCaption(night.turn),
-        ]
-          .filter(Boolean)
-          .join(' · '),
-      }
-    : { value: 'No bins', caption: 'Add your bin days to get a reminder the night before' };
-
-  const markOut = () => {
-    if (!collection) return;
-    bins.markOut(collection.date);
-    toastUndoAction('Bins out', () => bins.undoOut());
-  };
+  const markOut = () => screen.markOut((undo) => toastUndoAction('Bins out', undo));
 
   return (
     <div className={cn('mx-auto space-y-4 p-4 md:p-6 pb-24', wide ? 'max-w-[1400px] lg:px-8' : 'max-w-3xl')}>
@@ -169,7 +138,7 @@ export default function BinsPage() {
                         )}
                         title={day ? binNamesPhrase(day.streams) : undefined}
                       >
-                        <span className={cn(date === today && 'font-semibold text-primary')}>{DAY_LETTERS[weekdayOfISO(date)]}</span>
+                        <span className={cn(date === today && 'font-semibold text-primary')}>{BIN_DAY_LETTERS[weekdayOfISO(date)]}</span>
                         <span className="font-mono text-[10px] tabular-nums">{Number(date.slice(8))}</span>
                         {day && <BinLids lids={day.streams.map((s) => s.lid)} size="sm" stacked />}
                       </div>
@@ -189,8 +158,7 @@ export default function BinsPage() {
                     today={today}
                     turn={binTurn(plan, c.date)}
                     profiles={memberProfiles}
-                    turnLabel={(id) => (id === currentUserId ? 'You' : memberLabel(id, memberProfiles))}
-                    movedFrom={c.moved[0]?.from ?? null}
+                    turnLabel={who}
                   />
                 ))}
               </ListGroup>
@@ -207,11 +175,11 @@ export default function BinsPage() {
                       <ListItemContent>
                         <ListItemTitle>
                           <span className="truncate">
-                            {binShortDate(c.on_date)} · {c.stream_id ? streamName.get(c.stream_id) ?? 'Bin' : 'Every bin'}
+                            {binChangeTitle(c, streamName)}
                           </span>
                         </ListItemTitle>
                         <ListItemMeta>
-                          <span className="truncate">{[binChangeLabel(c), c.note].filter(Boolean).join(' · ')}</span>
+                          <span className="truncate">{binChangeMeta(c)}</span>
                         </ListItemMeta>
                       </ListItemContent>
                       <ListItemTrailing>
@@ -285,29 +253,20 @@ function CollectionRow({
   turn,
   profiles,
   turnLabel,
-  movedFrom,
 }: {
   collection: BinCollection;
   today: string;
   turn: string | null;
   profiles: Parameters<typeof AvatarBubble>[0]['profiles'];
   turnLabel: (id: string) => string;
-  movedFrom: string | null;
 }) {
-  const night = addDaysISO(collection.date, -1);
-  const meta = [
-    turn ? turnLabel(turn) : null,
-    movedFrom ? `moved from ${binShortDate(movedFrom)}` : null,
-    collection.notes[0] ?? null,
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  const meta = binCollectionMeta(collection, turn, turnLabel);
   const [, , day] = collection.date.split('-');
   return (
     <ListItem className="gap-3">
       <ListItemLeading>
         <div className="w-9 text-center text-[10px] font-semibold uppercase leading-tight tracking-[0.04em] text-muted-foreground">
-          {DAY_LETTERS[weekdayOfISO(collection.date)]}
+          {BIN_DAY_LETTERS[weekdayOfISO(collection.date)]}
           <b className={cn('block font-heading text-base tabular-nums text-foreground', collection.date === today && 'text-primary')}>{Number(day)}</b>
         </div>
       </ListItemLeading>
@@ -322,7 +281,7 @@ function CollectionRow({
         )}
       </ListItemContent>
       <ListItemTrailing>
-        <span className="text-xs text-muted-foreground">{night === today ? 'Tonight' : binDayLabel(collection.date, today)}</span>
+        <span className="text-xs text-muted-foreground">{binCollectionWhen(collection.date, today)}</span>
         <BinLids lids={collection.streams.map((s) => s.lid)} />
         {turn && <AvatarBubble userId={turn} profiles={profiles} size={22} />}
       </ListItemTrailing>

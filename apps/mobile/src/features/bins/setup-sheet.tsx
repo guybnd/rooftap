@@ -24,23 +24,20 @@ import {
 } from '@homeup/ui';
 import {
   BIN_LIDS,
+  binChangeDraftDetail,
   binDraftWeekOffset,
-  binDraftsFrom,
   binShortDate,
-  newBinStreamDraft,
   nextWeekdayISO,
-  realignBinAnchor,
+  useBinSetup,
   useModules,
   type BinChangeDraft,
   type BinLid,
-  type BinSource,
-  type BinStreamDraft,
   type BinsApi,
+  type BinStreamDraft,
   type GroupMember,
-  type ParsedBinSetup,
 } from '@homeup/core';
 import { Chip } from '@/features/rewards/chip';
-import { readCouncilCalendar, readHomeAssistantBins, type HomeAssistantBinCalendar } from './bins-api';
+import { readCouncilCalendar, readHomeAssistantBins } from './bins-api';
 
 const BINS_SECTION = { id: 'bins', Icon: Trash2 };
 
@@ -74,98 +71,21 @@ export function BinSetupSheet({
 }) {
   const modules = useModules();
   const haOn = modules.feature('bins.home-assistant');
-  const saved = React.useMemo(() => binDraftsFrom(bins.streams, bins.changes, today), [bins.streams, bins.changes, today]);
-  const [method, setMethod] = React.useState<Method>((bins.plan?.setup_source as Method) ?? 'manual');
-  const [streams, setStreams] = React.useState<BinStreamDraft[]>(() => (saved.streams.length ? saved.streams : [newBinStreamDraft('new-0', today)]));
-  const [changes, setChanges] = React.useState<BinChangeDraft[]>(saved.changes);
-  const [remindAt, setRemindAt] = React.useState(bins.plan?.remind_at ?? '19:00');
-  const [pushOn, setPushOn] = React.useState(bins.plan ? bins.plan.push_at !== null : true);
-  const [pushAt, setPushAt] = React.useState(bins.plan?.push_at ?? '21:00');
-  const [rotation, setRotation] = React.useState<string[]>(bins.plan?.rotation ?? []);
-  const [reading, setReading] = React.useState(false);
-  const [readNote, setReadNote] = React.useState<string | null>(null);
-  const [readError, setReadError] = React.useState<string | null>(null);
-  const [haCalendars, setHaCalendars] = React.useState<HomeAssistantBinCalendar[]>([]);
-  const [tried, setTried] = React.useState(false);
-  const nextKey = React.useRef(1);
-  const key = (prefix: string) => `${prefix}-${nextKey.current++}`;
+  const setup = useBinSetup({ bins, today, readHomeAssistantBins });
+  const { method, streams, changes, remindAt, pushOn, pushAt, rotation, reading, readNote, readError, haCalendars, tried } = setup;
+  const { updateStream, readHomeAssistant, toggleMember, streamLabel } = setup;
 
-  const updateStream = (k: string, patch: Partial<BinStreamDraft>) =>
-    setStreams((all) => all.map((s) => (s.key === k ? realignBinAnchor({ ...s, ...patch }, today) : s)));
-
-  const applyRead = (setup: ParsedBinSetup, source: BinSource) => {
-    // Keep ids of bins already saved under the same name, so their changes stay put.
-    const byName = new Map(saved.streams.map((s) => [s.name.toLowerCase(), s]));
-    const keyMap = new Map<string, string>();
-    const merged = setup.streams.map((s) => {
-      const existing = byName.get(s.name.toLowerCase());
-      const k = existing?.key ?? key('read');
-      keyMap.set(s.key, k);
-      return { ...s, key: k, id: existing?.id };
-    });
-    setStreams(merged);
-    setChanges(setup.changes.map((c) => ({ ...c, key: key('rc'), streamKey: c.streamKey === null ? null : (keyMap.get(c.streamKey) ?? null) })));
-    const n = merged.length;
-    const m = setup.changes.length;
-    setReadNote(`Found ${n} ${n === 1 ? 'bin' : 'bins'}${m ? ` and ${m} ${m === 1 ? 'change' : 'changes'}` : ''}. Check them below, then save.`);
-    setMethod(source === 'council' ? 'council' : 'home-assistant');
-  };
-
-  const readCouncil = async (source: 'camera' | 'file') => {
-    setReading(true);
-    setReadError(null);
-    setReadNote(null);
-    const result = await readCouncilCalendar(source);
-    setReading(false);
-    if (!result) return;
-    if (!result.ok) setReadError(result.error);
-    else applyRead(result.setup, 'council');
-  };
-
-  const readHomeAssistant = async (entityId?: string) => {
-    setReading(true);
-    setReadError(null);
-    setReadNote(null);
-    const result = await readHomeAssistantBins(entityId);
-    setReading(false);
-    if (!result.ok) {
-      setReadError(result.error);
-      return;
-    }
-    setHaCalendars(result.calendars);
-    if (result.setup.streams.length === 0) {
-      setReadError(
-        result.calendars.length
-          ? 'No bin calendar found by name. Pick the one that has your bin days.'
-          : 'Home Assistant has no calendars. Add the Waste Collection Schedule integration there first.',
-      );
-      return;
-    }
-    applyRead(result.setup, 'home-assistant');
-  };
+  const readCouncil = (source: 'camera' | 'file') => setup.readCouncil(() => readCouncilCalendar(source));
 
   const submit = () => {
-    setTried(true);
-    if (streams.length === 0 || streams.some((s) => !s.name.trim())) return;
-    bins.saveSetup({
-      streams,
-      changes,
-      remindAt,
-      pushAt: pushOn ? pushAt : null,
-      rotation,
-      rotationAnchor: rotation.length > 1 ? (rotation[0] === bins.plan?.rotation[0] ? bins.plan?.rotation_anchor : today) : null,
-      source: method,
-    });
-    onOpenChange(false);
+    if (setup.submit()) onOpenChange(false);
   };
 
-  const toggleMember = (id: string) => setRotation((r) => (r.includes(id) ? r.filter((m) => m !== id) : [...r, id]));
   const nameOf = (id: string) => {
     if (id === currentUserId) return 'You';
     const p = memberProfiles[id];
     return p ? p.name || p.email || 'Member' : 'Former member';
   };
-  const streamLabel = (k: string | null) => (k === null ? 'Every bin' : (streams.find((s) => s.key === k)?.name ?? 'Bin'));
 
   return (
     <ItemFormSheet
@@ -182,11 +102,7 @@ export function BinSetupSheet({
           <SegmentedControl
             accessibilityLabel="Where the days come from"
             value={method}
-            onChange={(m) => {
-              setMethod(m);
-              setReadError(null);
-              setReadNote(null);
-            }}
+            onChange={setup.pickMethod}
             wrap
             options={[
               { value: 'manual', label: "I'll enter them" },
@@ -237,10 +153,7 @@ export function BinSetupSheet({
                     accessibilityRole="button"
                     accessibilityLabel={`Remove ${s.name || 'bin'}`}
                     hitSlop={8}
-                    onPress={() => {
-                      setStreams((all) => all.filter((x) => x.key !== s.key));
-                      setChanges((all) => all.filter((c) => c.streamKey !== s.key));
-                    }}
+                    onPress={() => setup.removeStream(s.key)}
                   >
                     <X size={16} className="text-muted-foreground" />
                   </Pressable>
@@ -302,11 +215,7 @@ export function BinSetupSheet({
           <Button
             size="sm"
             variant="secondary"
-            onPress={() => {
-              const used = new Set(streams.map((s) => s.lid));
-              const lid = (['yellow', 'green', 'blue', 'purple', 'red', 'grey'] as BinLid[]).find((l) => !used.has(l)) ?? 'other';
-              setStreams((all) => [...all, { ...newBinStreamDraft(key('new'), today, lid, all[0]?.weekday), every_weeks: 2 }]);
-            }}
+            onPress={setup.addStream}
           >
             <Plus size={14} className="text-foreground" />
             <Text className="text-sm font-medium text-foreground">Add a bin</Text>
@@ -325,15 +234,14 @@ export function BinSetupSheet({
                   {binShortDate(c.on_date)} · {streamLabel(c.streamKey)}
                   <Text className="text-sm text-muted-foreground">
                     {' · '}
-                    {c.moved_to ? (c.moved_to === c.on_date ? 'extra' : `to ${binShortDate(c.moved_to)}`) : 'none'}
-                    {c.note ? ` · ${c.note}` : ''}
+                    {binChangeDraftDetail(c)}
                   </Text>
                 </Text>
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="Remove change"
                   hitSlop={8}
-                  onPress={() => setChanges((all) => all.filter((x) => x.key !== c.key))}
+                  onPress={() => setup.removeChange(c.key)}
                   className="size-9 items-center justify-center"
                 >
                   <X size={16} className="text-muted-foreground" />
@@ -345,16 +253,16 @@ export function BinSetupSheet({
         <AddChange
           streams={streams}
           today={today}
-          onAdd={(c) => setChanges((all) => [...all, { ...c, key: key('nc') }].sort((a, b) => a.on_date.localeCompare(b.on_date)))}
+          onAdd={setup.addChange}
         />
       </FormSection>
 
       <FormSection title="Reminders">
         <FieldRow label="Show on Home from" hint="On the night before a collection.">
-          <TimeScrollField value={remindAt} onChange={(v) => setRemindAt(v.slice(0, 5))} />
+          <TimeScrollField value={remindAt} onChange={(v) => setup.setRemindAt(v.slice(0, 5))} />
         </FieldRow>
-        <FieldRow label="Notification if they're not out" action={<Switch checked={pushOn} onChange={setPushOn} label="Notification if they're not out" />}>
-          {pushOn ? <TimeScrollField value={pushAt} onChange={(v) => setPushAt(v.slice(0, 5))} /> : null}
+        <FieldRow label="Notification if they're not out" action={<Switch checked={pushOn} onChange={setup.setPushOn} label="Notification if they're not out" />}>
+          {pushOn ? <TimeScrollField value={pushAt} onChange={(v) => setup.setPushAt(v.slice(0, 5))} /> : null}
         </FieldRow>
       </FormSection>
 
