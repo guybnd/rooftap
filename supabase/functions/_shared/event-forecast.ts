@@ -1,4 +1,4 @@
-// Deno twin of packages/core/src/event-forecast.ts for the reminder push
+// Deno twin of packages/core/src/modules/calendar/event-forecast.ts for the reminder push
 // (notify-upcoming-events): the forecast text for an event's day. Pure and
 // import-free; core's event-forecast.test.ts checks the two agree.
 

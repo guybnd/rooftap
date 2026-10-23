@@ -8,9 +8,9 @@
 // archived or deleted: it belongs to everyone.
 
 import { useSyncExternalStore } from 'react';
-import type { AssistantApi, AssistantConversation } from './assistant-api';
-import { forgetThread } from './assistant-thread';
-import type { ShopperSearch } from './shopper-scout';
+import type { AssistantApi, AssistantConversation } from './modules/assistant/assistant-api';
+import { forgetThread } from './modules/assistant/assistant-thread';
+import type { ShopperSearch } from './modules/shopper/shopper-scout';
 
 /** The toast each app shows: a line with an Undo button, a plain line, and an error. */
 export interface UndoToast {

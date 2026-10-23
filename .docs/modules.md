@@ -269,3 +269,14 @@ The store app follows `main` through OTA updates, but a self-hosted server only 
 - Until the app has heard from the server, everything counts as supported, so the official server never flashes features away on a cold start.
 - `apps/web/src/lib/server-features.test.ts` fails if a minimum names a migration that doesn't exist.
 
+
+## 13. Where module code lives
+
+Each module's shared logic is in its own folder, `packages/core/src/modules/<id>/`, named by its id in `modules.ts`. For example, `modules/costs/` holds the cost lines, the month view and the bank feed, and `modules/money-insights/` holds the insights card and the Assistant's money notes. Code that several modules use stays in `packages/core/src/`: the types, the data layer and the synced stores, the module registry, money formatting, and the surfaces that put modules together (Home, search, the widget). Both apps still import everything from `@homeup/core`, so a move inside core changes no app code.
+
+`npm run lint` in `packages/core` runs `scripts/check-module-boundary.mjs`. It fails when a file in one module's folder imports another module's folder, unless the registry links the two modules:
+
+- the importing module lists the other in `requires` or `enhances` (`modules.ts`), or
+- a feature in `module-features.ts` names both modules.
+
+So a new link between two modules needs a recorded reason, and that reason is also what the feature gate checks. The lint also fails on a folder under `modules/` that is not a module id. Code in the shared folders can import any module.

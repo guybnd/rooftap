@@ -10,7 +10,7 @@ import type {
   Recipe,
   SetupItem,
 } from '../types';
-import type { UnifiedDocument } from '../documents';
+import type { UnifiedDocument } from '../modules/documents/documents';
 import { ALL_MODULE_IDS, hiddenWithDisabledModules, type ModuleId } from '../modules';
 
 // HOUP-147: unit coverage for the pure hit-building/action-resolution logic

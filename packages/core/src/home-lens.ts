@@ -12,8 +12,8 @@ import {
   nextOccurrence,
   parseLocalDateOnly,
   totalForPeriod,
-} from './costs';
-import { isBill, type MonthTotals } from './money-insights';
+} from './modules/costs/costs';
+import { isBill, type MonthTotals } from './modules/costs/money-insights';
 
 /** The shortcuts that open a lens. Setup and countdown keep their plain behaviour. Shopper's (HOUP-434) shows its watched items. */
 export type HomeLensKey = 'budgetPulse' | 'billsDue' | 'shoppingList' | 'shopperWatch';

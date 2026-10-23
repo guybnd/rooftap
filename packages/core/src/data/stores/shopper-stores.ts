@@ -5,8 +5,8 @@
 // arrive here through sync; wants are written locally like any other row.
 
 import { createGroupStore } from '../create-group-store';
-import type { ShopperOffer, ShopperPriceSnapshot, ShopperWant } from '../../shopper';
-import type { ShopperPick, ShopperSearch } from '../../shopper-scout';
+import type { ShopperOffer, ShopperPriceSnapshot, ShopperWant } from '../../modules/shopper/shopper';
+import type { ShopperPick, ShopperSearch } from '../../modules/shopper/shopper-scout';
 
 export const shopperWants$ = createGroupStore<ShopperWant>({
   collection: 'shopper_wants',

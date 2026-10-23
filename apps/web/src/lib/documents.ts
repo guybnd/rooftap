@@ -1,6 +1,6 @@
 // FLUX-98 / FLUX-103 / HOUP-83: thin web facade over @homeup/core's documents
 // module. The platform-agnostic CRUD/query/upload logic now lives in
-// packages/core/src/documents.ts (shared with apps/mobile) — this file
+// packages/core/src/modules/documents/documents.ts (shared with apps/mobile) — this file
 // re-exports it and keeps the browser-only bits: `File`-based validation, the
 // `<input accept>` string, and a `File → DocumentUploadInput` adapter so
 // `uploadDocument`'s call sites (capture-sheet.tsx, recipe-capture.ts,

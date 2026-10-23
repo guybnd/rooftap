@@ -6,7 +6,7 @@
 
 - Scope: the `documents` bucket only (the documents store). Legacy buckets (`cost-documents`, `apartment-photos`, `photos`) stay in Supabase.
 - R2 keys mirror Supabase paths: the object `documents/<group>/<doc>/<file>` in R2 is the copy of `<group>/<doc>/<file>` in the Supabase `documents` bucket. No database column records where a file lives.
-- Both apps call `POST /api/storage` (`apps/web/src/app/api/storage/route.ts`) through packages/core's seam (`packages/core/src/document-storage.ts`, registered by each app's `lib/document-storage-env.ts`):
+- Both apps call `POST /api/storage` (`apps/web/src/app/api/storage/route.ts`) through packages/core's seam (`packages/core/src/modules/documents/document-storage.ts`, registered by each app's `lib/document-storage-env.ts`):
   - `upload`: returns a presigned PUT pinned to the file's type and size, or `supabase`.
   - `view`: returns a presigned GET when the R2 copy exists, otherwise `supabase` (the client signs a Supabase URL as before).
   - `delete`: removes the R2 copy. The Supabase original is removed by the client as before.

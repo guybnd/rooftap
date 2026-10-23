@@ -5,7 +5,7 @@
 // so the store lookup works in a shop with no signal.
 
 import { createGroupStore } from '../create-group-store';
-import type { RewardPartner, RewardPerk, RewardScheme } from '../../rewards';
+import type { RewardPartner, RewardPerk, RewardScheme } from '../../modules/rewards/rewards';
 
 export const rewardSchemes$ = createGroupStore<RewardScheme>({
   collection: 'reward_schemes',

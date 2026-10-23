@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { archiveConversation, canArchiveConversation, changeWithUndo, deleteConversation, onConversationsChanged, overrideScoutRun, scoutRunLists, type UndoToast } from './archive-undo';
-import type { AssistantConversation } from './assistant-api';
-import type { ShopperSearch } from './shopper-scout';
+import type { AssistantConversation } from './modules/assistant/assistant-api';
+import type { ShopperSearch } from './modules/shopper/shopper-scout';
 
 function fakeToast() {
   const undos: (() => void)[] = [];

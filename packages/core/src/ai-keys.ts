@@ -10,7 +10,7 @@
 // The assistant has its own spend-based allowance (assistant.ts); this rule
 // covers the single-shot AI reads: receipts, recipes, listings and events.
 
-import { assistantAccess, type AssistantAccess } from './assistant';
+import { assistantAccess, type AssistantAccess } from './modules/assistant/assistant';
 import type { EntitlementTier } from './entitlements';
 
 export type AiKeyProvider = 'openai' | 'openrouter' | 'gemini' | 'anthropic';

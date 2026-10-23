@@ -1,4 +1,4 @@
-// Deno twin of packages/core/src/event-travel.ts for notify-leave-time: when a
+// Deno twin of packages/core/src/modules/calendar/event-travel.ts for notify-leave-time: when a
 // "time to leave" push is due and what it says. Pure and import-free; core's
 // event-travel.test.ts checks the two agree.
 

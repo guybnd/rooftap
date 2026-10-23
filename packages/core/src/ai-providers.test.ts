@@ -12,7 +12,7 @@ import {
   withCustomProvider,
   withCustomProviderStream,
 } from './ai-providers';
-import { MODEL_PRICES } from './assistant';
+import { MODEL_PRICES } from './modules/assistant/assistant';
 
 describe('model refs', () => {
   it('split at the first colon, so model ids keep theirs', () => {

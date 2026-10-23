@@ -7,7 +7,7 @@ import type {
 } from "@homeup/core";
 
 // HOUP-434: the server half of the Shopper source contract (the shapes live in
-// packages/core/src/shopper-sources.ts). A source is one file in this folder
+// packages/core/src/modules/shopper/shopper-sources.ts). A source is one file in this folder
 // exporting a ShopperSource, listed once in ./index.ts. It implements only the
 // calls its manifest's capabilities name. See .docs/shopper-sources.md.
 

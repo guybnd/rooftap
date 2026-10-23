@@ -1,6 +1,6 @@
 import { use$ } from '@legendapp/state/react';
 import { householdTasks$ } from '../data/stores';
-import { bucketTasksByDueDate } from '../household-tasks';
+import { bucketTasksByDueDate } from '../modules/household/household-tasks';
 import { useModules } from '../modules-store';
 import { isTaskOwnerEnabled } from '../task-modules';
 import { syncedGroupId } from '../store-modules';

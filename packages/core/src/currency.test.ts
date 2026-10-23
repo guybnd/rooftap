@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { formatMoney } from './costs';
+import { formatMoney } from './money-format';
 import {
   FOLLOW_REGION_CURRENCY,
   currencyPickerOptions,

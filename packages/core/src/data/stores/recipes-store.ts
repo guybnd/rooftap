@@ -12,7 +12,7 @@
 
 import { createGroupStore } from '../create-group-store';
 import type { Recipe } from '../../types';
-import { normalizeRecipeRow } from '../../recipes';
+import { normalizeRecipeRow } from '../../modules/recipes/recipes';
 
 export const recipes$ = createGroupStore<Recipe>({
   collection: 'recipes',

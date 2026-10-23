@@ -1,6 +1,6 @@
 // Calendar event reminders: which reminder an event is due for today, and the
 // push text. Pure and import-free so core's vitest suite can check it
-// (packages/core/src/event-reminders.test.ts) next to core's own defaults.
+// (packages/core/src/modules/calendar/event-reminders.test.ts) next to core's own defaults.
 
 /** Days before an event a reminder goes out when the event doesn't choose. */
 export const DEFAULT_EVENT_REMINDER_DAYS = [7, 1];

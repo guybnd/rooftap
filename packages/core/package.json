@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit",
     "pretest": "node ../../scripts/whats-new.mjs",
     "test": "vitest run",
-    "lint": "node scripts/check-import-boundary.mjs"
+    "lint": "node scripts/check-import-boundary.mjs && node scripts/check-module-boundary.mjs"
   },
   "dependencies": {
     "@legendapp/state": "3.0.0-beta.47",

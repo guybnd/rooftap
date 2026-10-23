@@ -8,7 +8,7 @@ import type { ModuleFeatureId } from './module-features';
 import { taskOwnerModule, ownerScreenHref } from './task-modules';
 import { parseReminderKey } from './reminders';
 import { addDaysISO, daysBetweenISO, pad2 } from './date-utils';
-import { DEFAULT_UPCOMING_WINDOW_DAYS } from './household-tasks';
+import { DEFAULT_UPCOMING_WINDOW_DAYS } from './modules/household/household-tasks';
 
 /** Format a Date as a local YYYY-MM-DD (no UTC shift). */
 export function localDateISO(d: Date): string {

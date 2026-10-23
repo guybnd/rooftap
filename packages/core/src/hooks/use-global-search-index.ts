@@ -16,10 +16,10 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { listUnifiedDocuments, type UnifiedDocument } from '../documents';
-import { recipeCuisines } from '../recipes';
+import { listUnifiedDocuments, type UnifiedDocument } from '../modules/documents/documents';
+import { recipeCuisines } from '../modules/recipes/recipes';
 import { useModules } from '../modules-store';
-import type { ShopperWant } from '../shopper';
+import type { ShopperWant } from '../modules/shopper/shopper';
 import type { HouseholdTask, GroceryItem, CostItem, SetupItem, Appointment, ChecklistItem, Recipe, Checklist, Document } from '../types';
 
 export type SectionKey =

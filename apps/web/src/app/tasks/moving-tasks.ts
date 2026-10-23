@@ -11,11 +11,11 @@
 // `@/app/tasks/moving-tasks` call sites across the app (event-modal.tsx,
 // task-row.tsx, etc.) don't all need to switch to `@homeup/core` just for
 // these.
-// HOUP-81: nextOccurrenceISO moved to packages/core/src/household-tasks.ts
+// HOUP-81: nextOccurrenceISO moved to packages/core/src/modules/household/household-tasks.ts
 // (apps/mobile/src/app/tasks needs it too) — re-exported here unchanged so
 // this file's one call site (page.tsx) doesn't need to switch imports.
 // HOUP-122: generateMovingTasks/findOutOfSyncTasks/syncMovingTaskDates moved
-// to packages/core/src/moving-tasks.ts so apps/mobile can reuse them —
+// to packages/core/src/modules/household/moving-tasks.ts so apps/mobile can reuse them —
 // re-exported here so page.tsx's import path doesn't change.
 export {
   todayISO,
