@@ -538,3 +538,94 @@ export function groceryStatusPatch(
     ...clearRecipeNoteOnLeaveNeeded(nextStatus),
   };
 }
+
+/**
+ * One thing to buy for a recipe: every ingredient line that buys the same
+ * grocery item, folded together. Two lines for "blood orange" (2 for the
+ * topping, 9 tbsp of juice) are one row on the list, not two.
+ */
+export interface RecipeShoppingLine {
+  /** The grocery item name this line buys (the matched item's own name when there is one). */
+  name: string;
+  ingredients: RecipeIngredient[];
+  /** The grocery row it matched, or null when it would be a new item. */
+  match: GroceryItem | null;
+  /** Already on the list: the matched row is 'needed'. */
+  onList: boolean;
+  /** The note it carries on the list: "2, 9 tbsp for Cake". */
+  note: string;
+}
+
+/** "2 count", "9 tbsp", or '' when the line has no amount. */
+function amountText(ing: Pick<RecipeIngredient, 'quantity' | 'unit'>): string {
+  if (ing.quantity == null) return '';
+  return `${trimQty(ing.quantity)}${ing.unit ? ` ${ing.unit}` : ''}`;
+}
+
+/** The note for a folded line: every amount, then the recipe ("2, 9 tbsp for Cake"). */
+export function recipeLineNote(ingredients: Pick<RecipeIngredient, 'quantity' | 'unit'>[], recipeTitle: string): string {
+  const amounts = ingredients.map(amountText).filter(Boolean);
+  return `${amounts.length ? `${amounts.join(', ')} ` : ''}for ${recipeTitle.trim()}`.trim();
+}
+
+/**
+ * What a recipe still needs from the shop, one line per grocery item: lines
+ * whose item you already have, and staples, are left out. Lines already on
+ * the list stay in with `onList` set, so a sheet can show them as done.
+ */
+export function recipeShoppingLines(
+  ingredients: RecipeIngredient[],
+  groceryItems: GroceryItem[],
+  recipeTitle: string,
+  staples: ReadonlySet<string> = new Set(),
+): RecipeShoppingLine[] {
+  const byKey = new Map<string, { name: string; match: GroceryItem | null; ingredients: RecipeIngredient[] }>();
+  for (const ing of ingredients) {
+    const key = ingredientMatchKey(ing);
+    if (isStaple(key, staples) || isStaple(ing.name, staples)) continue;
+    const match = matchIngredientToGrocery(key, groceryItems);
+    if (match?.status === 'have') continue;
+    const id = match ? `item:${match.id}` : `name:${norm(key)}`;
+    if (!norm(key)) continue;
+    const line = byKey.get(id);
+    if (line) line.ingredients.push(ing);
+    else byKey.set(id, { name: match?.name ?? key.trim(), match, ingredients: [ing] });
+  }
+  return [...byKey.values()].map((l) => ({
+    ...l,
+    onList: l.match?.status === 'needed',
+    note: recipeLineNote(l.ingredients, recipeTitle),
+  }));
+}
+
+/** The one store write that puts a shopping line on the list. */
+export type RecipeLineWrite =
+  | { kind: 'patch'; id: string; patch: Partial<GroceryItem> }
+  | { kind: 'create'; item: GroceryItem };
+
+export function recipeLineWrite(
+  line: RecipeShoppingLine,
+  input: { groupId: string; recipeId: string; createdBy: string | null },
+): RecipeLineWrite {
+  if (line.match) {
+    return {
+      kind: 'patch',
+      id: line.match.id,
+      patch: {
+        ...(line.match.status === 'needed' ? {} : { status: 'needed' as const, status_changed_at: nowISO() }),
+        recipe_note: line.note,
+        recipe_source_id: input.recipeId,
+      },
+    };
+  }
+  return {
+    kind: 'create',
+    item: buildNeededGroceryItem({
+      groupId: input.groupId,
+      name: line.name,
+      recipeNote: line.note,
+      recipeSourceId: input.recipeId,
+      createdBy: input.createdBy,
+    }),
+  };
+}

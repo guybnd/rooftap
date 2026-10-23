@@ -30,6 +30,7 @@ import {
   UserPlus,
   Star,
   Circle,
+  StickyNote,
 } from 'lucide-react';
 import { AssigneePicker } from '../setup/assignee-picker';
 import { memberLabel } from '../setup/member-label';
@@ -498,6 +499,13 @@ function GroceryItemCardInner({
         run: () => void patch({ is_essential: !item.is_essential }),
       },
       { id: 'edit', label: 'Edit details', group: 'edit', icon: 'edit', run: () => onEdit(item) },
+      recipeLinked && !!item.recipe_note && {
+        id: 'recipe-note',
+        label: 'Remove recipe note',
+        group: 'edit',
+        icon: 'note',
+        run: () => void patch({ recipe_note: null, recipe_source_id: null }),
+      },
       onArchive && { id: 'archive', label: 'Archive', group: 'danger', icon: 'archive', run: () => onArchive(item) },
       { id: 'delete', label: 'Delete', group: 'danger', icon: 'delete', danger: true, run: () => onRequestDelete(item) },
     ],
@@ -953,6 +961,11 @@ function GroceryItemCardInner({
                   <MenuItem icon={<Pencil className="h-3.5 w-3.5" />} onClick={() => { onEdit(item); close(); }}>
                     Edit details
                   </MenuItem>
+                  {recipeLinked && item.recipe_note && (
+                    <MenuItem icon={<StickyNote className="h-3.5 w-3.5" />} onClick={() => { void patch({ recipe_note: null, recipe_source_id: null }); close(); }}>
+                      Remove recipe note
+                    </MenuItem>
+                  )}
                   {onArchive && (
                     <MenuItem icon={<Archive className="h-3.5 w-3.5" />} onClick={() => { onArchive(item); close(); }}>
                       Archive

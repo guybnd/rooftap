@@ -10,6 +10,7 @@
 // @/lib/recipes so every surface agrees.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { use$ } from '@legendapp/state/react';
@@ -17,16 +18,17 @@ import { ArrowLeft, Pencil, Trash2, Plus, Check, RotateCcw, ShoppingCart, Users,
 import { useDataCache } from '@/lib/data-cache';
 import { recipes$, recipeIngredients$, groceryItems$, useReconnectSync, useStoreHelpers, useStoreLoaded, useModules } from '@homeup/core';
 import { dialog } from '@homeup/core';
-import type { GroceryItem, Recipe, RecipeIngredient } from '@homeup/core';
+import type { GroceryItem, Recipe, RecipeIngredient, RecipeShoppingLine } from '@homeup/core';
 import {
   methodMeta,
   matchIngredientToGrocery,
   ingredientMatchKey,
   recipeHaveCount,
   useRecipeMatch,
-  isStaple,
   canBeMade,
   recipeNoteFor,
+  recipeLineWrite,
+  recipeShoppingLines,
   buildNeededGroceryItem,
   groceryStatusPatch,
   recipeCuisines,
@@ -48,6 +50,7 @@ import { StepTimerChip } from '@/components/cook/step-timer-chip';
 import { askTimerNotificationPermission } from '@/components/cook/cook-alarms';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { IngredientQuickEditorSheet } from '../ingredient-quick-editor-sheet';
+import { AddMissingSheet } from '../add-missing-sheet';
 import { useLongPress } from '@/hooks/use-long-press';
 import { PopMenu, MenuItem } from '@/app/setup/pop-menu';
 import { cn } from '@/lib/utils';
@@ -98,8 +101,7 @@ export default function RecipeDetailPage() {
     useStoreHelpers(ings$, currentUserId);
   const { writeRow: writeGrocery, patchRow: patchGrocery } = useStoreHelpers(items$, currentUserId);
   // Recipes v2 R5: staples are always in stock and never go on the list.
-  const { staples } = useRecipeMatch(group?.id, currentUserId);
-  const staple = (ing: RecipeIngredient) => isStaple(ingredientMatchKey(ing), staples) || isStaple(ing.name, staples);
+  const { staples, canRemember, setStaple } = useRecipeMatch(group?.id, currentUserId);
   const storeLoaded = useStoreLoaded(...(groceriesLinked ? [recs$, ings$, items$] : [recs$, ings$]));
 
   const recipe = use$(() => {
@@ -160,42 +162,42 @@ export default function RecipeDetailPage() {
     setQuickEditorFocusMatch(focusMatch);
     setQuickEditorOpen(true);
   };
-  const closeQuickEditor = () => setQuickEditorOpen(false);
-
-  // ── Grocery mutations ────────────────────────────────────────────────────────
-  const addIngredientToList = (ing: RecipeIngredient) => {
-    if (!group?.id || !recipe || !groceriesLinked) return;
-    const match = matchIngredientToGrocery(ingredientMatchKey(ing), groceryItems);
-    const note = recipeNoteFor(ing, recipe.title);
-    if (match) {
-      // Already on the list: attach the note + make sure it's flagged needed.
-      patchGrocery(match.id, {
-        status: 'needed',
-        status_changed_at: nowISO(),
-        recipe_note: note,
-        recipe_source_id: recipe.id,
-      });
-    } else {
-      writeGrocery(
-        buildNeededGroceryItem({
-          groupId: group.id,
-          name: ingredientMatchKey(ing),
-          recipeNote: note,
-          recipeSourceId: recipe.id,
-          createdBy: currentUserId ?? null,
-        }),
-      );
+  const closeQuickEditor = () => {
+    setQuickEditorOpen(false);
+    if (backToMissing.current) {
+      backToMissing.current = false;
+      setMissingOpen(true);
     }
   };
 
-  // Bulk: add every ingredient not already `have` (creating or note-attaching),
-  // skipping those already `have`.
-  const addMissing = () => {
-    for (const ing of ingredients) {
-      const match = matchIngredientToGrocery(ingredientMatchKey(ing), groceryItems);
-      if (match?.status === 'have' || staple(ing)) continue;
-      addIngredientToList(ing);
+  // ── Grocery mutations ────────────────────────────────────────────────────────
+  // One write per grocery item: lines that buy the same item fold into one
+  // row with both amounts in its note (recipeShoppingLines), so two blood
+  // orange lines never make two rows.
+  const addLines = (lines: RecipeShoppingLine[]) => {
+    if (!group?.id || !recipe || !groceriesLinked || lines.length === 0) return;
+    for (const line of lines) {
+      const w = recipeLineWrite(line, { groupId: group.id, recipeId: recipe.id, createdBy: currentUserId ?? null });
+      if (w.kind === 'patch') patchGrocery(w.id, w.patch);
+      else writeGrocery(w.item);
     }
+    toast.success(lines.length === 1 ? `Added ${lines[0].name} to Groceries` : `Added ${lines.length} to Groceries`);
+  };
+
+  // "Add to list" on one row: straight onto the list, no editor in the way.
+  const addIngredientToList = (ing: RecipeIngredient) => {
+    if (!recipe) return;
+    addLines(recipeShoppingLines([ing], groceryItems, recipe.title).filter((l) => !l.onList));
+  };
+
+  // "Add missing" opens a review sheet; clicking a row there edits that
+  // ingredient and comes back to the sheet when the editor closes.
+  const [missingOpen, setMissingOpen] = useState(false);
+  const backToMissing = useRef(false);
+  const editFromMissing = (ing: RecipeIngredient) => {
+    backToMissing.current = true;
+    setMissingOpen(false);
+    openQuickEditor(ing);
   };
 
   // Inline per-ingredient status flip (Have ↔ Need) on the matched grocery item.
@@ -244,9 +246,8 @@ export default function RecipeDetailPage() {
   const meta = methodMeta(recipe.method);
   const { have, total } = recipeHaveCount(ingredients, groceryItems, staples);
   const ready = groceriesLinked && canBeMade(ingredients, groceryItems, staples);
-  const missingCount = groceriesLinked
-    ? ingredients.filter((ing) => !staple(ing) && matchIngredientToGrocery(ingredientMatchKey(ing), groceryItems)?.status !== 'have').length
-    : 0;
+  const shoppingLines = groceriesLinked ? recipeShoppingLines(ingredients, groceryItems, recipe.title, staples) : [];
+  const missingCount = shoppingLines.filter((l) => !l.onList).length;
 
   const kind = [...(recipe.method ? [meta.label] : []), ...recipeCuisines(recipe).map(capitalize)].join(', ');
   const hasStats = recipe.servings != null || recipe.prep_minutes != null || recipe.cook_minutes != null;
@@ -340,7 +341,7 @@ export default function RecipeDetailPage() {
           {missingCount > 0 && (
             <button
               type="button"
-              onClick={addMissing}
+              onClick={() => setMissingOpen(true)}
               className={cn(
                 'inline-flex h-11 items-center gap-1.5 rounded-lg px-4 text-sm font-medium',
                 // H5: one primary action per layer; Start cooking takes it when offered.
@@ -399,7 +400,7 @@ export default function RecipeDetailPage() {
                 ingredient={ing}
                 groceriesLinked={groceriesLinked}
                 match={matchIngredientToGrocery(ingredientMatchKey(ing), groceryItems)}
-                onAdd={() => openQuickEditor(ing, true)}
+                onAdd={() => addIngredientToList(ing)}
                 onToggle={toggleIngredientStatus}
                 onEdit={() => openQuickEditor(ing, false)}
               />
@@ -463,6 +464,17 @@ export default function RecipeDetailPage() {
         onSave={saveEdit}
       />
 
+      <AddMissingSheet
+        open={missingOpen}
+        onOpenChange={setMissingOpen}
+        recipeTitle={recipe.title}
+        lines={shoppingLines}
+        canRemember={canRemember}
+        onSetStaple={(name) => setStaple(name, true)}
+        onEdit={editFromMissing}
+        onAdd={addLines}
+      />
+
       <IngredientQuickEditorSheet
         key={quickEditorOpen ? `quick-${quickEditorId}` : 'quick-closed'}
         isOpen={quickEditorOpen}
@@ -500,6 +512,7 @@ export default function RecipeDetailPage() {
             : undefined
         }
         onEditFullRecipe={() => {
+          backToMissing.current = false;
           closeQuickEditor();
           setIsEditOpen(true);
         }}

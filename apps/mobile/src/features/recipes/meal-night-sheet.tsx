@@ -2,14 +2,16 @@
 // label (Leftovers, Out) or a few words, and who cooks. Once a night has a
 // recipe, the list adds more dishes (a main plus sides and a dessert) and the
 // sheet stays open; each dish's role chip cycles Main, Side, Dessert. Every
-// choice applies at once, no Save. Web twin:
+// choice applies at once, no Save. With running cooks on, Start cooking
+// starts one cook for each dish of the night (Recipes v2). Web twin:
 // apps/web/src/app/recipes/meal-night-sheet.tsx.
 import * as React from 'react';
 import { Pressable, View } from 'react-native';
-import { Check, X } from 'lucide-react-native';
+import { Check, ChefHat, X } from 'lucide-react-native';
 import {
   BottomSheet,
   BottomSheetScrollView,
+  Button,
   Input,
   ListGroup,
   ListItem,
@@ -50,6 +52,7 @@ export function MealNightSheet({
   onAddDish,
   onRemoveDish,
   onDishRole,
+  onStartCooking,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -67,6 +70,8 @@ export function MealNightSheet({
   onAddDish?: (recipeId: string) => void;
   onRemoveDish?: (entryId: string) => void;
   onDishRole?: (entryId: string, role: MealRole) => void;
+  /** Starts a cook for each of the night's dishes; absent while running cooks are off. */
+  onStartCooking?: () => void;
 }) {
   const [query, setQuery] = React.useState('');
   const [other, setOther] = React.useState('');
@@ -133,6 +138,19 @@ export function MealNightSheet({
               );
             })}
           </View>
+        )}
+        {!!onStartCooking && dishes.length > 0 && (
+          <Button
+            className="h-11"
+            onPress={() => {
+              haptics.commit();
+              onStartCooking();
+              onOpenChange(false);
+            }}
+          >
+            <ChefHat size={16} className="text-primary-foreground" />
+            {dishes.length > 1 ? `Start cooking ${dishes.length} dishes` : 'Start cooking'}
+          </Button>
         )}
         <Input
           value={other}

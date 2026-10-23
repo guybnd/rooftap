@@ -15,6 +15,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { use$ } from '@legendapp/state/react';
+import { toast } from 'sonner';
 import { ArrowLeft, ChevronLeft, ChevronRight, Pause, Play, Volume2, VolumeX, X, ChefHat } from 'lucide-react';
 import {
   recipes$,
@@ -163,6 +164,14 @@ export default function CookModePage() {
   const meter = meterSegments(step + 1, Math.max(1, steps.length));
   const last = step >= steps.length - 1;
   const leave = () => router.push(`/recipes/${recipeId}`);
+  // Stop before the last step: the cook ends, with Undo, and you leave.
+  const stopCooking = () => {
+    if (!cook || !recipe) return;
+    const id = cook.session.id;
+    cooks.finish(id);
+    toast(`Stopped cooking ${recipe.title}`, { action: { label: 'Undo', onClick: () => cooks.restore(id) } });
+    leave();
+  };
 
   return (
     <div
@@ -190,6 +199,16 @@ export default function CookModePage() {
           <div className="min-w-0 flex-1 truncate text-center text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
             {recipe.title}
           </div>
+          {cook && (
+            <button
+              type="button"
+              onClick={stopCooking}
+              aria-label={`Stop cooking ${recipe.title}`}
+              className="inline-flex h-11 items-center rounded-lg px-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              Stop
+            </button>
+          )}
           <CookAsk recipeId={recipeId} step={step} />
           {canSpeak() ? (
             <button

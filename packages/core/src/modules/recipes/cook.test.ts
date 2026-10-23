@@ -16,6 +16,8 @@ import {
   timerProgress,
   timerState,
   timersToRing,
+  cookTimers,
+  upcomingStepTimer,
   type CookSession,
   type CookTimer,
 } from './cook';
@@ -59,7 +61,9 @@ describe('timers', () => {
     const resumed = resumeTimer(plus, t.id, 'web', T0 + 200_000);
     expect(Date.parse(resumed[0].endsAt!)).toBe(T0 + 760_000);
     expect(resumed[0].deviceId).toBe('web');
-    expect(stopTimer(resumed, t.id)).toEqual([]);
+    const stopped = stopTimer(resumed, t.id);
+    expect(stopped).toHaveLength(1);
+    expect(stopped[0]).toMatchObject({ id: t.id, dismissed: true, endsAt: null, pausedRemaining: null });
   });
 
   it('+1 min on a finished timer starts a fresh minute', () => {
@@ -156,5 +160,34 @@ describe('assistant in cook mode', () => {
     expect(assistantTimer(step, 1, [], { minutes: 10 })).toEqual({ step: 1, index: 0, label: 'Simmer', seconds: 600 });
     expect(assistantTimer(step, 1, [], { label: 'Rice', minutes: 12 })).toEqual({ step: 1, index: 1, label: 'Rice', seconds: 720 });
     expect(assistantTimer(undefined, 0, [], {})).toBeNull();
+  });
+});
+
+describe('dismissed timers', () => {
+  const steps = [
+    { text: 'Chop', timers: [], ingredientIds: [] },
+    { text: 'Simmer', timers: [{ label: 'Simmer', seconds: 600 }], ingredientIds: [] },
+    { text: 'Rest', timers: [{ label: 'Rest', seconds: 300 }], ingredientIds: [] },
+  ];
+
+  it('stays out of the live list but keeps its place', () => {
+    const [t] = startTimer([], input, 'phone', T0);
+    const s = session(stopTimer([t], t.id));
+    expect(cookTimers(s)).toEqual([]);
+    // Going back to step 2 does not offer the dismissed Simmer timer again.
+    expect(upcomingStepTimer(s, steps, 1)).toMatchObject({ step: 2, index: 0 });
+  });
+
+  it('starts again from its chip', () => {
+    const [t] = startTimer([], input, 'phone', T0);
+    const again = startTimer(stopTimer([t], t.id), input, 'web', T0 + 1000);
+    expect(again).toHaveLength(1);
+    expect(again[0]).toMatchObject({ id: t.id, dismissed: false, deviceId: 'web' });
+    expect(cookTimers(session(again))).toHaveLength(1);
+  });
+
+  it('offers the first unused step timer from the current step', () => {
+    expect(upcomingStepTimer(session([]), steps, 0)).toMatchObject({ step: 1, index: 0 });
+    expect(upcomingStepTimer(session([]), steps, 3)).toBeNull();
   });
 });

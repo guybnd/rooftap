@@ -220,11 +220,12 @@ export function CookHeads() {
           <button
             type="button"
             aria-label="Close"
-            className="absolute inset-0 bg-background/90 backdrop-blur-sm"
+            className="absolute inset-0 bg-black/30"
             onClick={() => setOpenId(null)}
           />
-          <div className="relative mx-auto flex w-full max-w-md flex-col gap-5 px-3 pt-6">
-            <div className="flex justify-end gap-3.5 px-1 pb-2">
+          {/* Only the heads and the card take clicks; the gaps close it like the scrim. */}
+          <div className="pointer-events-none relative mx-auto flex w-full max-w-md flex-col gap-4 px-3 pt-6 [&>*]:pointer-events-auto">
+            <div className="flex justify-end gap-3.5 px-1">
               {list.map((cook) => (
                 <button
                   key={cook.session.id}
@@ -248,6 +249,10 @@ export function CookHeads() {
               onOpen={() => {
                 setOpenId(null);
                 router.push(`/recipes/${open.recipe.id}`);
+              }}
+              onStop={() => {
+                setOpenId(null);
+                stop(open);
               }}
             />
           </div>

@@ -16,7 +16,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useKeepAwake } from 'expo-keep-awake';
 import { use$ } from '@legendapp/state/react';
 import { ArrowLeft, ChefHat, ChevronLeft, ChevronRight, Pause, Play, X } from 'lucide-react-native';
-import { Button, ScreenBackground, Text, cn, haptics } from '@homeup/ui';
+import { Button, ScreenBackground, Text, cn, haptics, toast } from '@homeup/ui';
 import {
   recipes$,
   recipeIngredients$,
@@ -103,6 +103,16 @@ export default function CookModeScreen() {
     else openRoute(`/recipes/${recipeId}`);
   };
 
+  // Stop before the last step: the cook ends, with Undo, and you leave.
+  const stopCooking = () => {
+    if (!cook || !recipe) return;
+    haptics.remove();
+    const id = cook.session.id;
+    cooks.finish(id);
+    toast.message(`Stopped cooking ${recipe.title}`, { action: { label: 'Undo', onPress: () => cooks.restore(id) } });
+    leave();
+  };
+
   if (!group || !recipe) {
     return (
       <ScreenBackground className="items-center justify-center p-6">
@@ -137,6 +147,17 @@ export default function CookModeScreen() {
             <Text numberOfLines={1} className="min-w-0 flex-1 text-center text-micro-label uppercase text-muted-foreground">
               {recipe.title}
             </Text>
+            {cook && (
+              <Pressable
+                onPress={stopCooking}
+                accessibilityRole="button"
+                accessibilityLabel={`Stop cooking ${recipe.title}`}
+                hitSlop={6}
+                className="h-11 justify-center rounded-lg px-2"
+              >
+                <Text className="text-sm font-medium text-muted-foreground">Stop</Text>
+              </Pressable>
+            )}
             <CookAsk recipeId={recipeId} step={step} />
           </View>
 

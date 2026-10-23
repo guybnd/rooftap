@@ -17,6 +17,7 @@ import {
   Circle,
   PackageCheck,
   Pencil,
+  StickyNote,
   Star,
   Trash2,
   UserPlus,
@@ -93,6 +94,8 @@ export interface GroceryItemQuickMenuProps {
   onSetDisposition: (status: GroceryItem['status']) => void;
   onToggleEssential: () => void;
   onEdit: () => void;
+  /** Drops the recipe note chip ("2 count for Cake"). Omitted when the item has none or recipes.groceries is off. */
+  onClearRecipeNote?: () => void;
   /** Omitted in reuse contexts (Home hub widget, global search) that don't wire the library-learn flow — mirrors web GroceryItemCardProps' onArchive (FLUX-191). Hides the menu item entirely rather than rendering a dead action. */
   onArchive?: () => void;
   /** Same reuse-context carve-out as onArchive — omitted (not wired to a no-op) where the caller has no delete/undo flow of its own. */
@@ -115,6 +118,7 @@ export function GroceryItemQuickMenu({
   onSetDisposition,
   onToggleEssential,
   onEdit,
+  onClearRecipeNote,
   onArchive,
   onRequestDelete,
   onAssign,
@@ -198,6 +202,13 @@ export function GroceryItemQuickMenu({
             setTimeout(onEdit, 0);
           }}
         />
+        {onClearRecipeNote && (
+          <MenuItem
+            icon={<StickyNote size={14} className="text-muted-foreground" />}
+            label="Remove recipe note"
+            onPress={() => commit(onClearRecipeNote)}
+          />
+        )}
         {/* Archive: learns the item to the library, no confirm (distinct from
             Delete below — mirrors web page.tsx's handleArchive). Hidden
             entirely (not a dead button) where the caller omitted it. */}

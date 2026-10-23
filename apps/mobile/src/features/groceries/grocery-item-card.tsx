@@ -475,6 +475,9 @@ export function GroceryItemCard({
         onSetDisposition={setDisposition}
         onToggleEssential={() => onPatch(item.id, { is_essential: !item.is_essential })}
         onEdit={() => onEdit(item)}
+        onClearRecipeNote={
+          recipeLinked && item.recipe_note ? () => onPatch(item.id, { recipe_note: null, recipe_source_id: null }) : undefined
+        }
         onArchive={onArchive ? () => onArchive(item) : undefined}
         onRequestDelete={onRequestDelete ? () => onRequestDelete(item) : undefined}
         onAssign={(userId) => onPatch(item.id, { assigned_to: userId })}

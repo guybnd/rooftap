@@ -4,11 +4,12 @@
 // label (Leftovers, Out) or a few words, and who cooks. Once a night has a
 // recipe, the list adds more dishes (a main plus sides and a dessert) and the
 // sheet stays open; each dish's role chip cycles Main, Side, Dessert. Every
-// choice applies at once, no Save. Native twin:
+// choice applies at once, no Save. With running cooks on, Start cooking
+// starts one cook for each dish of the night (Recipes v2). Native twin:
 // apps/mobile/src/features/recipes/meal-night-sheet.tsx.
 
 import { useMemo, useState } from 'react';
-import { Check, X } from 'lucide-react';
+import { Check, ChefHat, X } from 'lucide-react';
 import {
   formatMealMinutes,
   MEAL_QUICK_LABELS,
@@ -22,6 +23,7 @@ import {
   type Recipe,
 } from '@homeup/core';
 import { BottomSheet } from '@/components/ui/bottom-sheet';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ListGroup, ListItem, ListItemContent, ListItemLeading, ListItemMeta, ListItemTitle, ListItemTrailing } from '@/components/ui/list-item';
 import { cn } from '@/lib/utils';
@@ -41,6 +43,7 @@ export function MealNightSheet({
   onAddDish,
   onRemoveDish,
   onDishRole,
+  onStartCooking,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -58,6 +61,8 @@ export function MealNightSheet({
   onAddDish?: (recipeId: string) => void;
   onRemoveDish?: (entryId: string) => void;
   onDishRole?: (entryId: string, role: MealRole) => void;
+  /** Starts a cook for each of the night's dishes; absent while running cooks are off. */
+  onStartCooking?: () => void;
 }) {
   const [query, setQuery] = useState('');
   const [other, setOther] = useState('');
@@ -129,6 +134,21 @@ export function MealNightSheet({
                   </button>
                 );
               })}
+            </div>
+          )}
+
+          {onStartCooking && dishes.length > 0 && (
+            <div className="px-4 pb-2">
+              <Button
+                className="h-11 w-full"
+                onClick={() => {
+                  onStartCooking();
+                  onOpenChange(false);
+                }}
+              >
+                <ChefHat className="h-4 w-4" />
+                {dishes.length > 1 ? `Start cooking ${dishes.length} dishes` : 'Start cooking'}
+              </Button>
             </div>
           )}
 

@@ -20,7 +20,7 @@ import {
   addTimerMinute,
   buildCookSession,
   clampStep,
-  cookTimers,
+  allCookTimers,
   pauseTimer,
   resumeTimer,
   startTimer,
@@ -93,9 +93,12 @@ export interface UseCooks {
   addMinute: (cookId: string, timerId: string) => void;
   stopTimer: (cookId: string, timerId: string) => void;
   finish: (cookId: string) => void;
-  /** Undo a finish, while the store still holds the row. */
+  /** Undo a finish made in this app session. */
   restore: (cookId: string) => void;
 }
+
+/** Cooks finished in this app session, so Undo can bring them back. */
+const finished = new Map<string, CookSession>();
 
 export function useCooks(groupId: string | null | undefined, userId: string | null | undefined): UseCooks {
   const modules = useModules();
@@ -140,7 +143,7 @@ export function useCooks(groupId: string | null | undefined, userId: string | nu
       if (running) {
         if (timerInput) {
           patchRow(running.session.id, {
-            timers: startTimer(cookTimers(running.session), timerInput, cookDeviceId(), Date.now()),
+            timers: startTimer(allCookTimers(running.session), timerInput, cookDeviceId(), Date.now()),
           });
         }
         return running.session.id;
@@ -160,7 +163,7 @@ export function useCooks(groupId: string | null | undefined, userId: string | nu
     (cookId: string, fn: (timers: CookTimer[], now: number) => CookTimer[]) => {
       const cook = byId(cookId);
       if (!cook) return;
-      patchRow(cookId, { timers: fn(cookTimers(cook.session), Date.now()) });
+      patchRow(cookId, { timers: fn(allCookTimers(cook.session), Date.now()) });
     },
     [byId, patchRow],
   );
@@ -202,7 +205,23 @@ export function useCooks(groupId: string | null | undefined, userId: string | nu
     addMinute: (cookId, timerId) =>
       setTimers(cookId, (timers, now) => addTimerMinute(timers, timerId, cookDeviceId(), now)),
     stopTimer: (cookId, timerId) => setTimers(cookId, (timers) => stopTimer(timers, timerId)),
-    finish: (cookId) => softDeleteRow(cookId),
-    restore: (cookId) => patchRow(cookId, { deleted: false }),
+    finish: (cookId) => {
+      const cook = byId(cookId);
+      if (cook) finished.set(cookId, cook.session);
+      softDeleteRow(cookId);
+    },
+    // The finished row may already have left the store (a synced delete
+    // drops it), so Undo starts the same cook again as a new row.
+    restore: (cookId) => {
+      const old = finished.get(cookId);
+      if (!old || !groupId) return;
+      finished.delete(cookId);
+      writeRow({
+        ...buildCookSession({ groupId, userId: userId ?? null, recipeId: old.recipe_id }),
+        step: old.step,
+        timers: allCookTimers(old),
+        started_at: old.started_at,
+      });
+    },
   };
 }

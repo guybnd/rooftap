@@ -36,6 +36,7 @@ import {
   recipeMinutes,
   requestMealDraft,
   todayISO,
+  useCooks,
   useMealWeek,
   useModules,
   type MealDraftNight,
@@ -69,6 +70,7 @@ export function MealWeek({
   const today = todayISO();
   const [weekStart, setWeekStart] = React.useState(() => mealWeekStart(today));
   const week = useMealWeek({ groupId, currentUserId, weekStart, today, groceriesLinked, calendarLinked, multiDish });
+  const cooks = useCooks(groupId, currentUserId);
 
   const [draft, setDraft] = React.useState<MealDraftNight[] | null>(null);
   const [drafting, setDrafting] = React.useState(false);
@@ -258,6 +260,15 @@ export function MealWeek({
         onAddDish={!picking?.draft && multiDish ? (recipeId) => picking && week.addDish(picking.date, recipeId) : undefined}
         onRemoveDish={week.removeDish}
         onDishRole={week.setDishRole}
+        onStartCooking={
+          cooks.enabled && !picking?.draft && pickedNight?.dishes.length
+            ? () => {
+                // One cook per dish; the cooking heads show them all.
+                for (const d of pickedNight.dishes) cooks.start(d.recipe.id);
+                toast.success(pickedNight.dishes.length > 1 ? `Cooking ${pickedNight.dishes.length} dishes` : `Cooking ${pickedNight.dishes[0].recipe.title}`);
+              }
+            : undefined
+        }
       />
     </View>
   );

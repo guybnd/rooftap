@@ -6,7 +6,7 @@
 import * as React from 'react';
 import { Pressable, View } from 'react-native';
 import { ChefHat, Pause, Play, X } from 'lucide-react-native';
-import { Button, Text, cn, haptics } from '@homeup/ui';
+import { Button, Text, cn, haptics, toast } from '@homeup/ui';
 import {
   cookTimers,
   formatCountdown,
@@ -15,6 +15,7 @@ import {
   timerProgress,
   timerRemainingMs,
   timerState,
+  upcomingStepTimer,
   type RunningCook,
   type UseCooks,
 } from '@homeup/core';
@@ -28,6 +29,7 @@ export function CookCard({
   cooks,
   now,
   onOpen,
+  onStop,
   className,
 }: {
   cook: RunningCook;
@@ -35,6 +37,8 @@ export function CookCard({
   now: number;
   /** Shows an Open button that leads to the recipe. */
   onOpen?: () => void;
+  /** Stops the cook before its last step. Defaults to stopping it with Undo. */
+  onStop?: () => void;
   className?: string;
 }) {
   const { session, steps, step, recipe } = cook;
@@ -42,14 +46,15 @@ export function CookCard({
   const text = steps[step]?.text ?? 'This recipe has no steps yet.';
   const last = step >= steps.length - 1;
   const timers = cookTimers(session).sort((a, b) => timerRemainingMs(a, now) - timerRemainingMs(b, now));
-  const upcoming = (() => {
-    for (let s = step; s < steps.length; s++) {
-      const idx = steps[s].timers.findIndex((_, j) => !timers.some((t) => t.step === s && t.index === j));
-      if (idx >= 0) return { step: s, index: idx, timer: steps[s].timers[idx] };
-    }
-    return null;
-  })();
+  // The next step timer not used yet (a dismissed one counts as used).
+  const upcoming = upcomingStepTimer(session, steps, step);
   const meter = meterSegments(step + 1, Math.max(1, steps.length));
+  const stop = () => {
+    haptics.remove();
+    if (onStop) return onStop();
+    cooks.finish(id);
+    toast.message(`Stopped cooking ${recipe.title}`, { action: { label: 'Undo', onPress: () => cooks.restore(id) } });
+  };
 
   return (
     <View className={cn('gap-3 rounded-3xl border border-border/60 bg-card p-4', className)}>
@@ -62,6 +67,9 @@ export function CookCard({
             {steps.length ? `Step ${step + 1} of ${steps.length}` : 'Cooking'}
           </Text>
         </View>
+        <Button variant="ghost" size="sm" onPress={stop} className="h-10 px-3" accessibilityLabel={`Stop cooking ${recipe.title}`}>
+          <Text className="text-sm font-medium text-muted-foreground">Stop</Text>
+        </Button>
         {onOpen && (
           <Button variant="outline" size="sm" onPress={onOpen} className="h-10 px-3">
             Open

@@ -30,6 +30,11 @@ export interface CookTimer {
   pausedRemaining: number | null;
   /** The device that started it, and so rings for it. */
   deviceId: string | null;
+  /**
+   * Stopped or dismissed. Kept on the row so the step's timer is not offered
+   * again as the next one to start; hidden everywhere else.
+   */
+  dismissed?: boolean;
 }
 
 export interface CookSession {
@@ -64,9 +69,14 @@ export function buildCookSession(input: { groupId: string; userId: string | null
   };
 }
 
-/** The cook's timers, tolerating a malformed jsonb value. */
-export function cookTimers(session: Pick<CookSession, 'timers'>): CookTimer[] {
+/** Every timer on the row, dismissed ones too, tolerating a malformed jsonb value. Writes start from this. */
+export function allCookTimers(session: Pick<CookSession, 'timers'>): CookTimer[] {
   return Array.isArray(session.timers) ? session.timers.filter((t) => t && typeof t.id === 'string') : [];
+}
+
+/** The cook's live timers: running, paused or done, not dismissed. */
+export function cookTimers(session: Pick<CookSession, 'timers'>): CookTimer[] {
+  return allCookTimers(session).filter((t) => !t.dismissed);
 }
 
 export function timerRemainingMs(timer: CookTimer, now: number): number {
@@ -87,7 +97,7 @@ export function timerProgress(timer: CookTimer, now: number): number {
   return Math.min(1, Math.max(0, 1 - timerRemainingMs(timer, now) / total));
 }
 
-/** The timer started from a step's timer chip, if it is on this cook. */
+/** The timer started from a step's timer chip, if it is on this cook and not dismissed. */
 export function findStepTimer(session: Pick<CookSession, 'timers'>, step: number, index: number): CookTimer | null {
   return cookTimers(session).find((t) => t.step === step && t.index === index) ?? null;
 }
@@ -106,6 +116,8 @@ export function startTimer(
   if (existing && timerState(existing, now) !== 'done') return timers;
   const timer: CookTimer = {
     id: existing?.id ?? envRandomUUID(),
+    // A dismissed timer started again is live again.
+    dismissed: false,
     step: input.step,
     index: input.index,
     label: input.label,
@@ -151,9 +163,29 @@ export function addTimerMinute(timers: CookTimer[], id: string, deviceId: string
   });
 }
 
-/** Stop a timer, or dismiss a finished one. */
+/**
+ * Stop a timer, or dismiss a finished one. It stays on the row, marked, so
+ * the cook card does not offer the same step timer again.
+ */
 export function stopTimer(timers: CookTimer[], id: string): CookTimer[] {
-  return timers.filter((t) => t.id !== id);
+  return mapTimer(timers, id, (t) => ({ ...t, endsAt: null, pausedRemaining: null, dismissed: true }));
+}
+
+/**
+ * The next step timer the cook has not used yet, from the step on screen
+ * on: what the cook card offers to start.
+ */
+export function upcomingStepTimer(
+  session: Pick<CookSession, 'timers'>,
+  steps: readonly RecipeStep[],
+  fromStep: number,
+): { step: number; index: number; timer: RecipeStep['timers'][number] } | null {
+  const used = allCookTimers(session);
+  for (let s = Math.max(0, fromStep); s < steps.length; s++) {
+    const index = steps[s].timers.findIndex((_, j) => !used.some((t) => t.step === s && t.index === j));
+    if (index >= 0) return { step: s, index, timer: steps[s].timers[index] };
+  }
+  return null;
 }
 
 export function clampStep(step: number, stepCount: number): number {

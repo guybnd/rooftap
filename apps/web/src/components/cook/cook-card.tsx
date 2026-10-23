@@ -14,9 +14,11 @@ import {
   timerProgress,
   timerRemainingMs,
   timerState,
+  upcomingStepTimer,
   type RunningCook,
   type UseCooks,
 } from '@homeup/core';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { TimerRing } from './timer-ring';
 import { askTimerNotificationPermission } from './cook-alarms';
@@ -26,6 +28,7 @@ export function CookCard({
   cooks,
   now,
   onOpen,
+  onStop,
   className,
 }: {
   cook: RunningCook;
@@ -33,6 +36,8 @@ export function CookCard({
   now: number;
   /** Shows an Open button that leads to the recipe. */
   onOpen?: () => void;
+  /** Stops the cook before its last step. Defaults to stopping it with Undo. */
+  onStop?: () => void;
   className?: string;
 }) {
   const { session, steps, step, recipe } = cook;
@@ -40,15 +45,14 @@ export function CookCard({
   const text = steps[step]?.text ?? 'This recipe has no steps yet.';
   const last = step >= steps.length - 1;
   const timers = cookTimers(session).sort((a, b) => timerRemainingMs(a, now) - timerRemainingMs(b, now));
-  // The next timer the cook will meet: on this step and not started, or on a later step.
-  const upcoming = (() => {
-    for (let s = step; s < steps.length; s++) {
-      const idx = steps[s].timers.findIndex((_, j) => !timers.some((t) => t.step === s && t.index === j));
-      if (idx >= 0) return { step: s, index: idx, timer: steps[s].timers[idx] };
-    }
-    return null;
-  })();
+  // The next step timer not used yet (a dismissed one counts as used).
+  const upcoming = upcomingStepTimer(session, steps, step);
   const meter = meterSegments(step + 1, Math.max(1, steps.length));
+  const stop = () => {
+    if (onStop) return onStop();
+    cooks.finish(id);
+    toast(`Stopped cooking ${recipe.title}`, { action: { label: 'Undo', onClick: () => cooks.restore(id) } });
+  };
 
   return (
     <div className={cn('space-y-3 rounded-3xl border border-border/60 bg-card p-4 shadow-[var(--card-shadow)]', className)}>
@@ -59,6 +63,14 @@ export function CookCard({
             {steps.length ? `Step ${step + 1} of ${steps.length}` : 'Cooking'}
           </div>
         </div>
+        <button
+          type="button"
+          onClick={stop}
+          aria-label={`Stop cooking ${recipe.title}`}
+          className="inline-flex h-10 items-center rounded-lg px-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+        >
+          Stop
+        </button>
         {onOpen && (
           <button
             type="button"

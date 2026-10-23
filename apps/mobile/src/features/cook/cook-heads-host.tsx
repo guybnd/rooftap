@@ -1,10 +1,11 @@
 // Recipes v2 R3: the cooking heads over every screen (mockups 1C, 1D). Maps
 // the running cooks onto @homeup/ui's CookHeads, keeps where the pile rests
-// on this phone, and draws the opened head's card over a dim layer with
-// the other heads in a row above it to switch between cooks. Stopping a
-// cook from the drop target shows Undo.
+// on this phone, and draws the opened head's card in its own window over a
+// light scrim, with the other heads in a row above it to switch between
+// cooks. Stopping a cook (the drop target or the card's Stop) shows Undo.
 import * as React from 'react';
-import { Pressable, View } from 'react-native';
+import { Modal, Pressable, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { usePathname } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CookHeadFace, CookHeads, cn, toast, type CookHead } from '@homeup/ui';
@@ -104,41 +105,57 @@ export function CookHeadsHost({ bottomInset }: { bottomInset: number }) {
           topInset={insets.top}
         />
       )}
-      {open && (
-        <View style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, zIndex: 70 }}>
+      {/* The open card is its own window: Back closes it, a tap outside
+          closes it, and touches never reach the screen underneath. A light
+          scrim keeps the screen readable behind the card. */}
+      <Modal
+        transparent
+        visible={!!open}
+        animationType="fade"
+        onRequestClose={() => setOpenId(null)}
+        statusBarTranslucent
+        navigationBarTranslucent
+      >
+        <GestureHandlerRootView style={{ flex: 1 }}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Close"
             onPress={() => setOpenId(null)}
-            className="absolute inset-0 bg-background/95"
+            className="absolute inset-0 bg-black/30"
           />
-          <View className="gap-5 px-3" style={{ paddingTop: insets.top + 16 }} pointerEvents="box-none">
-            <View className="flex-row justify-end gap-3.5 px-1 pb-2">
-              {list.map((cook, i) => (
-                <Pressable
-                  key={cook.session.id}
-                  accessibilityRole="button"
-                  accessibilityLabel={cook.recipe.title}
-                  accessibilityState={{ selected: cook.session.id === open.session.id }}
-                  onPress={() => setOpenId(cook.session.id)}
-                  className={cn('rounded-full p-0.5', cook.session.id === open.session.id && 'border-[3px] border-primary')}
-                >
-                  <CookHeadFace head={heads[i]} size={52} />
-                </Pressable>
-              ))}
+          {open && (
+            <View className="gap-4 px-3" style={{ paddingTop: insets.top + 16 }} pointerEvents="box-none">
+              <View className="flex-row justify-end gap-3.5 px-1" pointerEvents="box-none">
+                {list.map((cook, i) => (
+                  <Pressable
+                    key={cook.session.id}
+                    accessibilityRole="button"
+                    accessibilityLabel={cook.recipe.title}
+                    accessibilityState={{ selected: cook.session.id === open.session.id }}
+                    onPress={() => setOpenId(cook.session.id)}
+                    className={cn('rounded-full p-0.5', cook.session.id === open.session.id && 'border-[3px] border-primary')}
+                  >
+                    <CookHeadFace head={heads[i]} size={52} />
+                  </Pressable>
+                ))}
+              </View>
+              <CookCard
+                cook={open}
+                cooks={cooks}
+                now={now}
+                onOpen={() => {
+                  setOpenId(null);
+                  openRoute(`/recipes/${open.recipe.id}`);
+                }}
+                onStop={() => {
+                  setOpenId(null);
+                  stop(open.session.id);
+                }}
+              />
             </View>
-            <CookCard
-              cook={open}
-              cooks={cooks}
-              now={now}
-              onOpen={() => {
-                setOpenId(null);
-                openRoute(`/recipes/${open.recipe.id}`);
-              }}
-            />
-          </View>
-        </View>
-      )}
+          )}
+        </GestureHandlerRootView>
+      </Modal>
     </>
   );
 }

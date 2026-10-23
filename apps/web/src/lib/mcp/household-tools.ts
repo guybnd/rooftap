@@ -52,6 +52,7 @@ import {
   setBankLinkRule,
 } from "@/lib/bank-actions";
 import {
+  allCookTimers,
   assistantTimer,
   buildCookSession,
   clampStep,
@@ -1707,7 +1708,7 @@ export function householdTools({
       const steps = recipeSteps(recipe);
       const existing = cooks.find((c) => c.recipe_id === recipe.id) ?? null;
       const stepIndex = clampStep(step != null ? step - 1 : existing?.step ?? 0, steps.length);
-      const timers = existing ? cookTimers(existing) : [];
+      const timers = existing ? allCookTimers(existing) : [];
       const pick = assistantTimer(steps[stepIndex], stepIndex, timers, { label, minutes });
       if (!pick) return toolError("Say how many minutes: this step has no timer of its own");
       // Rings on the asking device, else on the device the person last started a timer from.
