@@ -13,7 +13,8 @@
 
 import { CATEGORY_COLOR, CATEGORY_META } from './costs';
 import { costCategoryFromUp, monthRange, type BankTransactionView, type ShopChangeResult, type UpBankApi } from './up-bank';
-import type { CostMonth, CostMonthLine } from './cost-month';
+import { costCategoryLabel, type CostMonth, type CostMonthLine } from './cost-month';
+import { formatMoney } from '../../money-format';
 import type { RowMenu } from '../../row-actions';
 import type { CostCategory, CostItem } from '../../types';
 
@@ -177,6 +178,77 @@ export function costPaymentMenu(input: {
         options: costMoveOptions(input.category, input.choices, input.onMove),
       },
       t.mine && input.onHide && { id: 'hide', label: t.hidden ? 'Show in spending' : 'Hide from spending', group: 'danger', icon: 'hide', run: input.onHide },
+    ],
+  };
+}
+
+/** A shop row whose month of payments can be hidden: an Up shop, on servers with 'costs.quick-move'. */
+export function canHideCostLine(line: CostMonthLine, quickMove: boolean): boolean {
+  return quickMove && line.kind === 'shop' && !!line.vendor && line.source === 'up';
+}
+
+/** What a toast says after a row action, and how its Undo puts it back (null when it can't). */
+export interface CostRowDone {
+  message: string;
+  undo: (() => Promise<void>) | null;
+}
+
+/** Moves a row (moveCostLine) and says where it went, with Undo back to where it was. */
+export async function moveCostLineWithUndo(
+  line: CostMonthLine,
+  inCategory: CostCategory | null,
+  to: CostCategory,
+  quickMove: boolean,
+  deps: CostMoveDeps
+): Promise<CostRowDone> {
+  const from = costLineCategory(line, inCategory);
+  await moveCostLine(line, to, quickMove, deps);
+  return {
+    message: `Moved ${line.name} to ${CATEGORY_META[to].label}`,
+    undo: from ? () => moveCostLine(line, from, quickMove, deps) : null,
+  };
+}
+
+/** Hides a shop's payments in a month (hideShopMonth), with Undo; null when there was nothing to hide. */
+export async function hideShopMonthWithUndo(
+  line: CostMonthLine,
+  month: string,
+  monthName: string,
+  deps: Pick<CostMoveDeps, 'api' | 'reload'>
+): Promise<CostRowDone | null> {
+  const done = await hideShopMonth(line, month, deps);
+  if (!done) return null;
+  return {
+    message: `Hid ${line.name} in ${monthName}`,
+    undo: async () => {
+      await deps.api.changeShop({ ids: done.ids, hidden: false });
+      deps.reload();
+    },
+  };
+}
+
+/** The amount a row's sheet shows: what was paid, else "~" what is to come. */
+export function costLineAmountLabel(line: Pick<CostMonthLine, 'paidCents' | 'toComeCents'>): string | undefined {
+  if (line.paidCents > 0) return formatMoney(line.paidCents);
+  if (line.toComeCents > 0) return `~${formatMoney(line.toComeCents)}`;
+  return undefined;
+}
+
+/** A category row's menu: ask about it, and add a cost (or income) to it. */
+export function costCategoryMenu(input: {
+  category: CostCategory | null;
+  monthName: string;
+  onAsk: (question: string) => void;
+  onAdd: (category: CostCategory) => void;
+}): RowMenu {
+  const label = costCategoryLabel(input.category);
+  const category = input.category;
+  return {
+    title: label,
+    kind: 'Category',
+    actions: [
+      { id: 'ask', label: 'Ask the assistant', group: 'share', icon: 'comment', run: () => input.onAsk(`Help me make sense of my ${label} costs in ${input.monthName}.`) },
+      category && { id: 'add', label: category === 'income' ? 'Add income' : 'Add a cost', group: 'edit', icon: 'edit', run: () => input.onAdd(category) },
     ],
   };
 }

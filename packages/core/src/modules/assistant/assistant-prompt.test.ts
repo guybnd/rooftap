@@ -23,6 +23,10 @@ describe('buildAssistantSystemPrompt', () => {
     expect(prompt).toContain(PRIVACY_TEXT);
   });
 
+  it('tells the assistant to batch changes to several items', () => {
+    expect(ASSISTANT_PERSONA).toContain('call the tool once for each item in the same reply');
+  });
+
   it('tells the assistant to act now instead of promising to', () => {
     expect(ASSISTANT_PERSONA).toContain('Never end a reply saying you will look something up');
   });

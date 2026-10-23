@@ -23,6 +23,9 @@ import {
   computeEventOverlapLayout,
   computeOverlapLayout,
   isEventStartDay,
+  formatClockTime,
+  formatHourLabel,
+  isSameLocalDay,
   type Apartment,
   type Appointment,
   type GoogleCalendarEventWithAttribution,
@@ -127,20 +130,6 @@ export const SLOT_HEIGHT = 56;
 const SLOTS_PER_HOUR = 4;
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
-export function formatHour(hour: number): string {
-  const h = hour % 12 || 12;
-  const ampm = hour < 12 ? 'AM' : 'PM';
-  return `${h} ${ampm}`;
-}
-
-function formatClock(d: Date): string {
-  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-}
-
-function isSameDay(a: Date, b: Date): boolean {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-}
-
 // A small top inset applied to the whole grid so whichever hour row the
 // index screen's auto-scroll-to-current-time lands on always has breathing
 // room above its label — without it the scrolled-to row's label sits flush
@@ -184,7 +173,7 @@ export function DayGrid({
   const calendarLayout = computeCalendarOverlapLayout(calendarEvents);
 
   const now = new Date();
-  const isToday = isSameDay(day, now);
+  const isToday = isSameLocalDay(day, now);
   const nowTop = (now.getHours() + now.getMinutes() / 60) * SLOT_HEIGHT;
 
   const handleLongPress = (e: { nativeEvent: { locationY: number } }) => {
@@ -201,7 +190,7 @@ export function DayGrid({
       <View style={{ width: 44 }}>
         {HOURS.map((h) => (
           <View key={h} style={{ height: SLOT_HEIGHT }} className="items-end pr-1.5 pt-0.5">
-            <Text className="text-[10px] text-muted-foreground">{formatHour(h)}</Text>
+            <Text className="text-[10px] text-muted-foreground">{formatHourLabel(h)}</Text>
           </View>
         ))}
       </View>
@@ -239,7 +228,7 @@ export function DayGrid({
               style={{ top, height, left: `${col * widthPercent}%`, width: `${widthPercent}%` }}
             >
               <BlockText
-                time={formatClock(new Date(ev.starts_at))}
+                time={formatClockTime(new Date(ev.starts_at))}
                 title={ev.title || 'Untitled event'}
                 height={height}
                 textClassName={calendarEventTextClasses(ev)}
@@ -261,7 +250,7 @@ export function DayGrid({
               style={{ top, height, left: `${col * widthPercent}%`, width: `${widthPercent}%` }}
             >
               <BlockText
-                time={formatClock(new Date(ev.starts_at))}
+                time={formatClockTime(new Date(ev.starts_at))}
                 title={ev.title}
                 detail={ev.location}
                 height={height}
@@ -279,7 +268,7 @@ export function DayGrid({
           const widthPercent = 100 / totalCols;
           const muted = app.status === 'skipped' || app.status === 'rebook';
           const optional = app.status === 'optional';
-          const time = formatClock(new Date(app.scheduled_at));
+          const time = formatClockTime(new Date(app.scheduled_at));
           return (
             // A viewing is a neutral card in the grid (H2: teal is for
             // controls, amber for status words). An optional one is told by

@@ -12,13 +12,15 @@ import {
   computeOverlapLayout,
   getEventsForDay,
   isEventStartDay,
+  formatHourLabel,
+  isSameLocalDay,
   type Apartment,
   type Appointment,
   type GoogleCalendarEventWithAttribution,
   type GroupEvent,
 } from '@homeup/core';
 import { Text, cn, haptics } from '@homeup/ui';
-import { calendarEventClasses, calendarEventTextClasses, formatHour, groupEventClasses } from './day-grid';
+import { calendarEventClasses, calendarEventTextClasses, groupEventClasses } from './day-grid';
 
 /** Narrower than DayGrid's 56: a week needs more of the day on screen at once. */
 export const WEEK_SLOT_HEIGHT = 44;
@@ -29,10 +31,6 @@ const MIN_BLOCK = 18;
 const WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 /** All-day chips shown per day before a "+n". */
 const ALL_DAY_SHOWN = 2;
-
-function isSameDay(a: Date, b: Date): boolean {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-}
 
 interface WeekViewProps {
   days: Date[];
@@ -68,7 +66,7 @@ export function WeekView({
   const today = new Date();
   const columns = days.map((day) => {
     const dayEvents = getEventsForDay(groupEvents, day);
-    const dayCalendar = calendarEvents.filter((ev) => isSameDay(new Date(ev.starts_at), day));
+    const dayCalendar = calendarEvents.filter((ev) => isSameLocalDay(new Date(ev.starts_at), day));
     return {
       day,
       allDay: [
@@ -78,7 +76,7 @@ export function WeekView({
       events: computeEventOverlapLayout(dayEvents.filter((ev) => !ev.is_all_day && isEventStartDay(ev, day))),
       calendar: computeCalendarOverlapLayout(dayCalendar.filter((ev) => !ev.is_all_day)),
       viewings: computeOverlapLayout(
-        appointments.filter((a) => isSameDay(new Date(a.scheduled_at), day)),
+        appointments.filter((a) => isSameLocalDay(new Date(a.scheduled_at), day)),
         durationMinutes
       ),
     };
@@ -90,8 +88,8 @@ export function WeekView({
       {/* Day headers: tap one to open that day. */}
       <View className="flex-row border-b border-border/60 pb-1.5" style={{ paddingLeft: GUTTER }}>
         {days.map((day) => {
-          const selected = isSameDay(day, selectedDay);
-          const isToday = isSameDay(day, today);
+          const selected = isSameLocalDay(day, selectedDay);
+          const isToday = isSameLocalDay(day, today);
           return (
             <Pressable
               key={day.toDateString()}
@@ -170,13 +168,13 @@ export function WeekView({
           <View style={{ width: GUTTER }}>
             {HOURS.map((h) => (
               <View key={h} style={{ height: WEEK_SLOT_HEIGHT }} className="items-end pr-1 pt-0.5">
-                <Text className="text-[9px] text-muted-foreground">{formatHour(h)}</Text>
+                <Text className="text-[9px] text-muted-foreground">{formatHourLabel(h)}</Text>
               </View>
             ))}
           </View>
 
           {columns.map(({ day, events, calendar, viewings }) => {
-            const isToday = isSameDay(day, today);
+            const isToday = isSameLocalDay(day, today);
             const nowTop = (today.getHours() + today.getMinutes() / 60) * WEEK_SLOT_HEIGHT;
             return (
               <Pressable

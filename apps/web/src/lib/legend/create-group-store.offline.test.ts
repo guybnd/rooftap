@@ -237,7 +237,9 @@ describe("createGroupStore — offline write / reconnect / group isolation (HOUP
     storeA$["a-1"].set({ id: "a-1", group_id: "group-a", deleted: false, name: "Bread", created_at: null, updated_at: null });
     storeB$["b-1"].set({ id: "b-1", group_id: "group-b", deleted: false, name: "Eggs", created_at: null, updated_at: null });
 
-    await pollUntil(() => table("grocery_items").length === 2);
+    // A busy CI runner can push these well past the default wait (main and
+    // PRs timed out here at 8 s on Oct 23), so give it the restart test's.
+    await pollUntil(() => table("grocery_items").length === 2, 15000);
 
     // The fake "server" (standing in for Postgres+RLS) only ever received
     // each row tagged with its own group_id — the write path is correctly
@@ -253,7 +255,7 @@ describe("createGroupStore — offline write / reconnect / group isolation (HOUP
     // local table — each group's client-side view contains only its own rows.
     expect(storeA$["b-1"].peek()).toBeUndefined();
     expect(storeB$["a-1"].peek()).toBeUndefined();
-  }, 15000);
+  }, 25000);
 });
 
 // HOUP-267: reconcileDeletedRows against a REAL synced-observable push path

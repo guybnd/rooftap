@@ -1,7 +1,7 @@
 // HOUP-87: the calendar's Agenda view for one day — a flat, time-sorted list
 // merging appointments, group events, Google Calendar overlay events
-// (HOUP-100), and due to-dos, same source data as apps/web/src/app/calendar/
-// page.tsx's getAgendaItems.
+// (HOUP-100), and due to-dos, from core's calendarAgenda like web's calendar
+// page.
 import * as React from 'react';
 import { Pressable, View } from 'react-native';
 import { Building2, Check, CalendarDays, Navigation } from 'lucide-react-native';
@@ -10,10 +10,7 @@ import {
   binNamesPhrase,
   eventDetailLabel,
   legText,
-  getEventsForDay,
-  isEventStartDay,
-  type Apartment,
-  type BinCollection,
+  type CalendarAgendaItem,
   type Appointment,
   type GoogleCalendarEventWithAttribution,
   type GroupEvent,
@@ -33,104 +30,8 @@ function memberLabel(userId: string, profiles: MemberProfiles | undefined): stri
   return profile.name || profile.email || 'Member';
 }
 
-function toDateKey(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-function formatClock(d: Date): string {
-  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-}
-
-function formatWallClockTime(hhmm: string): string {
-  const [h, m] = hhmm.split(':').map(Number);
-  return new Date(1970, 0, 1, h, m).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-}
-
-export type AgendaItem =
-  | { kind: 'appointment'; key: string; sortMinutes: number; timeLabel: string; appointment: Appointment; apartment: Apartment | null }
-  | { kind: 'event'; key: string; sortMinutes: number; timeLabel: string; event: GroupEvent }
-  | { kind: 'calendarEvent'; key: string; sortMinutes: number; timeLabel: string; calendarEvent: GoogleCalendarEventWithAttribution }
-  | { kind: 'task'; key: string; sortMinutes: number; timeLabel: string; task: HouseholdTask }
-  | { kind: 'bins'; key: string; sortMinutes: number; timeLabel: string; collection: BinCollection };
-
-export function getAgendaItems(
-  date: Date,
-  appointments: Appointment[],
-  apartments: Apartment[],
-  groupEvents: GroupEvent[],
-  tasks: HouseholdTask[],
-  calendarEvents: GoogleCalendarEventWithAttribution[] = [],
-  binDay: BinCollection | null = null
-): AgendaItem[] {
-  const items: AgendaItem[] = [];
-  const dateKey = toDateKey(date);
-
-  // Bin night: the day's collection, as an all-day row (needs calendar and bins).
-  if (binDay) {
-    items.push({ kind: 'bins', key: `bins-${binDay.date}`, sortMinutes: -1, timeLabel: 'All day', collection: binDay });
-  }
-
-  appointments
-    .filter((app) => toDateKey(new Date(app.scheduled_at)) === dateKey)
-    .forEach((app) => {
-      const d = new Date(app.scheduled_at);
-      items.push({
-        kind: 'appointment',
-        key: `apt-${app.id}`,
-        sortMinutes: d.getHours() * 60 + d.getMinutes(),
-        timeLabel: formatClock(d),
-        appointment: app,
-        apartment: apartments.find((a) => a.id === app.apartment_id) ?? null,
-      });
-    });
-
-  // Google Calendar overlay events (HOUP-100) — matched by exact start-day
-  // (mirrors apps/web's getCalendarEventsForDay; these never span multiple
-  // days the way group events can).
-  calendarEvents
-    .filter((ev) => toDateKey(new Date(ev.starts_at)) === dateKey)
-    .forEach((ev) => {
-      const d = new Date(ev.starts_at);
-      items.push({
-        kind: 'calendarEvent',
-        key: `gcal-${ev.id}`,
-        sortMinutes: ev.is_all_day ? -1 : d.getHours() * 60 + d.getMinutes(),
-        timeLabel: ev.is_all_day ? 'All day' : formatClock(d),
-        calendarEvent: ev,
-      });
-    });
-
-  // Matches any day within an event's [starts_at, ends_at] span, not just its
-  // start day, so multi-day events show up on every day they span (FLUX-259 /
-  // HOUP-112) — a later spanned day renders as an "All day" row, since only
-  // the start day carries a meaningful clock time.
-  getEventsForDay(groupEvents, date).forEach((ev) => {
-    const allDay = ev.is_all_day || !isEventStartDay(ev, date);
-    const d = new Date(ev.starts_at);
-    items.push({
-      kind: 'event',
-      key: `event-${ev.id}`,
-      sortMinutes: allDay ? -1 : d.getHours() * 60 + d.getMinutes(),
-      timeLabel: allDay ? 'All day' : formatClock(d),
-      event: ev,
-    });
-  });
-
-  tasks
-    .filter((t) => t.due_date === dateKey)
-    .forEach((t) => {
-      const [h, m] = t.due_time ? t.due_time.split(':').map(Number) : [null, null];
-      items.push({
-        kind: 'task',
-        key: `task-${t.id}`,
-        sortMinutes: h === null ? -1 : h * 60 + (m ?? 0),
-        timeLabel: t.due_time ? formatWallClockTime(t.due_time) : 'All day',
-        task: t,
-      });
-    });
-
-  return items.sort((a, b) => a.sortMinutes - b.sortMinutes);
-}
+// The day's items come from core's calendarAgenda (calendar-view.ts), shared with web.
+export type AgendaItem = CalendarAgendaItem;
 
 interface AgendaListProps {
   items: AgendaItem[];

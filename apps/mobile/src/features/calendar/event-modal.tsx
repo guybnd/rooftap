@@ -20,10 +20,11 @@ import {
   EVENT_CATEGORY_META,
   EVENT_REMINDER_OPTIONS,
   applyParsedEvent,
-  eventReminderDays,
   looksLikeEventLink,
   mapsSearchUrl,
   todayISO,
+  eventFromForm,
+  initialEventForm,
   EVENT_DURATION_OPTIONS,
   eventDurationChoice,
   eventDurationMinutes,
@@ -38,9 +39,7 @@ import {
   linkEventTicket,
   saveEventTicket,
   useModules,
-  localDateOf,
   localDateTimeToISO,
-  localTimeOf,
   type EventTiming,
   type TravelMode,
   type EventCategory,
@@ -103,26 +102,27 @@ export function EventModal({
 }: EventModalProps) {
   // The caller remounts this component on `event?.id ?? 'new'` (mirrors
   // household-task-modal.tsx), so these initializers alone re-seed the form.
-  const [title, setTitle] = React.useState(event?.title ?? '');
-  const [category, setCategory] = React.useState<EventCategory>(event?.category ?? 'general');
-  const [visibility, setVisibility] = React.useState<'shared' | 'private'>(event?.private ? 'private' : 'shared');
-  const [isAllDay, setIsAllDay] = React.useState(event?.is_all_day ?? false);
-  const [startDate, setStartDate] = React.useState(event ? localDateOf(event.starts_at) : defaultDate || todayISO());
-  const [startTime, setStartTime] = React.useState(event ? localTimeOf(event.starts_at) : defaultTime || '09:00');
-  const [endDate, setEndDate] = React.useState(event?.ends_at ? localDateOf(event.ends_at) : '');
-  const [endTime, setEndTime] = React.useState(event?.ends_at ? localTimeOf(event.ends_at) : '');
-  const [location, setLocation] = React.useState(event?.location ?? '');
-  const [notes, setNotes] = React.useState(event?.notes ?? '');
   // Time to leave: new events start on Drive when the household's home is set.
   const { group, userSettings } = useDataCache();
-  const [travelMode, setTravelMode] = React.useState<TravelMode | null>(
-    event ? event.travel_mode ?? null : group?.home_lat != null && group?.home_lng != null ? 'drive' : null
+  const [initial] = React.useState(() =>
+    initialEventForm(event, { defaultDate, defaultTime, costCents, hasHome: group?.home_lat != null && group?.home_lng != null })
   );
+  const [title, setTitle] = React.useState(initial.title);
+  const [category, setCategory] = React.useState<EventCategory>(initial.category);
+  const [visibility, setVisibility] = React.useState<'shared' | 'private'>(initial.private ? 'private' : 'shared');
+  const [isAllDay, setIsAllDay] = React.useState(initial.is_all_day);
+  const [startDate, setStartDate] = React.useState(initial.start_date);
+  const [startTime, setStartTime] = React.useState(initial.start_time);
+  const [endDate, setEndDate] = React.useState(initial.end_date);
+  const [endTime, setEndTime] = React.useState(initial.end_time);
+  const [location, setLocation] = React.useState(initial.location);
+  const [notes, setNotes] = React.useState(initial.notes);
+  const [travelMode, setTravelMode] = React.useState<TravelMode | null>(initial.travel_mode);
   const travel = useEventTravel(location, isAllDay ? null : travelMode);
 
   // Dollars on the form; the Budget keeps cents.
-  const [cost, setCost] = React.useState<number | null>(costCents != null ? costCents / 100 : null);
-  const [reminderDays, setReminderDays] = React.useState<number[]>(() => eventReminderDays(event ?? {}));
+  const [cost, setCost] = React.useState<number | null>(initial.cost);
+  const [reminderDays, setReminderDays] = React.useState<number[]>(initial.reminder_days);
 
   // The forecast once the event is within range, for the place as typed (debounced).
   const forecast = useEventForecast(
@@ -262,63 +262,31 @@ export function EventModal({
   const canSave = title.trim().length > 0;
 
   const save = () => {
-    if (!canSave) return;
-    const finalStartDate = startDate || todayISO();
-    const starts_at = isAllDay ? localDateTimeToISO(finalStartDate, '00:00') : localDateTimeToISO(finalStartDate, startTime || '09:00');
-    const ends_at = !isAllDay && endDate && endTime ? localDateTimeToISO(endDate, endTime) : null;
-    const costCentsOnForm = showBudget && cost ? Math.round(cost * 100) : null;
-    const travelFields = {
-      travel_mode: isAllDay ? null : travelMode,
-      travel_minutes: isAllDay || !travelMode
-        ? null
-        : typeof travel.minutes === 'number'
-          ? travel.minutes
-          : // Still loading on an unchanged trip: keep what was saved.
-            travel.minutes === undefined && travelMode === event?.travel_mode && location.trim() === (event?.location ?? '')
-            ? event?.travel_minutes ?? null
-            : null,
-    };
-
-    if (event) {
-      onSave({
-        ...event,
-        title: title.trim(),
+    const saved = eventFromForm(
+      {
+        title,
         category,
-        starts_at,
-        ends_at,
-        is_all_day: isAllDay,
-        location: location.trim() || null,
-        notes: notes.trim() || null,
         private: visibility === 'private',
-        reminder_days: reminderDays,
-        ...travelFields,
-      }, costCentsOnForm);
-    } else {
-      const id = randomUUID();
-      onSave({
-        id,
-        group_id: groupId,
-        created_by: null,
-        title: title.trim(),
-        category,
-        starts_at,
-        ends_at,
+        start_date: startDate,
+        start_time: startTime,
+        end_date: endDate,
+        end_time: endTime,
         is_all_day: isAllDay,
-        location: location.trim() || null,
-        notes: notes.trim() || null,
-        private: visibility === 'private',
+        location,
+        notes,
         reminder_days: reminderDays,
-        ...travelFields,
-        deleted: false,
-        created_at: null as unknown as string,
-        updated_at: null as unknown as string,
-      }, costCentsOnForm);
-      if (showDocuments && pendingTickets.length > 0) {
-        const supabase = getCurrentSupabaseClient();
-        void Promise.all(pendingTickets.map((doc) => linkEventTicket(supabase, groupId, doc.id, id))).catch(() =>
-          toast.error('Event saved, but a ticket could not be linked. Add it again from the event.')
-        );
-      }
+        cost,
+        travel_mode: travelMode,
+      },
+      { event, groupId, newId: randomUUID(), showBudget, travelMinutes: travel.minutes }
+    );
+    if (!saved) return;
+    onSave(saved.event, saved.costCents);
+    if (!event && showDocuments && pendingTickets.length > 0) {
+      const supabase = getCurrentSupabaseClient();
+      void Promise.all(pendingTickets.map((doc) => linkEventTicket(supabase, groupId, doc.id, saved.event.id))).catch(() =>
+        toast.error('Event saved, but a ticket could not be linked. Add it again from the event.')
+      );
     }
   };
 

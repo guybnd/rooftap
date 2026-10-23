@@ -383,7 +383,7 @@ export function householdTools({
     "get_budget_summary",
     {
       description:
-        "Costs for one month, exactly as the Costs page shows it: spent (paid_cents), still to come (to_come_cents: recurring costs not paid yet, planned costs, and what is left of each category's usual shop spend), expected_cents (paid plus to come), the monthly goal, and income. categories lists each category with its lines: kind shop (a shop's bank payments summed), recurring (a recurring cost, paid or due), cost (added by hand), usual (usual spend left) or target (a plan the bank's payments replaced, not counted). source is up (a bank connector), csv or manual. cost_lines lists every cost line (recurring ones, ones added by hand, the bank's line for each shop, and archived ones) with its id for update_cost_item and update_bank_payment. To move a payment to another category, use update_bank_payment with category instead of looking for a line. Amounts in cents. Defaults to this month.",
+        "Costs for one month, exactly as the Costs page shows it: spent (paid_cents), still to come (to_come_cents: recurring costs not paid yet, planned costs, and what is left of each category's usual shop spend), expected_cents (paid plus to come), the monthly goal, and income. categories lists each category with its lines: kind shop (a shop's bank payments summed), recurring (a recurring cost, paid or due), cost (added by hand), usual (usual spend left) or target (a plan the bank's payments replaced, not counted). source is up (a bank connector), csv or manual. cost_lines lists every cost line (recurring ones, ones added by hand, the bank's line for each shop, and archived ones) with its id for update_cost_item and update_bank_payment. To move a payment to another category, use update_bank_payment with category instead of looking for a line. Amounts in cents. Defaults to this month. When you talk about a month's spending, say how it stands against goal_cents (spent so far and expected by month end), when there is a goal.",
       inputSchema: {
         month: z
           .string()
@@ -468,7 +468,7 @@ export function householdTools({
       // that helper can't be called directly here since it expects an
       // auth'd browser client (supabase.auth.getUser()), not the admin client.
       description:
-        "Create a household cost line: a one-off purchase or bill by default, or a recurring cost with cadence. Category income records money in (pay), which never counts as a cost.",
+        "Create a household cost line: a one-off purchase or bill by default, or a recurring cost with cadence. Category income records money in (pay), which never counts as a cost. For a recurring cost, set cadence and start_date (the first payment, YYYY-MM-DD) and name both in your one-line summary, so the person can check them in one go.",
       inputSchema: {
         name: z.string().min(1),
         amount: z.number().int().nonnegative().optional(),

@@ -39,7 +39,8 @@ import {
   withEventDuration,
   withEventStart,
   applyParsedEvent,
-  eventReminderDays,
+  eventFromForm,
+  initialEventForm,
   looksLikeEventLink,
   mapsSearchUrl,
   toggleReminderDay,
@@ -50,9 +51,7 @@ import {
   EVENT_TICKETS_FOLDER_NAME,
   useModules,
   currencySymbol,
-  localDateOf,
   localDateTimeToISO,
-  localTimeOf,
   type TravelMode,
 } from '@homeup/core';
 import { dialog } from '@homeup/core';
@@ -117,22 +116,7 @@ export function EventModal({
   const hasHome = group?.home_lat != null && group?.home_lng != null;
 
   const buildInitialForm = useCallback(() => {
-    const form = {
-      title: event?.title || '',
-      category: (event?.category ?? 'general') as EventCategory,
-      private: event?.private ?? false,
-      start_date: event ? localDateOf(event.starts_at) : defaultDate || todayISO(),
-      start_time: event ? localTimeOf(event.starts_at) : defaultTime || '09:00',
-      end_date: event?.ends_at ? localDateOf(event.ends_at) : '',
-      end_time: event?.ends_at ? localTimeOf(event.ends_at) : '',
-      is_all_day: event?.is_all_day ?? false,
-      location: event?.location || '',
-      notes: event?.notes || '',
-      reminder_days: eventReminderDays(event ?? {}),
-      // Dollars on the form; the Budget keeps cents.
-      cost: costCents != null ? costCents / 100 : (null as number | null),
-      travel_mode: (event ? event.travel_mode ?? null : hasHome ? 'drive' : null) as TravelMode | null,
-    };
+    const form = initialEventForm(event, { defaultDate, defaultTime, costCents, hasHome });
     if (event || !initialDetails) return form;
     // Made from a document: start from what was read from it.
     const price = initialDetails.price_total;
@@ -340,69 +324,10 @@ export function EventModal({
     );
 
   const handleSubmit = () => {
-    if (!formData.title.trim()) return;
-
-    const start_date = formData.start_date || todayISO();
-    const title = formData.title.trim();
-    const location = formData.location.trim() || null;
-    const notes = formData.notes.trim() || null;
-    const costCentsOnForm = showBudget && formData.cost ? Math.round(formData.cost * 100) : null;
-    const travelMode = formData.is_all_day ? null : formData.travel_mode;
-    const travelFields = {
-      travel_mode: travelMode,
-      travel_minutes: !travelMode
-        ? null
-        : typeof travel.minutes === 'number'
-          ? travel.minutes
-          : // Still loading on an unchanged trip: keep what was saved.
-            travel.minutes === undefined && travelMode === event?.travel_mode && formData.location.trim() === (event?.location ?? '')
-            ? event?.travel_minutes ?? null
-            : null,
-    };
-    const starts_at = formData.is_all_day
-      ? localDateTimeToISO(start_date, '00:00')
-      : localDateTimeToISO(start_date, formData.start_time || '09:00');
-    const ends_at =
-      !formData.is_all_day && formData.end_date && formData.end_time
-        ? localDateTimeToISO(formData.end_date, formData.end_time)
-        : null;
-
-    if (event?.id) {
-      onSave({
-        ...event,
-        title,
-        category: formData.category,
-        starts_at,
-        ends_at,
-        is_all_day: formData.is_all_day,
-        location,
-        notes,
-        private: formData.private,
-        reminder_days: formData.reminder_days,
-        ...travelFields,
-      }, costCentsOnForm);
-    } else {
-      const newEvent: GroupEvent = {
-        id: crypto.randomUUID(),
-        group_id: groupId,
-        created_by: null, // useStoreHelpers.writeRow fills this from currentUserId
-        title,
-        category: formData.category,
-        starts_at,
-        ends_at,
-        is_all_day: formData.is_all_day,
-        location,
-        notes,
-        private: formData.private,
-        reminder_days: formData.reminder_days,
-        ...travelFields,
-        deleted: false,
-        created_at: null as unknown as string,
-        updated_at: null as unknown as string,
-      };
-      onSave(newEvent, costCentsOnForm);
-      if (showDocuments && pendingAttachment) void linkPendingAttachment(newEvent.id);
-    }
+    const saved = eventFromForm(formData, { event, groupId, newId: crypto.randomUUID(), showBudget, travelMinutes: travel.minutes });
+    if (!saved) return;
+    onSave(saved.event, saved.costCents);
+    if (!event?.id && showDocuments && pendingAttachment) void linkPendingAttachment(saved.event.id);
 
     onClose();
   };

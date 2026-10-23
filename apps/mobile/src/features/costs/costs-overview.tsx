@@ -19,9 +19,8 @@ import {
   bankDayLabel,
   costCategoryLabel,
   formatMoney,
-  monthKeys,
   openAssistantPopup,
-  useCostMonths,
+  useCostsOverview,
   useUpOverview,
   useShopPayments,
   moveBankPayment,
@@ -42,13 +41,15 @@ import {
   type CostMonthCategory,
   type CostMonthLine,
   type MoneySummaryPrefs,
-  CATEGORY_META,
+  canHideCostLine,
+  costCategoryMenu,
+  costLineAmountLabel,
   costLineCategory,
   costMoveKind,
   costRowMenu,
-  hideShopMonth,
+  hideShopMonthWithUndo,
   likelyCostCategories,
-  moveCostLine,
+  moveCostLineWithUndo,
   useCostCategoryChoices,
   useCostInsights,
   useModules,
@@ -71,8 +72,6 @@ const TABULAR = { fontVariant: ['tabular-nums' as const] };
 const LABEL = 'text-micro-label uppercase text-muted-foreground';
 const CARD = 'overflow-hidden rounded-3xl border border-border/60 bg-card';
 /** Months the chart shows: nine back, this one, two ahead. */
-const CHART_BACK = 9;
-const CHART_MONTHS = 12;
 const CHART_HEIGHT = 84;
 
 export interface CostsOverviewProps {
@@ -121,12 +120,7 @@ export function CostsOverview(props: CostsOverviewProps) {
   const { scope, setScope, data, ready, status } = useUpOverview();
   // Someone sharing Up who never set the weekly switch gets the bank's weekly digest.
   const upWeekly = !!status?.connection && status.connection.shareMode !== 'none' && status.connection.weeklyDigest !== false;
-  const now = React.useMemo(() => new Date(), []);
-  const keys = React.useMemo(() => monthKeys(now, -CHART_BACK, CHART_MONTHS), [now]);
-  const months = useCostMonths(items, keys);
-  const [picked, setPicked] = React.useState(keys[CHART_BACK]);
-  const month = months.find((m) => m.month === picked) ?? months[CHART_BACK];
-  const [open, setOpen] = React.useState<Set<string>>(new Set());
+  const { months, month, name, setPicked, open, toggle, focus, setFocus, toggleFocus, openCategory: showCategory } = useCostsOverview(items);
   const [shop, setShop] = React.useState<CostMonthLine | null>(null);
   const [rowSheet, setRowSheet] = React.useState<CostRowSheetState | null>(null);
   const [pick, setPick] = React.useState<CategoryPick | null>(null);
@@ -134,23 +128,11 @@ export function CostsOverview(props: CostsOverviewProps) {
   const { reload } = useUpOverview();
   const quickMove = useModules().server('costs.quick-move');
   const choices = useCostCategoryChoices();
-  // A colour picked on the spend bar: the chart shows only that category.
-  const [focus, setFocus] = React.useState<string | null>(null);
-  const name = monthLongName(month.month);
 
-  const toggle = (id: string) =>
-    setOpen((cur) => {
-      const next = new Set(cur);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
 
   // An insight's "Show the category": this month, with that category open.
   const openCategory = (category: CostCategory | null) => {
-    setFocus(null);
-    setPicked(keys[CHART_BACK]);
-    setOpen((cur) => new Set(cur).add(category ?? 'none'));
+    showCategory(category);
   };
 
   const openRoute = useOpenRoute();
@@ -161,26 +143,22 @@ export function CostsOverview(props: CostsOverviewProps) {
   const deps = { patchItem: props.onPatchItem, api: upBankApi, reload };
   // A move says where the row went, with Undo back to where it was.
   const move = (l: CostMonthLine, inCategory: CostCategory | null, to: CostCategory) => {
-    const from = costLineCategory(l, inCategory);
-    moveCostLine(l, to, quickMove, deps)
-      .then(() => {
+    moveCostLineWithUndo(l, inCategory, to, quickMove, deps)
+      .then(({ message, undo }) => {
         haptics.success();
-        toast.message(`Moved ${l.name} to ${CATEGORY_META[to].label}`, {
+        toast.message(message, {
           duration: 5000,
-          action: from ? { label: 'Undo', onPress: () => void moveCostLine(l, from, quickMove, deps).catch(() => toast.error("Couldn't move it back.")) } : undefined,
+          action: undo ? { label: 'Undo', onPress: () => void undo().catch(() => toast.error("Couldn't move it back.")) } : undefined,
         });
       })
       .catch((err) => toast.error(err instanceof Error ? err.message : "Couldn't move it."));
   };
   const hide = (l: CostMonthLine) => {
     haptics.remove();
-    hideShopMonth(l, month.month, { api: upBankApi, reload })
+    hideShopMonthWithUndo(l, month.month, name, { api: upBankApi, reload })
       .then((done) => {
         if (!done) return;
-        toast.message(`Hid ${l.name} in ${name}`, {
-          duration: 5000,
-          action: { label: 'Undo', onPress: () => void upBankApi.changeShop({ ids: done.ids, hidden: false }).then(reload) },
-        });
+        toast.message(done.message, { duration: 5000, action: { label: 'Undo', onPress: () => void done.undo?.() } });
       })
       .catch((err) => toast.error(err instanceof Error ? err.message : "Couldn't hide it."));
   };
@@ -229,12 +207,12 @@ export function CostsOverview(props: CostsOverviewProps) {
   }
   const glanceStart = glance.findIndex((p) => p.dot);
 
-  const canHide = (l: CostMonthLine) => quickMove && l.kind === 'shop' && !!l.vendor && l.source === 'up';
+  const canHide = (l: CostMonthLine) => canHideCostLine(l, quickMove);
   const lineMenu = (l: CostMonthLine, c: CostMonthCategory) => {
     haptics.commit();
     setRowSheet({
       category: costLineCategory(l, c.category),
-      amount: l.paidCents > 0 ? formatMoney(l.paidCents) : l.toComeCents > 0 ? `~${formatMoney(l.toComeCents)}` : undefined,
+      amount: costLineAmountLabel(l),
       meta: [costCategoryLabel(costLineCategory(l, c.category)), lineMeta(l, name)].filter(Boolean).join(' · '),
       menu: costRowMenu({
         line: l,
@@ -253,20 +231,7 @@ export function CostsOverview(props: CostsOverviewProps) {
   };
   const categoryMenu = (c: CostMonthCategory) => {
     haptics.commit();
-    const label = costCategoryLabel(c.category);
-    setRowSheet({
-      category: c.category,
-      amount: formatMoney(c.paidCents),
-      meta: name,
-      menu: {
-        title: label,
-        kind: 'Category',
-        actions: [
-          { id: 'ask', label: 'Ask the assistant', group: 'share', icon: 'comment', run: () => ask(`Help me make sense of my ${label} costs in ${name}.`) },
-          c.category && { id: 'add', label: c.category === 'income' ? 'Add income' : 'Add a cost', group: 'edit', icon: 'edit', run: () => onAdd(c.category as CostCategory) },
-        ],
-      },
-    });
+    setRowSheet({ category: c.category, amount: formatMoney(c.paidCents), meta: name, menu: costCategoryMenu({ category: c.category, monthName: name, onAsk: ask, onAdd }) });
   };
 
   return (
@@ -309,7 +274,7 @@ export function CostsOverview(props: CostsOverviewProps) {
         <Waiting />
       ) : (
         <>
-        <Hero month={month} goalCents={goalCents} onEditGoal={onEditGoal} focus={focus} onFocus={(k) => { haptics.select(); setFocus((cur) => (cur === k ? null : k)); }} />
+        <Hero month={month} goalCents={goalCents} onEditGoal={onEditGoal} focus={focus} onFocus={(k) => { haptics.select(); toggleFocus(k); }} />
 
         <MonthChart months={months} picked={month.month} goalCents={goalCents} onPick={(k) => { haptics.select(); setPicked(k); }} focus={focus} onClearFocus={() => setFocus(null)} />
 

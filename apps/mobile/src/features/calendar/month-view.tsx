@@ -6,6 +6,7 @@ import { Pressable, View } from 'react-native';
 import {
   getEventsForDay,
   monthGridDays,
+  isSameLocalDay,
   type Appointment,
   type GoogleCalendarEventWithAttribution,
   type GroupEvent,
@@ -15,10 +16,6 @@ import { groupEventFillClasses } from './day-grid';
 
 const WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const SHOWN = 2;
-
-function isSameDay(a: Date, b: Date): boolean {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-}
 
 type Bar = { key: string; title: string; className: string };
 
@@ -39,7 +36,7 @@ export function MonthView({ month, selectedDay, appointments, groupEvents, calen
 
   const barsFor = (day: Date): Bar[] => [
     ...calendarEvents
-      .filter((ev) => isSameDay(new Date(ev.starts_at), day))
+      .filter((ev) => isSameLocalDay(new Date(ev.starts_at), day))
       .map((ev) => ({ key: `g-${ev.id}`, title: ev.title || 'Untitled event', className: 'bg-secondary' })),
     ...getEventsForDay(groupEvents, day).map((ev) => ({
       key: `e-${ev.id}`,
@@ -47,7 +44,7 @@ export function MonthView({ month, selectedDay, appointments, groupEvents, calen
       className: groupEventFillClasses(ev.category),
     })),
     ...appointments
-      .filter((a) => isSameDay(new Date(a.scheduled_at), day))
+      .filter((a) => isSameLocalDay(new Date(a.scheduled_at), day))
       .map((a) => ({ key: `a-${a.id}`, title: 'Viewing', className: 'border border-border bg-card' })),
   ];
 
@@ -63,8 +60,8 @@ export function MonthView({ month, selectedDay, appointments, groupEvents, calen
       <View className="flex-row flex-wrap">
         {days.map((day) => {
           const inMonth = day.getMonth() === month.getMonth();
-          const selected = isSameDay(day, selectedDay);
-          const isToday = isSameDay(day, today);
+          const selected = isSameLocalDay(day, selectedDay);
+          const isToday = isSameLocalDay(day, today);
           const bars = barsFor(day);
           const more = Math.max(0, bars.length - SHOWN) + taskCountFor(day);
           return (

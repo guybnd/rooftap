@@ -14,7 +14,7 @@
 //
 // HOUP-208 audit: deliberately NOT migrated to FlashList. Day view renders a
 // time-grid (`DayGrid`), not a row list; Agenda view is scoped to the
-// selected day only (`getAgendaItems`). Neither is an unbounded scrolling
+// selected day only (core `calendarAgenda`). Neither is an unbounded scrolling
 // list — both are bounded to "one day's worth of items," so virtualization
 // has nothing to save.
 import * as React from 'react';
@@ -32,25 +32,31 @@ import {
   agents$,
   apartments$,
   appointments$,
+  CALENDAR_DEFAULT_HOUR,
   CALENDAR_SPAN_OPTIONS,
   calendarAddPhrase,
+  calendarAgenda,
+  calendarDayHasItems,
+  calendarOpenHour,
   calendarSpanDays,
   calendarSpanLabel,
   calendarSpanLede,
   monthGridDays,
   shiftCalendarDate,
   type CalendarSpan,
-  daysBetweenISO,
   eventTravelLegs,
+  filterApartments,
   getEventsForDay,
   getWeekDays,
   groupEvents$,
   costItems$,
-  hideViewingSuggestions,
+  heroDayLabel,
   householdTasks$,
-  isEventStartDay,
+  isSameLocalDay,
   isTaskOwnerEnabled,
   MOTION_DURATIONS_MS,
+  toISODate,
+  useCalendarOverlay,
   useModules,
   useReconnectSync,
   useEventSave,
@@ -59,7 +65,6 @@ import {
   type Agent,
   type Apartment,
   type Appointment,
-  type GoogleCalendarEventWithAttribution,
   type GroupEvent,
   type HouseholdTask,
 } from '@homeup/core';
@@ -70,44 +75,13 @@ import { AppointmentModal } from '@/features/appointments/appointment-modal';
 import { HouseholdTaskModal } from '@/features/tasks/household-task-modal';
 import { EventModal } from '@/features/calendar/event-modal';
 import { AllDayBand, DayGrid, SLOT_HEIGHT } from '@/features/calendar/day-grid';
-import { AgendaList, getAgendaItems } from '@/features/calendar/agenda-list';
+import { AgendaList } from '@/features/calendar/agenda-list';
 import { MonthView } from '@/features/calendar/month-view';
 import { WeekView, WEEK_SLOT_HEIGHT } from '@/features/calendar/week-view';
 import { CalendarEventSheet } from '@/features/calendar/calendar-event-sheet';
-import {
-  dismissCalendarEvent,
-  fetchCalendarEvents,
-  fetchCalendarStatus,
-  importCalendarEventAsAppointment,
-  importCalendarEventAsTask,
-  shareCalendarEvent,
-  unshareCalendarEvent,
-} from '@/features/calendar/calendar-api';
-
-function toDateKey(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-function isSameDay(a: Date, b: Date): boolean {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-}
+import { calendarApi } from '@/features/calendar/calendar-api';
 
 const WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-
-// H6: the Hero's day in words. Today / tomorrow / a weekday inside the coming
-// week, then "Oct 25" (web's calendar page heroDayLabel uses the same grammar).
-function heroDayLabel(day: Date): string {
-  const diff = daysBetweenISO(toDateKey(new Date()), toDateKey(day));
-  if (diff === 0) return 'on today';
-  if (diff === 1) return 'on tomorrow';
-  if (diff === -1) return 'on yesterday';
-  if (diff > 1 && diff < 7) return `on ${day.toLocaleDateString('en-US', { weekday: 'long' })}`;
-  return `on ${day.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
-}
-
-// First hour the Day grid opens on for a day with no timed items, instead of
-// midnight (web's DEFAULT_SCROLL_HOUR).
-const DEFAULT_SCROLL_HOUR = 8;
 
 export default function CalendarSectionScreen() {
   const insets = useSafeAreaInsets();
@@ -131,7 +105,7 @@ export default function CalendarSectionScreen() {
   const binDayOf = React.useCallback(
     (date: Date) => {
       if (!showBins || binsApi.streams.length === 0) return null;
-      const key = toDateKey(date);
+      const key = toISODate(date);
       return binCollections(binsApi.streams, binsApi.changes, key, key)[0] ?? null;
     },
     [showBins, binsApi.streams, binsApi.changes]
@@ -217,16 +191,6 @@ export default function CalendarSectionScreen() {
   const [apartmentPickerOpen, setApartmentPickerOpen] = React.useState(false);
   const [apartmentSearch, setApartmentSearch] = React.useState('');
 
-  const [calendarConnected, setCalendarConnected] = React.useState(false);
-  const [pulledCalendarEvents, setCalendarEvents] = React.useState<GoogleCalendarEventWithAttribution[]>([]);
-  // Modules: viewing suggestions need calendar and search (module-features.ts).
-  const calendarEvents = React.useMemo(
-    () => hideViewingSuggestions(pulledCalendarEvents, showViewings),
-    [pulledCalendarEvents, showViewings]
-  );
-  const [selectedCalendarEvent, setSelectedCalendarEvent] = React.useState<GoogleCalendarEventWithAttribution | null>(null);
-  const [calendarActionBusy, setCalendarActionBusy] = React.useState(false);
-
   const weekDays = React.useMemo(() => getWeekDays(currentDate), [currentDate]);
   // The month grid shows whole weeks either side of the month, so it fetches those too.
   const overlayDays = React.useMemo(
@@ -235,33 +199,29 @@ export default function CalendarSectionScreen() {
   );
   const spanDays = React.useMemo(() => calendarSpanDays(span, currentDate), [span, currentDate]);
 
-  // Google Calendar overlay (HOUP-100) — mirrors apps/web's fetchCalendarOverlay:
-  // best-effort, fails silently (the overlay is supplementary, never blocking).
-  const fetchCalendarOverlay = React.useCallback(async () => {
-    if (!showGoogleEvents) {
-      setCalendarConnected(false);
-      setCalendarEvents([]);
-      return;
-    }
-    try {
-      const status = await fetchCalendarStatus();
-      setCalendarConnected(status.connected);
-      if (!status.connected) {
-        setCalendarEvents([]);
-        return;
-      }
-      const from = overlayDays[0];
-      const to = new Date(overlayDays[overlayDays.length - 1]);
-      to.setDate(to.getDate() + 1);
-      setCalendarEvents(await fetchCalendarEvents(from, to));
-    } catch {
-      // overlay is best-effort supplementary content — fail silently
-    }
-  }, [overlayDays, showGoogleEvents]);
-
-  React.useEffect(() => {
-    fetchCalendarOverlay();
-  }, [fetchCalendarOverlay]);
+  // Google Calendar overlay (HOUP-100): core's useCalendarOverlay, shared with
+  // web. Best-effort: a failed call keeps what's shown, never blocks.
+  const overlayTo = React.useMemo(() => {
+    const to = new Date(overlayDays[overlayDays.length - 1]);
+    to.setDate(to.getDate() + 1);
+    return to;
+  }, [overlayDays]);
+  const overlay = useCalendarOverlay({
+    api: calendarApi,
+    enabled: showGoogleEvents,
+    showViewings,
+    from: overlayDays[0],
+    to: overlayTo,
+    notifyError: (message) => toast.error(message),
+    onImported: () => haptics.success(),
+  });
+  const {
+    connected: calendarConnected,
+    events: calendarEvents,
+    selected: selectedCalendarEvent,
+    setSelected: setSelectedCalendarEvent,
+    busy: calendarActionBusy,
+  } = overlay;
 
   const shiftSpan = React.useCallback(
     (step: number) => setCurrentDate((d) => shiftCalendarDate(span, d, step)),
@@ -295,7 +255,7 @@ export default function CalendarSectionScreen() {
     });
 
   const dayAppointments = React.useMemo(
-    () => appointments.filter((a) => isSameDay(new Date(a.scheduled_at), currentDate)),
+    () => appointments.filter((a) => isSameLocalDay(new Date(a.scheduled_at), currentDate)),
     [appointments, currentDate]
   );
   // Multi-day/spanning group events render on every day they span, not just
@@ -307,23 +267,26 @@ export default function CalendarSectionScreen() {
   );
 
   const dayCalendarEvents = React.useMemo(
-    () => (calendarConnected ? calendarEvents.filter((ev) => isSameDay(new Date(ev.starts_at), currentDate)) : []),
+    () => (calendarConnected ? calendarEvents.filter((ev) => isSameLocalDay(new Date(ev.starts_at), currentDate)) : []),
     [calendarConnected, calendarEvents, currentDate]
   );
 
   const dayHasItems = React.useCallback(
-    (date: Date) => {
-      if (appointments.some((a) => isSameDay(new Date(a.scheduled_at), date))) return true;
-      if (calendarConnected && calendarEvents.some((ev) => isSameDay(new Date(ev.starts_at), date))) return true;
-      if (getEventsForDay(groupEvents, date).length > 0) return true;
-      const key = toDateKey(date);
-      return tasks.some((t) => t.due_date === key);
-    },
+    (date: Date) =>
+      calendarDayHasItems(date, { appointments, groupEvents, tasks, calendarEvents: calendarConnected ? calendarEvents : [] }),
     [appointments, calendarConnected, calendarEvents, groupEvents, tasks]
   );
 
   const agendaItems = React.useMemo(
-    () => getAgendaItems(currentDate, appointments, apartments, groupEvents, tasks, dayCalendarEvents, binDayOf(currentDate)),
+    () =>
+      calendarAgenda(currentDate, {
+        appointments,
+        apartments,
+        groupEvents,
+        tasks,
+        calendarEvents: dayCalendarEvents,
+        binDay: binDayOf(currentDate),
+      }),
     [currentDate, appointments, apartments, groupEvents, tasks, dayCalendarEvents, binDayOf]
   );
 
@@ -334,42 +297,22 @@ export default function CalendarSectionScreen() {
   const dayScrollRef = React.useRef<ScrollView>(null);
   React.useEffect(() => {
     if (!showDayGrid) return;
-    const isToday = new Date().toDateString() === currentDate.toDateString();
-    let offsetHours = DEFAULT_SCROLL_HOUR;
-    if (isToday) {
-      const now = new Date();
-      offsetHours = Math.max(0, now.getHours() + now.getMinutes() / 60 - 1);
-    } else {
-      const starts: number[] = [];
-      dayAppointments.forEach((app) => {
-        const d = new Date(app.scheduled_at);
-        starts.push(d.getHours() + d.getMinutes() / 60);
-      });
-      dayCalendarEvents
-        .filter((ev) => !ev.is_all_day)
-        .forEach((ev) => {
-          const d = new Date(ev.starts_at);
-          starts.push(d.getHours() + d.getMinutes() / 60);
-        });
-      dayGroupEvents
-        .filter((ev) => !ev.is_all_day && isEventStartDay(ev, currentDate))
-        .forEach((ev) => {
-          const d = new Date(ev.starts_at);
-          starts.push(d.getHours() + d.getMinutes() / 60);
-        });
-      if (starts.length > 0) offsetHours = Math.max(0, Math.min(...starts) - 0.5);
-    }
+    const offsetHours = calendarOpenHour([currentDate], {
+      appointments: dayAppointments,
+      calendarEvents: dayCalendarEvents,
+      groupEvents: dayGroupEvents,
+    });
     dayScrollRef.current?.scrollTo({ y: offsetHours * SLOT_HEIGHT, animated: false });
   }, [currentDate, dayAppointments, dayCalendarEvents, dayGroupEvents, showDayGrid]);
 
   // The week grid opens on the current hour this week, or 8 AM any other week.
   const weekScrollRef = React.useRef<ScrollView>(null);
-  const weekKey = toDateKey(weekDays[0]);
+  const weekKey = toISODate(weekDays[0]);
   React.useEffect(() => {
     if (span !== 'week' || listMode) return;
     const now = new Date();
-    const thisWeek = weekDays.some((d) => isSameDay(d, now));
-    const hours = thisWeek ? Math.max(0, now.getHours() + now.getMinutes() / 60 - 1) : DEFAULT_SCROLL_HOUR;
+    const thisWeek = weekDays.some((d) => isSameLocalDay(d, now));
+    const hours = thisWeek ? Math.max(0, now.getHours() + now.getMinutes() / 60 - 1) : CALENDAR_DEFAULT_HOUR;
     // After layout, so the ScrollView has its content height.
     requestAnimationFrame(() => weekScrollRef.current?.scrollTo({ y: hours * WEEK_SLOT_HEIGHT, animated: false }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -381,22 +324,21 @@ export default function CalendarSectionScreen() {
     return spanDays
       .map((day) => ({
         day,
-        items: getAgendaItems(
-          day,
+        items: calendarAgenda(day, {
           appointments,
           apartments,
           groupEvents,
           tasks,
-          calendarConnected ? calendarEvents.filter((ev) => isSameDay(new Date(ev.starts_at), day)) : [],
-          binDayOf(day)
-        ),
+          calendarEvents: calendarConnected ? calendarEvents.filter((ev) => isSameLocalDay(new Date(ev.starts_at), day)) : [],
+          binDay: binDayOf(day),
+        }),
       }))
       .filter((group) => group.items.length > 0 || span === 'day');
   }, [listMode, spanDays, appointments, apartments, groupEvents, tasks, calendarConnected, calendarEvents, span, binDayOf]);
 
   const taskCountFor = React.useCallback(
     (day: Date) => {
-      const key = toDateKey(day);
+      const key = toISODate(day);
       return tasks.filter((t) => t.due_date === key).length;
     },
     [tasks]
@@ -423,74 +365,6 @@ export default function CalendarSectionScreen() {
   const toggleTaskDone = (task: HouseholdTask) => {
     if (task.done) patchTask(task.id, { done: false, completed_at: null });
     else patchTask(task.id, { done: true, completed_at: new Date().toISOString() });
-  };
-
-  const handleCalendarShareToggle = async () => {
-    if (!selectedCalendarEvent) return;
-    setCalendarActionBusy(true);
-    try {
-      const toggled = selectedCalendarEvent.visibility === 'group' ? unshareCalendarEvent : shareCalendarEvent;
-      const result = await toggled(selectedCalendarEvent.id);
-      if (result.ok) {
-        setSelectedCalendarEvent({
-          ...selectedCalendarEvent,
-          visibility: selectedCalendarEvent.visibility === 'group' ? 'private' : 'group',
-        });
-        await fetchCalendarOverlay();
-      }
-    } finally {
-      setCalendarActionBusy(false);
-    }
-  };
-
-  const handleCalendarDismiss = async () => {
-    if (!selectedCalendarEvent) return;
-    setCalendarActionBusy(true);
-    try {
-      const result = await dismissCalendarEvent(selectedCalendarEvent.id);
-      if (result.ok) {
-        setSelectedCalendarEvent(null);
-        await fetchCalendarOverlay();
-      }
-    } finally {
-      setCalendarActionBusy(false);
-    }
-  };
-
-  const handleCalendarImportAsTask = async () => {
-    if (!selectedCalendarEvent) return;
-    setCalendarActionBusy(true);
-    try {
-      const result = await importCalendarEventAsTask(selectedCalendarEvent.id);
-      if (result.ok) {
-        haptics.success();
-        await fetchCalendarOverlay();
-        setSelectedCalendarEvent(null);
-      } else {
-        toast.error(result.error === 'already_imported' ? 'This event has already been imported.' : 'Could not add as to-do. Please try again.');
-      }
-    } finally {
-      setCalendarActionBusy(false);
-    }
-  };
-
-  const handleCalendarImportAsAppointment = async (apartmentId: string) => {
-    if (!selectedCalendarEvent) return;
-    setCalendarActionBusy(true);
-    try {
-      const result = await importCalendarEventAsAppointment(selectedCalendarEvent.id, apartmentId);
-      if (result.ok) {
-        haptics.success();
-        await fetchCalendarOverlay();
-        setSelectedCalendarEvent(null);
-      } else {
-        toast.error(
-          result.error === 'already_imported' ? 'This event has already been imported.' : 'Could not import as appointment. Please try again.'
-        );
-      }
-    } finally {
-      setCalendarActionBusy(false);
-    }
   };
 
   const openChooserAt = (at: Date) => {
@@ -535,11 +409,7 @@ export default function CalendarSectionScreen() {
     setApartmentPickerOpen(true);
   };
 
-  const filteredApartments = React.useMemo(() => {
-    if (!apartmentSearch.trim()) return apartments;
-    const q = apartmentSearch.toLowerCase();
-    return apartments.filter((a) => a.address.toLowerCase().includes(q) || (a.suburb && a.suburb.toLowerCase().includes(q)));
-  }, [apartments, apartmentSearch]);
+  const filteredApartments = React.useMemo(() => filterApartments(apartments, apartmentSearch), [apartments, apartmentSearch]);
 
   if (cacheLoading || (!storeLoaded && appointments.length === 0 && groupEvents.length === 0 && tasks.length === 0)) {
     return (
@@ -561,9 +431,9 @@ export default function CalendarSectionScreen() {
   const spanCount =
     span === 'day'
       ? dayAppointments.length + dayGroupEvents.length + dayCalendarEvents.length
-      : appointments.filter((a) => spanDays.some((d) => isSameDay(new Date(a.scheduled_at), d))).length +
+      : appointments.filter((a) => spanDays.some((d) => isSameLocalDay(new Date(a.scheduled_at), d))).length +
         groupEvents.filter((ev) => spanDays.some((d) => getEventsForDay([ev], d).length > 0)).length +
-        (calendarConnected ? calendarEvents.filter((ev) => spanDays.some((d) => isSameDay(new Date(ev.starts_at), d))).length : 0);
+        (calendarConnected ? calendarEvents.filter((ev) => spanDays.some((d) => isSameLocalDay(new Date(ev.starts_at), d))).length : 0);
   const spanLede = span === 'day' ? heroDayLabel(currentDate) : calendarSpanLede(span, currentDate);
 
   return (
@@ -654,15 +524,15 @@ export default function CalendarSectionScreen() {
             <GestureDetector gesture={weekPan}>
               <View className="flex-1 flex-row gap-1">
                 {weekDays.map((d) => {
-                  const selected = isSameDay(d, currentDate);
-                  const isToday = isSameDay(d, new Date());
+                  const selected = isSameLocalDay(d, currentDate);
+                  const isToday = isSameLocalDay(d, new Date());
                   // H2: the selected day is the control's state (a soft teal
                   // tint); today is told by a neutral ring, and a day's dot is a
                   // neutral count marker, teal only on the selected day (web's
                   // week strip draws the same).
                   return (
                     <Pressable
-                      key={toDateKey(d)}
+                      key={toISODate(d)}
                       onPress={() => {
                         if (!selected) haptics.select();
                         setCurrentDate(d);
@@ -739,10 +609,10 @@ export default function CalendarSectionScreen() {
               </Text>
             ) : (
               spanAgenda.map(({ day, items }) => (
-                <View key={toDateKey(day)} className="gap-1.5">
+                <View key={toISODate(day)} className="gap-1.5">
                   {span !== 'day' && (
                     <Text className="px-1 text-micro-label uppercase text-muted-foreground">
-                      {isSameDay(day, new Date()) ? 'Today' : calendarSpanLabel('day', day)}
+                      {isSameLocalDay(day, new Date()) ? 'Today' : calendarSpanLabel('day', day)}
                     </Text>
                   )}
                   <AgendaList
@@ -806,7 +676,7 @@ export default function CalendarSectionScreen() {
           {/* The picked day's agenda, under the grid. */}
           <View className="gap-1.5 px-4 pt-4">
             <Text className="px-1 text-micro-label uppercase text-muted-foreground">
-              {isSameDay(currentDate, new Date()) ? 'Today' : calendarSpanLabel('day', currentDate)}
+              {isSameLocalDay(currentDate, new Date()) ? 'Today' : calendarSpanLabel('day', currentDate)}
             </Text>
             <AgendaList
                     legs={eventLegs}
@@ -912,7 +782,7 @@ export default function CalendarSectionScreen() {
         open={eventModalOpen}
         event={editEvent ?? undefined}
         groupId={group.id}
-        defaultDate={chooserAt ? toDateKey(chooserAt) : undefined}
+        defaultDate={chooserAt ? toISODate(chooserAt) : undefined}
         defaultTime={chooserAt ? `${String(chooserAt.getHours()).padStart(2, '0')}:${String(chooserAt.getMinutes()).padStart(2, '0')}` : undefined}
         onClose={() => { setEventModalOpen(false); setTimeout(() => setEditEvent(null), MOTION_DURATIONS_MS.exit); }}
         showBudget={showBudget}
@@ -939,7 +809,7 @@ export default function CalendarSectionScreen() {
           currentUserId={currentUserId}
           groupMembers={groupMembers}
           memberProfiles={memberProfiles}
-          initialDueDate={chooserAt ? toDateKey(chooserAt) : undefined}
+          initialDueDate={chooserAt ? toISODate(chooserAt) : undefined}
           initialDueTime={chooserAt ? `${String(chooserAt.getHours()).padStart(2, '0')}:${String(chooserAt.getMinutes()).padStart(2, '0')}` : undefined}
           onClose={() => { setTaskModalOpen(false); setTimeout(() => setEditTask(null), MOTION_DURATIONS_MS.exit); }}
           onSave={(saved) => {
@@ -1031,11 +901,11 @@ export default function CalendarSectionScreen() {
         memberProfiles={memberProfiles}
         apartments={apartments}
         busy={calendarActionBusy}
-        onShareToggle={handleCalendarShareToggle}
-        onDismiss={handleCalendarDismiss}
+        onShareToggle={overlay.toggleShare}
+        onDismiss={overlay.dismiss}
         // Modules: import as a to-do or a viewing only when the calendar shows them (module-features.ts).
-        onImportAsTask={showTasks ? handleCalendarImportAsTask : undefined}
-        onImportAsAppointment={showViewings ? handleCalendarImportAsAppointment : undefined}
+        onImportAsTask={showTasks ? overlay.importAsTask : undefined}
+        onImportAsAppointment={showViewings ? overlay.importAsAppointment : undefined}
       />
     </ScreenBackground>
   );

@@ -72,17 +72,27 @@ import {
   isTaskOwnerEnabled,
   useModules,
   calendarAddPhrase,
-  hideViewingSuggestions,
+  calendarAgenda,
+  calendarDayCount,
+  calendarDayHasItems,
+  calendarOpenHour,
+  filterApartments,
+  formatClockTime,
+  formatHourLabel,
+  heroDayLabel,
+  isSameLocalDay,
+  toISODate,
+  useCalendarOverlay,
   eventDetailLabel,
-  daysBetweenISO,
   mapsDirectionsUrl,
   dialog,
   type RowMenu,
 } from '@homeup/core';
 import { MonthDatePicker } from "@/components/month-date-picker";
-import type { Agent, Apartment, Appointment, GoogleCalendarEventWithAttribution, GroupEvent, HouseholdTask } from '@homeup/core';
+import type { Agent, Apartment, Appointment, CalendarAgendaItem, GoogleCalendarEventWithAttribution, GroupEvent, HouseholdTask } from '@homeup/core';
 import { useEventForecast } from "@/lib/use-event-forecast";
 import { useLegTravel } from "@/lib/use-event-travel";
+import { calendarApi } from "@/lib/calendar-client";
 
 // Full 24h grid — was 7am-9pm, which silently dropped events starting outside
 // that window from the Day/Week grid entirely (FLUX-1562).
@@ -102,36 +112,6 @@ function pad2(n: number) {
   return String(n).padStart(2, "0");
 }
 
-function toDateKey(d: Date) {
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-}
-
-function formatWallClockTime(hhmm: string) {
-  const [h, m] = hhmm.split(":").map(Number);
-  return new Date(1970, 0, 1, h, m).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-}
-
-function formatHour(hour: number) {
-  const h = hour % 12 || 12;
-  const ampm = hour < 12 ? "AM" : "PM";
-  return `${h} ${ampm}`;
-}
-
-function formatClock(d: Date) {
-  return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-}
-
-// H6: the Hero's day in words. Today / tomorrow / a weekday inside the coming
-// week, then "Oct 25" (native's calendar screen uses the same grammar).
-function heroDayLabel(day: Date) {
-  const diff = daysBetweenISO(toDateKey(new Date()), toDateKey(day));
-  if (diff === 0) return "on today";
-  if (diff === 1) return "on tomorrow";
-  if (diff === -1) return "on yesterday";
-  if (diff > 1 && diff < 7) return `on ${day.toLocaleDateString("en-US", { weekday: "long" })}`;
-  return `on ${day.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
-}
-
 // The week range for the desktop header: "Oct 18 – 24", or "Oct 28 – Nov 3"
 // across a month boundary.
 function formatWeekRange(start: Date, end: Date) {
@@ -148,8 +128,6 @@ function formatWeekRange(start: Date, end: Date) {
 const COMPACT_BLOCK_PX = 40;
 // Tall enough for a third line: an event's place under its title.
 const DETAIL_BLOCK_PX = 52;
-// First hour of the grid an empty day or week opens on.
-const DEFAULT_SCROLL_HOUR = 8;
 
 export default function CalendarPageWrapper() {
   return (
@@ -175,7 +153,7 @@ function CalendarPage() {
   const binsApi = useBins(showBins ? group?.id : undefined, currentUserId);
   const binDayOf = (date: Date) => {
     if (!showBins || binsApi.streams.length === 0) return null;
-    const key = toDateKey(date);
+    const key = toISODate(date);
     return binCollections(binsApi.streams, binsApi.changes, key, key)[0] ?? null;
   };
 
@@ -271,16 +249,7 @@ function CalendarPage() {
   const [agentPhone, setAgentPhone] = useState("");
   const [editAppointment, setEditAppointment] = useState<Appointment | null>(null);
   const [editModalOpen, setEditModalOpen] = useState(false);
-  const [calendarConnected, setCalendarConnected] = useState(false);
-  const [pulledCalendarEvents, setCalendarEvents] = useState<GoogleCalendarEventWithAttribution[]>([]);
-  // Modules: viewing suggestions need calendar and search (module-features.ts).
-  const calendarEvents = useMemo(
-    () => hideViewingSuggestions(pulledCalendarEvents, showViewings),
-    [pulledCalendarEvents, showViewings]
-  );
-  const [selectedCalendarEvent, setSelectedCalendarEvent] = useState<GoogleCalendarEventWithAttribution | null>(null);
   const [calendarDetailOpen, setCalendarDetailOpen] = useState(false);
-  const [calendarActionBusy, setCalendarActionBusy] = useState(false);
   const [importApartmentPickerOpen, setImportApartmentPickerOpen] = useState(false);
   const [importSearchQuery, setImportSearchQuery] = useState("");
   const router = useRouter();
@@ -309,43 +278,35 @@ function CalendarPage() {
     return d;
   }, [startOfWeek, mobileDayOffset]);
 
-  const fetchCalendarOverlay = useCallback(async () => {
-    if (!showGoogleEvents) {
-      setCalendarConnected(false);
-      setCalendarEvents([]);
-      return;
-    }
-    try {
-      const statusRes = await fetch("/api/calendar/status");
-      if (!statusRes.ok) return;
-      const statusData = await statusRes.json();
-      const connected = !!statusData.connected;
-      setCalendarConnected(connected);
-      if (!connected) {
-        setCalendarEvents([]);
-        return;
-      }
-
-      const from = new Date(startOfWeek);
-      const to = new Date(startOfWeek);
-      to.setDate(to.getDate() + 7);
-      const eventsRes = await fetch(
-        `/api/calendar/events?from=${encodeURIComponent(from.toISOString())}&to=${encodeURIComponent(to.toISOString())}`
-      );
-      if (!eventsRes.ok) return;
-      const eventsData = await eventsRes.json();
-      setCalendarEvents(eventsData.events ?? []);
-    } catch {
-      // overlay is best-effort supplementary content — fail silently
-    }
-  }, [startOfWeek, showGoogleEvents]);
+  // Google Calendar overlay: core's useCalendarOverlay, shared with native.
+  // Best-effort: a failed call keeps what's shown, never blocks.
+  const overlayTo = useMemo(() => {
+    const to = new Date(startOfWeek);
+    to.setDate(to.getDate() + 7);
+    return to;
+  }, [startOfWeek]);
+  const overlay = useCalendarOverlay({
+    api: calendarApi,
+    enabled: showGoogleEvents,
+    showViewings,
+    from: startOfWeek,
+    to: overlayTo,
+    notifyError: (message) => toast.error(message),
+    onClosed: () => {
+      setCalendarDetailOpen(false);
+      setImportApartmentPickerOpen(false);
+    },
+  });
+  const {
+    connected: calendarConnected,
+    events: calendarEvents,
+    selected: selectedCalendarEvent,
+    setSelected: setSelectedCalendarEvent,
+    busy: calendarActionBusy,
+  } = overlay;
 
   useEffect(() => {
-    fetchCalendarOverlay();
-  }, [fetchCalendarOverlay]);
-
-  useEffect(() => {
-    const dateStr = toDateKey(mobileDay);
+    const dateStr = toISODate(mobileDay);
     const url = new URL(window.location.href);
     if (url.searchParams.get("date") !== dateStr) {
       url.searchParams.set("date", dateStr);
@@ -359,37 +320,12 @@ function CalendarPage() {
   useEffect(() => {
     const el = columnRef.current;
     if (!el) return;
-    const isToday = new Date().toDateString() === mobileDay.toDateString();
-    if (isToday) {
-      const now = new Date();
-      const hour = now.getHours() + now.getMinutes() / 60;
-      const offsetHours = Math.max(0, hour - START_HOUR - 1);
-      el.scrollTop = offsetHours * MOBILE_SLOT_HEIGHT;
-      return;
-    }
-    const starts: number[] = [];
-    getAppointmentsForDay(mobileDay).forEach((app) => {
-      const d = new Date(app.scheduled_at);
-      starts.push(d.getHours() + d.getMinutes() / 60);
+    const openHour = calendarOpenHour([mobileDay], {
+      appointments,
+      groupEvents,
+      calendarEvents: calendarConnected ? calendarEvents : [],
     });
-    (calendarConnected ? getCalendarEventsForDay(mobileDay) : [])
-      .filter((ev) => !isAllDayCalendarEvent(ev))
-      .forEach((ev) => {
-        const d = new Date(ev.starts_at);
-        starts.push(d.getHours() + d.getMinutes() / 60);
-      });
-    getEventsForDay(mobileDay)
-      .filter((ev) => !isAllDayEvent(ev) && isEventStartDay(ev, mobileDay))
-      .forEach((ev) => {
-        const d = new Date(ev.starts_at);
-        starts.push(d.getHours() + d.getMinutes() / 60);
-      });
-    if (starts.length === 0) {
-      el.scrollTop = (DEFAULT_SCROLL_HOUR - START_HOUR) * MOBILE_SLOT_HEIGHT;
-      return;
-    }
-    const offsetHours = Math.max(0, Math.min(...starts) - START_HOUR - 0.5);
-    el.scrollTop = offsetHours * MOBILE_SLOT_HEIGHT;
+    el.scrollTop = (openHour - START_HOUR) * MOBILE_SLOT_HEIGHT;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mobileDay, appointments, calendarEvents, calendarConnected, groupEvents]);
 
@@ -404,33 +340,9 @@ function CalendarPage() {
     const el = desktopScrollRef.current;
     if (!el) return;
     const now = new Date();
-    const weekHasToday = days.some((d) => d.toDateString() === now.toDateString());
-    let targetHour: number;
-    if (weekHasToday) {
-      targetHour = Math.max(0, now.getHours() + now.getMinutes() / 60 - 1);
-    } else {
-      const starts: number[] = [];
-      days.forEach((day) => {
-        getAppointmentsForDay(day).forEach((app) => {
-          const d = new Date(app.scheduled_at);
-          starts.push(d.getHours() + d.getMinutes() / 60);
-        });
-        (calendarConnected ? getCalendarEventsForDay(day) : [])
-          .filter((ev) => !isAllDayCalendarEvent(ev))
-          .forEach((ev) => {
-            const d = new Date(ev.starts_at);
-            starts.push(d.getHours() + d.getMinutes() / 60);
-          });
-        getEventsForDay(day)
-          .filter((ev) => !isAllDayEvent(ev) && isEventStartDay(ev, day))
-          .forEach((ev) => {
-            const d = new Date(ev.starts_at);
-            starts.push(d.getHours() + d.getMinutes() / 60);
-          });
-      });
-      targetHour = starts.length > 0 ? Math.max(0, Math.min(...starts) - 0.5) : DEFAULT_SCROLL_HOUR;
-    }
-    const key = `${toDateKey(days[0])}@${weekHasToday ? "now" : targetHour}`;
+    const weekHasToday = days.some((d) => isSameLocalDay(d, now));
+    const targetHour = calendarOpenHour(days, { appointments, groupEvents, calendarEvents: calendarConnected ? calendarEvents : [] }, now);
+    const key = `${toISODate(days[0])}@${weekHasToday ? "now" : targetHour}`;
     if (desktopScrollKeyRef.current === key) return;
     desktopScrollKeyRef.current = key;
     el.scrollTop = (targetHour - START_HOUR) * DESKTOP_SLOT_HEIGHT;
@@ -645,15 +557,7 @@ function CalendarPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
-  const filteredApartments = useMemo(() => {
-    if (!searchQuery.trim()) return apartments;
-    const q = searchQuery.toLowerCase();
-    return apartments.filter(
-      (a) =>
-        a.address.toLowerCase().includes(q) ||
-        (a.suburb && a.suburb.toLowerCase().includes(q))
-    );
-  }, [apartments, searchQuery]);
+const filteredApartments = useMemo(() => filterApartments(apartments, searchQuery), [apartments, searchQuery]);
 
   const selectedApartment = apartments.find((a) => a.id === selectedApartmentId);
   const selectedAgent = selectedApartment?.agent_id
@@ -729,27 +633,9 @@ function CalendarPage() {
     setSaving(false);
   };
 
-  const getAppointmentsForDay = (date: Date) => {
-    return appointments.filter((app) => {
-      const appDate = new Date(app.scheduled_at);
-      return (
-        appDate.getFullYear() === date.getFullYear() &&
-        appDate.getMonth() === date.getMonth() &&
-        appDate.getDate() === date.getDate()
-      );
-    });
-  };
+  const getAppointmentsForDay = (date: Date) => appointments.filter((app) => isSameLocalDay(new Date(app.scheduled_at), date));
 
-  const getCalendarEventsForDay = (date: Date) => {
-    return calendarEvents.filter((ev) => {
-      const d = new Date(ev.starts_at);
-      return (
-        d.getFullYear() === date.getFullYear() &&
-        d.getMonth() === date.getMonth() &&
-        d.getDate() === date.getDate()
-      );
-    });
-  };
+  const getCalendarEventsForDay = (date: Date) => calendarEvents.filter((ev) => isSameLocalDay(new Date(ev.starts_at), date));
 
   const isAllDayCalendarEvent = (ev: GoogleCalendarEventWithAttribution) => ev.is_all_day;
 
@@ -856,13 +742,8 @@ function CalendarPage() {
 
   // Week-strip presence dot (FLUX-257): does this day have anything at all —
   // appointment, calendar overlay event, group event, or a to-do due that day?
-  const dayHasItems = (date: Date) => {
-    if (getAppointmentsForDay(date).length > 0) return true;
-    if (calendarConnected && getCalendarEventsForDay(date).length > 0) return true;
-    if (getEventsForDay(date).length > 0) return true;
-    const key = toDateKey(date);
-    return tasks.some((t) => t.due_date === key);
-  };
+  const dayHasItems = (date: Date) =>
+    calendarDayHasItems(date, { appointments, groupEvents, tasks, calendarEvents: calendarConnected ? calendarEvents : [] });
 
   /** One row in the mobile Agenda view (FLUX-257): appointments, calendar/group
    *  events, and to-dos due that day, merged into a single time-sorted list.
@@ -887,204 +768,83 @@ function CalendarPage() {
     event?: GroupEvent;
   };
 
-  const getAgendaItems = (date: Date): AgendaItem[] => {
-    const items: AgendaItem[] = [];
-
-    getAppointmentsForDay(date).forEach((app) => {
-      const apt = apartments.find((a) => a.id === app.apartment_id);
-      const d = new Date(app.scheduled_at);
-      const skipped = app.status === "skipped" || app.status === "rebook";
-      items.push({
-        key: `apt-${app.id}`,
-        sortMinutes: d.getHours() * 60 + d.getMinutes(),
-        timeLabel: formatClock(d),
-        timed: true,
-        title: apt?.address ?? "Apartment viewing",
-        subtitle: skipped ? "Skipped" : app.status === "optional" ? "Optional" : apt?.suburb ?? undefined,
-        sectionId: "search",
-        onClick: () => router.push(`/apartment/${app.apartment_id}`),
-      });
-    });
-
-    (calendarConnected ? getCalendarEventsForDay(date) : []).forEach((ev) => {
-      const allDay = isAllDayCalendarEvent(ev);
-      const d = new Date(ev.starts_at);
-      items.push({
-        key: `gcal-${ev.id}`,
-        sortMinutes: allDay ? -1 : d.getHours() * 60 + d.getMinutes(),
-        timeLabel: allDay ? "All day" : formatClock(d),
-        timed: !allDay,
-        title: ev.title || "Untitled event",
-        subtitle: ev.state === "suggested" ? "Looks like a viewing" : ev.sharedByUserId ? `Shared by ${memberLabel(ev.sharedByUserId, memberProfiles)}` : undefined,
-        subtitleTone: ev.state === "suggested" ? "warning" : undefined,
-        sectionId: "calendar",
-        onClick: () => openCalendarEventDetail(ev),
-      });
-    });
-
-    getEventsForDay(date).forEach((ev) => {
-      // A spanned event only carries a meaningful clock time on its start day —
-      // later days it spans render as an all-day agenda entry (FLUX-259).
-      const allDay = isAllDayEvent(ev) || !isEventStartDay(ev, date);
-      const d = new Date(ev.starts_at);
-      items.push({
-        key: `event-${ev.id}`,
-        sortMinutes: allDay ? -1 : d.getHours() * 60 + d.getMinutes(),
-        timeLabel: allDay ? "All day" : formatClock(d),
-        timed: !allDay,
-        title: ev.title,
-        subtitle: eventDetailLabel(ev),
-        sectionId: "calendar",
-        event: ev,
-        onClick: () => openEventDetail(ev),
-      });
-    });
-
-    const binDay = binDayOf(date);
-    if (binDay) {
-      items.push({
-        key: `bins-${binDay.date}`,
-        sortMinutes: -1,
-        timeLabel: "All day",
-        timed: false,
-        title: "Bin collection",
-        subtitle: binNamesPhrase(binDay.streams),
-        sectionId: "bins",
-        lids: binDay.streams.map((st) => st.lid),
-        onClick: () => router.push("/bins"),
-      });
-    }
-
-    const dateKey = toDateKey(date);
-    tasks
-      .filter((t) => t.due_date === dateKey)
-      .forEach((t) => {
-        const [h, m] = t.due_time ? t.due_time.split(":").map(Number) : [null, null];
-        items.push({
-          key: `task-${t.id}`,
-          sortMinutes: h === null ? -1 : h * 60 + (m ?? 0),
-          timeLabel: t.due_time ? formatWallClockTime(t.due_time) : "All day",
-          timed: !!t.due_time,
-          title: t.title,
+  // The day's items come from core's calendarAgenda (shared with native); each maps onto a web row.
+  const toAgendaRow = (item: CalendarAgendaItem): AgendaItem => {
+    const base = { key: item.key, sortMinutes: item.sortMinutes, timeLabel: item.timeLabel, timed: item.sortMinutes >= 0 };
+    switch (item.kind) {
+      case "appointment": {
+        const { appointment: app, apartment: apt } = item;
+        const skipped = app.status === "skipped" || app.status === "rebook";
+        return {
+          ...base,
+          title: apt?.address ?? "Apartment viewing",
+          subtitle: skipped ? "Skipped" : app.status === "optional" ? "Optional" : apt?.suburb ?? undefined,
+          sectionId: "search",
+          onClick: () => router.push(`/apartment/${app.apartment_id}`),
+        };
+      }
+      case "calendarEvent": {
+        const ev = item.calendarEvent;
+        return {
+          ...base,
+          title: ev.title || "Untitled event",
+          subtitle: ev.state === "suggested" ? "Looks like a viewing" : ev.sharedByUserId ? `Shared by ${memberLabel(ev.sharedByUserId, memberProfiles)}` : undefined,
+          subtitleTone: ev.state === "suggested" ? "warning" : undefined,
+          sectionId: "calendar",
+          onClick: () => openCalendarEventDetail(ev),
+        };
+      }
+      case "event":
+        return {
+          ...base,
+          title: item.event.title,
+          subtitle: eventDetailLabel(item.event),
+          sectionId: "calendar",
+          event: item.event,
+          onClick: () => openEventDetail(item.event),
+        };
+      case "bins":
+        return {
+          ...base,
+          title: "Bin collection",
+          subtitle: binNamesPhrase(item.collection.streams),
+          sectionId: "bins",
+          lids: item.collection.streams.map((st) => st.lid),
+          onClick: () => router.push("/bins"),
+        };
+      case "task":
+        return {
+          ...base,
+          title: item.task.title,
           onClick: () => {
-            setEditTask(t);
+            setEditTask(item.task);
             setTodoModalOpen(true);
           },
-          task: t,
-        });
-      });
-
-    return items.sort((a, b) => a.sortMinutes - b.sortMinutes || compareStrings(a.title, b.title));
-  };
-
-  const handleShareToggle = async () => {
-    if (!selectedCalendarEvent) return;
-    setCalendarActionBusy(true);
-    try {
-      const endpoint = selectedCalendarEvent.visibility === "group" ? "/api/calendar/unshare" : "/api/calendar/share";
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ eventId: selectedCalendarEvent.id }),
-      });
-      if (res.ok) {
-        const newVisibility = selectedCalendarEvent.visibility === "group" ? "private" : "group";
-        setSelectedCalendarEvent({ ...selectedCalendarEvent, visibility: newVisibility });
-        await fetchCalendarOverlay();
-      }
-    } finally {
-      setCalendarActionBusy(false);
+          task: item.task,
+        };
     }
   };
 
-  const handleDismissSuggestion = async () => {
-    if (!selectedCalendarEvent) return;
-    setCalendarActionBusy(true);
-    try {
-      const res = await fetch("/api/calendar/dismiss", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ eventId: selectedCalendarEvent.id }),
-      });
-      if (res.ok) {
-        setCalendarDetailOpen(false);
-        setSelectedCalendarEvent(null);
-        await fetchCalendarOverlay();
-      }
-    } finally {
-      setCalendarActionBusy(false);
-    }
-  };
+  const getAgendaItems = (date: Date): AgendaItem[] =>
+    calendarAgenda(date, {
+      appointments,
+      apartments,
+      groupEvents,
+      tasks,
+      calendarEvents: calendarConnected ? calendarEvents : [],
+      binDay: binDayOf(date),
+    })
+      .map(toAgendaRow)
+      .sort((a, b) => a.sortMinutes - b.sortMinutes || compareStrings(a.title, b.title));
 
-  const handleImportAsTask = async () => {
-    if (!selectedCalendarEvent) return;
-    setCalendarActionBusy(true);
-    try {
-      const res = await fetch("/api/calendar/import", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ eventId: selectedCalendarEvent.id, target: "task" }),
-      });
-      if (res.ok) {
-        await fetchCalendarOverlay();
-        setCalendarDetailOpen(false);
-        setSelectedCalendarEvent(null);
-      } else {
-        const data = await res.json().catch(() => null);
-        toast.error(
-          data?.error === "already_imported"
-            ? "This event has already been imported."
-            : "Could not add as to-do. Please try again."
-        );
-      }
-    } finally {
-      setCalendarActionBusy(false);
-    }
-  };
-
-  const handleImportAsAppointment = async (apartmentId: string) => {
-    if (!selectedCalendarEvent) return;
-    setCalendarActionBusy(true);
-    try {
-      const res = await fetch("/api/calendar/import", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ eventId: selectedCalendarEvent.id, target: "appointment", apartmentId }),
-      });
-      if (res.ok) {
-        await fetchCalendarOverlay();
-        setCalendarDetailOpen(false);
-        setSelectedCalendarEvent(null);
-        setImportApartmentPickerOpen(false);
-      } else {
-        const data = await res.json().catch(() => null);
-        toast.error(
-          data?.error === "already_imported"
-            ? "This event has already been imported."
-            : "Could not import as appointment. Please try again."
-        );
-      }
-    } finally {
-      setCalendarActionBusy(false);
-    }
-  };
-
-  const importFilteredApartments = useMemo(() => {
-    if (!importSearchQuery.trim()) return apartments;
-    const q = importSearchQuery.toLowerCase();
-    return apartments.filter(
-      (a) => a.address.toLowerCase().includes(q) || (a.suburb && a.suburb.toLowerCase().includes(q))
-    );
-  }, [apartments, importSearchQuery]);
+  const importFilteredApartments = useMemo(() => filterApartments(apartments, importSearchQuery), [apartments, importSearchQuery]);
 
   const durationMinutes = userSettings?.appointment_duration_minutes ?? 20;
 
   // Hearth v2 (Pulse): the lede counts what's on a day. On a phone that is the
   // selected day (like native); the desktop week counts today.
   const countForDay = (day: Date) =>
-    getAppointmentsForDay(day).length +
-    getEventsForDay(day).length +
-    (calendarConnected ? getCalendarEventsForDay(day).length : 0);
+    calendarDayCount(day, { appointments, groupEvents, calendarEvents: calendarConnected ? calendarEvents : [] });
   const todayCount = countForDay(new Date());
   const mobileDayCount = countForDay(mobileDay);
 
@@ -1223,7 +983,7 @@ function CalendarPage() {
                 width: `calc(${widthPercent}% - 4px)`,
               }}
             >
-              {blockText(formatClock(new Date(ev.starts_at)), ev.title || "Untitled event", height)}
+              {blockText(formatClockTime(new Date(ev.starts_at)), ev.title || "Untitled event", height)}
             </div>
           );
         })}
@@ -1258,7 +1018,7 @@ function CalendarPage() {
                 width: `calc(${widthPercent}% - 4px)`,
               }}
             >
-              {blockText(formatClock(new Date(ev.starts_at)), ev.title, height, ev.location)}
+              {blockText(formatClockTime(new Date(ev.starts_at)), ev.title, height, ev.location)}
             </div>
           );
         })}
@@ -1332,12 +1092,12 @@ function CalendarPage() {
               onPointerDown={(e) => e.stopPropagation()}
             >
               {height < COMPACT_BLOCK_PX ? (
-                blockText(formatClock(appDate), apt.address, height)
+                blockText(formatClockTime(appDate), apt.address, height)
               ) : (
                 <>
                   <div className="flex items-center gap-1 text-[11px] font-semibold tabular-nums text-muted-foreground">
                     <Building2 className="h-3 w-3 shrink-0" />
-                    {formatClock(appDate)}
+                    {formatClockTime(appDate)}
                   </div>
                   <div className={`font-medium truncate ${isMobile ? "text-sm" : "text-xs"}`}>{apt.address}</div>
                   {apt.suburb && <div className="text-xs text-muted-foreground truncate">{apt.suburb}</div>}
@@ -1537,7 +1297,7 @@ function CalendarPage() {
                 >
                   {/* The first label sits inside the grid instead of half
                       above it, where the header clipped "12 AM". */}
-                  <span className={i === 0 ? "mt-0.5" : "-mt-2"}>{formatHour(hour)}</span>
+                  <span className={i === 0 ? "mt-0.5" : "-mt-2"}>{formatHourLabel(hour)}</span>
                 </div>
               ))}
             </div>
@@ -1571,7 +1331,7 @@ function CalendarPage() {
                       className="absolute left-0 right-0 flex items-start justify-end pr-2 text-xs tabular-nums text-muted-foreground"
                       style={{ top: i * MOBILE_SLOT_HEIGHT, height: MOBILE_SLOT_HEIGHT }}
                     >
-                      <span className={i === 0 ? "mt-0.5" : "-mt-2"}>{formatHour(hour)}</span>
+                      <span className={i === 0 ? "mt-0.5" : "-mt-2"}>{formatHourLabel(hour)}</span>
                     </div>
                   ))}
                 </div>
@@ -2034,7 +1794,7 @@ function CalendarPage() {
                             <button
                               key={apt.id}
                               disabled={calendarActionBusy}
-                              onClick={() => handleImportAsAppointment(apt.id)}
+                              onClick={() => overlay.importAsAppointment(apt.id)}
                               className="w-full text-left p-2 hover:bg-muted/50 transition-colors flex items-start gap-2 disabled:opacity-50"
                             >
                               <MapPin className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
@@ -2063,7 +1823,7 @@ function CalendarPage() {
                     </Button>
                     {isOwn && (
                       <>
-                        <Button variant="outline" size="sm" disabled={calendarActionBusy} onClick={handleShareToggle}>
+                        <Button variant="outline" size="sm" disabled={calendarActionBusy} onClick={overlay.toggleShare}>
                           <Share2 className="h-3.5 w-3.5 mr-1" />
                           {ev.visibility === "group" ? "Unshare" : "Share to group"}
                         </Button>
@@ -2084,14 +1844,14 @@ function CalendarPage() {
                             variant="outline"
                             size="sm"
                             disabled={calendarActionBusy || ev.state === "imported"}
-                            onClick={handleImportAsTask}
+                            onClick={overlay.importAsTask}
                           >
                             <ListPlus className="h-3.5 w-3.5 mr-1" />
                             Add as to-do
                           </Button>
                         )}
                         {ev.state === "suggested" && (
-                          <Button variant="outline" size="sm" disabled={calendarActionBusy} onClick={handleDismissSuggestion}>
+                          <Button variant="outline" size="sm" disabled={calendarActionBusy} onClick={overlay.dismiss}>
                             <EyeOff className="h-3.5 w-3.5 mr-1" />
                             Dismiss
                           </Button>

@@ -1,5 +1,17 @@
 import { describe, expect, it, vi } from 'vitest';
-import { costMoveKind, costPaymentMenu, costRowMenu, likelyCostCategories, moveCostLine } from './cost-row-actions';
+import {
+  canHideCostLine,
+  costCategoryMenu,
+  costLineAmountLabel,
+  costMoveKind,
+  costPaymentMenu,
+  costRowMenu,
+  hideShopMonthWithUndo,
+  likelyCostCategories,
+  moveCostLine,
+  moveCostLineWithUndo,
+} from './cost-row-actions';
+import { formatMoney } from '../../money-format';
 import type { CostMonthLine } from './cost-month';
 import type { BankTransactionView } from './up-bank';
 import type { CostCategory, CostItem } from '../../types';
@@ -100,5 +112,60 @@ describe('costPaymentMenu', () => {
     const ids = (m: ReturnType<typeof costPaymentMenu>) => m.actions.filter(Boolean).map((a) => a && a.id);
     expect(ids(costPaymentMenu({ t, category: null, choices, quickMove: true, onMove: () => {}, onOpen: () => {}, onHide: () => {} }))).toEqual(['open', 'move', 'hide']);
     expect(ids(costPaymentMenu({ t: { ...t, mine: false }, category: null, choices, quickMove: true, onMove: () => {}, onOpen: () => {} }))).toEqual(['open']);
+  });
+});
+
+describe('canHideCostLine', () => {
+  it('hides only a bank shop, and only on a server that can', () => {
+    expect(canHideCostLine(line({}), true)).toBe(true);
+    expect(canHideCostLine(line({}), false)).toBe(false);
+    expect(canHideCostLine(line({ source: undefined }), true)).toBe(false);
+    expect(canHideCostLine(line({ kind: 'cost', item: item() }), true)).toBe(false);
+  });
+});
+
+describe('moveCostLineWithUndo', () => {
+  it('says where the row went, and Undo moves it back', async () => {
+    const deps = { patchItem: vi.fn(), api: { changeShop: vi.fn(async () => ({ costItemId: null, ids: [] })) }, reload: vi.fn() };
+    const own = item({ name: 'Netflix', category: 'other' });
+    const done = await moveCostLineWithUndo(line({ kind: 'cost', name: 'Netflix', item: own }), 'other', 'rent', true, deps);
+    expect(done.message).toBe('Moved Netflix to Rent');
+    await done.undo?.();
+    expect(deps.patchItem).toHaveBeenLastCalledWith(own, { category: 'other' });
+  });
+});
+
+describe('hideShopMonthWithUndo', () => {
+  it('hides the month, and Undo shows those payments again', async () => {
+    const changeShop = vi.fn(async () => ({ costItemId: null, ids: ['t1', 't2'] }));
+    const deps = { api: { changeShop }, reload: vi.fn() };
+    const done = await hideShopMonthWithUndo(line({}), '2026-10', 'October', deps);
+    expect(done?.message).toBe('Hid Coles in October');
+    await done?.undo?.();
+    expect(changeShop).toHaveBeenLastCalledWith({ ids: ['t1', 't2'], hidden: false });
+    expect(deps.reload).toHaveBeenCalledTimes(2);
+    await expect(hideShopMonthWithUndo(line({ kind: 'cost', item: item() }), '2026-10', 'October', deps)).resolves.toBeNull();
+  });
+});
+
+describe('costLineAmountLabel', () => {
+  it('shows what was paid, else what is to come', () => {
+    expect(costLineAmountLabel({ paidCents: 1_000, toComeCents: 500 })).toBe(formatMoney(1_000));
+    expect(costLineAmountLabel({ paidCents: 0, toComeCents: 500 })).toBe(`~${formatMoney(500)}`);
+    expect(costLineAmountLabel({ paidCents: 0, toComeCents: 0 })).toBeUndefined();
+  });
+});
+
+describe('costCategoryMenu', () => {
+  it('asks about the category and adds to it', () => {
+    const onAsk = vi.fn();
+    const onAdd = vi.fn();
+    const menu = costCategoryMenu({ category: 'income', monthName: 'October', onAsk, onAdd });
+    const actions = menu.actions.filter((a) => !!a);
+    expect(actions.map((a) => a && a.label)).toEqual(['Ask the assistant', 'Add income']);
+    actions.forEach((a) => a && 'run' in a && a.run?.());
+    expect(onAsk).toHaveBeenCalledWith('Help me make sense of my Income costs in October.');
+    expect(onAdd).toHaveBeenCalledWith('income');
+    expect(costCategoryMenu({ category: null, monthName: 'October', onAsk, onAdd }).actions.filter(Boolean)).toHaveLength(1);
   });
 });
