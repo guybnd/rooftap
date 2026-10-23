@@ -55,7 +55,12 @@ import {
   likelyCostCategories,
   moveCostLine,
   useCostCategoryChoices,
+  useCostInsights,
   useModules,
+  useSeenInsights,
+  hasUnseenInsights,
+  markInsightsSeen,
+  type SpendingTransaction,
 } from '@homeup/core';
 import { BottomSheet } from '@/components/ui/bottom-sheet';
 import { Switch } from '@/components/ui/switch';
@@ -65,6 +70,7 @@ import { cn } from '@/lib/utils';
 import { CategoryGlyph } from './category-glyph';
 import { CostInsightsCard, type CostInsightsCardProps } from './cost-insights';
 import { ToSortCard } from './to-sort-card';
+import { CostsGlance, LatestRows, latestCategory, type GlancePage } from './costs-glance';
 import { TransactionSheet } from './money-view';
 import { CategoryPickerSheet, type CategoryPick } from './category-picker';
 import { CostRowShell, CostRowSheet, type CostRowSheetState } from './cost-row-sheet';
@@ -204,6 +210,47 @@ export function CostsOverview(props: CostsOverviewProps) {
     const current = costLineCategory(l, c.category);
     setPick({ title: `Move ${l.name}`, current, likely: likelyCostCategories(l, current, month, choices), onPick: (to) => move(l, c.category, to) });
   };
+  // The glance card: the latest payments and the insights, one page each.
+  const { insights: insightList } = useCostInsights(items, { goalCents, marks: props.insights?.marks });
+  const insightKeys = props.insights ? insightList.map((i) => i.key) : [];
+  const seenInsights = useSeenInsights();
+  const lineById = useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
+  const latest = (data?.recent ?? []).slice(0, 3);
+  const movePayment = (t: SpendingTransaction, to: CostCategory, wholeShop: boolean) => {
+    const done = wholeShop ? upBankApi.changeShop({ vendor: t.description, category: to }) : upBankApi.updateTransaction(t.id, { costCategory: to });
+    done
+      .then(() => {
+        success();
+        reload();
+        toast(`Moved ${wholeShop ? t.description : 'the payment'} to ${CATEGORY_META[to].label}`);
+      })
+      .catch((err) => toast.error(err instanceof Error ? err.message : "Couldn't move it."));
+  };
+  const pickPayment = (t: SpendingTransaction) => {
+    const current = latestCategory(t, t.costItemId ? lineById.get(t.costItemId) : undefined);
+    commit();
+    setPick({
+      title: `Move ${t.description}`,
+      current,
+      likely: likelyCostCategories({ sourceCategory: t.category }, current, month, choices),
+      scope: { label: `Every payment at ${t.description}`, hint: 'Off moves this payment only' },
+      onPick: (to, whole) => movePayment(t, to, whole),
+    });
+  };
+  const glance: GlancePage[] = [];
+  if (month.when === 'current' && latest.length) {
+    glance.push({ key: 'latest', label: 'Latest', node: <LatestRows payments={latest} lineById={lineById} onOpen={() => onOpenPayments?.()} onMove={quickMove ? pickPayment : null} /> });
+  }
+  if (props.insights && month.when === 'current' && insightKeys.length) {
+    glance.push({
+      key: 'insights',
+      label: 'Worth a look',
+      dot: hasUnseenInsights(insightKeys, seenInsights),
+      node: <CostInsightsCard bare items={items} goalCents={goalCents} onOpenItem={onOpenItem} onOpenCategory={(c) => openCategory(c)} {...props.insights} />,
+    });
+  }
+  const glanceStart = glance.findIndex((p) => p.dot);
+
   const canHide = (l: CostMonthLine) => quickMove && l.kind === 'shop' && !!l.vendor && l.source === 'up';
   const lineMenu = (l: CostMonthLine, c: CostMonthCategory): RowMenu =>
     costRowMenu({
@@ -270,8 +317,15 @@ export function CostsOverview(props: CostsOverviewProps) {
     <div className="space-y-5">
       <Hero month={month} goalCents={goalCents} onEditGoal={onEditGoal} focus={focus} onFocus={(k) => setFocus((cur) => (cur === k ? null : k))} />
       <MonthChart months={months} picked={month.month} goalCents={goalCents} onPick={setPicked} focus={focus} onClearFocus={() => setFocus(null)} />
-      {props.insights && month.when === 'current' && (
-        <CostInsightsCard items={items} goalCents={goalCents} onOpenItem={onOpenItem} onOpenCategory={openCategory} {...props.insights} />
+      {glance.length > 0 && (
+        <CostsGlance
+          key={glance.map((p) => p.key).join('|')}
+          pages={glance}
+          initial={Math.max(0, glanceStart)}
+          onPage={(key) => {
+            if (key === 'insights') markInsightsSeen(insightKeys);
+          }}
+        />
       )}
       {quickMove && month.when === 'current' && (
         <ToSortCard

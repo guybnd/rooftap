@@ -3,9 +3,10 @@
 // a neutral tile leading, `type · one fact` meta (when it expires, warn
 // < 30d, else how long ago it was added), and a PortalChipRow second line
 // (tags -> filter in place, reminder, cost links), then who filed it. M3:
-// tap opens preview, long-press (+ a trailing "more" button as the visible
-// path) opens a BottomSheet actions menu. Legacy (non-store) files get the
-// same menu; their first action adopts them into the store. The menu's Select
+// tap or the trailing open icon opens preview, long-press (+ a trailing
+// "more" button as the visible path) opens a BottomSheet actions menu.
+// Legacy (non-store) files get the same menu; their first action adopts
+// them into the store. The menu's Select
 // starts the screen's select mode, where a tap ticks the row instead.
 import * as React from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
@@ -295,6 +296,18 @@ export function DocumentRow({
 
       {!selecting && (
         <ListItemTrailing>
+          {/* The visible open path: a tap on the row opens too, but the
+              icon says so. Same Eye as the menu's Open item. */}
+          <Pressable
+            onPress={() => onPreview(doc)}
+            disabled={opening}
+            hitSlop={6}
+            accessibilityLabel="Open"
+            accessibilityRole="button"
+            className="-mt-1 h-9 w-9 items-center justify-center rounded-full"
+          >
+            <Eye size={16} className="text-muted-foreground" />
+          </Pressable>
           <Pressable
             onPress={() => setMenuOpen(true)}
             hitSlop={6}

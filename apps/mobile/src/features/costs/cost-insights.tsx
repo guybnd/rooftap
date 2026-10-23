@@ -74,6 +74,8 @@ export interface CostInsightsCardProps {
   onOpenCategory: (category: CostCategory | null) => void;
   /** Adds a "Cancel it?" reminder task; null when Tasks is off. */
   onRemind: ((sub: SubscriptionLine) => void) | null;
+  /** Just the rows, for a page of the Costs glance card (which draws the label and frame). */
+  bare?: boolean;
 }
 
 export function CostInsightsCard(props: CostInsightsCardProps) {
@@ -96,9 +98,9 @@ export function CostInsightsCard(props: CostInsightsCardProps) {
   };
 
   return (
-    <View className="gap-2">
-      <Text className={cn(LABEL, 'px-1')}>Worth a look</Text>
-      <View className={CARD}>
+    <View className={props.bare ? undefined : 'gap-2'}>
+      {props.bare ? null : <Text className={cn(LABEL, 'px-1')}>Worth a look</Text>}
+      <View className={props.bare ? undefined : CARD}>
         {insights.slice(0, SHOWN).map((i, n) => (
           <InsightRow key={i.key} insight={i} divided={n > 0} onPress={() => openSheet(i.key)} />
         ))}

@@ -213,10 +213,12 @@ function snapshot(overrides: Partial<WidgetTodaySnapshot> = {}): WidgetTodaySnap
 
 describe('pure guard decisions', () => {
   let mod: typeof import('./widgetTaskHandler');
+  // The first import after resetModules loads the whole module graph cold,
+  // which took over 10 s on a busy CI runner (PRs #545, #551).
   beforeEach(async () => {
     vi.resetModules();
     mod = await import('./widgetTaskHandler');
-  });
+  }, 30_000);
 
   const taskPayload = { id: 'task-1', snapshotVersion: 4, snapshotDone: false, snapshotSourceUpdatedAt: '2026-08-01T00:00:00.000Z' };
   const groceryPayload = { id: 'grocery-1', snapshotVersion: 4, snapshotStatus: 'needed' as const, snapshotSourceUpdatedAt: '2026-08-01T00:00:00.000Z' };
