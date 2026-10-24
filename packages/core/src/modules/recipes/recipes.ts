@@ -18,6 +18,27 @@ import { isStaple } from './scan-match';
 // create-group-store.ts), and one such row must not crash the Recipes screen.
 export const norm = (s: string | null | undefined): string => (s ?? '').toLowerCase().trim();
 
+// ── List split ─────────────────────────────────────────────────────────────────
+export interface RecipeListSplit {
+  /** The book: saved recipes, newest first. */
+  recipes: Recipe[];
+  /** Scans waiting for their review (draft). */
+  drafts: Recipe[];
+  /** Ideas on the To try list, kept out of the book until someone keeps one. */
+  toTry: Recipe[];
+}
+
+/** Splits live recipes into the book, scanned drafts and the To try list, each newest first. */
+export function splitRecipeList(all: Recipe[]): RecipeListSplit {
+  const newest = (a: Recipe, b: Recipe) => (b.created_at ?? '').localeCompare(a.created_at ?? '');
+  const out: RecipeListSplit = { recipes: [], drafts: [], toTry: [] };
+  for (const r of all) (r.draft ? out.drafts : r.to_try ? out.toTry : out.recipes).push(r);
+  out.recipes.sort(newest);
+  out.drafts.sort(newest);
+  out.toTry.sort(newest);
+  return out;
+}
+
 // ── Cooking method ─────────────────────────────────────────────────────────────
 export const RECIPE_METHODS: RecipeMethod[] = ['cooking', 'baking', 'roasting', 'other'];
 
@@ -388,6 +409,8 @@ export function buildRecipe(input: {
   source?: string | null;
   sourceType?: RecipeSourceType | null;
   draft?: boolean;
+  /** Save onto the To try list; the column is only sent when set, for servers without it. */
+  toTry?: boolean;
   createdBy?: string | null;
   id?: string;
 }): Recipe {
@@ -405,6 +428,7 @@ export function buildRecipe(input: {
     source: input.source?.trim() || null,
     source_type: input.sourceType ?? null,
     draft: input.draft ?? false,
+    ...(input.toTry ? { to_try: true } : {}),
     created_by: input.createdBy ?? null,
     created_at: now,
     updated_at: now,

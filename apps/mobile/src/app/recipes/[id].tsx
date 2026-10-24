@@ -88,6 +88,7 @@ export default function RecipeDetailScreen() {
   // Modules: have/need, "Add missing", "Add to list" and every grocery write need
   // recipes and groceries (module-features.ts). Off means the shopping list isn't read.
   const groceriesLinked = modules.feature('recipes.groceries');
+  const toTryOn = modules.server('recipes.to-try');
 
   const recs$ = recipes$(group?.id);
   const ings$ = recipeIngredients$(group?.id);
@@ -96,7 +97,7 @@ export default function RecipeDetailScreen() {
   useReconnectSync(ings$);
   useReconnectSync(items$);
 
-  const { writeRow: writeRecipe, softDeleteRow: softDeleteRecipe } = useStoreHelpers(recs$, currentUserId);
+  const { writeRow: writeRecipe, patchRow: patchRecipe, softDeleteRow: softDeleteRecipe } = useStoreHelpers(recs$, currentUserId);
   const { writeRow: writeIngredient, patchRow: patchIngredient, softDeleteRow: softDeleteIngredient } =
     useStoreHelpers(ings$, currentUserId);
   const { writeRow: writeGrocery, patchRow: patchGrocery } = useStoreHelpers(items$, currentUserId);
@@ -307,6 +308,25 @@ export default function RecipeDetailScreen() {
             <Trash2 size={18} className="text-muted-foreground" />
           </Pressable>
         </View>
+
+        {/* To try: an idea kept out of the book until someone keeps it. */}
+        {toTryOn && recipe.to_try && (
+          <Card className="flex-row items-center gap-3 rounded-3xl px-4">
+            <Text className="min-w-0 flex-1 text-sm text-muted-foreground">
+              On your To try list. Keep it to move it into your recipes.
+            </Text>
+            <Pressable
+              onPress={() => {
+                haptics.commit();
+                patchRecipe(recipe.id, { to_try: false });
+              }}
+              accessibilityRole="button"
+              className="h-11 items-center justify-center rounded-lg bg-primary px-3.5"
+            >
+              <Text className="text-sm font-medium text-primary-foreground">Keep</Text>
+            </Pressable>
+          </Card>
+        )}
 
         {/* Facts + fill bar: one v2 card. Meta words are plain text (pill
             shape means tappable, PC1); servings and times use Lucide. */}

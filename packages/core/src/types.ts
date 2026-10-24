@@ -806,6 +806,8 @@ export interface Recipe {
   source: string | null;           // FLUX-202: free-text locator (filename/URL) for provenance
   source_type: RecipeSourceType | null; // FLUX-202: null = predates the scan feature
   draft: boolean;                  // FLUX-202: true until the scan review is Saved
+  /** On the "To try" list, out of the main book until someone keeps it; absent on servers without the column (recipes.to-try). */
+  to_try?: boolean;
   // NOT NULL in the DB, but nullable here: local-first creates build the row with
   // created_by:null and useStoreHelpers.writeRow stamps the active user before
   // the row syncs (mirrors grocery_items / checklists).

@@ -14,6 +14,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { use$ } from '@legendapp/state/react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Plus, ChefHat, Camera, ImagePlus, Loader2 } from 'lucide-react';
 import { useDataCache } from '@/lib/data-cache';
@@ -29,6 +31,7 @@ import {
   groceryStatusPatch,
   recipeCuisines,
   ingredientMatchKey,
+  splitRecipeList,
 } from '@homeup/core';
 import { captureRecipeFromPhoto, discardRecipeDraftPhoto } from '@/lib/recipe-capture';
 import { HeroLede } from '@/components/ui/hero-lede';
@@ -39,6 +42,7 @@ import { ScanMatchSheet } from './scan-match-sheet';
 import { RecipeRow } from './recipe-row';
 import { OfflineHint } from '@/components/offline-hint';
 import { cn } from '@/lib/utils';
+import { navLinkClickHandler } from '@/lib/view-transitions';
 import { useWideLayout } from '@/lib/desktop-layout';
 import { WideList } from '@/components/wide-list';
 import { SegmentedControl } from '@/components/ui/segmented-control';
@@ -85,14 +89,11 @@ export default function RecipesPage() {
   const allRecipes = use$(() =>
     Object.values(recs$.get() ?? {}).filter((r): r is Recipe => !!r && !r.deleted),
   );
-  const recipes = useMemo(
-    () => allRecipes.filter((r) => !r.draft).sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? '')),
-    [allRecipes],
-  );
-  const drafts = useMemo(
-    () => allRecipes.filter((r) => r.draft).sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? '')),
-    [allRecipes],
-  );
+  // The book, scanned drafts and the To try list (ideas, often saved by the
+  // Assistant, kept out of the book until someone keeps one).
+  const { recipes, drafts, toTry } = useMemo(() => splitRecipeList(allRecipes), [allRecipes]);
+  const toTryOn = modules.server('recipes.to-try');
+  const router = useRouter();
   const allIngredients = use$(() =>
     Object.values(ings$.get() ?? {}).filter((i): i is RecipeIngredient => !!i && !i.deleted),
   );
@@ -394,6 +395,28 @@ export default function RecipesPage() {
               >
                 {d.title || 'Untitled scan'}
               </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* To try strip: the same neutral card as the drafts strip. Each chip
+          opens the recipe, where Keep moves it into the book. */}
+      {toTryOn && toTry.length > 0 && (
+        <div className="rounded-3xl border border-border/60 bg-card p-4 shadow-[var(--card-shadow)]">
+          <p className="mb-2.5 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+            To try <span className="tabular-nums">{toTry.length}</span>
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {toTry.map((r) => (
+              <Link
+                key={r.id}
+                href={`/recipes/${r.id}`}
+                onClick={navLinkClickHandler('descend', router, `/recipes/${r.id}`)}
+                className={cn(CHIP, 'border-border bg-muted text-foreground hover:bg-accent')}
+              >
+                {r.title || 'Untitled recipe'}
+              </Link>
             ))}
           </div>
         </div>

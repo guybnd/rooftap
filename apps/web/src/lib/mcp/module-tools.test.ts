@@ -189,6 +189,13 @@ describe("checklist, recipe and setup tools", () => {
     expect((await run(tables, "save_recipe", args)).res.isError).toBe(true);
   });
 
+  it("saves a recipe onto the To try list, with a link to it", async () => {
+    const tables: Record<string, Row[]> = {};
+    const { body } = await run(tables, "save_recipe", { title: "Cabbage salad", ingredients: [{ name: "1 cabbage" }], to_try: true });
+    expect(body).toMatchObject({ ok: true, to_try: true, link: `/recipes/${body.id}` });
+    expect(tables.recipes[0]).toMatchObject({ title: "Cabbage salad", to_try: true });
+  });
+
   it("adds and changes Setup items, never another member's private one", async () => {
     const tables: Record<string, Row[]> = {
       setup_items: [{ id: "x", group_id: "g1", name: "Secret", room: "Bedroom", private: true, assigned_to: "u2", status: "needed", sort_order: 0, ...live }],

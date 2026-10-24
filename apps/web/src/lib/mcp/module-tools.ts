@@ -725,7 +725,7 @@ export function moduleTools({ admin, userId, groupId, enabled, shared = false }:
     "save_recipe",
     {
       description:
-        "Recipes: save a new recipe to the household's book, from what the person typed or pasted. ingredients each have the line as written (name, e.g. \"2 cups arborio rice\"), and when you can tell them, the plain grocery item (item, e.g. \"arborio rice\"), quantity and unit. steps are the method, one per entry. Check get_recipes first so you don't save the same one twice.",
+        "Recipes: save a new recipe to the household's book, from what the person typed or pasted. ingredients each have the line as written (name, e.g. \"2 cups arborio rice\"), and when you can tell them, the plain grocery item (item, e.g. \"arborio rice\"), quantity and unit. steps are the method, one per entry. Check get_recipes first so you don't save the same one twice. to_try puts it on the To try list instead of the main book: use it when the person wants to try a recipe, calls it a suggestion or an idea, or hasn't cooked it yet; they keep it from the recipe's screen once they like it.",
       inputSchema: {
         title: z.string().min(1).max(200),
         ingredients: z
@@ -745,6 +745,7 @@ export function moduleTools({ admin, userId, groupId, enabled, shared = false }:
         cuisines: z.array(z.string().max(40)).max(8).optional(),
         method: z.enum(["cooking", "baking", "roasting", "other"]).optional(),
         source_url: z.string().url().optional(),
+        to_try: z.boolean().optional(),
       },
     },
     async (args, gid) => {
@@ -762,6 +763,7 @@ export function moduleTools({ admin, userId, groupId, enabled, shared = false }:
         cookMinutes: args.cook_minutes ?? null,
         source: args.source_url ?? null,
         sourceType: args.source_url ? "url" : "manual",
+        toTry: args.to_try,
         createdBy: userId,
       });
       const { error } = await admin.from("recipes").insert(recipe);
@@ -773,7 +775,7 @@ export function moduleTools({ admin, userId, groupId, enabled, shared = false }:
         const { error: ingError } = await admin.from("recipe_ingredients").insert(ingredients);
         if (ingError) return fail(ingError.message);
       }
-      return ok({ ok: true, id: recipe.id, title: recipe.title, ingredients: ingredients.length, link: itemLink("recipe", recipe.id) });
+      return ok({ ok: true, id: recipe.id, title: recipe.title, ingredients: ingredients.length, ...(recipe.to_try ? { to_try: true } : {}), link: itemLink("recipe", recipe.id) });
     },
     null,
   );

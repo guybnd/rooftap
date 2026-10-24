@@ -1397,7 +1397,7 @@ export function householdTools({
     "get_recipes",
     {
       description:
-        "The household's saved recipes. With no arguments, a short list (title, cuisines, method, times, ingredient names). Pass query to filter by a word in the title, a cuisine or an ingredient. Pass recipe_id for one recipe in full: ingredients with quantities, and the steps.",
+        "The household's saved recipes. With no arguments, a short list (title, cuisines, method, times, ingredient names). Pass query to filter by a word in the title, a cuisine or an ingredient. Pass recipe_id for one recipe in full: ingredients with quantities, and the steps. to_try marks an idea on the To try list, not yet kept in the book.",
       inputSchema: {
         query: z.string().optional(),
         recipe_id: z.string().optional(),
@@ -1453,6 +1453,7 @@ export function householdTools({
             basic(i, ["name", "quantity", "unit"] as const),
           ),
           steps: stepsFromInstructions(recipe.instructions),
+          ...(recipe.to_try ? { to_try: true } : {}),
           link: itemLink("recipe", recipe.id),
         };
         return { content: [{ type: "text", text: JSON.stringify(full) }] };
@@ -1470,6 +1471,7 @@ export function householdTools({
           ] as const),
           cuisines: recipeCuisines(r),
           ingredients: (byRecipe.get(r.id) ?? []).map((i) => i.name),
+          ...(r.to_try ? { to_try: true } : {}),
           link: itemLink("recipe", r.id),
         }))
         .filter(

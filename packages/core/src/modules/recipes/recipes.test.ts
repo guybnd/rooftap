@@ -8,6 +8,8 @@ import {
   recipeCuisines,
   recipeLineWrite,
   recipeShoppingLines,
+  buildRecipe,
+  splitRecipeList,
 } from './recipes';
 import type { GroceryItem, Recipe, RecipeIngredient } from '../../types';
 
@@ -163,5 +165,20 @@ describe('recipeShoppingLines', () => {
     const create = recipeLineWrite(fresh, ctx);
     expect(create.kind).toBe('create');
     if (create.kind === 'create') expect(create.item).toMatchObject({ name: 'Saffron', status: 'needed', recipe_note: '1 g for Paella' });
+  });
+});
+
+describe('splitRecipeList', () => {
+  const r = (id: string, extra: Partial<Recipe> = {}): Recipe =>
+    ({ ...buildRecipe({ groupId: 'g', title: id, id }), created_at: `2026-10-0${id.length}`, ...extra });
+  it('puts drafts and To try ideas in their own lists, newest first', () => {
+    const split = splitRecipeList([r('a'), r('bb', { to_try: true }), r('ccc', { draft: true }), r('dddd')]);
+    expect(split.recipes.map((x) => x.id)).toEqual(['dddd', 'a']);
+    expect(split.toTry.map((x) => x.id)).toEqual(['bb']);
+    expect(split.drafts.map((x) => x.id)).toEqual(['ccc']);
+  });
+  it('only sends to_try when the recipe goes on the list', () => {
+    expect('to_try' in buildRecipe({ groupId: 'g', title: 'x' })).toBe(false);
+    expect(buildRecipe({ groupId: 'g', title: 'x', toTry: true }).to_try).toBe(true);
   });
 });

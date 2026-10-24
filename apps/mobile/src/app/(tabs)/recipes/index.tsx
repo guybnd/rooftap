@@ -59,6 +59,7 @@ import {
   type GroceryItem,
   type Recipe,
   type RecipeIngredient,
+  splitRecipeList,
 } from '@homeup/core';
 import { useFuzzySearch } from '@homeup/core/src/hooks/use-fuzzy-search';
 import { useDataCache } from '@/lib/data-cache';
@@ -108,14 +109,10 @@ export default function RecipesSectionScreen() {
   const storeLoaded = useStoreLoaded(...(groceriesLinked ? [recs$, ings$, items$] : [recs$, ings$]));
 
   const allRecipes = use$(() => Object.values(recs$.get() ?? {}).filter((r): r is Recipe => !!r && !r.deleted));
-  const recipes = React.useMemo(
-    () => allRecipes.filter((r) => !r.draft).sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? '')),
-    [allRecipes]
-  );
-  const drafts = React.useMemo(
-    () => allRecipes.filter((r) => r.draft).sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? '')),
-    [allRecipes]
-  );
+  // The book, scanned drafts and the To try list (ideas, often saved by the
+  // Assistant, kept out of the book until someone keeps one).
+  const { recipes, drafts, toTry } = React.useMemo(() => splitRecipeList(allRecipes), [allRecipes]);
+  const toTryOn = modules.server('recipes.to-try');
   const allIngredients = use$(() =>
     Object.values(ings$.get() ?? {}).filter((i): i is RecipeIngredient => !!i && !i.deleted)
   );
@@ -449,6 +446,29 @@ export default function RecipesSectionScreen() {
                 className="h-7 justify-center rounded-full border border-border bg-muted px-3"
               >
                 <Text className="text-xs font-medium text-foreground">{d.title || 'Untitled scan'}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </Card>
+      )}
+
+      {/* To try strip: the same neutral card as the drafts strip. Each chip
+          opens the recipe, where Keep moves it into the book. */}
+      {toTryOn && toTry.length > 0 && (
+        <Card className="gap-2.5 rounded-3xl px-4">
+          <Text className="text-micro-label uppercase text-muted-foreground">
+            To try <Text style={{ fontVariant: ['tabular-nums'] }}>{toTry.length}</Text>
+          </Text>
+          <View className="flex-row flex-wrap gap-2">
+            {toTry.map((r) => (
+              <Pressable
+                key={r.id}
+                onPress={() => router.push(`/recipes/${r.id}` as Href)}
+                accessibilityRole="button"
+                hitSlop={8}
+                className="h-7 justify-center rounded-full border border-border bg-muted px-3"
+              >
+                <Text className="text-xs font-medium text-foreground">{r.title || 'Untitled recipe'}</Text>
               </Pressable>
             ))}
           </View>

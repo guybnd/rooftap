@@ -88,6 +88,7 @@ export default function RecipeDetailPage() {
   // Modules: have/need, "Add missing", "Add to list" and every grocery write need
   // recipes and groceries (module-features.ts). Off means the shopping list isn't read.
   const groceriesLinked = modules.feature('recipes.groceries');
+  const toTryOn = modules.server('recipes.to-try');
 
   const recs$ = recipes$(group?.id);
   const ings$ = recipeIngredients$(group?.id);
@@ -96,7 +97,7 @@ export default function RecipeDetailPage() {
   useReconnectSync(ings$);
   useReconnectSync(items$);
 
-  const { writeRow: writeRecipe, softDeleteRow: softDeleteRecipe } = useStoreHelpers(recs$, currentUserId);
+  const { writeRow: writeRecipe, patchRow: patchRecipe, softDeleteRow: softDeleteRecipe } = useStoreHelpers(recs$, currentUserId);
   const { writeRow: writeIngredient, patchRow: patchIngredient, softDeleteRow: softDeleteIngredient } =
     useStoreHelpers(ings$, currentUserId);
   const { writeRow: writeGrocery, patchRow: patchGrocery } = useStoreHelpers(items$, currentUserId);
@@ -298,6 +299,22 @@ export default function RecipeDetailPage() {
           <Trash2 className="h-5 w-5" />
         </button>
       </div>
+
+      {/* To try: an idea kept out of the book until someone keeps it. */}
+      {toTryOn && recipe.to_try && (
+        <div className="flex items-center gap-3 rounded-3xl border border-border/60 bg-card p-4 shadow-[var(--card-shadow)]">
+          <p className="min-w-0 flex-1 text-sm text-muted-foreground">
+            On your To try list. Keep it to move it into your recipes.
+          </p>
+          <button
+            type="button"
+            onClick={() => patchRecipe(recipe.id, { to_try: false })}
+            className="inline-flex h-11 shrink-0 items-center rounded-lg bg-primary px-3.5 text-sm font-medium text-primary-foreground hover:bg-primary/80"
+          >
+            Keep
+          </button>
+        </div>
+      )}
 
       {/* Facts + fill bar: one v2 card. Meta words are plain text (pill shape
           means tappable, PC1); servings and times use Lucide, not emoji. */}
