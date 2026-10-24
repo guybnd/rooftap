@@ -11,6 +11,7 @@ import {
   monthLastDayLabel,
   monthLongName,
   monthShortName,
+  goalStatus,
   moneyFlow,
   signedMoney,
 } from './cost-month-view';
@@ -156,5 +157,43 @@ describe('labels', () => {
   it('signs money', () => {
     expect(signedMoney(-4_500).startsWith('−')).toBe(true);
     expect(signedMoney(4_500).startsWith('+')).toBe(true);
+  });
+});
+
+describe('goalStatus', () => {
+  const today = new Date(2026, 9, 24);
+
+  it('says under so far and heading over as two lines', () => {
+    const m = month({ paidCents: 815_400, toComeCents: 272_500, expectedCents: 1_087_900 });
+    expect(goalStatus(m, 900_000, today)).toEqual([
+      { tone: 'success', lead: 'Under goal so far.', detail: '$846 left with 7 days to go.' },
+      { tone: 'warning', lead: 'Heading $1,879 over.', detail: '$2,725 still to come.' },
+    ]);
+  });
+
+  it('says on track when the estimate fits the goal', () => {
+    const m = month({ paidCents: 500_000, toComeCents: 100_000, expectedCents: 600_000 });
+    expect(goalStatus(m, 900_000, today)[1]).toEqual({ tone: 'success', lead: 'On track to finish $3,000 under.', detail: '$1,000 still to come.' });
+  });
+
+  it('is red only once spending passes the goal', () => {
+    const m = month({ paidCents: 950_000, toComeCents: 50_000, expectedCents: 1_000_000 });
+    expect(goalStatus(m, 900_000, new Date(2026, 9, 31))).toEqual([
+      { tone: 'danger', lead: '$500 over goal.', detail: '$9,500 spent on the last day.' },
+      { tone: 'neutral', lead: expect.stringMatching(/^About \$10,000 by /), detail: '$500 still to come.' },
+    ]);
+  });
+
+  it('keeps one line when nothing is to come', () => {
+    expect(goalStatus(month({ paidCents: 100_000, expectedCents: 100_000 }), 900_000, today)).toHaveLength(1);
+  });
+
+  it('sums up a finished month and a future one', () => {
+    expect(goalStatus(month({ when: 'past', paidCents: 950_000 }), 900_000)).toEqual([{ tone: 'danger', lead: 'Finished $500 over goal.' }]);
+    expect(goalStatus(month({ when: 'future', expectedCents: 800_000 }), 900_000)).toEqual([{ tone: 'success', lead: 'Looks $1,000 under goal.' }]);
+  });
+
+  it('shows the estimate without a goal', () => {
+    expect(goalStatus(month({ paidCents: 100_000, toComeCents: 20_000, expectedCents: 120_000 }), null, today)[0].lead).toMatch(/^About \$1,200 by /);
   });
 });

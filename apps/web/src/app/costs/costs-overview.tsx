@@ -34,10 +34,11 @@ import {
   lineMeta,
   lineRanks,
   monthBar,
-  monthLastDayLabel,
   monthLongName,
   monthShortName,
+  goalStatus,
   moneyFlow,
+  type GoalStatusLine,
   signedMoney,
   type CostCategory,
   type CostItem,
@@ -71,7 +72,6 @@ import {
 } from '@homeup/core';
 import { BottomSheet } from '@/components/ui/bottom-sheet';
 import { Switch } from '@/components/ui/switch';
-import { SegmentedControl } from '@/components/ui/segmented-control';
 import { upBankApi } from '@/lib/up-bank-client';
 import { cn } from '@/lib/utils';
 import { CategoryGlyph } from './category-glyph';
@@ -380,38 +380,44 @@ export function CostsOverview(props: CostsOverviewProps) {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1">
         {scope ? (
-          <SegmentedControl
-            ariaLabel="Whose costs"
-            value={scope}
-            onChange={setScope}
-            options={[
-              { value: 'household', label: 'Household' },
-              { value: 'mine', label: 'Personal' },
-            ]}
-            size="sm"
-            className="max-w-xs flex-1"
-          />
+          <div role="radiogroup" aria-label="Whose costs" className="flex flex-1 items-center gap-4">
+            {SCOPES.map((o) => (
+              <button
+                key={o.value}
+                type="button"
+                role="radio"
+                aria-checked={scope === o.value}
+                onClick={() => setScope(o.value)}
+                className={cn(
+                  'h-9 border-b-2 text-[15px] transition-colors',
+                  scope === o.value ? 'border-foreground font-semibold text-foreground' : 'border-transparent font-medium text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
         ) : (
           <span className={cn(LABEL, 'flex-1')}>Costs</span>
         )}
-        <span className="flex-1" />
         <button
           type="button"
+          aria-label="Add a cost"
+          title="Add a cost"
           onClick={() => onAdd()}
-          className="flex h-10 items-center gap-1.5 rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          className="flex h-9 w-9 items-center justify-center rounded-full text-primary transition-colors hover:bg-primary/10"
         >
-          <Plus className="h-4 w-4" />
-          Add cost
+          <Plus className="h-5 w-5" />
         </button>
         <button
           type="button"
           aria-label="More"
           onClick={() => setMoreOpen(true)}
-          className="flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-muted text-foreground transition-colors hover:bg-accent"
+          className="flex h-9 w-9 items-center justify-center rounded-full text-foreground transition-colors hover:bg-accent"
         >
-          <MoreHorizontal className="h-4 w-4" />
+          <MoreHorizontal className="h-5 w-5" />
         </button>
       </div>
 
@@ -528,6 +534,13 @@ export function CostsOverview(props: CostsOverviewProps) {
   );
 }
 
+const SCOPES = [
+  { value: 'household', label: 'Household' },
+  { value: 'mine', label: 'Personal' },
+] as const;
+
+const DOT: Record<GoalStatusLine['tone'], string> = { success: 'bg-success', warning: 'bg-warning', danger: 'bg-destructive', neutral: 'bg-muted-foreground' };
+
 function Hero({
   month,
   goalCents,
@@ -546,7 +559,7 @@ function Hero({
   const name = monthLongName(month.month);
   const max = Math.max(goalCents ?? 0, month.expectedCents, 1);
   const pct = (v: number) => `${Math.min(100, (v / max) * 100)}%`;
-  const vsGoal = goalCents ? goalCents - month.expectedCents : null;
+  const status = goalStatus(month, goalCents);
   const flow = moneyFlow(month);
   return (
     <div className="space-y-2">
@@ -582,25 +595,20 @@ function Hero({
         </div>
         {goalCents ? <div className="pointer-events-none absolute -inset-y-1 w-0.5 rounded bg-foreground" style={{ left: pct(goalCents) }} /> : null}
       </div>
-      <div className="flex justify-between gap-2 text-xs tabular-nums">
-        <span className="text-muted-foreground">
-          {hover ? (
-            <span className="font-semibold text-foreground">{hover}</span>
-          ) : month.when === 'current' ? (
-            <>
-              Expected by {monthLastDayLabel(month.month)} <span className="font-semibold text-foreground">{formatMoney(month.expectedCents)}</span>
-            </>
-          ) : month.when === 'future' ? (
-            'Forecast'
-          ) : (
-            'Finished month'
-          )}
-        </span>
-        {vsGoal != null ? (
-          <span className={vsGoal < 0 ? 'text-destructive' : 'text-success'}>
-            {vsGoal < 0 ? `${formatMoney(-vsGoal)} over goal` : `${formatMoney(vsGoal)} under goal`}
-          </span>
-        ) : null}
+      <div className="space-y-1 pt-0.5 text-sm tabular-nums">
+        {status.map((l, i) => (
+          <p key={i} className="flex items-center gap-2">
+            <span aria-hidden className={cn('h-2 w-2 shrink-0 rounded-full', DOT[l.tone])} />
+            {i === 0 && hover ? (
+              <span className="font-semibold text-foreground">{hover}</span>
+            ) : (
+              <span>
+                <span className="font-semibold text-foreground">{l.lead}</span>
+                {l.detail ? <span className="text-muted-foreground"> {l.detail}</span> : null}
+              </span>
+            )}
+          </p>
+        ))}
       </div>
       {flow ? (
         <div className="flex gap-2 pt-1">

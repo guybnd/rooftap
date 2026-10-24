@@ -155,3 +155,45 @@ export function costDayLabel(date: string): string {
 export function signedMoney(cents: number): string {
   return `${cents < 0 ? '−' : '+'}${formatMoney(Math.abs(cents))}`;
 }
+
+export interface GoalStatusLine {
+  tone: 'success' | 'warning' | 'danger' | 'neutral';
+  /** The bold lead: "Under goal so far." */
+  lead: string;
+  /** The quieter rest: "$846 left with 7 days to go." */
+  detail?: string;
+}
+
+/**
+ * The hero's status lines under the spend bar. Spent so far and the month-end
+ * estimate get a line each, so a month that is under the goal today but
+ * heading over says both instead of one red "over goal". Heading over is a
+ * warning; only money already spent past the goal is red.
+ */
+export function goalStatus(month: CostMonth, goalCents: number | null, today: Date = new Date()): GoalStatusLine[] {
+  const end = monthLastDayLabel(month.month);
+  if (month.when === 'past') {
+    if (!goalCents) return [{ tone: 'neutral', lead: 'Finished month.' }];
+    const off = goalCents - month.paidCents;
+    return [off >= 0 ? { tone: 'success', lead: `Finished ${formatMoney(off)} under goal.` } : { tone: 'danger', lead: `Finished ${formatMoney(-off)} over goal.` }];
+  }
+  if (month.when === 'future') {
+    if (!goalCents) return [{ tone: 'neutral', lead: 'Forecast.' }];
+    const off = goalCents - month.expectedCents;
+    return [off >= 0 ? { tone: 'success', lead: `Looks ${formatMoney(off)} under goal.` } : { tone: 'warning', lead: `Looks ${formatMoney(-off)} over goal.` }];
+  }
+  const toCome = month.toComeCents > 0 ? `${formatMoney(month.toComeCents)} still to come.` : undefined;
+  if (!goalCents) return [{ tone: 'neutral', lead: `About ${formatMoney(month.expectedCents)} by ${end}.`, detail: toCome }];
+  const [y, m] = month.month.split('-').map(Number);
+  const daysLeft = Math.max(0, new Date(y, m, 0).getDate() - today.getDate());
+  const togo = daysLeft === 0 ? 'on the last day' : `with ${daysLeft} ${daysLeft === 1 ? 'day' : 'days'} to go`;
+  const left = goalCents - month.paidCents;
+  const now: GoalStatusLine =
+    left >= 0
+      ? { tone: 'success', lead: 'Under goal so far.', detail: `${formatMoney(left)} left ${togo}.` }
+      : { tone: 'danger', lead: `${formatMoney(-left)} over goal.`, detail: `${formatMoney(month.paidCents)} spent ${togo}.` };
+  if (month.toComeCents <= 0) return [now];
+  const off = goalCents - month.expectedCents;
+  if (left < 0) return [now, { tone: 'neutral', lead: `About ${formatMoney(month.expectedCents)} by ${end}.`, detail: toCome }];
+  return [now, off >= 0 ? { tone: 'success', lead: `On track to finish ${formatMoney(off)} under.`, detail: toCome } : { tone: 'warning', lead: `Heading ${formatMoney(-off)} over.`, detail: toCome }];
+}

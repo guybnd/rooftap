@@ -13,7 +13,7 @@
 import * as React from 'react';
 import { Pressable, View } from 'react-native';
 import { Archive, ArrowRight, ChevronDown, ChevronRight, EyeOff, FileText, Landmark, MessageSquare, MoreHorizontal, PenLine, Plus, Repeat, Sparkles, Target, Wallet, List, type LucideIcon } from 'lucide-react-native';
-import { BottomSheet, SegmentedControl, SwipeActions, Switch, Text, cn, haptics, toast } from '@homeup/ui';
+import { BottomSheet, SwipeActions, Switch, Text, cn, haptics, toast } from '@homeup/ui';
 import {
   CADENCE_LABEL,
   bankDayLabel,
@@ -30,10 +30,11 @@ import {
   lineMeta,
   lineRanks,
   monthBar,
-  monthLastDayLabel,
   monthLongName,
   monthShortName,
+  goalStatus,
   moneyFlow,
+  type GoalStatusLine,
   signedMoney,
   type CostCategory,
   type CostItem,
@@ -260,19 +261,27 @@ export function CostsOverview(props: CostsOverviewProps) {
 
   return (
     <View className="gap-4">
-      <View className="flex-row items-center gap-2">
+      <View className="flex-row items-center gap-1">
         {scope ? (
-          <SegmentedControl
-            accessibilityLabel="Whose costs"
-            value={scope}
-            onChange={setScope}
-            options={[
-              { value: 'household', label: 'Household' },
-              { value: 'mine', label: 'Personal' },
-            ]}
-            size="sm"
-            className="flex-1"
-          />
+          <View accessibilityRole="radiogroup" accessibilityLabel="Whose costs" className="flex-1 flex-row items-center gap-4">
+            {SCOPES.map((o) => {
+              const on = scope === o.value;
+              return (
+                <Pressable
+                  key={o.value}
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: on }}
+                  onPress={() => {
+                    if (!on) haptics.select();
+                    setScope(o.value);
+                  }}
+                  className={cn('h-9 justify-center border-b-2', on ? 'border-foreground' : 'border-transparent')}
+                >
+                  <Text className={cn('text-[15px]', on ? 'font-semibold text-foreground' : 'font-medium text-muted-foreground')}>{o.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
         ) : (
           <Text className={cn(LABEL, 'flex-1')}>Costs</Text>
         )}
@@ -280,17 +289,17 @@ export function CostsOverview(props: CostsOverviewProps) {
           accessibilityRole="button"
           accessibilityLabel="Add a cost"
           onPress={() => onAdd()}
-          className="h-9 w-9 items-center justify-center rounded-full bg-primary"
+          className="h-10 w-10 items-center justify-center rounded-full"
         >
-          <Plus size={16} className="text-primary-foreground" />
+          <Plus size={20} className="text-primary" />
         </Pressable>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="More"
           onPress={() => setMoreOpen(true)}
-          className="h-9 w-9 items-center justify-center rounded-full border border-border"
+          className="h-10 w-10 items-center justify-center rounded-full"
         >
-          <MoreHorizontal size={16} className="text-foreground" />
+          <MoreHorizontal size={20} className="text-foreground" />
         </Pressable>
       </View>
 
@@ -490,6 +499,13 @@ export function CostsOverview(props: CostsOverviewProps) {
   );
 }
 
+const SCOPES = [
+  { value: 'household', label: 'Household' },
+  { value: 'mine', label: 'Personal' },
+] as const;
+
+const DOT: Record<GoalStatusLine['tone'], string> = { success: 'bg-success', warning: 'bg-warning', danger: 'bg-destructive', neutral: 'bg-muted-foreground' };
+
 function Hero({
   month,
   goalCents,
@@ -507,8 +523,7 @@ function Hero({
   const name = monthLongName(month.month);
   const max = Math.max(goalCents ?? 0, month.expectedCents, 1);
   const pct = (v: number) => `${Math.min(100, (v / max) * 100)}%` as const;
-  const vsGoal = goalCents ? goalCents - month.expectedCents : null;
-  const end = month.month === undefined ? '' : monthLastDayLabel(month.month);
+  const status = goalStatus(month, goalCents);
   const flow = moneyFlow(month);
   return (
     <View className="gap-2">
@@ -544,20 +559,16 @@ function Hero({
         </View>
         {goalCents ? <View pointerEvents="none" className="absolute -bottom-1 -top-1 w-0.5 rounded bg-foreground" style={{ left: pct(goalCents) }} /> : null}
       </View>
-      <View className="flex-row justify-between gap-2">
-        <Text className="text-caption text-muted-foreground" style={TABULAR}>
-          {month.when === 'current'
-            ? `Expected by ${end} `
-            : month.when === 'future'
-              ? 'Forecast'
-              : 'Finished month'}
-          {month.when === 'current' ? <Text className="text-caption font-semibold text-foreground">{formatMoney(month.expectedCents)}</Text> : null}
-        </Text>
-        {vsGoal != null ? (
-          <Text className={cn('text-caption', vsGoal < 0 ? 'text-destructive' : 'text-success')} style={TABULAR}>
-            {vsGoal < 0 ? `${formatMoney(-vsGoal)} over goal` : `${formatMoney(vsGoal)} under goal`}
-          </Text>
-        ) : null}
+      <View className="gap-1 pt-0.5">
+        {status.map((l, i) => (
+          <View key={i} className="flex-row items-center gap-2">
+            <View className={cn('h-2 w-2 rounded-full', DOT[l.tone])} />
+            <Text className="flex-1 text-sm font-semibold text-foreground" style={TABULAR}>
+              {l.lead}
+              {l.detail ? <Text className="text-sm font-normal text-muted-foreground">{` ${l.detail}`}</Text> : null}
+            </Text>
+          </View>
+        ))}
       </View>
       {flow ? (
         <View className="flex-row gap-2 pt-1">
