@@ -15,7 +15,7 @@ const HAS_GOOGLE_SERVICES = existsSync(join(__dirname, 'google-services.json'));
 const config: ExpoConfig = {
   name: IS_DEV ? 'Rooftap Dev' : 'Rooftap',
   slug: 'mobile',
-  version: '1.1.1',
+  version: '1.1.2',
   orientation: 'portrait',
   icon: './assets/images/icon.png',
   scheme: 'mobile',

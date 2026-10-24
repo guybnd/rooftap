@@ -8,6 +8,26 @@ Each change people would notice gets a `whats-new/` entry (see `whats-new/README
 
 ## Unreleased
 
+## 1.1.2 (2026-10-24)
+
+This release ships a new APK: the phone now finds places near you with its location. It installs over 1.1.1.
+
+- The Assistant can search the web. Ask what something costs or when a shop opens, and it searches the web and reads the page. It names the site for each price.
+- The Assistant finds places near you. On the phone and in the browser it asks for your location once and only uses it while you ask. Otherwise it uses your home, or asks for your suburb once.
+- Send photos to the Assistant. Attach a receipt, a bin calendar or a recipe page, and it files what it finds. Chat photos stay private and are deleted after 30 days.
+- The Assistant knows which screen you have open, and it reaches more of the app: rewards cards, bins, home care, checklists, recipes, Home Setup, documents and your agenda.
+- Pick which changes the Assistant makes. Each suggested change has its own tick, and you can confirm a week of changes on one card.
+- Send feedback through the Assistant. It shows you the whole message and sends it only when you say yes.
+- Smarter price checks in Shopper. Items close to your target price get a check every day. On Free, your first 10 items get a check every few days, and you can open any item to check it now.
+- Keep a Scout search or a price watch from someone, for a present.
+- Occasions: track birthdays and other days, keep gift ideas kept from the person they are for, and share a wishlist. Occasions show on the Calendar.
+- Bin night shows which bins go out this week and whose turn it is, and Home reminds you the evening before.
+- Plan the week's dinners in Recipes, with several dishes a night. Cook with step timers, cook mode and several recipes at once.
+- Scanned recipes show how they match your Groceries, and staples such as salt and oil never go on the list.
+- Home care in Home Setup reminds you when upkeep such as smoke alarm tests is due.
+- Costs shows your latest payments, a To sort card for new shops, Worth a look tips and spending by category in colour. Move a cost to another category in two taps. The Budget bar on Home fills only with what you paid.
+- Settings > Notifications lists every push Rooftap sends, with a switch for each.
+- Fixes: follow-up questions to the Assistant work again, new Home Setup items save on every server, and Home no longer stops on a half-synced grocery.
 - Self-hosting: a new install serves the web app on port 3737, not 3000. `scripts/self-host-init.sh` keeps an existing install on 3000. If you start the stack with `docker compose up` and your `.env` has no `APP_PORT` line, add `APP_PORT=3000` to keep the old port.
 
 ## 1.1.1 (2026-10-22)
