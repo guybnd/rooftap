@@ -16,6 +16,8 @@ import {
   timerProgress,
   timerState,
   timersToRing,
+  liveDeviceTimers,
+  timerLiveText,
   cookTimers,
   upcomingStepTimer,
   type CookSession,
@@ -189,5 +191,24 @@ describe('dismissed timers', () => {
   it('offers the first unused step timer from the current step', () => {
     expect(upcomingStepTimer(session([]), steps, 0)).toMatchObject({ step: 1, index: 0 });
     expect(upcomingStepTimer(session([]), steps, 3)).toBeNull();
+  });
+});
+
+describe('live timers in the notification bar', () => {
+  it('lists this device\'s running and paused timers, not finished or other devices\'', () => {
+    const [a] = startTimer([], input, 'phone', T0);
+    const [b] = startTimer([], { ...input, index: 1, seconds: 60 }, 'phone', T0);
+    const [c] = startTimer([], { ...input, index: 2 }, 'web', T0);
+    const paused = pauseTimer([a], a.id, T0 + 100_000)[0];
+    const live = liveDeviceTimers([session([paused, b, c])], 'phone', T0 + 120_000);
+    expect(live.map((l) => l.timer.id)).toEqual([a.id]);
+  });
+
+  it('says when a running timer is ready, or how long a paused one has left', () => {
+    const [t] = startTimer([], input, 'phone', T0);
+    const clock = (ms: number) => new Date(ms).toISOString().slice(11, 16);
+    expect(timerLiveText(t, 'Risotto', T0, clock)).toEqual({ title: 'Simmer · Risotto', body: 'Ready at 18:10' });
+    const [p] = pauseTimer([t], t.id, T0 + 400_000);
+    expect(timerLiveText(p, 'Risotto', T0 + 500_000, clock).body).toBe('Paused, 3:20 left');
   });
 });

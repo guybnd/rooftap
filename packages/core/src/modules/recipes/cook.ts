@@ -282,6 +282,43 @@ export function stepTimerStates(
 }
 
 /** Notification copy for a finished timer. */
+/**
+ * This device's timers that are still going, running or paused: what the
+ * phone shows in its notification bar while you cook (finished ones ring
+ * instead, see timersToRing).
+ */
+export function liveDeviceTimers(
+  sessions: readonly CookSession[],
+  deviceId: string,
+  now: number,
+): { timer: CookTimer; session: CookSession }[] {
+  const out: { timer: CookTimer; session: CookSession }[] = [];
+  for (const session of sessions) {
+    if (session.deleted) continue;
+    for (const timer of cookTimers(session)) {
+      if (timer.deviceId !== deviceId || timerState(timer, now) === 'done') continue;
+      out.push({ timer, session });
+    }
+  }
+  return out;
+}
+
+/**
+ * The notification-bar line for a timer still going: "Simmer · Lemon
+ * risotto", then "Ready at 7:42 PM" (the caller formats the clock) or
+ * "Paused, 3:20 left".
+ */
+export function timerLiveText(
+  timer: CookTimer,
+  recipeTitle: string,
+  now: number,
+  clock: (ms: number) => string,
+): { title: string; body: string } {
+  const title = `${timer.label} · ${recipeTitle}`;
+  if (timerState(timer, now) === 'paused') return { title, body: `Paused, ${formatCountdown(timerRemainingMs(timer, now))} left` };
+  return { title, body: `Ready at ${clock(now + timerRemainingMs(timer, now))}` };
+}
+
 export function timerDoneText(timer: Pick<CookTimer, 'label'>, recipeTitle: string): { title: string; body: string } {
   return { title: `${timer.label} is done`, body: recipeTitle };
 }

@@ -12,7 +12,9 @@ import { useOpenRoute } from './tab-routes';
 
 Notifications.setNotificationHandler({
   handleNotification: async (notification) => ({
-    shouldShowBanner: true,
+    // A running cooking timer's quiet line goes to the bar, never a banner
+    // over the app you are cooking in.
+    shouldShowBanner: notification.request.content.data?.kind !== 'cook-running',
     shouldShowList: true,
     // A finished cooking timer (features/cook/cook-alarms.tsx) rings in the
     // foreground too; other pushes stay quiet while the app is open.
