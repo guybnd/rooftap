@@ -68,6 +68,7 @@ import {
   nextOccasionDay,
   occasionTitle,
   type Occasion,
+  itemLink,
 } from "@homeup/core";
 import { memberNames } from "@/lib/member-names";
 import { personTimeZone, todayIn } from "@/lib/meal-plan-server";
@@ -605,7 +606,7 @@ export function moduleTools({ admin, userId, groupId, enabled, shared = false }:
       };
       const { error } = await admin.from("shopper_wants").insert(row);
       if (error) return fail(error.message);
-      return ok({ ok: true, id: row.id, title: row.title, status: row.status, link: "/shopper" });
+      return ok({ ok: true, id: row.id, title: row.title, status: row.status, link: itemLink("watch", row.id) });
     },
     null,
   );
@@ -713,7 +714,7 @@ export function moduleTools({ admin, userId, groupId, enabled, shared = false }:
         if (itemsError) return fail(itemsError.message);
       }
       if (task) await admin.from("household_tasks").insert({ ...task, assigned_to: userId });
-      return ok({ ok: true, id: checklist.id, title: checklist.title, items: rows.length, ...(task ? { task_id: task.id } : {}) });
+      return ok({ ok: true, id: checklist.id, title: checklist.title, items: rows.length, ...(task ? { task_id: task.id } : {}), link: itemLink("checklist", checklist.id) });
     },
     null,
   );
@@ -772,7 +773,7 @@ export function moduleTools({ admin, userId, groupId, enabled, shared = false }:
         const { error: ingError } = await admin.from("recipe_ingredients").insert(ingredients);
         if (ingError) return fail(ingError.message);
       }
-      return ok({ ok: true, id: recipe.id, title: recipe.title, ingredients: ingredients.length, link: `/recipes/${recipe.id}` });
+      return ok({ ok: true, id: recipe.id, title: recipe.title, ingredients: ingredients.length, link: itemLink("recipe", recipe.id) });
     },
     null,
   );
@@ -964,6 +965,7 @@ export function moduleTools({ admin, userId, groupId, enabled, shared = false }:
               listing_url: p.listing_url,
               notes: p.notes,
               archived: p.archived || null,
+              link: itemLink("listing", p.id),
               viewings: viewings
                 .filter((v) => v.apartment_id === p.id)
                 .sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at))

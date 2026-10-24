@@ -8,6 +8,7 @@ import {
   billsDue,
   addDaysISO,
   toISODate,
+  itemLink,
   type ModuleId,
 } from "@homeup/core";
 import { memberNames } from "@/lib/member-names";
@@ -1452,6 +1453,7 @@ export function householdTools({
             basic(i, ["name", "quantity", "unit"] as const),
           ),
           steps: stepsFromInstructions(recipe.instructions),
+          link: itemLink("recipe", recipe.id),
         };
         return { content: [{ type: "text", text: JSON.stringify(full) }] };
       }
@@ -1468,6 +1470,7 @@ export function householdTools({
           ] as const),
           cuisines: recipeCuisines(r),
           ingredients: (byRecipe.get(r.id) ?? []).map((i) => i.name),
+          link: itemLink("recipe", r.id),
         }))
         .filter(
           (r) =>
@@ -2224,6 +2227,7 @@ export function householdTools({
         items: (byList.get(l.id) ?? []).map((i) =>
           basic(i, ["id", "label", "is_done", "cost_cents"] as const),
         ),
+        link: itemLink("checklist", l.id),
       }));
       return { content: [{ type: "text", text: JSON.stringify(rows) }] };
     },
@@ -2478,8 +2482,8 @@ export function householdTools({
         // In the shared chat, watches kept from anyone stay out too.
         .filter((w) => !isKeptFrom(w, userId) && !(shared && (w.hidden_from ?? []).length > 0))
         .filter((w) => (status ? w.status === status : w.status !== "bought"))
-        .map((w) =>
-          basic(w, [
+        .map((w) => ({
+          ...basic(w, [
             "id",
             "title",
             "status",
@@ -2491,7 +2495,8 @@ export function householdTools({
             "last_checked_at",
             "notes",
           ] as const),
-        );
+          link: itemLink("watch", w.id),
+        }));
       return { content: [{ type: "text", text: JSON.stringify(rows) }] };
     },
   );
@@ -2566,7 +2571,7 @@ export function householdTools({
               id: run.id,
               status: "running",
               title: scoutTitle(run.brief),
-              link: `/shopper/scout/${run.id}`,
+              link: itemLink("scout", run.id),
             }),
           },
         ],
@@ -2628,7 +2633,7 @@ export function householdTools({
               brief: latest.brief,
               error: latest.error,
               picks,
-              link: `/shopper/scout/${root.id}`,
+              link: itemLink("scout", root.id),
             }),
           },
         ],

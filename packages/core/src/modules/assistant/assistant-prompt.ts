@@ -6,6 +6,7 @@
 // adapted to one household app with per-module trust levels.
 
 import type { ConversationKind, MessageChannel, TrustLevel } from './assistant';
+import { linksPromptText } from './assistant-links';
 import { screenPromptText } from './assistant-screen';
 import { webLookupText, type WebWhere } from './web-lookup';
 
@@ -130,6 +131,8 @@ export function buildAssistantSystemPrompt(input: AssistantPromptInput): string 
   );
   sections.push(REMEMBER_INSTRUCTION);
   sections.push(`${KIND_TEXT[input.kind]} ${CHANNEL_TEXT[input.channel]}`);
+  // Telegram and routines can't open in-app routes.
+  if (input.channel === 'app') sections.push(linksPromptText());
 
   if (input.memories.length > 0) {
     sections.push(`## Remembered about this household\n${input.memories.map((m) => `- ${m}`).join('\n')}`);
