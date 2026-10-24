@@ -41,10 +41,10 @@ describe("fetchPage", () => {
 
 describe("webTools", () => {
   it("offers nothing without a SerpApi key, or when switched off", async () => {
-    expect(await webTools(admin(true), "g")).toEqual({ tools: [], where: null });
+    expect((await webTools(admin(true), "g")).tools).toEqual([]);
     keys.set("SERPAPI_API_KEY", "k");
     keys.set("ASSISTANT_WEB", "off");
-    expect(await webTools(admin(true), "g")).toEqual({ tools: [], where: null });
+    expect((await webTools(admin(true), "g")).tools).toEqual([]);
   });
 
   it("offers search and page reading as lookups", async () => {
@@ -62,7 +62,7 @@ describe("webTools", () => {
     const [search] = (await webTools(admin(false), "g")).tools;
     const out = await search.run({ query: "airmesh thong price" });
     expect(out.isError).toBe(true);
-    expect(out.content[0].text).toContain("today's 25 web searches");
+    expect(out.content[0].text).toContain("today's 10 web searches");
     expect(fetchSpy).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
   });
@@ -88,7 +88,7 @@ describe("webTools", () => {
       .mockImplementation(async () => new Response(JSON.stringify({ local_results: [{ title: "Dogs R Us", address: "1 Lygon St", rating: 4.6 }] })));
     const home = admin(true, { region: "AU", home_lat: -37.81361, home_lng: 144.96305 });
 
-    const device = await webTools(home, "g", { lat: -37.768, lng: 144.962 });
+    const device = await webTools(home, "g", { here: { lat: -37.768, lng: 144.962 } });
     expect(device.where).toBe("device");
     const out = JSON.parse((await device.tools[0].run({ query: "hot dogs", kind: "places" })).content[0].text);
     let url = new URL(String(fetchSpy.mock.calls[0][0]));
@@ -116,5 +116,37 @@ describe("webTools", () => {
     const out = await tools[0].run({ query: "hot dogs", kind: "places" });
     expect(out.isError).toBe(true);
     expect(out.content[0].text).toContain("suburb");
+  });
+
+  it("prefers Serper, posts the search and counts its cost", async () => {
+    keys.set("SERPAPI_API_KEY", "old");
+    keys.set("SERPER_API_KEY", "new");
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async () => new Response(JSON.stringify({ organic: [{ title: "T", link: "https://x.example/", snippet: "s" }], answerBox: { answer: "42" } })));
+    const web = await webTools(admin(true), "g");
+    const out = JSON.parse((await web.tools[0].run({ query: "meaning of life" })).content[0].text);
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toBe("https://google.serper.dev/search");
+    expect((init as RequestInit).headers).toMatchObject({ "X-API-KEY": "new" });
+    expect(JSON.parse(String((init as RequestInit).body))).toMatchObject({ q: "meaning of life", gl: "au" });
+    expect(out).toMatchObject({ answer: "42", results: [{ title: "T", url: "https://x.example/", snippet: "s" }] });
+    expect(web.spentMicros()).toBe(1000);
+
+    await webTools(admin(true, { region: "AU", home_lat: -37.81, home_lng: 144.96 }), "g").then((w) => w.tools[0].run({ query: "hot dogs", kind: "places" }));
+    const [mapsUrl, mapsInit] = fetchSpy.mock.calls[1];
+    expect(String(mapsUrl)).toBe("https://google.serper.dev/maps");
+    expect(JSON.parse(String((mapsInit as RequestInit).body))).toMatchObject({ q: "hot dogs", ll: "@-37.81,144.96,14z" });
+    fetchSpy.mockRestore();
+  });
+
+  it("skips the daily count when uncapped", async () => {
+    keys.set("SERPER_API_KEY", "k");
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}"));
+    const a = admin(false);
+    const [search] = (await webTools(a, "g", { capped: false })).tools;
+    expect((await search.run({ query: "x" })).isError).toBeFalsy();
+    expect((a as unknown as { rpc: ReturnType<typeof vi.fn> }).rpc).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
   });
 });

@@ -146,7 +146,7 @@ async function turnTools(
     { admin: ctx.admin, userId: ctx.userId, groupId: ctx.groupId, enabled: ctx.enabled, deviceId, shared },
     { settings, readOnly }
   );
-  const [homeAssistant, web] = await Promise.all([homeAssistantTools(ctx.admin, ctx.groupId, { readOnly }), webTools(ctx.admin, ctx.groupId, here)]);
+  const [homeAssistant, web] = await Promise.all([homeAssistantTools(ctx.admin, ctx.groupId, { readOnly }), webTools(ctx.admin, ctx.groupId, { here, capped: ctx.access !== "unlimited" })]);
   const feedback = feedbackTool(ctx.admin, ctx.userId, ctx.groupId);
   // Filing a chat photo in Documents, so it outlives the chat's keep time.
   const filing = ctx.enabled.has("documents") && !readOnly ? photoTool(ctx.admin, ctx.userId, ctx.groupId, trustFor(settings.trust, "documents")) : null;
@@ -154,6 +154,7 @@ async function turnTools(
     tools: [...household, ...(homeAssistant?.tools ?? []), ...web.tools, feedback, ...(filing ? [filing] : [])],
     homeAssistant,
     web: web.tools.length ? { where: web.where } : null,
+    webSpentMicros: web.spentMicros,
   };
 }
 
@@ -744,7 +745,7 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
   );
 
   const contextMs = Date.now() - started - readMs;
-  const { tools, homeAssistant, web, ms: toolsMs } = await gathering;
+  const { tools, homeAssistant, web, webSpentMicros, ms: toolsMs } = await gathering;
   const reachable = [...new Set(tools.map((t) => t.module))].filter((m): m is ModuleId => m !== HOME_ASSISTANT_SCOPE);
   const system = buildAssistantSystemPrompt({
     now: formatNow(timeZone, now),
@@ -837,7 +838,8 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
 
   // The model that answered, which is the fallback if the first was busy.
   const model = llm.model() ?? chosenModel;
-  const cost = turnCost(active, model, turn.inputTokens, turn.outputTokens);
+  // Web searches are paid by the server, so they count with the turn's spend.
+  const cost = turnCost(active, model, turn.inputTokens, turn.outputTokens) + webSpentMicros();
   // Steps before the final answer are stored for the model's memory of the
   // turn; only the last one carries the proposals, tokens and cost.
   // Each row gets its own time, a millisecond apart, so the turn reads back

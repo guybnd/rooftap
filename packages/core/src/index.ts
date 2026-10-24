@@ -40,6 +40,7 @@ export * from './modules/recipes/use-cooks';
 export * from './modules/meals/meal-plan';
 export * from './modules/meals/use-meal-week';
 export * from './modules/shopper/shopper';
+export * from './modules/shopper/shopper-checks';
 export * from './modules/rewards/rewards';
 export * from './modules/rewards/rewards-view';
 export * from './modules/occasions/occasions';

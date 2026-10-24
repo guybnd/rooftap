@@ -40,7 +40,13 @@ export const RUNTIME_KEYS: KeyDefinition[] = [
     key: "SERPAPI_API_KEY",
     class: "runtime",
     label: "SerpApi key",
-    purpose: "Finds current prices for Shopper items through Google Shopping.",
+    purpose: "Finds current prices for Shopper items through Google Shopping. Used when there is no Serper key.",
+  },
+  {
+    key: "SERPER_API_KEY",
+    class: "runtime",
+    label: "Serper key",
+    purpose: "Google results for the Assistant's web search and Shopper prices, at about a tenth of SerpApi's cost.",
   },
   {
     key: "GOOGLE_CLIENT_ID",

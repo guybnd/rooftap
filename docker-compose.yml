@@ -351,6 +351,7 @@ services:
       SCRAPER_API_KEY: ${SCRAPER_API_KEY:-}
       # Shopper price sources and the daily price check (.docs/shopper-sources.md).
       SERPAPI_API_KEY: ${SERPAPI_API_KEY:-}
+      SERPER_API_KEY: ${SERPER_API_KEY:-}
       SHOPPER_SOURCES_DISABLED: ${SHOPPER_SOURCES_DISABLED:-}
       SHOPPER_HTTP_SOURCES: ${SHOPPER_HTTP_SOURCES:-}
       CRON_SECRET: ${CRON_SECRET:-}

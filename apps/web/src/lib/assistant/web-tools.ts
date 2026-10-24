@@ -19,13 +19,19 @@ import type { ToolResult } from "@/lib/mcp/household-tools";
 import type { AssistantTool } from "./tools";
 
 // The Assistant's own web lookups (core web-lookup.ts): a Google search
-// through the server's SerpApi key, and reading one page. Both only look
-// things up, so they run without a card. Searches are paid, so each
-// household has a daily allowance (assistant_web_lookup_hit); the operator
-// takes the tools away with ASSISTANT_WEB=off, and a server without a
-// SerpApi key never offers them.
+// through Serper (or SerpApi when the server only has that key), and reading
+// one page. Both only look things up, so they run without a card. Searches
+// are paid: on a hosted server each household has a daily allowance
+// (assistant_web_lookup_hit), and what the searches cost is added to the
+// turn's spend, so it counts against the household's Assistant allowance.
+// The operator takes the tools away with ASSISTANT_WEB=off, and a server
+// with neither key never offers them.
 
 const TIMEOUT_MS = 12_000;
+
+/** What one search costs, in millionths of a dollar (Serper about $1 per 1,000, SerpApi about $15). */
+const SEARCH_COST_MICROS = { serper: 1_000, serpapi: 15_000 } as const;
+type SearchProvider = keyof typeof SEARCH_COST_MICROS;
 const PAGE_BYTES_MAX = 2_000_000;
 const REDIRECTS_MAX = 4;
 
@@ -38,7 +44,8 @@ function fail(error: string): ToolResult {
 }
 
 /** Counts one lookup; false once the household is past the day's allowance, or when the count can't be kept. */
-async function withinAllowance(admin: SupabaseClient, groupId: string, kind: WebLookupKind): Promise<boolean> {
+async function withinAllowance(admin: SupabaseClient, groupId: string, kind: WebLookupKind, capped: boolean): Promise<boolean> {
+  if (!capped) return true;
   const { data, error } = await admin.rpc("assistant_web_lookup_hit", {
     p_group_id: groupId,
     p_kind: kind,
@@ -115,22 +122,67 @@ async function readCapped(res: Response): Promise<string> {
   return out;
 }
 
+/** One search through Serper: its JSON answer, in the same shapes the core parsers read. */
+async function serperSearch(key: string, kind: "web" | "places" | "shopping", q: string, region: string, origin: WebHere | null) {
+  const endpoint = kind === "places" ? "maps" : kind === "shopping" ? "shopping" : "search";
+  const body: Record<string, unknown> = { q, hl: "en" };
+  if (kind === "places") {
+    if (origin) body.ll = `@${origin.lat},${origin.lng},14z`;
+  } else {
+    body.gl = region;
+    body.num = 10;
+  }
+  return fetch(`https://google.serper.dev/${endpoint}`, {
+    method: "POST",
+    headers: { "X-API-KEY": key, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+  });
+}
+
+/** One search through SerpApi. */
+async function serpapiSearch(key: string, kind: "web" | "places" | "shopping", q: string, region: string, origin: WebHere | null) {
+  const params = new URLSearchParams({ hl: "en", api_key: key, q });
+  if (kind === "places") {
+    params.set("engine", "google_maps");
+    params.set("type", "search");
+    if (origin) params.set("ll", `@${origin.lat},${origin.lng},14z`);
+  } else {
+    params.set("engine", kind === "shopping" ? "google_shopping" : "google");
+    params.set("gl", region);
+    params.set("num", "10");
+  }
+  return fetch(`https://serpapi.com/search.json?${params}`, { signal: AbortSignal.timeout(TIMEOUT_MS) });
+}
+
+export interface WebToolOptions {
+  /** The device's position for this turn only; without it, places searches start from the household's home. */
+  here?: WebHere | null;
+  /** The daily caps apply (a hosted server, and not the exempt household). */
+  capped?: boolean;
+}
+
 /**
- * The web tools for this turn, or none when the server has no SerpApi key or
- * the operator switched them off. `here` is the device's position for this
- * turn only; without it, places searches start from the household's home.
+ * The web tools for this turn, or none when the server has no search key or
+ * the operator switched them off. `spentMicros` is what this turn's searches
+ * cost, for the turn's usage record.
  */
 export async function webTools(
   admin: SupabaseClient,
   groupId: string,
-  here: WebHere | null = null
-): Promise<{ tools: AssistantTool[]; where: WebWhere }> {
-  const [key, switch_, { data: group }] = await Promise.all([
+  { here = null, capped = true }: WebToolOptions = {}
+): Promise<{ tools: AssistantTool[]; where: WebWhere; spentMicros: () => number }> {
+  const [serper, serpapi, switch_, { data: group }] = await Promise.all([
+    resolveServerKey("SERPER_API_KEY"),
     resolveServerKey("SERPAPI_API_KEY"),
     resolveServerKey("ASSISTANT_WEB"),
     admin.from("groups").select("region, home_lat, home_lng").eq("id", groupId).maybeSingle(),
   ]);
-  if (!key?.trim() || /^(off|false|0|no)$/i.test(switch_?.trim() ?? "")) return { tools: [], where: null };
+  let spent = 0;
+  const spentMicros = () => spent;
+  const provider: SearchProvider | null = serper?.trim() ? "serper" : serpapi?.trim() ? "serpapi" : null;
+  if (!provider || /^(off|false|0|no)$/i.test(switch_?.trim() ?? "")) return { tools: [], where: null, spentMicros };
+  const key = (provider === "serper" ? serper : serpapi)!.trim();
   const g = (group ?? {}) as { region?: string | null; home_lat?: number | null; home_lng?: number | null };
   const region = (g.region || "AU").toLowerCase();
   // The home is rounded to about a suburb, as Shopper does.
@@ -145,7 +197,8 @@ export async function webTools(
       'kind "places" searches Google Maps for somewhere to go (a cafe, a shop, a tradesperson) near the person and gives names, addresses, ratings and opening; ' +
       '"shopping" searches Google Shopping in the household\'s region and gives stores and prices; "web" (the default) gives pages and snippets. ' +
       "`near` is a suburb or town to search around instead of where the person is. " +
-      "Keep the query short, and never put names, street addresses or other private household details in it. Each search counts against a daily allowance.",
+      "Keep the query short, and never put names, street addresses or other private household details in it." +
+      (capped ? " Each search counts against a daily allowance." : ""),
     parameters: {
       type: "object",
       properties: {
@@ -166,24 +219,15 @@ export async function webTools(
       if (kind === "places" && !near && !origin) {
         return fail("No location to search from. Ask the person for their suburb or town, then search again with `near`.");
       }
-      if (!(await withinAllowance(admin, groupId, "search"))) {
+      if (!(await withinAllowance(admin, groupId, "search", capped))) {
         return fail(`The household has used today's ${WEB_SEARCHES_PER_DAY} web searches. Offer a Scout search instead.`);
       }
-      const params = new URLSearchParams({ hl: "en", api_key: key });
-      if (kind === "places") {
-        params.set("engine", "google_maps");
-        params.set("type", "search");
-        params.set("q", near ? `${query} near ${near}` : query);
-        if (!near && origin) params.set("ll", `@${origin.lat},${origin.lng},14z`);
-      } else {
-        params.set("engine", kind === "shopping" ? "google_shopping" : "google");
-        params.set("q", query);
-        params.set("gl", region);
-        params.set("num", "10");
-      }
+      const q = kind === "places" && near ? `${query} near ${near}` : query;
+      const from = kind === "places" && !near ? origin : null;
       try {
-        const res = await fetch(`https://serpapi.com/search.json?${params}`, { signal: AbortSignal.timeout(TIMEOUT_MS) });
+        const res = await (provider === "serper" ? serperSearch : serpapiSearch)(key, kind, q, region, from);
         if (!res.ok) return fail(`The search didn't work (${res.status}).`);
+        spent += SEARCH_COST_MICROS[provider];
         const body = await res.json();
         if (kind === "places") {
           return ok({ query, kind, near: near || (here ? "where they are now" : "the household's home"), places: serpPlaces(body) });
@@ -210,7 +254,7 @@ export async function webTools(
     lookup: true,
     run: async (args) => {
       if (!webPageUrl(args.url)) return fail("That link can't be opened.");
-      if (!(await withinAllowance(admin, groupId, "page"))) return fail(`The household has read today's ${WEB_PAGES_PER_DAY} pages.`);
+      if (!(await withinAllowance(admin, groupId, "page", capped))) return fail(`The household has read today's ${WEB_PAGES_PER_DAY} pages.`);
       const page = await fetchPage(String(args.url));
       if ("error" in page) return fail(page.error);
       const { title, text, cut } = pageText(page.html);
@@ -219,5 +263,5 @@ export async function webTools(
     },
   };
 
-  return { tools: [search, read], where };
+  return { tools: [search, read], where, spentMicros };
 }

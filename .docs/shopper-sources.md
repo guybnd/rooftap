@@ -130,13 +130,22 @@ The bundled sources:
 
 | id | Region | Gives | Needs |
 |---|---|---|---|
+| `serper-google-shopping` | any | offers | `SERPER_API_KEY` |
 | `serpapi-google-shopping` | any | offers | `SERPAPI_API_KEY` |
 | `osm-stores` | any | nearby stores (OpenStreetMap) | nothing |
 | `ozbargain` | AU | deals | nothing |
 
+Serper and SerpApi give the same Google Shopping results. When both keys are set, Shopper uses only Serper, which costs about a tenth as much per search.
+
+Households share search results. A source is asked once per item name, region and day, and every household that watches the same item reads that answer from `shopper_source_cache`.
+
 ## The daily price check
 
-`GET /api/shopper/refresh` re-checks watched items that haven't been checked for 20 hours, up to 40 per run, for households that have Shopper switched on. It needs `Authorization: Bearer $CRON_SECRET`.
+`GET /api/shopper/refresh` re-checks watched items in households that have Shopper switched on. It needs `Authorization: Bearer $CRON_SECRET`.
+
+- With billing off (self-hosted), and for Plus households, every watched item is checked each day.
+- A Free household on a hosted server gets its first 10 watched items checked every 3 days. An item whose best price is within 10% of its target or budget is checked each day. The other items are checked when someone opens them.
+- The check works through the items a few at a time. When it runs short of time, it calls itself again for the rest, up to 30 times.
 
 - **Hosted (Vercel):** `apps/web/vercel.json` schedules it daily at 19:00 UTC, and Vercel Cron sends the secret. Set `CRON_SECRET` in the project's environment.
 - **Self-hosted:** call it from any scheduler, for example:

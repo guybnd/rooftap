@@ -1,5 +1,6 @@
 import type { ShopperSource } from "./types";
 import { serpapiGoogleShopping } from "./serpapi-google-shopping";
+import { serperGoogleShopping } from "./serper-google-shopping";
 import { osmStores } from "./osm-stores";
 import { ozbargain } from "./ozbargain";
 import { httpSources } from "./http-source";
@@ -8,7 +9,7 @@ import { httpSources } from "./http-source";
 // this folder plus a line here (.docs/shopper-sources.md); nothing else
 // changes. Which apply to a household is decided per lookup (region, keys,
 // SHOPPER_SOURCES_DISABLED), see ../lookup.ts.
-export const SHOPPER_SOURCES: readonly ShopperSource[] = [serpapiGoogleShopping, osmStores, ozbargain];
+export const SHOPPER_SOURCES: readonly ShopperSource[] = [serperGoogleShopping, serpapiGoogleShopping, osmStores, ozbargain];
 
 /**
  * The built-in sources plus any external ones the operator configured

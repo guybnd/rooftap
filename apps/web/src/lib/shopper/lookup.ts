@@ -10,6 +10,7 @@ import {
   relevantOffers,
   parseSourceIds,
   sortOffers,
+  sourceCacheKey,
   storeKey,
   todayISO,
   wantQuery,
@@ -30,6 +31,12 @@ import { allSources, type ShopperSource, type SourceCallContext } from "./source
 // belongs to the want's household first.
 
 const FETCH_TIMEOUT_MS = 12_000;
+/**
+ * A source that gives the same results as another, cheaper one: it is left
+ * out while the cheaper one is ready, so a server with both keys pays once.
+ */
+const CHEAPER_TWIN: Record<string, string> = { "serpapi-google-shopping": "serper-google-shopping" };
+
 /** Store branches looked up per check, cheapest offers first. */
 const STORE_LOOKUPS = 5;
 
@@ -94,7 +101,8 @@ export async function applicableSources(
     if (!isSourceApplicable(manifest, { region: ctx.region, configuredKeys: new Set(Object.keys(keys)), disabledByServer, disabledByHousehold })) continue;
     ready.push({ source, ctx: { ...ctx, keys, fetch: rateLimitedFetch(manifest) } });
   }
-  return ready;
+  const ids = new Set(ready.map((r) => r.source.manifest.id));
+  return ready.filter((r) => !ids.has(CHEAPER_TWIN[r.source.manifest.id] ?? ""));
 }
 
 /** Applicable sources' manifests, for attribution in the apps and the Settings switches. */
@@ -122,7 +130,7 @@ export async function runLookup(admin: SupabaseClient, want: ShopperWant, group:
   await Promise.all(
     offerSources.map(async ({ source, ctx: callCtx }) => {
       try {
-        const raw = (await source.searchOffers?.(query, callCtx)) ?? [];
+        const raw = await cachedOffers(admin, source, query, callCtx);
         for (const o of raw) {
           const offer = { ...o, url: cleanOfferUrl(o.url) };
           // A result that breaks the contract is dropped, never shown.
@@ -186,6 +194,38 @@ export async function runLookup(admin: SupabaseClient, want: ShopperWant, group:
 
   await refreshBest(admin, want, now);
   return { offers: merged.length, sources: offerSources.map((s) => s.source.manifest.name), failed };
+}
+
+/**
+ * A source's offers for a query, shared across households: one search per
+ * item, region and day (shopper_source_cache). A cache that can't be read
+ * or written only costs a fresh search.
+ */
+async function cachedOffers(admin: SupabaseClient, source: ShopperSource, query: string, ctx: SourceCallContext): Promise<SourceOffer[]> {
+  if (!source.searchOffers) return [];
+  const key = sourceCacheKey(query, ctx.region, ctx.currency);
+  const day = todayISO();
+  const { data } = await admin
+    .from("shopper_source_cache")
+    .select("offers")
+    .eq("source_id", source.manifest.id)
+    .eq("key", key)
+    .eq("day", day)
+    .maybeSingle();
+  const hit = (data as { offers?: unknown } | null)?.offers;
+  if (Array.isArray(hit)) return hit as SourceOffer[];
+  const offers = await source.searchOffers(query, ctx);
+  const { error } = await admin
+    .from("shopper_source_cache")
+    .upsert({ source_id: source.manifest.id, key, day, offers }, { onConflict: "source_id,key,day" });
+  if (error) console.warn("shopper cache not saved:", error.message);
+  return offers;
+}
+
+/** Clears shared results older than a few days (the daily price check calls it). */
+export async function pruneSourceCache(admin: SupabaseClient): Promise<void> {
+  const cutoff = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  await admin.from("shopper_source_cache").delete().lt("day", cutoff);
 }
 
 /** A price the household found themselves, kept as a manual offer. */

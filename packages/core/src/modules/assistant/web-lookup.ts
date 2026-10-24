@@ -7,9 +7,9 @@
 export const WEB_SEARCH_TOOL = 'web_search';
 export const READ_PAGE_TOOL = 'read_page';
 
-/** Searches per household per day (UTC). */
-export const WEB_SEARCHES_PER_DAY = 25;
-/** Pages read per household per day (UTC). */
+/** Searches per household per day (UTC) on a hosted server; self-hosted and exempt households have no cap. */
+export const WEB_SEARCHES_PER_DAY = 10;
+/** Pages read per household per day (UTC), with the same exceptions. */
 export const WEB_PAGES_PER_DAY = 60;
 /** Characters of page text handed to the model. */
 export const PAGE_TEXT_MAX = 8000;
@@ -49,10 +49,10 @@ export interface WebPlace {
   website: string | null;
 }
 
-/** The places in a SerpApi Google Maps answer. */
+/** The places in a Google Maps answer, from SerpApi (local_results) or Serper (places). */
 export function serpPlaces(body: unknown, max = 8): WebPlace[] {
   const b = (body ?? {}) as Record<string, unknown>;
-  const list = Array.isArray(b.local_results) ? b.local_results : b.place_results ? [b.place_results] : [];
+  const list = Array.isArray(b.local_results) ? b.local_results : Array.isArray(b.places) ? b.places : b.place_results ? [b.place_results] : [];
   const places: WebPlace[] = [];
   for (const r of list) {
     const o = r as Record<string, unknown>;
@@ -61,10 +61,10 @@ export function serpPlaces(body: unknown, max = 8): WebPlace[] {
     places.push({
       name,
       address: str(o.address),
-      type: str(o.type),
+      type: str(o.type) ?? str(o.category),
       rating: typeof o.rating === 'number' ? o.rating : null,
-      reviews: typeof o.reviews === 'number' ? o.reviews : null,
-      price: str(o.price),
+      reviews: typeof o.reviews === 'number' ? o.reviews : typeof o.ratingCount === 'number' ? o.ratingCount : null,
+      price: str(o.price) ?? str(o.priceLevel),
       open: str(o.open_state) ?? str(o.hours),
       website: str(o.website),
     });
@@ -95,14 +95,16 @@ export interface WebSearchAnswer {
 
 const str = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : null);
 
-/** The parts of a SerpApi Google (or Google Shopping) answer the model needs. */
+/** The parts of a Google (or Google Shopping) answer the model needs, from SerpApi or Serper. */
 export function serpSearchAnswer(body: unknown, max = 8): WebSearchAnswer {
   const b = (body ?? {}) as Record<string, unknown>;
-  const box = (b.answer_box ?? {}) as Record<string, unknown>;
-  const graph = (b.knowledge_graph ?? {}) as Record<string, unknown>;
+  const box = (b.answer_box ?? b.answerBox ?? {}) as Record<string, unknown>;
+  const graph = (b.knowledge_graph ?? b.knowledgeGraph ?? {}) as Record<string, unknown>;
+  const organic = b.organic_results ?? b.organic;
+  const shop = b.shopping_results ?? b.shopping;
   const answer = str(box.answer) ?? str(box.snippet) ?? str(graph.description);
   const results: WebResult[] = [];
-  for (const r of Array.isArray(b.organic_results) ? b.organic_results : []) {
+  for (const r of Array.isArray(organic) ? organic : []) {
     const o = r as Record<string, unknown>;
     const title = str(o.title);
     const url = str(o.link);
@@ -110,11 +112,12 @@ export function serpSearchAnswer(body: unknown, max = 8): WebSearchAnswer {
     if (results.length >= max) break;
   }
   const shopping: WebShoppingResult[] = [];
-  for (const r of Array.isArray(b.shopping_results) ? b.shopping_results : []) {
+  for (const r of Array.isArray(shop) ? shop : []) {
     const o = r as Record<string, unknown>;
     const title = str(o.title);
     const store = str(o.source);
-    const price = str(o.price) ?? (typeof o.extracted_price === 'number' ? String(o.extracted_price) : null);
+    const num = typeof o.extracted_price === 'number' ? o.extracted_price : typeof o.price === 'number' ? o.price : null;
+    const price = str(o.price) ?? (num !== null ? String(num) : null);
     if (title && store && price) shopping.push({ title, store, url: str(o.product_link) ?? str(o.link), price });
     if (shopping.length >= max) break;
   }

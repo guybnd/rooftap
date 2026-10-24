@@ -146,6 +146,7 @@ export const TABLE_REACH: Record<string, Reach> = {
   assistant_telegram_links: { none: ACCOUNT },
   assistant_telegram_updates: { none: SERVER },
   assistant_web_lookups: { none: SERVER },
+  shopper_source_cache: { none: SERVER },
 
   // new-module:table-reach (scripts/new-module.mjs adds above this line)
 };
