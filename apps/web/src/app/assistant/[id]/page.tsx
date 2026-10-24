@@ -17,6 +17,7 @@ import { useDataCache } from '@/lib/data-cache';
 import { assistantApi } from '@/lib/assistant-client';
 import { navLinkClickHandler } from '@/lib/view-transitions';
 import { ThreadFooter, ThreadMessages } from '../thread-body';
+import { devicePosition } from '@/lib/device-position';
 
 const pageToast = { error: (m: string) => toast.error(m), message: (m: string) => toast(m) };
 
@@ -42,6 +43,7 @@ export default function AssistantThreadPage() {
       // In view is read; a hidden tab gets the push and reads it on return.
       presence: () => (!mounted.current ? 'away' : document.visibilityState === 'visible' ? 'here' : 'background'),
       toast: pageToast,
+      here: devicePosition,
     }
   );
   const { conversation, kind, send } = thread;

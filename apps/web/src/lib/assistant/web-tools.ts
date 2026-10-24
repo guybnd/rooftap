@@ -7,9 +7,12 @@ import {
   WEB_SEARCH_TOOL,
   isPrivateAddress,
   pageText,
+  serpPlaces,
   serpSearchAnswer,
   webPageUrl,
+  type WebHere,
   type WebLookupKind,
+  type WebWhere,
 } from "@homeup/core";
 import { resolveServerKey } from "@/lib/admin-config";
 import type { ToolResult } from "@/lib/mcp/household-tools";
@@ -112,22 +115,43 @@ async function readCapped(res: Response): Promise<string> {
   return out;
 }
 
-/** The web tools for this turn, or none when the server has no SerpApi key or the operator switched them off. */
-export async function webTools(admin: SupabaseClient, groupId: string): Promise<AssistantTool[]> {
-  const [key, switch_] = await Promise.all([resolveServerKey("SERPAPI_API_KEY"), resolveServerKey("ASSISTANT_WEB")]);
-  if (!key?.trim() || /^(off|false|0|no)$/i.test(switch_?.trim() ?? "")) return [];
+/**
+ * The web tools for this turn, or none when the server has no SerpApi key or
+ * the operator switched them off. `here` is the device's position for this
+ * turn only; without it, places searches start from the household's home.
+ */
+export async function webTools(
+  admin: SupabaseClient,
+  groupId: string,
+  here: WebHere | null = null
+): Promise<{ tools: AssistantTool[]; where: WebWhere }> {
+  const [key, switch_, { data: group }] = await Promise.all([
+    resolveServerKey("SERPAPI_API_KEY"),
+    resolveServerKey("ASSISTANT_WEB"),
+    admin.from("groups").select("region, home_lat, home_lng").eq("id", groupId).maybeSingle(),
+  ]);
+  if (!key?.trim() || /^(off|false|0|no)$/i.test(switch_?.trim() ?? "")) return { tools: [], where: null };
+  const g = (group ?? {}) as { region?: string | null; home_lat?: number | null; home_lng?: number | null };
+  const region = (g.region || "AU").toLowerCase();
+  // The home is rounded to about a suburb, as Shopper does.
+  const home = g.home_lat != null && g.home_lng != null ? { lat: Math.round(g.home_lat * 100) / 100, lng: Math.round(g.home_lng * 100) / 100 } : null;
+  const origin = here ?? home;
+  const where: WebWhere = here ? "device" : home ? "home" : null;
 
   const search: AssistantTool = {
     name: WEB_SEARCH_TOOL,
     description:
-      "Search the web (Google) for something outside the household: a price, a product, opening hours, how to do something. " +
-      'kind "shopping" searches Google Shopping in the household\'s region and gives stores and prices; "web" (the default) gives pages and snippets. ' +
-      "Keep the query short, and never put names, addresses or other private household details in it. Each search counts against a daily allowance.",
+      "Search the web (Google) for something outside the household: a price, a product, opening hours, a place to go, how to do something. " +
+      'kind "places" searches Google Maps for somewhere to go (a cafe, a shop, a tradesperson) near the person and gives names, addresses, ratings and opening; ' +
+      '"shopping" searches Google Shopping in the household\'s region and gives stores and prices; "web" (the default) gives pages and snippets. ' +
+      "`near` is a suburb or town to search around instead of where the person is. " +
+      "Keep the query short, and never put names, street addresses or other private household details in it. Each search counts against a daily allowance.",
     parameters: {
       type: "object",
       properties: {
         query: { type: "string", minLength: 1, maxLength: 200 },
-        kind: { type: "string", enum: ["web", "shopping"] },
+        kind: { type: "string", enum: ["web", "places", "shopping"] },
+        near: { type: "string", maxLength: 100, description: "A suburb or town, for places searches." },
       },
       required: ["query"],
     },
@@ -137,24 +161,34 @@ export async function webTools(admin: SupabaseClient, groupId: string): Promise<
     run: async (args) => {
       const query = typeof args.query === "string" ? args.query.trim().slice(0, 200) : "";
       if (!query) return fail("The search is empty.");
-      const shopping = args.kind === "shopping";
-      const { data: group } = await admin.from("groups").select("region").eq("id", groupId).maybeSingle();
-      const region = ((group as { region?: string | null } | null)?.region || "AU").toLowerCase();
+      const kind = args.kind === "shopping" || args.kind === "places" ? args.kind : "web";
+      const near = typeof args.near === "string" ? args.near.trim().slice(0, 100) : "";
+      if (kind === "places" && !near && !origin) {
+        return fail("No location to search from. Ask the person for their suburb or town, then search again with `near`.");
+      }
       if (!(await withinAllowance(admin, groupId, "search"))) {
         return fail(`The household has used today's ${WEB_SEARCHES_PER_DAY} web searches. Offer a Scout search instead.`);
       }
-      const params = new URLSearchParams({
-        engine: shopping ? "google_shopping" : "google",
-        q: query,
-        gl: region,
-        hl: "en",
-        num: "10",
-        api_key: key,
-      });
+      const params = new URLSearchParams({ hl: "en", api_key: key });
+      if (kind === "places") {
+        params.set("engine", "google_maps");
+        params.set("type", "search");
+        params.set("q", near ? `${query} near ${near}` : query);
+        if (!near && origin) params.set("ll", `@${origin.lat},${origin.lng},14z`);
+      } else {
+        params.set("engine", kind === "shopping" ? "google_shopping" : "google");
+        params.set("q", query);
+        params.set("gl", region);
+        params.set("num", "10");
+      }
       try {
         const res = await fetch(`https://serpapi.com/search.json?${params}`, { signal: AbortSignal.timeout(TIMEOUT_MS) });
         if (!res.ok) return fail(`The search didn't work (${res.status}).`);
-        return ok({ query, kind: shopping ? "shopping" : "web", region: region.toUpperCase(), ...serpSearchAnswer(await res.json()) });
+        const body = await res.json();
+        if (kind === "places") {
+          return ok({ query, kind, near: near || (here ? "where they are now" : "the household's home"), places: serpPlaces(body) });
+        }
+        return ok({ query, kind, region: region.toUpperCase(), ...serpSearchAnswer(body) });
       } catch {
         return fail("The search didn't answer in time.");
       }
@@ -185,5 +219,5 @@ export async function webTools(admin: SupabaseClient, groupId: string): Promise<
     },
   };
 
-  return [search, read];
+  return { tools: [search, read], where };
 }

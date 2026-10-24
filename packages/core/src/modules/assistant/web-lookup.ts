@@ -16,6 +16,63 @@ export const PAGE_TEXT_MAX = 8000;
 
 export type WebLookupKind = 'search' | 'page';
 
+/** Where the person is right now, from their device, rounded to about 100 m. Used for one turn and never stored. */
+export interface WebHere {
+  lat: number;
+  lng: number;
+}
+
+const NEARBY = /\b(near(by| me| here| us)|close (to )?(me|here|by|us)|around (me|here|us)|closest|nearest|in my area|walking distance)\b/i;
+
+/** The message asks about places near the person, so the app may send where they are. */
+export function looksNearby(text: string): boolean {
+  return NEARBY.test(text);
+}
+
+/** A position the app sent, rounded to three decimals (about 100 m); null for anything else. */
+export function cleanHere(value: unknown): WebHere | null {
+  const v = value as { lat?: unknown; lng?: unknown } | null;
+  if (!v || typeof v.lat !== 'number' || typeof v.lng !== 'number') return null;
+  if (!Number.isFinite(v.lat) || !Number.isFinite(v.lng) || Math.abs(v.lat) > 90 || Math.abs(v.lng) > 180) return null;
+  const round = (n: number) => Math.round(n * 1000) / 1000;
+  return { lat: round(v.lat), lng: round(v.lng) };
+}
+
+export interface WebPlace {
+  name: string;
+  address: string | null;
+  type: string | null;
+  rating: number | null;
+  reviews: number | null;
+  price: string | null;
+  open: string | null;
+  website: string | null;
+}
+
+/** The places in a SerpApi Google Maps answer. */
+export function serpPlaces(body: unknown, max = 8): WebPlace[] {
+  const b = (body ?? {}) as Record<string, unknown>;
+  const list = Array.isArray(b.local_results) ? b.local_results : b.place_results ? [b.place_results] : [];
+  const places: WebPlace[] = [];
+  for (const r of list) {
+    const o = r as Record<string, unknown>;
+    const name = str(o.title);
+    if (!name) continue;
+    places.push({
+      name,
+      address: str(o.address),
+      type: str(o.type),
+      rating: typeof o.rating === 'number' ? o.rating : null,
+      reviews: typeof o.reviews === 'number' ? o.reviews : null,
+      price: str(o.price),
+      open: str(o.open_state) ?? str(o.hours),
+      website: str(o.website),
+    });
+    if (places.length >= max) break;
+  }
+  return places;
+}
+
 export interface WebResult {
   title: string;
   url: string;
@@ -146,12 +203,26 @@ export function isPrivateAddress(address: string): boolean {
   );
 }
 
+/** Where "near me" searches start from this turn. */
+export type WebWhere = 'device' | 'home' | null;
+
 /** The prompt lines for the web tools, when the server offers them. */
-export const WEB_LOOKUP_TEXT =
-  '## The web\n' +
-  `You can search the web with ${WEB_SEARCH_TOOL} and open a result with ${READ_PAGE_TOOL}. Use them for facts from ` +
-  'outside the household, such as a price, opening hours or how to fix something, before offering a Scout search: ' +
-  'Scout is for longer research the person asks for. Name the site for each fact or price you give, and say that a ' +
-  'price came from a web search, not from a store Shopper watches. Never put member names, addresses, amounts or ' +
-  'anything private from the household in a search. The household has a daily allowance of searches; when it runs ' +
-  'out, say so and offer Scout instead.';
+export function webLookupText(where: WebWhere = null): string {
+  const near =
+    where === 'device'
+      ? 'Their device shared where they are right now, so a places search finds what is near them.'
+      : where === 'home'
+        ? "A places search starts from the household's home, which is saved in Settings. If they say they are somewhere else, pass that place as `near`."
+        : 'Neither their device nor the household shared a location. Before a places search, ask once for their suburb or town, ' +
+          'pass it as `near`, and remember it with a remember marker. Never guess a city.';
+  return (
+    '## The web\n' +
+    `You can search the web with ${WEB_SEARCH_TOOL} and open a result with ${READ_PAGE_TOOL}. Use them for facts from ` +
+    'outside the household, such as a price, opening hours or how to fix something, before offering a Scout search: ' +
+    'Scout is for longer research the person asks for. For somewhere to go (a cafe, a shop, a plumber), search with kind ' +
+    `"places". ${near} Name the site for each fact or price you give, and say that a ` +
+    'price came from a web search, not from a store Shopper watches. Never put member names, addresses, amounts or ' +
+    'anything private from the household in a search. The household has a daily allowance of searches; when it runs ' +
+    'out, say so and offer Scout instead.'
+  );
+}

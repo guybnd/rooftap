@@ -7,7 +7,7 @@
 
 import type { ConversationKind, MessageChannel, TrustLevel } from './assistant';
 import { screenPromptText } from './assistant-screen';
-import { WEB_LOOKUP_TEXT } from './web-lookup';
+import { webLookupText, type WebWhere } from './web-lookup';
 
 export const ASSISTANT_PERSONA =
   "You are Rooftap, the household's assistant. You help the members of one home run it together: " +
@@ -94,8 +94,8 @@ export interface AssistantPromptInput {
   cooking?: string | null;
   /** Asked from the pop-up chat: the route of the screen behind it (assistant-screen.ts). */
   screen?: string | null;
-  /** The server offers web_search and read_page this turn (web-lookup.ts). */
-  web?: boolean;
+  /** The server offers web_search and read_page this turn (web-lookup.ts), and where places searches start. */
+  web?: { where: WebWhere } | null;
 }
 
 /** Assembles the system prompt for one turn. Never empty. */
@@ -122,7 +122,7 @@ export function buildAssistantSystemPrompt(input: AssistantPromptInput): string 
   }
 
   sections.push(PRIVACY_TEXT);
-  if (input.web) sections.push(WEB_LOOKUP_TEXT);
+  if (input.web) sections.push(webLookupText(input.web.where));
 
   sections.push(
     'When a tool says a change was proposed, tell the person what you proposed in one line and that it ' +

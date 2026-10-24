@@ -9,6 +9,7 @@
 // notification or the list) paints at once and refreshes behind, instead of
 // a blank screen waiting on the network.
 
+import { looksNearby, type WebHere } from './web-lookup';
 import type { ProposalPick } from './proposal-picks';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { announceAnswer, setAssistantCounts, type AnsweredElsewhere } from './assistant-answers';
@@ -149,6 +150,12 @@ export interface ThreadHost {
   cook?: () => { recipeId: string; step: number; deviceId?: string | null } | null;
   /** The pop-up chat: the route of the screen behind it, read at each send. */
   screen?: () => string | null;
+  /**
+   * Where the device is, asked only when a message reads like a "near me"
+   * question (looksNearby). Resolves null when the person says no or the
+   * device can't tell; the message then goes without it.
+   */
+  here?: () => Promise<WebHere | null>;
 }
 
 /** A photo attached in the composer: its uploaded path, and the local picture shown while it sends. */
@@ -298,6 +305,7 @@ export function useAssistantThread(target: ThreadTarget, host: ThreadHost) {
         const pacer = createDraftPacer(setDraft);
         const cook = hostRef.current.cook?.() ?? undefined;
         const screen = hostRef.current.screen?.() ?? undefined;
+        const here = hostRef.current.here && looksNearby(text) ? ((await hostRef.current.here().catch(() => null)) ?? undefined) : undefined;
         const res = await api.send(
           {
             text,
@@ -306,6 +314,7 @@ export function useAssistantThread(target: ThreadTarget, host: ThreadHost) {
             reopen: resumedRef.current || undefined,
             ...(cook ? { cook } : {}),
             ...(screen ? { screen } : {}),
+            ...(here ? { here } : {}),
             ...withPhotos,
           },
           (event) => pacer.push(event)

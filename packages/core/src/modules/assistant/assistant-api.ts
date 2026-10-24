@@ -26,6 +26,7 @@ import {
 import { createAssistantStreamReader, type AssistantStreamEvent } from './assistant-stream';
 import { scoutTitle } from '../shopper/shopper-scout';
 import { SEND_FEEDBACK_TOOL } from './feedback';
+import type { WebHere } from './web-lookup';
 import { FILE_PHOTO_TOOL, type AssistantPhoto, type AssistantPhotoSlot } from './assistant-photos';
 
 export interface AssistantConversation {
@@ -256,6 +257,8 @@ export function createAssistantApi(call: AssistantCall, stream?: AssistantStream
         cook?: { recipeId: string; step: number; deviceId?: string | null };
         /** The route of the screen behind the pop-up chat; older servers ignore it. */
         screen?: string;
+        /** Where the device is, for a "near me" ask (looksNearby); older servers ignore it. */
+        here?: WebHere;
         /** Uploaded photos (uploadAssistantPhoto paths) for Rooftap to look at. */
         photos?: string[];
       },

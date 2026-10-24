@@ -36,6 +36,7 @@ import { ConversationRow } from "@/app/assistant/conversation-row";
 import { ListGroup } from "@/components/ui/list-item";
 import { Button } from "@/components/ui/button";
 import { PromptBadge } from "@/components/ui/prompt-badge";
+import { devicePosition } from "@/lib/device-position";
 
 const popupToast = { error: (m: string) => toast.error(m), message: (m: string) => toast(m) };
 
@@ -92,6 +93,7 @@ function PopupThread({
     presence: () => (document.visibilityState !== "visible" ? "background" : openRef.current ? "here" : "away"),
     toast: popupToast,
     screen: () => pathRef.current,
+    here: devicePosition,
   });
   const { conversation, loadError, send, reload } = thread;
   // A delete can be taken back on servers that have archiving.

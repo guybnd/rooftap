@@ -7,7 +7,6 @@ import {
   MODEL_PRICES,
   PLUS_ASSISTANT_ALLOWANCE_CENTS,
   SUMMARY_SYSTEM_PROMPT,
-  WEB_SEARCH_TOOL,
   assistantAccess,
   buildAssistantSystemPrompt,
   checkBudget,
@@ -50,6 +49,7 @@ import {
   type ProposalPick,
   type EntitlementTier,
   assistantPhotoKeepDays,
+  type WebHere,
 } from "@homeup/core";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSessionUser } from "@/lib/supabase/session";
@@ -140,17 +140,21 @@ async function turnTools(
   ctx: AssistantContext,
   settings: AssistantSettings,
   readOnly: boolean,
-  { deviceId, shared = false }: { deviceId?: string | null; shared?: boolean } = {}
+  { deviceId, shared = false, here = null }: { deviceId?: string | null; shared?: boolean; here?: WebHere | null } = {}
 ) {
   const household = assistantTools(
     { admin: ctx.admin, userId: ctx.userId, groupId: ctx.groupId, enabled: ctx.enabled, deviceId, shared },
     { settings, readOnly }
   );
-  const [homeAssistant, web] = await Promise.all([homeAssistantTools(ctx.admin, ctx.groupId, { readOnly }), webTools(ctx.admin, ctx.groupId)]);
+  const [homeAssistant, web] = await Promise.all([homeAssistantTools(ctx.admin, ctx.groupId, { readOnly }), webTools(ctx.admin, ctx.groupId, here)]);
   const feedback = feedbackTool(ctx.admin, ctx.userId, ctx.groupId);
   // Filing a chat photo in Documents, so it outlives the chat's keep time.
   const filing = ctx.enabled.has("documents") && !readOnly ? photoTool(ctx.admin, ctx.userId, ctx.groupId, trustFor(settings.trust, "documents")) : null;
-  return { tools: [...household, ...(homeAssistant?.tools ?? []), ...web, feedback, ...(filing ? [filing] : [])], homeAssistant };
+  return {
+    tools: [...household, ...(homeAssistant?.tools ?? []), ...web.tools, feedback, ...(filing ? [filing] : [])],
+    homeAssistant,
+    web: web.tools.length ? { where: web.where } : null,
+  };
 }
 
 /** The cook mode section of the prompt: the recipe, its steps and the person's timers on it. */
@@ -554,6 +558,8 @@ export interface ChatInput {
   cook?: CookAskContext | null;
   /** Asked from the pop-up chat: the route of the screen behind it (cleanScreenPath). */
   screen?: string | null;
+  /** Where the person's device is, for "near me" asks (cleanHere); used for this turn only, never stored. */
+  here?: WebHere | null;
   /** Photos sent with the message: storage paths the caller checked belong to this person (isAssistantPhotoPathFor). */
   photos?: string[];
 }
@@ -683,7 +689,7 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
   // the conversation and its history are read.
   const toolsStarted = Date.now();
   // In the household thread every member reads the reply (shared).
-  const gathering = turnTools(ctx, settings, limits.readOnly, { deviceId: input.cook?.deviceId, shared: roomKind === "household" }).then(
+  const gathering = turnTools(ctx, settings, limits.readOnly, { deviceId: input.cook?.deviceId, shared: roomKind === "household", here: input.here }).then(
     (r) => ({ ...r, ms: Date.now() - toolsStarted })
   );
   // Settled here so a failed read below can't leave it rejecting unheard.
@@ -738,7 +744,7 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
   );
 
   const contextMs = Date.now() - started - readMs;
-  const { tools, homeAssistant, ms: toolsMs } = await gathering;
+  const { tools, homeAssistant, web, ms: toolsMs } = await gathering;
   const reachable = [...new Set(tools.map((t) => t.module))].filter((m): m is ModuleId => m !== HOME_ASSISTANT_SCOPE);
   const system = buildAssistantSystemPrompt({
     now: formatNow(timeZone, now),
@@ -766,7 +772,7 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
     summary: conversation.summary,
     cooking,
     screen: input.screen,
-    web: tools.some((t) => t.name === WEB_SEARCH_TOOL),
+    web,
   }) + (photos.length || lookAgain ? PHOTO_PROMPT : "");
 
   const channel = input.channel ?? "app";

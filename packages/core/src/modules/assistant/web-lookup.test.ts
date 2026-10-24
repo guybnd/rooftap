@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildAssistantSystemPrompt, type AssistantPromptInput } from './assistant-prompt';
-import { WEB_SEARCH_TOOL, isPrivateAddress, pageText, serpSearchAnswer, webPageUrl } from './web-lookup';
+import { WEB_SEARCH_TOOL, cleanHere, isPrivateAddress, looksNearby, pageText, serpPlaces, serpSearchAnswer, webPageUrl } from './web-lookup';
 
 describe('serpSearchAnswer', () => {
   it('keeps titles, links, snippets and prices', () => {
@@ -82,7 +82,34 @@ describe('isPrivateAddress', () => {
 describe('prompt', () => {
   const base: AssistantPromptInput = { now: 'Thursday', timeZone: 'UTC', person: 'Guy', members: ['Guy'], modules: [], memories: [], kind: 'quick', channel: 'app' };
   it('names the web tools only when the server offers them', () => {
-    expect(buildAssistantSystemPrompt({ ...base, web: true })).toContain(WEB_SEARCH_TOOL);
+    expect(buildAssistantSystemPrompt({ ...base, web: { where: 'home' } })).toContain(WEB_SEARCH_TOOL);
     expect(buildAssistantSystemPrompt(base)).not.toContain(WEB_SEARCH_TOOL);
+  });
+
+  it('asks for a suburb, not a guess, when there is no location', () => {
+    expect(buildAssistantSystemPrompt({ ...base, web: { where: null } })).toContain('Never guess a city');
+    expect(buildAssistantSystemPrompt({ ...base, web: { where: 'device' } })).toContain('near them');
+  });
+});
+
+describe('near me', () => {
+  it('spots questions about places nearby', () => {
+    for (const t of ['Can you find a nice hotdog place near me', 'any cafes nearby?', "what's the closest chemist", 'pizza around here']) {
+      expect(looksNearby(t), t).toBe(true);
+    }
+    for (const t of ['add milk to the list', 'how much is this', 'nearly done with the chores']) expect(looksNearby(t), t).toBe(false);
+  });
+
+  it('rounds a sent position and drops a bad one', () => {
+    expect(cleanHere({ lat: -37.813629, lng: 144.963058 })).toEqual({ lat: -37.814, lng: 144.963 });
+    expect(cleanHere({ lat: 200, lng: 0 })).toBeNull();
+    expect(cleanHere({ lat: '1', lng: 2 })).toBeNull();
+    expect(cleanHere(null)).toBeNull();
+  });
+
+  it('reads Google Maps places', () => {
+    expect(serpPlaces({ local_results: [{ title: 'A', rating: 4.5, reviews: 10, open_state: 'Open now' }, { address: 'x' }] })).toEqual([
+      { name: 'A', address: null, type: null, rating: 4.5, reviews: 10, price: null, open: 'Open now', website: null },
+    ]);
   });
 });
