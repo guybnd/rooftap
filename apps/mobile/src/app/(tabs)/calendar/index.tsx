@@ -82,6 +82,7 @@ import { MonthView } from '@/features/calendar/month-view';
 import { WeekView, WEEK_SLOT_HEIGHT } from '@/features/calendar/week-view';
 import { CalendarEventSheet } from '@/features/calendar/calendar-event-sheet';
 import { calendarApi } from '@/features/calendar/calendar-api';
+import { ModuleSettingsButton } from '@/features/settings/module-settings-sheet';
 
 const WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
@@ -481,10 +482,13 @@ export default function CalendarSectionScreen() {
           </View>
           {/* M1: the tab bar's raised "+" is the real FAB — this header action
               is demoted to ghost so it never competes with it. */}
-          <View ref={addButtonRef} collapsable={false}>
-            <Button variant="ghost" size="icon-sm" accessibilityLabel="Add" onPress={openAddMenu}>
-              <Plus size={16} className="text-foreground" />
-            </Button>
+          <View className="flex-row items-center gap-1">
+            <ModuleSettingsButton moduleId="calendar" className="h-9 w-9 border-0 bg-transparent" />
+            <View ref={addButtonRef} collapsable={false}>
+              <Button variant="ghost" size="icon-sm" accessibilityLabel="Add" onPress={openAddMenu}>
+                <Plus size={16} className="text-foreground" />
+              </Button>
+            </View>
           </View>
         </View>
 

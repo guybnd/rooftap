@@ -4,6 +4,7 @@ import { Text, Button, Card, HeroLede, LeadingTile, PulseTile, SectionSearchBar,
 import { SETUP_STATUS_SEGMENTS, setupHeroCaption, type SetupItem, type SetupStore, type SetupSummary, type SetupStatusSegment, currencySymbol } from '@homeup/core';
 import { BudgetSummary } from '@/features/setup/budget-summary';
 import { SegmentedBar } from '@/features/setup/segmented-bar';
+import { ModuleSettingsButton } from '@/features/settings/module-settings-sheet';
 
 export const money = (n: number) => `${currencySymbol()}${n.toLocaleString()}`;
 
@@ -108,6 +109,7 @@ export function SetupListHeader({
           <Button size="icon-sm" variant="outline" onPress={onRefresh} accessibilityLabel="Refresh">
             <RotateCw size={14} className="text-foreground" />
           </Button>
+          <ModuleSettingsButton moduleId="setup" className="h-9 w-9" />
           <Button size="sm" onPress={onAddItem}>
             <Plus size={14} className="text-primary-foreground" />
             <Text className="text-sm font-medium text-primary-foreground">Add</Text>

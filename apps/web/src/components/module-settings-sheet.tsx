@@ -2,7 +2,9 @@
 
 import { useState, type ReactNode } from "react";
 import { getSection, moduleSettingsTitle, useModules } from "@homeup/core";
+import { Settings } from "lucide-react";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
+import { cn } from "@/lib/utils";
 import { moduleSettingsComponents } from "@/app/settings/settings-registry";
 
 // The second door to a module's settings (module-settings.ts): the module
@@ -42,4 +44,27 @@ export function useModuleSettingsSheet(moduleId: string): ModuleSettingsDoor {
       </BottomSheet>
     ) : null,
   };
+}
+
+/**
+ * A screen with no More menu takes this gear instead: it opens the module's
+ * settings sheet, and renders nothing when the module has nothing to set.
+ */
+export function ModuleSettingsButton({ moduleId, className }: { moduleId: string; className?: string }) {
+  const settings = useModuleSettingsSheet(moduleId);
+  if (!settings.available) return null;
+  return (
+    <>
+      <button
+        type="button"
+        onClick={settings.open}
+        aria-label={settings.label}
+        title={settings.label}
+        className={cn("inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground hover:bg-accent hover:text-foreground", className)}
+      >
+        <Settings className="h-4 w-4" />
+      </button>
+      {settings.sheet}
+    </>
+  );
 }

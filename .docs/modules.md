@@ -374,4 +374,6 @@ To add a setting:
 
 A panel that applies only when a feature is on returns nothing when the feature is off. A panel that belongs to another module, such as Google Calendar, shows only while that module is on.
 
-`module-conformance.test.ts` fails a module that has settings but no `useModuleSettingsSheet` call in its screens. Some older modules (Home search, Home setup, Calendar, Assistant and Shopper) do not have a More menu yet. They are in the baseline.
+A screen with no More menu, for example Home search, Calendar or Assistant, puts `ModuleSettingsButton` in its header instead. The button opens the same sheet and shows nothing when the module has nothing to set.
+
+`module-conformance.test.ts` fails a module that has settings but no `useModuleSettingsSheet` call or `ModuleSettingsButton` in its screens.

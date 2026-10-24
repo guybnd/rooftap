@@ -88,6 +88,7 @@ import { ApartmentGrid, SortPicker, type SortOption } from '@/features/homesearc
 import { SavedSearchPicker } from '@/features/homesearch/saved-search-picker';
 import { DashboardStats, type DashboardStatTone } from '@/features/homesearch/dashboard-stats';
 import { InvitationBanner } from '@/features/settings/panels/invitation-banner';
+import { ModuleSettingsButton } from '@/features/settings/module-settings-sheet';
 
 type QuickFilter = 'all' | 'has-appointment' | 'to-book' | 'viewed' | 'needs-score' | 'skipped' | 'rebook';
 
@@ -349,6 +350,7 @@ export default function HomeSearchScreen() {
         <View className="flex-row items-center justify-between gap-3">
           <Text className="text-micro-label uppercase text-muted-foreground">Home search</Text>
           <View className="flex-row items-center gap-2">
+            <ModuleSettingsButton moduleId="search" className="h-9 w-9" />
             <Button variant="outline" size="sm" onPress={() => router.push('/apartment/bulk')}>
               <Upload size={14} className="text-foreground" />
               <Text className="text-sm font-medium text-foreground">Bulk</Text>

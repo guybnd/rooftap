@@ -1,6 +1,7 @@
 "use client";
 
 import { HeroLede } from '@/components/ui/hero-lede';
+import { ModuleSettingsButton } from '@/components/module-settings-sheet';
 import { LeadingTile } from '@/components/ui/leading-tile';
 import { sectionIconFor } from '@/lib/section-icons';
 import { cn } from '@/lib/utils';
@@ -1176,6 +1177,7 @@ const filteredApartments = useMemo(() => filterApartments(apartments, searchQuer
           <Button variant="ghost" size="icon" onClick={nextWeek} aria-label="Next week">
             <ChevronRight className="h-4 w-4" />
           </Button>
+          <ModuleSettingsButton moduleId="calendar" className="h-8 w-8 rounded-lg bg-transparent hover:bg-muted" />
         </div>
         {/* Mobile: today + tappable month/year (opens the month picker) */}
         <div className="flex md:hidden items-center gap-1 bg-muted/50 p-1 rounded-xl">
@@ -1189,6 +1191,7 @@ const filteredApartments = useMemo(() => filterApartments(apartments, searchQuer
             {mobileDay.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
             <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
           </button>
+          <ModuleSettingsButton moduleId="calendar" className="h-10 w-10 rounded-lg bg-transparent hover:bg-muted" />
         </div>
       </div>
 

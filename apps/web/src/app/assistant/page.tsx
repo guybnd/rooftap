@@ -18,6 +18,7 @@ import {
 import { useDataCache } from '@/lib/data-cache';
 import { assistantApi } from '@/lib/assistant-client';
 import { HeroLede } from '@/components/ui/hero-lede';
+import { ModuleSettingsButton } from '@/components/module-settings-sheet';
 import { LeadingTile } from '@/components/ui/leading-tile';
 import { ListGroup, ListItem, ListItemContent, ListItemLeading, ListItemMeta, ListItemTitle, ListItemTrailing } from '@/components/ui/list-item';
 import { Pill } from '@/components/ui/pill';
@@ -67,6 +68,7 @@ export default function AssistantPage() {
         trailing={
           <>
             {!isOnline && <OfflineHint />}
+            <ModuleSettingsButton moduleId="assistant" />
             <Link
               href="/assistant/new?kind=chat"
               className="inline-flex h-11 items-center gap-1.5 rounded-xl bg-primary px-3.5 text-sm font-medium text-primary-foreground hover:bg-primary/80"

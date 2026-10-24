@@ -40,7 +40,7 @@ export const PLATFORM_DEFERRALS: Partial<Record<ModuleId, { platform: "web" | "m
 
 export const MODULE_BASELINE: Partial<Record<ModuleId, ModuleBaseline>> = {
   household: { gaps: ["no-core-hook"], duplicated: ["dueMeta", "formatTime", "heroRowIcon", "useTaskSnoozeUndo"], dataCalls: 2 },
-  calendar: { gaps: ["web-no-list-item", "web-no-settings-door", "mobile-no-settings-door"] },
+  calendar: { gaps: ["web-no-list-item"] },
   checklists: { gaps: ["mobile-skips-core-hook", "mobile-no-row-menu"], duplicated: ["checklistTypeIcon", "scheduledDateMeta"] },
   documents: { gaps: ["mobile-no-row-menu"], dataCalls: 2 },
   groceries: { duplicated: ["useGroceryAux", "useGroceryUndo", "useSuggestDismiss"], dataCalls: 15 },
@@ -49,10 +49,10 @@ export const MODULE_BASELINE: Partial<Record<ModuleId, ModuleBaseline>> = {
     duplicated: ["capitalize", "computeReviewState", "dotClass", "emptyRow", "freshName", "freshRowKey", "lineDetail", "missingPreview", "statusWord"],
   },
   costs: { duplicated: ["fillOf", "latestCategory"], dataCalls: 3 },
-  setup: { gaps: ["web-no-settings-door", "mobile-no-settings-door"], duplicated: ["blank", "fromJob", "money"] },
-  search: { gaps: ["web-skips-core-hook", "mobile-skips-core-hook", "web-no-list-item", "web-no-row-menu", "mobile-no-row-menu", "web-no-settings-door", "mobile-no-settings-door"], dataCalls: 6, localModals: 1 },
-  shopper: { gaps: ["mobile-skips-core-hook", "mobile-no-row-menu", "web-no-settings-door", "mobile-no-settings-door"], duplicated: ["centsText", "dealToneClass", "statusWord"] },
+  setup: { duplicated: ["blank", "fromJob", "money"] },
+  search: { gaps: ["web-skips-core-hook", "mobile-skips-core-hook", "web-no-list-item", "web-no-row-menu", "mobile-no-row-menu"], dataCalls: 6, localModals: 1 },
+  shopper: { gaps: ["mobile-skips-core-hook", "mobile-no-row-menu"], duplicated: ["centsText", "dealToneClass", "statusWord"] },
   rewards: { gaps: ["mobile-no-row-menu"] },
   bins: { gaps: ["web-no-row-menu", "mobile-no-row-menu"] },
-  assistant: { gaps: ["mobile-no-row-menu", "web-no-settings-door", "mobile-no-settings-door"], localModals: 1 },
+  assistant: { gaps: ["mobile-no-row-menu"], localModals: 1 },
 };

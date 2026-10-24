@@ -15,6 +15,7 @@ import { SavedSearchPicker } from "@/components/saved-search-picker";
 import { InvitationBanner } from "@/components/invitation-banner";
 import { SectionSearchBar } from "@/components/section-search-bar";
 import { HeroLede } from "@/components/ui/hero-lede";
+import { ModuleSettingsButton } from "@/components/module-settings-sheet";
 import { buttonVariants } from "@/components/ui/button";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useFuzzySearch } from "@/hooks/use-fuzzy-search";
@@ -243,6 +244,7 @@ export default function HomeSearchPage() {
           }
         />
         <div className="flex items-center gap-2">
+          <ModuleSettingsButton moduleId="search" className="h-10 w-10" />
           <SavedSearchPicker />
           <Link href="/apartment/new" className={cn(buttonVariants(), "h-10 gap-1.5 rounded-xl px-3.5")}>
             <Plus className="h-4 w-4" />

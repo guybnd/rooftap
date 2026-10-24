@@ -38,6 +38,7 @@ import {
 import { useDataCache } from '@/lib/data-cache';
 import { lookupWhenSynced, shopperSources } from '@/lib/shopper-api';
 import { HeroLede } from '@/components/ui/hero-lede';
+import { ModuleSettingsButton } from '@/components/module-settings-sheet';
 import { ListGroup, ListItem, ListItemContent, ListItemMeta, ListItemTitle } from '@/components/ui/list-item';
 import { navLinkClickHandler } from '@/lib/view-transitions';
 import { SegmentedControl } from '@/components/ui/segmented-control';
@@ -161,6 +162,7 @@ export default function ShopperPage() {
         trailing={
           <>
             {!isOnline && <OfflineHint />}
+            <ModuleSettingsButton moduleId="shopper" />
             {scoutOn && (
               <button
                 type="button"

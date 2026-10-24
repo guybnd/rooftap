@@ -59,6 +59,7 @@ import { WantFormSheet } from '@/features/shopper/want-form-sheet';
 import { ScoutBriefSheet } from '@/features/shopper/scout-brief-sheet';
 import { ScoutRunRow } from '@/features/shopper/scout-run-row';
 import { lookupWhenSynced, shopperSources } from '@/features/shopper/shopper-api';
+import { ModuleSettingsButton } from '@/features/settings/module-settings-sheet';
 
 const TABS: { value: ShopperWantStatus; label: string }[] = [
   { value: 'watching', label: 'Watching' },
@@ -203,6 +204,7 @@ export default function ShopperScreen() {
               <Text className="text-xs text-muted-foreground">Offline</Text>
             </View>
           )}
+          <ModuleSettingsButton moduleId="shopper" className="h-9 w-9" />
           {scoutOn && (
             <Button size="sm" variant="secondary" onPress={openScout} disabled={!isOnline}>
               <Sparkles size={14} className="text-foreground" />

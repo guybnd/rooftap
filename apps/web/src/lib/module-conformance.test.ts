@@ -11,8 +11,9 @@
 //   the same name in the web and the phone screen folders, no Supabase
 //   query in a screen, no OS dialog (Hearth M4), no React Native Modal;
 // - a module with settings (core module-settings.ts) opens them from its
-//   screen too: the More menu's last row, through useModuleSettingsSheet on
-//   both platforms, so its settings are never written a second time there.
+//   screen too: the More menu's last row through useModuleSettingsSheet, or
+//   ModuleSettingsButton in a header with no More menu, on both platforms,
+//   so its settings are never written a second time there.
 //
 // Modules that predate these rules have their gaps written down in
 // module-conformance-baseline.ts. The baseline only shrinks: a new gap
@@ -110,7 +111,7 @@ function report(id: ModuleId): Report {
   if (mobileRoute && !anyFile(mobile, /\buseRowMenuSheet\(|\bonLongPress=/)) gaps.push("mobile-no-row-menu");
   if (MODULE_SETTINGS[id]?.length) {
     // A detail screen can hold the door (Checklists: each list's menu), and on the phone those live outside (tabs).
-    const door = /\buseModuleSettingsSheet\(/;
+    const door = /\buseModuleSettingsSheet\(|<ModuleSettingsButton\b/;
     if (webRoute && !anyFile(web, door)) gaps.push("web-no-settings-door");
     if (mobileRoute && !anyFile([...mobile, ...walk(path.join(ROOT, "apps/mobile/src/app", base))], door)) gaps.push("mobile-no-settings-door");
   }
@@ -137,8 +138,8 @@ const HOW: Record<ModuleGap, string> = {
   "mobile-no-list-item": "render rows with ListItem from @homeup/ui (Hearth three-slot line item)",
   "web-no-row-menu": "give rows a RowMenu (core row-actions.ts) through useRowContextMenu (Hearth §13.7)",
   "mobile-no-row-menu": "open the row's RowMenu on a long press with useRowMenuSheet from @homeup/ui (Hearth §13.7)",
-  "web-no-settings-door": "end the screen's More menu with useModuleSettingsSheet's row (components/module-settings-sheet.tsx) and move any setting the screen edits into the module's panels",
-  "mobile-no-settings-door": "end the screen's More menu with useModuleSettingsSheet's row (features/settings/module-settings-sheet.tsx) and move any setting the screen edits into the module's panels",
+  "web-no-settings-door": "end the screen's More menu with useModuleSettingsSheet's row, or put ModuleSettingsButton in its header (components/module-settings-sheet.tsx), and move any setting the screen edits into the module's panels",
+  "mobile-no-settings-door": "end the screen's More menu with useModuleSettingsSheet's row, or put ModuleSettingsButton in its header (features/settings/module-settings-sheet.tsx), and move any setting the screen edits into the module's panels",
 };
 
 describe("module conformance", () => {

@@ -18,6 +18,7 @@ import { assistantApi } from '@/features/assistant/assistant-api';
 import { Composer } from '@/features/assistant/assistant-parts';
 import { AssistantNotice } from '@/features/assistant/assistant-notice';
 import { ConversationRow } from '@/features/assistant/conversation-row';
+import { ModuleSettingsButton } from '@/features/settings/module-settings-sheet';
 
 function Group({ label, rows, open }: { label: string; rows: AssistantConversation[]; open: (id: string) => void }) {
   if (rows.length === 0) return null;
@@ -86,6 +87,7 @@ export default function AssistantScreen() {
                 <Text className="text-xs text-muted-foreground">Offline</Text>
               </View>
             )}
+            <ModuleSettingsButton moduleId="assistant" className="h-9 w-9" />
             <Button size="sm" onPress={() => router.push({ pathname: '/assistant/[id]', params: { id: 'new', kind: 'chat' } } as unknown as Href)}>
               <Plus size={14} className="text-primary-foreground" />
               <Text className="text-sm font-medium text-primary-foreground">New chat</Text>

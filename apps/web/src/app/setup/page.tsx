@@ -37,6 +37,7 @@ import { BudgetSummary } from './budget-summary';
 import { SegmentedBar } from './segmented-bar';
 import { PulseTile } from '@/components/ui/pulse-tile';
 import { HeroLede } from '@/components/ui/hero-lede';
+import { ModuleSettingsButton } from '@/components/module-settings-sheet';
 import { LeadingTile } from '@/components/ui/leading-tile';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { PopMenu, MenuItem, MenuLabel } from './pop-menu';
@@ -295,6 +296,7 @@ export default function SetupPage() {
           >
             <RotateCw className="h-4 w-4" />
           </button>
+          <ModuleSettingsButton moduleId="setup" className={`${headerButtonClass} aspect-square w-auto border-border bg-secondary text-secondary-foreground hover:bg-accent`} />
           <button
             onClick={() => {
               setEditingItem(undefined);

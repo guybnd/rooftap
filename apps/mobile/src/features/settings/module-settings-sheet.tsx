@@ -3,7 +3,9 @@
 // panels Settings > <Module> shows, as a sheet over the screen.
 // Web twin: apps/web/src/components/module-settings-sheet.tsx.
 import * as React from 'react';
-import { BottomSheet, BottomSheetScrollView, Text } from '@homeup/ui';
+import { Pressable } from 'react-native';
+import { Settings } from 'lucide-react-native';
+import { BottomSheet, BottomSheetScrollView, Text, cn } from '@homeup/ui';
 import { getSection, moduleSettingsTitle, useModules } from '@homeup/core';
 import { moduleSettingsComponents } from './settings-registry';
 
@@ -36,4 +38,27 @@ export function useModuleSettingsSheet(moduleId: string): ModuleSettingsDoor {
       </BottomSheet>
     ) : null,
   };
+}
+
+/**
+ * A screen with no More menu takes this gear instead: it opens the module's
+ * settings sheet, and renders nothing when the module has nothing to set.
+ */
+export function ModuleSettingsButton({ moduleId, className }: { moduleId: string; className?: string }) {
+  const settings = useModuleSettingsSheet(moduleId);
+  if (!settings.available) return null;
+  return (
+    <>
+      <Pressable
+        onPress={settings.open}
+        accessibilityRole="button"
+        accessibilityLabel={settings.label}
+        hitSlop={4}
+        className={cn('h-11 w-11 items-center justify-center rounded-lg border border-border bg-muted active:bg-accent', className)}
+      >
+        <Settings size={16} className="text-muted-foreground" />
+      </Pressable>
+      {settings.sheet}
+    </>
+  );
 }
