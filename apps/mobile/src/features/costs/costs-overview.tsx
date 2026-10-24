@@ -34,7 +34,6 @@ import {
   monthShortName,
   goalStatus,
   moneyFlow,
-  type GoalStatusLine,
   signedMoney,
   type CostCategory,
   type CostItem,
@@ -51,13 +50,7 @@ import {
   likelyCostCategories,
   moveCostLineWithUndo,
   useCostCategoryChoices,
-  useCostInsights,
   useModules,
-  useSeenInsights,
-  hasUnseenInsights,
-  markInsightsSeen,
-  useRecentSpend,
-  DEFAULT_RECENT_SPEND,
   type RecentSpendPrefs,
   type SpendingTransaction,
 } from '@homeup/core';
@@ -66,8 +59,9 @@ import { CostRowSheet, type CostRowSheetState } from './cost-row-sheet';
 import { CATEGORY_BAR_FILL, CategoryChip } from './cost-card';
 import { TransactionSheet } from './money-view';
 import { upBankApi } from './up-bank-api';
-import { CostInsightsCard, type CostInsightsCardProps } from './cost-insights';
-import { CostsGlance, LatestPage, latestCategory, type GlancePage } from './costs-glance';
+import type { CostInsightsCardProps } from './cost-insights';
+import { CostsGlanceCard, latestCategory } from './costs-glance';
+import { GoalStatusLines } from './goal-status';
 import { ToSortCard } from './to-sort-card';
 import { useOpenRoute } from '@/lib/tab-routes';
 
@@ -172,13 +166,7 @@ export function CostsOverview(props: CostsOverviewProps) {
     setPick({ title: `Move ${l.name}`, current, likely: likelyCostCategories(l, current, month, choices), onPick: (to) => move(l, c.category, to) });
   };
   // The glance card: the latest payments and the insights, one page each.
-  const { insights: insightList } = useCostInsights(items, { goalCents, marks: props.insights?.marks });
-  const insightKeys = props.insights ? insightList.map((i) => i.key) : [];
-  const seenInsights = useSeenInsights();
   const lineById = React.useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
-  const latest = (data?.recent ?? []).slice(0, 3);
-  const recentPrefs = props.recentPrefs ?? DEFAULT_RECENT_SPEND;
-  const recent = useRecentSpend(upBankApi, items, recentPrefs);
   const movePayment = (t: SpendingTransaction, to: CostCategory, wholeShop: boolean) => {
     moveBankPayment(upBankApi, t, to, wholeShop)
       .then((message) => {
@@ -199,34 +187,6 @@ export function CostsOverview(props: CostsOverviewProps) {
       onPick: (to, whole) => movePayment(t, to, whole),
     });
   };
-  const glance: GlancePage[] = [];
-  if (month.when === 'current' && (latest.length || recent.windows.length)) {
-    glance.push({
-      key: 'latest',
-      label: 'Latest',
-      node: (
-        <LatestPage
-          recent={recent}
-          latest={latest}
-          lineById={lineById}
-          onOpen={() => onOpenPayments?.()}
-          onHold={quickMove ? pickPayment : null}
-          onSettings={onOpenSettings?.open ?? null}
-          skipBills={recentPrefs.skipBills}
-        />
-      ),
-    });
-  }
-  if (props.insights && month.when === 'current' && insightKeys.length) {
-    glance.push({
-      key: 'insights',
-      label: 'Worth a look',
-      dot: hasUnseenInsights(insightKeys, seenInsights),
-      node: <CostInsightsCard bare items={items} goalCents={goalCents} onOpenItem={onOpenItem} onOpenCategory={openCategory} {...props.insights} />,
-    });
-  }
-  const glanceStart = glance.findIndex((p) => p.dot);
-
   const canHide = (l: CostMonthLine) => canHideCostLine(l, quickMove);
   const lineMenu = (l: CostMonthLine, c: CostMonthCategory) => {
     haptics.commit();
@@ -306,16 +266,18 @@ export function CostsOverview(props: CostsOverviewProps) {
 
         <MonthChart months={months} picked={month.month} goalCents={goalCents} onPick={(k) => { haptics.select(); setPicked(k); }} focus={focus} onClearFocus={() => setFocus(null)} />
 
-        {glance.length ? (
-          <CostsGlance
-            key={glance.map((p) => p.key).join('|')}
-            pages={glance}
-            initial={Math.max(0, glanceStart)}
-            onPage={(key) => {
-              if (key === 'insights') markInsightsSeen(insightKeys);
-            }}
-          />
-        ) : null}
+        <CostsGlanceCard
+          items={items}
+          goalCents={goalCents}
+          current={month.when === 'current'}
+          recentPrefs={props.recentPrefs}
+          insights={props.insights ?? null}
+          onOpenPayments={() => onOpenPayments?.()}
+          onHoldPayment={quickMove ? pickPayment : null}
+          onSettings={onOpenSettings?.open ?? null}
+          onOpenItem={onOpenItem}
+          onOpenCategory={openCategory}
+        />
 
         {quickMove && month.when === 'current' ? (
           <ToSortCard
@@ -448,7 +410,6 @@ const SCOPES = [
   { value: 'mine', label: 'Personal' },
 ] as const;
 
-const DOT: Record<GoalStatusLine['tone'], string> = { success: 'bg-success', warning: 'bg-warning', danger: 'bg-destructive', neutral: 'bg-muted-foreground' };
 
 function Hero({
   month,
@@ -503,17 +464,7 @@ function Hero({
         </View>
         {goalCents ? <View pointerEvents="none" className="absolute -bottom-1 -top-1 w-0.5 rounded bg-foreground" style={{ left: pct(goalCents) }} /> : null}
       </View>
-      <View className="gap-1 pt-0.5">
-        {status.map((l, i) => (
-          <View key={i} className="flex-row items-center gap-2">
-            <View className={cn('h-2 w-2 rounded-full', DOT[l.tone])} />
-            <Text className="flex-1 text-sm font-semibold text-foreground" style={TABULAR}>
-              {l.lead}
-              {l.detail ? <Text className="text-sm font-normal text-muted-foreground">{` ${l.detail}`}</Text> : null}
-            </Text>
-          </View>
-        ))}
-      </View>
+      <GoalStatusLines lines={status} />
       {flow ? (
         <View className="flex-row gap-2 pt-1">
           <Stat label={flow.incomeLabel} value={formatMoney(flow.income)} hint={flow.incomeHint} />
@@ -523,6 +474,7 @@ function Hero({
     </View>
   );
 }
+
 
 function Stat({ label, value, hint, tone }: { label: string; value: string; hint?: string; tone?: 'success' | 'danger' }) {
   return (

@@ -21,7 +21,7 @@ import {
   setupCostLine,
   type NewCostLine,
 } from '@homeup/core';
-import { deleteCostReminders, costItems$, setupItems$, apartments$, readRecentSpendPrefs, saveUserSettings, useReconnectSync, useStoreHelpers, useStoreLoaded } from '@homeup/core';
+import { deleteCostReminders, costItems$, setupItems$, apartments$, readRecentSpendPrefs, saveUserSettings, useInsightMarks, useReconnectSync, useStoreHelpers, useStoreLoaded } from '@homeup/core';
 import { LeadingTile } from '@/components/ui/leading-tile';
 import { useModuleSettingsSheet } from '@/components/module-settings-sheet';
 import { sectionIconFor } from '@/lib/section-icons';
@@ -113,20 +113,8 @@ export default function CostsPage() {
   // marks then last until the page closes.
   const insightsOn = modules.isEnabled('money-insights');
   const canSaveMarks = modules.server('costs.insight-marks');
-  const [insightMarks, setInsightMarks] = useState<CostInsightMarks>({});
-  useEffect(() => {
-    if (userSettings?.money_insight_marks) setInsightMarks(userSettings.money_insight_marks);
-  }, [userSettings?.money_insight_marks]);
-  const updateMarks = useCallback(
-    (update: (cur: CostInsightMarks) => CostInsightMarks) => {
-      setInsightMarks((cur) => {
-        const next = update(cur);
-        if (canSaveMarks) void persistSettings({ money_insight_marks: next });
-        return next;
-      });
-    },
-    [canSaveMarks, persistSettings],
-  );
+  const saveMarks = useCallback((marks: CostInsightMarks) => void persistSettings({ money_insight_marks: marks }), [persistSettings]);
+  const [insightMarks, updateMarks] = useInsightMarks(userSettings?.money_insight_marks, canSaveMarks ? saveMarks : null);
   // Assistant summaries (money-summary.ts) and recent spending (recent-spend.ts) are set in Costs settings.
   const canSummarise = insightsOn && modules.isEnabled('assistant');
   const recentPrefs = readRecentSpendPrefs(userSettings?.costs_recent_spend);

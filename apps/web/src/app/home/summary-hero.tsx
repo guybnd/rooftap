@@ -36,7 +36,7 @@ import {
   skyHeadline,
   todayProgress,
   useModules,
-  useMonthTotals,
+  useCurrentCostMonth,
   isModuleShown,
   nowCardTiming,
   unassignedCount,
@@ -150,7 +150,7 @@ export function SummaryHero({
   const modules = useModules();
   const isOn = (key: string) => isModuleShown(key, config, modules.feature);
 
-  const month = useMonthTotals(costItems);
+  const costMonth = useCurrentCostMonth(costItems);
   const ctx: HeroModuleContext = {
     todayCount,
     weather,
@@ -161,7 +161,7 @@ export function SummaryHero({
     now: new Date(),
     budgetCents,
     costItems,
-    monthTotalCents: month?.totalCents ?? null,
+    costMonth,
     groceryToBuyCount,
     setup,
     shopperShortcut,

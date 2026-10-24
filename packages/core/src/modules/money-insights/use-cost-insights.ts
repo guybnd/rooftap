@@ -5,7 +5,7 @@
 // links and accounts for the nudges only a bank can give. Both apps' "Worth a
 // look" card reads this, so they show the same list.
 
-import { useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { costTargets } from '../costs/costs';
 import { monthKeys } from '../costs/cost-month';
 import { costInsights, type CostInsightMarks, type CostInsights } from './cost-insights';
@@ -35,4 +35,31 @@ export function useCostInsights(items: readonly CostItem[], opts: { goalCents?: 
       : [];
     return costInsights({ items: live, months: shown, nudges, goalCents, marks: marks ?? undefined, now });
   }, [items, months, data, bank, scope, goalCents, marks]);
+}
+
+/**
+ * What this person hid and the subscriptions they kept
+ * (user_settings.money_insight_marks), for Costs and Home's Worth a look.
+ * `save` stores the new marks; null (older servers lack the column) keeps
+ * them until the screen closes.
+ */
+export function useInsightMarks(
+  saved: CostInsightMarks | null | undefined,
+  save: ((marks: CostInsightMarks) => void) | null,
+): [CostInsightMarks, (update: (cur: CostInsightMarks) => CostInsightMarks) => void] {
+  const [marks, setMarks] = useState<CostInsightMarks>({});
+  useEffect(() => {
+    if (saved) setMarks(saved);
+  }, [saved]);
+  const update = useCallback(
+    (change: (cur: CostInsightMarks) => CostInsightMarks) => {
+      setMarks((cur) => {
+        const next = change(cur);
+        save?.(next);
+        return next;
+      });
+    },
+    [save],
+  );
+  return [marks, update];
 }

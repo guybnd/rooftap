@@ -38,7 +38,6 @@ import {
   monthShortName,
   goalStatus,
   moneyFlow,
-  type GoalStatusLine,
   signedMoney,
   type CostCategory,
   type CostItem,
@@ -56,13 +55,7 @@ import {
   likelyCostCategories,
   moveCostLineWithUndo,
   useCostCategoryChoices,
-  useCostInsights,
   useModules,
-  useSeenInsights,
-  hasUnseenInsights,
-  markInsightsSeen,
-  useRecentSpend,
-  DEFAULT_RECENT_SPEND,
   type RecentSpendPrefs,
   type SpendingTransaction,
 } from '@homeup/core';
@@ -70,9 +63,10 @@ import { BottomSheet } from '@/components/ui/bottom-sheet';
 import { upBankApi } from '@/lib/up-bank-client';
 import { cn } from '@/lib/utils';
 import { CategoryGlyph } from './category-glyph';
-import { CostInsightsCard, type CostInsightsCardProps } from './cost-insights';
+import type { CostInsightsCardProps } from './cost-insights';
 import { ToSortCard } from './to-sort-card';
-import { CostsGlance, LatestPage, latestCategory, type GlancePage } from './costs-glance';
+import { CostsGlanceCard, latestCategory } from './costs-glance';
+import { GoalStatusLines } from './goal-status';
 import { TransactionSheet } from './money-view';
 import { CategoryPickerSheet, type CategoryPick } from './category-picker';
 import { CostRowShell, CostRowSheet, type CostRowSheetState } from './cost-row-sheet';
@@ -193,13 +187,7 @@ export function CostsOverview(props: CostsOverviewProps) {
     setPick({ title: `Move ${l.name}`, current, likely: likelyCostCategories(l, current, month, choices), onPick: (to) => move(l, c.category, to) });
   };
   // The glance card: the latest payments and the insights, one page each.
-  const { insights: insightList } = useCostInsights(items, { goalCents, marks: props.insights?.marks });
-  const insightKeys = props.insights ? insightList.map((i) => i.key) : [];
-  const seenInsights = useSeenInsights();
   const lineById = useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
-  const latest = (data?.recent ?? []).slice(0, 3);
-  const recentPrefs = props.recentPrefs ?? DEFAULT_RECENT_SPEND;
-  const recent = useRecentSpend(upBankApi, items, recentPrefs);
   const movePayment = (t: SpendingTransaction, to: CostCategory, wholeShop: boolean) => {
     moveBankPayment(upBankApi, t, to, wholeShop)
       .then((message) => {
@@ -220,34 +208,6 @@ export function CostsOverview(props: CostsOverviewProps) {
       onPick: (to, whole) => movePayment(t, to, whole),
     });
   };
-  const glance: GlancePage[] = [];
-  if (month.when === 'current' && (latest.length || recent.windows.length)) {
-    glance.push({
-      key: 'latest',
-      label: 'Latest',
-      node: (
-        <LatestPage
-          recent={recent}
-          latest={latest}
-          lineById={lineById}
-          onOpen={() => onOpenPayments?.()}
-          onMove={quickMove ? pickPayment : null}
-          onSettings={onOpenSettings?.open ?? null}
-          skipBills={recentPrefs.skipBills}
-        />
-      ),
-    });
-  }
-  if (props.insights && month.when === 'current' && insightKeys.length) {
-    glance.push({
-      key: 'insights',
-      label: 'Worth a look',
-      dot: hasUnseenInsights(insightKeys, seenInsights),
-      node: <CostInsightsCard bare items={items} goalCents={goalCents} onOpenItem={onOpenItem} onOpenCategory={(c) => openCategory(c)} {...props.insights} />,
-    });
-  }
-  const glanceStart = glance.findIndex((p) => p.dot);
-
   const canHide = (l: CostMonthLine) => canHideCostLine(l, quickMove);
   const lineMenu = (l: CostMonthLine, c: CostMonthCategory): RowMenu =>
     costRowMenu({
@@ -297,16 +257,18 @@ export function CostsOverview(props: CostsOverviewProps) {
     <div className="space-y-5">
       <Hero month={month} goalCents={goalCents} onEditGoal={onOpenSettings?.open ?? null} focus={focus} onFocus={toggleFocus} />
       <MonthChart months={months} picked={month.month} goalCents={goalCents} onPick={setPicked} focus={focus} onClearFocus={() => setFocus(null)} />
-      {glance.length > 0 && (
-        <CostsGlance
-          key={glance.map((p) => p.key).join('|')}
-          pages={glance}
-          initial={Math.max(0, glanceStart)}
-          onPage={(key) => {
-            if (key === 'insights') markInsightsSeen(insightKeys);
-          }}
-        />
-      )}
+      <CostsGlanceCard
+        items={items}
+        goalCents={goalCents}
+        current={month.when === 'current'}
+        recentPrefs={props.recentPrefs}
+        insights={props.insights ?? null}
+        onOpenPayments={() => onOpenPayments?.()}
+        onMovePayment={quickMove ? pickPayment : null}
+        onSettings={onOpenSettings?.open ?? null}
+        onOpenItem={onOpenItem}
+        onOpenCategory={(c) => openCategory(c)}
+      />
       {quickMove && month.when === 'current' && (
         <ToSortCard
           month={month}
@@ -484,7 +446,6 @@ const SCOPES = [
   { value: 'mine', label: 'Personal' },
 ] as const;
 
-const DOT: Record<GoalStatusLine['tone'], string> = { success: 'bg-success', warning: 'bg-warning', danger: 'bg-destructive', neutral: 'bg-muted-foreground' };
 
 function Hero({
   month,
@@ -540,21 +501,7 @@ function Hero({
         </div>
         {goalCents ? <div className="pointer-events-none absolute -inset-y-1 w-0.5 rounded bg-foreground" style={{ left: pct(goalCents) }} /> : null}
       </div>
-      <div className="space-y-1 pt-0.5 text-sm tabular-nums">
-        {status.map((l, i) => (
-          <p key={i} className="flex items-center gap-2">
-            <span aria-hidden className={cn('h-2 w-2 shrink-0 rounded-full', DOT[l.tone])} />
-            {i === 0 && hover ? (
-              <span className="font-semibold text-foreground">{hover}</span>
-            ) : (
-              <span>
-                <span className="font-semibold text-foreground">{l.lead}</span>
-                {l.detail ? <span className="text-muted-foreground"> {l.detail}</span> : null}
-              </span>
-            )}
-          </p>
-        ))}
-      </div>
+      <GoalStatusLines lines={status} hover={hover} />
       {flow ? (
         <div className="flex gap-2 pt-1">
           <Stat label={flow.incomeLabel} value={formatMoney(flow.income)} hint={flow.incomeHint} />

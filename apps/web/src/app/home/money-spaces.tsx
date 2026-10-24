@@ -3,41 +3,49 @@
 // Hearth v2: the Budget and Bills Spaces. Home is one dashboard, so these
 // sit in Spaces with Groceries whether or not their shortcut is on. Tapping
 // a shortcut filters Home down to its Space, shown `expanded` (every bar and
-// row, not just the first few). The numbers come from core home-lens.ts, so
-// the native twins (apps/mobile features/home/money-spaces.tsx) agree.
+// row, not just the first few). The native twins are apps/mobile
+// features/home/money-spaces.tsx.
 //
-// Category hues key the budget's bars only (a chart series, as on the Costs
-// page); bill rows lead with a neutral glyph chip (H2).
+// Budget is the Costs hero in small (Guy, 2026-10-24): what is paid so far
+// out of the goal, with the same status lines (core goalStatus: under goal so
+// far, then where the month is heading), and the Costs glance card (Latest
+// with recent spending, and Worth a look). Expanded adds the category bars
+// from core home-lens.ts. Category hues key those bars only (a chart series,
+// as on the Costs page); bill rows lead with a neutral glyph chip (H2).
 
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Plus, Receipt, Wallet } from 'lucide-react';
-import type { CostItem, Group } from '@homeup/core';
+import type { CostInsightMarks, CostItem, Group } from '@homeup/core';
 import {
   CATEGORY_COLOR,
-  budgetPulseTone,
   SPACE_COLLAPSED_ROWS,
   buildBillsLens,
   buildBudgetLens,
   costItems$,
   daysUntilLabel,
   formatMoney,
-  timeAgo,
+  goalStatus,
+  goalTone,
+  monthLongName,
+  readRecentSpendPrefs,
+  saveUserSettings,
+  useCurrentCostMonth,
+  useInsightMarks,
+  useModules,
   useMonthTotals,
-  useUpOverview,
   useStoreHelpers,
-  type BudgetLens,
 } from '@homeup/core';
 import { ProgressBar } from '@/components/ui/progress-bar';
 import { CostModal } from '@/app/costs/cost-modal';
 import { CategoryGlyph } from '@/app/costs/category-glyph';
+import { CostsGlanceCard } from '@/app/costs/costs-glance';
+import { GoalStatusLines } from '@/app/costs/goal-status';
+import { useDataCache } from '@/lib/data-cache';
+import { createClient } from '@/lib/supabase/client';
 import { HubTile, TileHeader, stopNav } from './hub-shared';
 
-const TONE_FILL = { success: 'bg-success', warning: 'bg-warning', danger: 'bg-destructive' } as const;
-
-function budgetTone(lens: BudgetLens): string {
-  if (lens.budgetCents == null) return 'bg-foreground/45';
-  return TONE_FILL[budgetPulseTone(lens.budgetCents, lens.spentCents)];
-}
+const TONE_FILL = { success: 'bg-success', warning: 'bg-warning', danger: 'bg-destructive', neutral: 'bg-foreground/45' } as const;
 
 export function BudgetSpace({
   group,
@@ -54,58 +62,52 @@ export function BudgetSpace({
   expanded: boolean;
   now: Date;
 }) {
+  const router = useRouter();
+  const modules = useModules();
+  const { userSettings, refresh } = useDataCache();
   const { writeRow } = useStoreHelpers(costItems$(group.id), currentUserId);
   const [modalOpen, setModalOpen] = useState(false);
-  const month = useMonthTotals(costItems);
-  const { data: bankData } = useUpOverview();
-  const lens = buildBudgetLens(costItems, budgetCents, now, month);
-  // The latest payments, so Home shows the money moving.
-  const latest = month ? (bankData?.recent ?? []).slice(0, expanded ? 5 : 3) : [];
-  const lineById = new Map(costItems.map((c) => [c.id, c]));
-  const over = lens.leftCents != null && lens.leftCents < 0;
+  const month = useCurrentCostMonth(costItems);
+  const lens = buildBudgetLens(costItems, budgetCents, now, useMonthTotals(costItems));
+  const status = goalStatus(month, budgetCents, now);
+  const tone = goalTone(month, budgetCents, now);
   const discount = lens.endingDiscounts[0];
-  const bars = expanded ? lens.categories : lens.categories.slice(0, SPACE_COLLAPSED_ROWS);
+  const bars = expanded ? lens.categories : [];
+  const openCosts = () => router.push('/costs');
+
+  // Worth a look keeps the marks Costs keeps (user_settings.money_insight_marks).
+  const insightsOn = modules.isEnabled('money-insights');
+  const saveMarks = useCallback(
+    (marks: CostInsightMarks) => {
+      void saveUserSettings(createClient(), { money_insight_marks: marks }).then((ok) => {
+        if (ok) void refresh();
+      });
+    },
+    [refresh],
+  );
+  const [marks, onMarks] = useInsightMarks(userSettings?.money_insight_marks, modules.server('costs.insight-marks') ? saveMarks : null);
 
   return (
     <HubTile href="/costs" ariaLabel="Budget">
       <TileHeader sectionId="costs" Icon={Wallet} title="Budget" />
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-2">
-          {lens.budgetCents != null && lens.leftCents != null ? (
-            <p className="tabular-nums">
-              <span className={`font-heading text-2xl font-bold tracking-tight ${over ? 'text-destructive' : 'text-foreground'}`}>
-                {formatMoney(Math.abs(lens.leftCents))}
-              </span>{' '}
-              <span className="text-xs text-muted-foreground">
-                {over ? 'over' : 'left of'} {formatMoney(lens.budgetCents)}
-              </span>
-            </p>
-          ) : (
-            <p className="tabular-nums">
-              <span className="font-heading text-2xl font-bold tracking-tight text-foreground">{formatMoney(lens.spentCents)}</span>{' '}
-              <span className="text-xs text-muted-foreground">{month ? 'this month' : '/ month'}</span>
-            </p>
-          )}
-          {lens.budgetCents != null ? (
+          <p className="tabular-nums">
+            <span className="font-heading text-2xl font-bold tracking-tight text-foreground">{formatMoney(month.paidCents)}</span>{' '}
+            <span className="text-xs text-muted-foreground">
+              {budgetCents != null ? `of ${formatMoney(budgetCents)}` : `spent in ${monthLongName(month.month)}`}
+            </span>
+          </p>
+          {budgetCents != null ? (
             // Solid: paid so far. Faint: what is still to come this month.
-            <ProgressBar value={lens.paidCents ?? lens.spentCents} expected={lens.spentCents} total={lens.budgetCents} fillClassName={budgetTone(lens)} className="h-[3px]" />
+            <ProgressBar value={month.paidCents} expected={month.expectedCents} total={budgetCents} fillClassName={TONE_FILL[tone]} className="h-[3px]" />
           ) : (
             <p className="text-xs text-muted-foreground">Set a monthly budget in Costs to track spend against it.</p>
           )}
-          {(lens.paidCents != null || lens.committedPct != null || discount) && (
-            <p className="text-xs text-muted-foreground">
-              {lens.paidCents != null ? (
-                <span className="tabular-nums">
-                  {formatMoney(lens.paidCents)} paid · {formatMoney(Math.max(0, lens.spentCents - lens.paidCents))} to come.{' '}
-                </span>
-              ) : (
-                lens.committedPct != null && <span className="tabular-nums">{lens.committedPct}% committed. </span>
-              )}
-              {discount && (
-                <span className="text-warning">
-                  {discount.label} discount ends {daysUntilLabel(discount.days)}.
-                </span>
-              )}
+          <GoalStatusLines lines={status} />
+          {discount && (
+            <p className="text-xs text-warning">
+              {discount.label} discount ends {daysUntilLabel(discount.days)}.
             </p>
           )}
         </div>
@@ -127,27 +129,19 @@ export function BudgetSpace({
             ))}
           </ul>
         )}
-        {latest.length > 0 && (
-          <ul className="divide-y divide-border/60" aria-label="Latest payments">
-            {latest.map((t) => {
-              const line = t.costItemId ? lineById.get(t.costItemId) : undefined;
-              return (
-                <li key={t.id} className="flex min-h-10 items-center gap-3 py-1.5 text-sm">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-foreground">{t.description}</p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {[t.pending ? 'Pending' : null, timeAgo(t.occurredAt), line ? line.name : t.categoryLabel].filter(Boolean).join(' · ')}
-                    </p>
-                  </div>
-                  <span className={`text-xs tabular-nums ${t.amountCents > 0 ? 'text-success' : 'text-foreground'}`}>
-                    {t.amountCents > 0 ? '+' : ''}
-                    {formatMoney(Math.abs(t.amountCents))}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        )}
+        <div className="-mx-4 cursor-auto" {...stopNav} onKeyDown={(e) => e.stopPropagation()}>
+          <CostsGlanceCard
+            bare
+            items={costItems}
+            goalCents={budgetCents}
+            current
+            recentPrefs={readRecentSpendPrefs(userSettings?.costs_recent_spend)}
+            insights={insightsOn ? { marks, onMarks, onRemind: null } : null}
+            onOpenPayments={openCosts}
+            onOpenItem={openCosts}
+            onOpenCategory={openCosts}
+          />
+        </div>
         <button
           onClick={(e) => {
             e.stopPropagation();

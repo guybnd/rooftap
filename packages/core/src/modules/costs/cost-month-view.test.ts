@@ -12,6 +12,7 @@ import {
   monthLongName,
   monthShortName,
   goalStatus,
+  goalTone,
   moneyFlow,
   signedMoney,
 } from './cost-month-view';
@@ -195,5 +196,19 @@ describe('goalStatus', () => {
 
   it('shows the estimate without a goal', () => {
     expect(goalStatus(month({ paidCents: 100_000, toComeCents: 20_000, expectedCents: 120_000 }), null, today)[0].lead).toMatch(/^About \$1,200 by /);
+  });
+});
+
+describe('goalTone', () => {
+  const today = new Date(2026, 9, 24);
+
+  it('is amber while under so far but heading over, not red', () => {
+    expect(goalTone(month({ paidCents: 817_700, toComeCents: 270_200, expectedCents: 1_087_900 }), 900_000, today)).toBe('warning');
+  });
+
+  it('is green on track, red once paid passes the goal, neutral without one', () => {
+    expect(goalTone(month({ paidCents: 500_000, toComeCents: 100_000, expectedCents: 600_000 }), 900_000, today)).toBe('success');
+    expect(goalTone(month({ paidCents: 950_000, toComeCents: 50_000, expectedCents: 1_000_000 }), 900_000, today)).toBe('danger');
+    expect(goalTone(month({ paidCents: 500_000, expectedCents: 500_000 }), null, today)).toBe('neutral');
   });
 });

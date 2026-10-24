@@ -9,14 +9,38 @@
 // payments on click; right-click (or a long press) moves it to another
 // category. Phone twin: apps/mobile/src/features/costs/costs-glance.tsx.
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { CATEGORY_COLOR, costCategoryFromUp, formatMoney, recentDayLabel, recentVerdictText, timeAgo, type CostCategory, type CostItem, type RecentBar, type RecentSpendState, type SpendingTransaction } from '@homeup/core';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  CATEGORY_COLOR,
+  DEFAULT_RECENT_SPEND,
+  costCategoryFromUp,
+  formatMoney,
+  hasUnseenInsights,
+  markInsightsSeen,
+  recentDayLabel,
+  recentVerdictText,
+  timeAgo,
+  useCostInsights,
+  useRecentSpend,
+  useSeenInsights,
+  useUpOverview,
+  type CostCategory,
+  type CostItem,
+  type RecentBar,
+  type RecentSpendPrefs,
+  type RecentSpendState,
+  type SpendingTransaction,
+} from '@homeup/core';
 import { tick } from '@/lib/haptics';
+import { upBankApi } from '@/lib/up-bank-client';
 import { cn } from '@/lib/utils';
 import { CategoryGlyph } from './category-glyph';
+import { CostInsightsCard, type CostInsightsCardProps } from './cost-insights';
 
 const LABEL = 'text-[10.5px] font-medium uppercase tracking-[0.1em] text-muted-foreground';
 const CARD = 'overflow-hidden rounded-3xl border border-border/60 bg-card shadow-[var(--card-shadow)]';
+/** Inside another card: rules above and below instead of a frame. */
+const BARE = 'overflow-hidden border-y border-border/60';
 
 export interface GlancePage {
   key: string;
@@ -26,7 +50,83 @@ export interface GlancePage {
   node: ReactNode;
 }
 
-export function CostsGlance({ pages, initial, onPage }: { pages: GlancePage[]; initial: number; onPage?: (key: string) => void }) {
+export interface CostsGlanceCardProps {
+  items: readonly CostItem[];
+  goalCents: number | null;
+  /** The month on show is this one: the card only shows then. */
+  current: boolean;
+  /** Recent spending on the Latest page (set in Costs settings). */
+  recentPrefs?: RecentSpendPrefs;
+  /** The money-insights module's Worth a look page; null when it's off. */
+  insights: Pick<CostInsightsCardProps, 'marks' | 'onMarks' | 'onRemind'> | null;
+  /** A click on a latest payment. */
+  onOpenPayments: () => void;
+  /** Right-click or long press on a latest payment (move it); null for none. */
+  onMovePayment?: ((t: SpendingTransaction) => void) | null;
+  /** The "Change" link under an open recent window; null hides it. */
+  onSettings?: (() => void) | null;
+  onOpenItem: (item: CostItem) => void;
+  onOpenCategory: (category: CostCategory | null) => void;
+  /** Drawn inside another card (Home's Budget space): no frame of its own. */
+  bare?: boolean;
+}
+
+/**
+ * The glance card with its pages built from the bank overview and the money
+ * insights: Costs shows it under the month, Home in its Budget space.
+ */
+export function CostsGlanceCard(props: CostsGlanceCardProps) {
+  const { items, goalCents, current, insights, bare } = props;
+  const { data } = useUpOverview();
+  const { insights: insightList } = useCostInsights(items, { goalCents, marks: insights?.marks });
+  const insightKeys = insights ? insightList.map((i) => i.key) : [];
+  const seenInsights = useSeenInsights();
+  const lineById = useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
+  const latest = (data?.recent ?? []).slice(0, 3);
+  const recentPrefs = props.recentPrefs ?? DEFAULT_RECENT_SPEND;
+  const recent = useRecentSpend(upBankApi, items, recentPrefs);
+
+  const pages: GlancePage[] = [];
+  if (current && (latest.length || recent.windows.length)) {
+    pages.push({
+      key: 'latest',
+      label: 'Latest',
+      node: (
+        <LatestPage
+          recent={recent}
+          latest={latest}
+          lineById={lineById}
+          onOpen={props.onOpenPayments}
+          onMove={props.onMovePayment}
+          onSettings={props.onSettings ?? null}
+          skipBills={recentPrefs.skipBills}
+        />
+      ),
+    });
+  }
+  if (insights && current && insightKeys.length) {
+    pages.push({
+      key: 'insights',
+      label: 'Worth a look',
+      dot: hasUnseenInsights(insightKeys, seenInsights),
+      node: <CostInsightsCard bare items={items} goalCents={goalCents} onOpenItem={props.onOpenItem} onOpenCategory={props.onOpenCategory} {...insights} />,
+    });
+  }
+  if (!pages.length) return null;
+  return (
+    <CostsGlance
+      key={pages.map((p) => p.key).join('|')}
+      pages={pages}
+      initial={Math.max(0, pages.findIndex((p) => p.dot))}
+      bare={bare}
+      onPage={(key) => {
+        if (key === 'insights') markInsightsSeen(insightKeys);
+      }}
+    />
+  );
+}
+
+export function CostsGlance({ pages, initial, onPage, bare }: { pages: GlancePage[]; initial: number; onPage?: (key: string) => void; bare?: boolean }) {
   const [page, setPage] = useState(() => Math.max(0, Math.min(initial, pages.length - 1)));
   const scroller = useRef<HTMLDivElement | null>(null);
   const placed = useRef(false);
@@ -41,8 +141,8 @@ export function CostsGlance({ pages, initial, onPage }: { pages: GlancePage[]; i
   if (pages.length === 1) {
     return (
       <section className="space-y-2" aria-label={pages[0].label}>
-        <h2 className={cn(LABEL, 'px-1')}>{pages[0].label}</h2>
-        <div className={CARD}>{pages[0].node}</div>
+        <h2 className={cn(LABEL, bare ? 'px-4' : 'px-1')}>{pages[0].label}</h2>
+        <div className={bare ? BARE : CARD}>{pages[0].node}</div>
       </section>
     );
   }
@@ -58,7 +158,7 @@ export function CostsGlance({ pages, initial, onPage }: { pages: GlancePage[]; i
 
   return (
     <section className="space-y-2" aria-label="At a glance">
-      <div role="tablist" className="flex gap-4 px-1">
+      <div role="tablist" className={cn('flex gap-4', bare ? 'px-4' : 'px-1')}>
         {pages.map((p, n) => (
           <button
             key={p.key}
@@ -87,7 +187,7 @@ export function CostsGlance({ pages, initial, onPage }: { pages: GlancePage[]; i
           const n = Math.round(el.scrollLeft / Math.max(1, el.clientWidth));
           if (n !== at && n >= 0 && n < pages.length) setPage(n);
         }}
-        className={cn(CARD, 'flex snap-x snap-mandatory items-start overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden')}
+        className={cn(bare ? BARE : CARD, 'flex snap-x snap-mandatory items-start overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden')}
       >
         {pages.map((p, n) => (
           <div key={p.key} role="tabpanel" aria-label={p.label} aria-hidden={n !== at} className="w-full shrink-0 snap-start">

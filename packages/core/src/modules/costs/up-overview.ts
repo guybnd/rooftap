@@ -235,7 +235,7 @@ export function useBankActuals(): BankActuals | undefined {
 export function useMonthTotals(items: readonly CostItem[]): MonthTotals | null {
   const { data, month, scope } = useUpOverview();
   const bank = useBankActuals();
-  const [current] = useCostMonths(items, useMemo(() => [monthKeyOf(new Date())], []));
+  const current = useCurrentCostMonth(items);
   return useMemo(() => {
     const now = new Date();
     if (scope === 'mine' || month !== monthStartOf(now)) return null;
@@ -249,6 +249,12 @@ export function useMonthTotals(items: readonly CostItem[]): MonthTotals | null {
     const targets = costTargets(items);
     return monthTotals(items.filter((i) => !i.deleted && !targets.has(i.id)), bank, data.spentCents, now);
   }, [data, bank, scope, month, items, current]);
+}
+
+/** This month from costMonth, as the Costs hero shows it (Home's Budget space and shortcut). */
+export function useCurrentCostMonth(items: readonly CostItem[]): CostMonth {
+  const [current] = useCostMonths(items, useMemo(() => [monthKeyOf(new Date())], []));
+  return current;
 }
 
 /**

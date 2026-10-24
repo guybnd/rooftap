@@ -38,7 +38,7 @@ function baseCtx(weather: WeatherData | null): HeroModuleContext {
     tasks: [],
     now: NOON,
     budgetCents: null,
-    monthTotalCents: null,
+    costMonth: null,
     costItems: [],
     groceryToBuyCount: 0,
     setup: { done: 0, total: 0 },

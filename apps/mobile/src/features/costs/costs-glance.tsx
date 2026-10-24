@@ -9,11 +9,34 @@
 import * as React from 'react';
 import { Pressable, ScrollView, View, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { Text, cn, haptics } from '@homeup/ui';
-import { costCategoryFromUp, formatMoney, recentDayLabel, recentVerdictText, timeAgo, type CostCategory, type CostItem, type RecentBar, type RecentSpendState, type SpendingTransaction } from '@homeup/core';
+import {
+  DEFAULT_RECENT_SPEND,
+  costCategoryFromUp,
+  formatMoney,
+  hasUnseenInsights,
+  markInsightsSeen,
+  recentDayLabel,
+  recentVerdictText,
+  timeAgo,
+  useCostInsights,
+  useRecentSpend,
+  useSeenInsights,
+  useUpOverview,
+  type CostCategory,
+  type CostItem,
+  type RecentBar,
+  type RecentSpendPrefs,
+  type RecentSpendState,
+  type SpendingTransaction,
+} from '@homeup/core';
 import { CATEGORY_BAR_FILL, CategoryChip } from './cost-card';
+import { CostInsightsCard, type CostInsightsCardProps } from './cost-insights';
+import { upBankApi } from './up-bank-api';
 
 const LABEL = 'text-micro-label uppercase text-muted-foreground';
 const CARD = 'overflow-hidden rounded-3xl border border-border/60 bg-card';
+/** Inside another card: a rule above instead of a frame. */
+const BARE = 'overflow-hidden border-y border-border/60';
 const TABULAR = { fontVariant: ['tabular-nums' as const] };
 
 export interface GlancePage {
@@ -24,7 +47,83 @@ export interface GlancePage {
   node: React.ReactNode;
 }
 
-export function CostsGlance({ pages, initial, onPage }: { pages: GlancePage[]; initial: number; onPage?: (key: string) => void }) {
+export interface CostsGlanceCardProps {
+  items: readonly CostItem[];
+  goalCents: number | null;
+  /** The month on show is this one: the card only shows then. */
+  current: boolean;
+  /** Recent spending on the Latest page (set in Costs settings). */
+  recentPrefs?: RecentSpendPrefs;
+  /** The money-insights module's Worth a look page; null when it's off. */
+  insights: Pick<CostInsightsCardProps, 'marks' | 'onMarks' | 'onRemind'> | null;
+  /** A tap on a latest payment. */
+  onOpenPayments: () => void;
+  /** A hold on a latest payment (move it); null for no hold. */
+  onHoldPayment?: ((t: SpendingTransaction) => void) | null;
+  /** The "Change" link under an open recent window; null hides it. */
+  onSettings?: (() => void) | null;
+  onOpenItem: (item: CostItem) => void;
+  onOpenCategory: (category: CostCategory | null) => void;
+  /** Drawn inside another card (Home's Budget space): no frame of its own. */
+  bare?: boolean;
+}
+
+/**
+ * The glance card with its pages built from the bank overview and the money
+ * insights: Costs shows it under the month, Home in its Budget space.
+ */
+export function CostsGlanceCard(props: CostsGlanceCardProps) {
+  const { items, goalCents, current, insights, bare } = props;
+  const { data } = useUpOverview();
+  const { insights: insightList } = useCostInsights(items, { goalCents, marks: insights?.marks });
+  const insightKeys = insights ? insightList.map((i) => i.key) : [];
+  const seenInsights = useSeenInsights();
+  const lineById = React.useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
+  const latest = (data?.recent ?? []).slice(0, 3);
+  const recentPrefs = props.recentPrefs ?? DEFAULT_RECENT_SPEND;
+  const recent = useRecentSpend(upBankApi, items, recentPrefs);
+
+  const pages: GlancePage[] = [];
+  if (current && (latest.length || recent.windows.length)) {
+    pages.push({
+      key: 'latest',
+      label: 'Latest',
+      node: (
+        <LatestPage
+          recent={recent}
+          latest={latest}
+          lineById={lineById}
+          onOpen={props.onOpenPayments}
+          onHold={props.onHoldPayment}
+          onSettings={props.onSettings ?? null}
+          skipBills={recentPrefs.skipBills}
+        />
+      ),
+    });
+  }
+  if (insights && current && insightKeys.length) {
+    pages.push({
+      key: 'insights',
+      label: 'Worth a look',
+      dot: hasUnseenInsights(insightKeys, seenInsights),
+      node: <CostInsightsCard bare items={items} goalCents={goalCents} onOpenItem={props.onOpenItem} onOpenCategory={props.onOpenCategory} {...insights} />,
+    });
+  }
+  if (!pages.length) return null;
+  return (
+    <CostsGlance
+      key={pages.map((p) => p.key).join('|')}
+      pages={pages}
+      initial={Math.max(0, pages.findIndex((p) => p.dot))}
+      bare={bare}
+      onPage={(key) => {
+        if (key === 'insights') markInsightsSeen(insightKeys);
+      }}
+    />
+  );
+}
+
+export function CostsGlance({ pages, initial, onPage, bare }: { pages: GlancePage[]; initial: number; onPage?: (key: string) => void; bare?: boolean }) {
   const [width, setWidth] = React.useState(0);
   const [page, setPage] = React.useState(() => Math.max(0, Math.min(initial, pages.length - 1)));
   const scroller = React.useRef<ScrollView>(null);
@@ -35,8 +134,8 @@ export function CostsGlance({ pages, initial, onPage }: { pages: GlancePage[]; i
   if (pages.length === 1) {
     return (
       <View className="gap-2">
-        <Text className={cn(LABEL, 'px-1')}>{pages[0].label}</Text>
-        <View className={CARD}>{pages[0].node}</View>
+        <Text className={cn(LABEL, bare ? 'px-4' : 'px-1')}>{pages[0].label}</Text>
+        <View className={bare ? BARE : CARD}>{pages[0].node}</View>
       </View>
     );
   }
@@ -60,7 +159,7 @@ export function CostsGlance({ pages, initial, onPage }: { pages: GlancePage[]; i
 
   return (
     <View className="gap-2">
-      <View className="flex-row gap-4 px-1" accessibilityRole="tablist">
+      <View className={cn('flex-row gap-4', bare ? 'px-4' : 'px-1')} accessibilityRole="tablist">
         {pages.map((p, n) => (
           <Pressable
             key={p.key}
@@ -79,7 +178,7 @@ export function CostsGlance({ pages, initial, onPage }: { pages: GlancePage[]; i
           </Pressable>
         ))}
       </View>
-      <View className={CARD} onLayout={onLayout}>
+      <View className={bare ? BARE : CARD} onLayout={onLayout}>
         {width ? (
           <ScrollView
             ref={scroller}

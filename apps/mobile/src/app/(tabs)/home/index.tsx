@@ -87,15 +87,14 @@ import {
   countdownDisplay,
   daysUntilLabel,
   formatMoney,
-  isOneOff,
-  totalForPeriod,
+  goalTone,
+  useCurrentCostMonth,
   buildDayRibbon,
   skyHeadline,
   MOTION_DURATIONS_MS,
   hiddenWithDisabledModules,
   useModules,
   useBins,
-  useMonthTotals,
   UpOverviewProvider,
   useEventSave,
   useStoreHelpers,
@@ -117,7 +116,6 @@ import {
   nowCardTiming,
   useHomeData,
   todayProgress,
-  budgetPulseTone as toneForBudget,
   compareHeroItems,
   heroTips,
   isModuleShown,
@@ -582,24 +580,17 @@ function HomeSectionBody() {
   const showUnassignedChip = heroOn('unassignedNudge') && unassigned > 0;
 
   const budgetCents = userSettings?.costs_budget_monthly ?? null;
-  const month = useMonthTotals(costItemsList);
-  const { costs, setup } = React.useMemo(() => {
-    const recurring = costItemsList.filter((c) => !isOneOff(c));
-    const monthlyTotalCents = month ? month.totalCents : totalForPeriod(recurring, 'monthly');
-    const setupDone = setupItemsList.filter((s) => s.status === 'installed').length;
-    return {
-      costs: { monthlyTotalCents },
-      setup: { done: setupDone, total: setupItemsList.length },
-    };
-  }, [costItemsList, setupItemsList, month]);
+  // The Budget shortcut reads like the Costs hero: paid so far out of the
+  // goal, amber while the month is heading over, red once paid passes it
+  // (core goalTone), never the month-end forecast as if already spent.
+  const costMonth = useCurrentCostMonth(costItemsList);
+  const setup = React.useMemo(
+    () => ({ done: setupItemsList.filter((s) => s.status === 'installed').length, total: setupItemsList.length }),
+    [setupItemsList]
+  );
 
-  // HOUP-222: web parity — the hero's own togglable budgetPulse tile
-  // (apps/web/src/app/home/hero-modules.tsx:378-408). HOUP-223: CostsTile
-  // (section-tiles.tsx) now derives its own meter/chip via deriveBudgetTile
-  // internally, mirroring web's CostsTile — this pulse tile is a separate
-  // keeper and stays untouched.
   const showBudgetPulseTile = heroOn('budgetPulse') && budgetCents != null;
-  const budgetPulseTone = budgetCents != null ? toneForBudget(budgetCents, costs.monthlyTotalCents) : 'success';
+  const budgetPulseTone = goalTone(costMonth, budgetCents, now);
 
   // HOUP-172: pulse tiles (item 2) — same qualification rules as web's
   // billsDue/shoppingList/setupProgress modules (a module renders nothing,
@@ -637,11 +628,11 @@ function HomeSectionBody() {
               tone={budgetPulseTone}
               value={
                 <Text numberOfLines={1} className={`text-sm font-semibold tabular-nums ${budgetPulseTone === 'danger' ? 'text-destructive' : 'text-foreground'}`}>
-                  {formatMoney(costs.monthlyTotalCents)}
+                  {formatMoney(costMonth.paidCents)}
                 </Text>
               }
-              meter={{ value: costs.monthlyTotalCents, total: budgetCents }}
-              accessibilityLabel={`Budget, ${formatMoney(costs.monthlyTotalCents)} of ${formatMoney(budgetCents)}`}
+              meter={{ value: costMonth.paidCents, total: budgetCents }}
+              accessibilityLabel={`Budget, ${formatMoney(costMonth.paidCents)} of ${formatMoney(budgetCents)} so far`}
               className={shortcutClass}
             />
           ),

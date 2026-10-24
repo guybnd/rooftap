@@ -19,6 +19,8 @@ import {
   HERO_MODULES as CORE_HERO_MODULES,
   availableHeroModules as availableCoreHeroModules,
   budgetPulseTone,
+  goalTone,
+  type CostMonth,
   computeAllClearStreak,
   countdownDisplay,
   daysUntilLabel,
@@ -47,8 +49,8 @@ export interface HeroModuleContext {
   tasks: HouseholdTask[];
   budgetCents: number | null;
   costItems: CostItem[];
-  /** Where this month ends with the bank's data (core useMonthTotals); null without it. */
-  monthTotalCents: number | null;
+  /** This month as the Costs hero shows it (core useCurrentCostMonth); null in tests. */
+  costMonth: CostMonth | null;
   groceryToBuyCount: number;
   setup: { done: number; total: number };
   /** HOUP-434: the Shopper shortcut's figure (core shopperShortcutValue), null with nothing watched. */
@@ -186,7 +188,7 @@ function renderTip(key: string): NonNullable<HeroModule['render']> {
   };
 }
 
-const PULSE_FILL = { success: 'bg-success', warning: 'bg-warning', danger: 'bg-destructive' } as const;
+const PULSE_FILL = { success: 'bg-success', warning: 'bg-warning', danger: 'bg-destructive', neutral: 'bg-foreground/45' } as const;
 
 // Web's render per module. A key without one renders nothing here (the fused
 // day lines, the sky block and the spaces are drawn by their containers).
@@ -207,14 +209,15 @@ const RENDERS: Partial<Record<string, NonNullable<HeroModule['render']>>> = {
   tipSunset: renderTip('tipSunset'),
   budgetPulse: (ctx) => {
     if (ctx.budgetCents == null) return null;
-    // The same monthly recurring total the Costs tile, the Costs page and
-    // mobile compare against the budget, so Home never shows two figures.
-    const spend = ctx.monthTotalCents ?? totalForPeriod(ctx.costItems.filter((i) => !isOneOff(i)), 'monthly');
-    const tone = budgetPulseTone(ctx.budgetCents, spend);
+    // Like the Costs hero: paid so far out of the goal, amber while the month
+    // is heading over, red once paid passes it (core goalTone), never the
+    // month-end forecast as if already spent.
+    const spend = ctx.costMonth?.paidCents ?? totalForPeriod(ctx.costItems.filter((i) => !isOneOff(i)), 'monthly');
+    const tone = ctx.costMonth ? goalTone(ctx.costMonth, ctx.budgetCents, ctx.now) : budgetPulseTone(ctx.budgetCents, spend);
     return (
       <PulseTile
         {...lensTap(ctx, 'budgetPulse', '/costs')}
-        ariaLabel={`Budget, ${formatMoney(spend)} of ${formatMoney(ctx.budgetCents)}`}
+        ariaLabel={`Budget, ${formatMoney(spend)} of ${formatMoney(ctx.budgetCents)} so far`}
         label="Budget"
         value={formatMoney(spend)}
         valueClassName={tone === 'danger' ? 'text-destructive' : undefined}

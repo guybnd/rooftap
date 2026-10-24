@@ -43,6 +43,7 @@ import {
   rentCostLine,
   setupCostLine,
   type NewCostLine,
+  useInsightMarks,
 } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
 import { NoGroupScreen } from '@/components/no-group-screen';
@@ -138,20 +139,8 @@ function CostsScreenBody() {
   // marks then last until the screen closes.
   const insightsOn = modules.isEnabled('money-insights');
   const canSaveMarks = modules.server('costs.insight-marks');
-  const [insightMarks, setInsightMarks] = React.useState<CostInsightMarks>({});
-  React.useEffect(() => {
-    if (userSettings?.money_insight_marks) setInsightMarks(userSettings.money_insight_marks);
-  }, [userSettings?.money_insight_marks]);
-  const updateMarks = React.useCallback(
-    (update: (cur: CostInsightMarks) => CostInsightMarks) => {
-      setInsightMarks((cur) => {
-        const next = update(cur);
-        if (canSaveMarks) void persistSettings({ money_insight_marks: next });
-        return next;
-      });
-    },
-    [canSaveMarks, persistSettings],
-  );
+  const saveMarks = React.useCallback((marks: CostInsightMarks) => void persistSettings({ money_insight_marks: marks }), [persistSettings]);
+  const [insightMarks, updateMarks] = useInsightMarks(userSettings?.money_insight_marks, canSaveMarks ? saveMarks : null);
   // Assistant summaries (money-summary.ts) and recent spending (recent-spend.ts) are set in Costs settings.
   const canSummarise = insightsOn && modules.isEnabled('assistant');
   const recentPrefs = readRecentSpendPrefs(userSettings?.costs_recent_spend);

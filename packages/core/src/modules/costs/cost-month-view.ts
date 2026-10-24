@@ -197,3 +197,16 @@ export function goalStatus(month: CostMonth, goalCents: number | null, today: Da
   if (left < 0) return [now, { tone: 'neutral', lead: `About ${formatMoney(month.expectedCents)} by ${end}.`, detail: toCome }];
   return [now, off >= 0 ? { tone: 'success', lead: `On track to finish ${formatMoney(off)} under.`, detail: toCome } : { tone: 'warning', lead: `Heading ${formatMoney(-off)} over.`, detail: toCome }];
 }
+
+/**
+ * The strongest tone of goalStatus, for a glance at the month (Home's Budget
+ * shortcut and space): red only once paid passes the goal, amber while the
+ * month is heading over, green otherwise. Neutral without a goal.
+ */
+export function goalTone(month: CostMonth, goalCents: number | null, today: Date = new Date()): GoalStatusLine['tone'] {
+  const tones = goalStatus(month, goalCents, today).map((l) => l.tone);
+  if (tones.includes('danger')) return 'danger';
+  if (tones.includes('warning')) return 'warning';
+  if (tones.includes('success')) return 'success';
+  return 'neutral';
+}
