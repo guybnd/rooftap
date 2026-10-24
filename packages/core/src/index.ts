@@ -117,6 +117,8 @@ export * from './modules/costs/use-money-view';
 export * from './modules/costs/cost-form';
 export * from './modules/costs/cost-dates';
 export * from './modules/costs/use-costs-overview';
+export * from './modules/costs/recent-spend';
+export * from './modules/costs/use-recent-spend';
 export * from './modules/documents/document-folders';
 export * from './modules/documents/document-list-view';
 export * from './modules/documents/use-document-list-view';

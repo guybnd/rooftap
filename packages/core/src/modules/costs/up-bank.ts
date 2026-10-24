@@ -17,6 +17,7 @@
 
 import type { CostCadence, CostCategory, CostItem } from '../../types';
 import type { LedgerRow } from './cost-month';
+import type { DaySpend } from './recent-spend';
 import { CATEGORY_META } from './costs';
 
 export const UP_API_BASE = 'https://api.up.com.au/api/v1';
@@ -170,6 +171,8 @@ export interface UpOverview extends UpSpending {
   actualsSince?: string | null;
   /** Payments per shop and month over the last 13 months, for costMonth. Missing before the costs redesign. */
   ledger?: LedgerRow[];
+  /** Money out per local day over the last RECENT_DAYS_BACK days, for the recent spending strip. Missing before 'costs.recent-spend'. */
+  days?: DaySpend[];
 }
 
 /** What one cost line was really paid in one month, from the bank. */
@@ -240,6 +243,27 @@ export function ledgerRows(rows: readonly BankTransaction[], tzOffset = 0): Ledg
       cur.count += 1;
     } else cur.inCents += r.amount_cents;
     if (r.occurred_at > cur.lastAt) cur.lastAt = r.occurred_at;
+    out.set(key, cur);
+  }
+  return Array.from(out.values());
+}
+
+/**
+ * Money out per local day and cost line since `since` (an instant), for the
+ * Costs recent spending strip (recent-spend.ts). Counted once per bank
+ * transaction; transfers and hidden payments stay out.
+ */
+export function dayRows(rows: readonly BankTransaction[], since: string, tzOffset = 0): DaySpend[] {
+  const seen = new Set<string>();
+  const out = new Map<string, DaySpend>();
+  for (const r of rows) {
+    if (r.is_transfer || r.hidden || r.amount_cents >= 0 || r.occurred_at < since || seen.has(r.external_id)) continue;
+    seen.add(r.external_id);
+    const day = new Date(Date.parse(r.occurred_at) - tzOffset * 60_000).toISOString().slice(0, 10);
+    const costItemId = r.cost_item_id ?? null;
+    const key = `${day}|${costItemId ?? ''}`;
+    const cur = out.get(key) ?? { day, costItemId, outCents: 0 };
+    cur.outCents += -r.amount_cents;
     out.set(key, cur);
   }
   return Array.from(out.values());
@@ -1166,11 +1190,18 @@ export function createUpBankApi(call: UpBankCall) {
     setCostLink: (costItemId: string, rule: BankLinkRule) =>
       call<CostBankDetail>(`/api/up-bank/links/${encodeURIComponent(costItemId)}`, { method: 'PUT', body: rule }),
     transactions: (
-      input: { before?: string | null; hidden?: boolean; scope?: Exclude<BankScope, 'all'>; month?: string } = {},
+      input: {
+        before?: string | null;
+        hidden?: boolean;
+        scope?: Exclude<BankScope, 'all'>;
+        month?: string;
+        /** Any stretch up to 32 days, instead of a month. */
+        range?: { from: Date; to: Date };
+      } = {},
     ) => {
       const q = new URLSearchParams();
       if (input.scope) q.set('scope', input.scope);
-      const range = input.month ? monthRange(input.month) : null;
+      const range = input.range ?? (input.month ? monthRange(input.month) : null);
       if (range) {
         q.set('from', range.from.toISOString());
         q.set('to', range.to.toISOString());

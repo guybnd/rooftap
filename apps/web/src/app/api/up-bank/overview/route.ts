@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { actualsSinceOf, costActuals, costBankLinks, ledgerRows, summariseAccounts, summariseSpending, type UpOverview } from "@homeup/core";
+import { RECENT_DAYS_BACK, actualsSinceOf, costActuals, costBankLinks, dayRows, ledgerRows, summariseAccounts, summariseSpending, type UpOverview } from "@homeup/core";
 import { bankLinkRows, upErrorResponse, upRequest, visibleBankAccounts, visibleBankTransactions } from "@/lib/up-bank";
 
 // Up Bank connector: what the Costs screen shows. One month of spending (the
@@ -61,6 +61,7 @@ export async function GET(request: Request) {
       actuals: costActuals(recentRows, tz),
       actualsSince: actualsSinceOf(recentRows, tz),
       ledger: ledgerRows(recentRows, tz),
+      days: dayRows(recentRows, new Date(now - RECENT_DAYS_BACK * 86_400_000).toISOString(), tz),
       ...(scope ? { scope } : {}),
     };
     return NextResponse.json(body);

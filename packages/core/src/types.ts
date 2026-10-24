@@ -214,6 +214,8 @@ export interface UserSettings {
   money_insight_marks?: Record<string, string> | null;
   /** Money summaries this person asked the Assistant for (money-summary.ts). Missing before 20261023040000_money_summaries. */
   money_summaries?: { weekly?: boolean; monthly?: boolean } | null;
+  /** Recent spending windows on the Costs Latest card (recent-spend.ts). Missing before 20261024050000_costs_recent_spend. */
+  costs_recent_spend?: { windows?: number[]; skipBills?: boolean; show?: boolean } | null;
   /** FLUX-65: Groceries aisle display order (synced replacement for localStorage). */
   grocery_aisle_order: string[] | null;
   /** FLUX-65: Groceries per-aisle default unit (aisle id/custom name -> unit string). */

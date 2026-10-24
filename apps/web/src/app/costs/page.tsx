@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useDataCache } from '@/lib/data-cache';
 import { createClient } from '@/lib/supabase/client';
 import { use$ } from '@legendapp/state/react';
-import type { CostItem, CostCategory, Apartment, CostInsightMarks, MoneySummaryPrefs, SubscriptionLine } from '@homeup/core';
+import type { CostItem, CostCategory, Apartment, CostInsightMarks, MoneySummaryPrefs, RecentSpendPrefs, SubscriptionLine } from '@homeup/core';
 import { toast } from 'sonner';
 import { ArrowLeft, X } from 'lucide-react';
 import {
@@ -21,7 +21,7 @@ import {
   setupCostLine,
   type NewCostLine,
 } from '@homeup/core';
-import { deleteCostReminders, costItems$, setupItems$, apartments$, useReconnectSync, useStoreHelpers, useStoreLoaded } from '@homeup/core';
+import { deleteCostReminders, costItems$, setupItems$, apartments$, useReconnectSync, useRecentSpendPrefs, useStoreHelpers, useStoreLoaded } from '@homeup/core';
 import { LeadingTile } from '@/components/ui/leading-tile';
 import { BottomSheet } from '@/components/ui/bottom-sheet';
 import { Input } from '@/components/ui/input';
@@ -161,6 +161,10 @@ export default function CostsPage() {
     },
     [persistSettings],
   );
+  // Recent spending on the Latest card (recent-spend.ts): which windows show and whether bills count.
+  const canSaveRecent = modules.server('costs.recent-spend');
+  const saveRecent = useCallback((next: RecentSpendPrefs) => void persistSettings({ costs_recent_spend: next }), [persistSettings]);
+  const recentSpend = useRecentSpendPrefs(userSettings?.costs_recent_spend, canSaveRecent ? saveRecent : null);
   const remindToCancel = useCallback(
     async (sub: SubscriptionLine) => {
       if (!group?.id || !sub.item) return;
@@ -337,6 +341,7 @@ export default function CostsPage() {
           onPatchItem={(item, patch) => patchRow(item.id, patch)}
           footer={suggestions}
           wide={wide}
+          recent={recentSpend}
           summaries={summariesOn ? { prefs: summaryPrefs, onChange: modules.server('costs.money-summaries') ? saveSummaryPrefs : null } : null}
           insights={insightsOn ? { marks: insightMarks, onMarks: updateMarks, onRemind: modules.feature('insights.reminders') ? remindToCancel : null } : null}
         />

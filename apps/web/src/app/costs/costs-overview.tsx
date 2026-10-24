@@ -61,6 +61,12 @@ import {
   useSeenInsights,
   hasUnseenInsights,
   markInsightsSeen,
+  useRecentSpend,
+  toggleRecentWindow,
+  recentWindowLabel,
+  RECENT_WINDOW_CHOICES,
+  DEFAULT_RECENT_SPEND,
+  type RecentSpendPrefs,
   type SpendingTransaction,
 } from '@homeup/core';
 import { BottomSheet } from '@/components/ui/bottom-sheet';
@@ -71,7 +77,7 @@ import { cn } from '@/lib/utils';
 import { CategoryGlyph } from './category-glyph';
 import { CostInsightsCard, type CostInsightsCardProps } from './cost-insights';
 import { ToSortCard } from './to-sort-card';
-import { CostsGlance, LatestRows, latestCategory, type GlancePage } from './costs-glance';
+import { CostsGlance, LatestPage, latestCategory, type GlancePage } from './costs-glance';
 import { TransactionSheet } from './money-view';
 import { CategoryPickerSheet, type CategoryPick } from './category-picker';
 import { CostRowShell, CostRowSheet, type CostRowSheetState } from './cost-row-sheet';
@@ -108,6 +114,8 @@ export interface CostsOverviewProps {
   insights?: Pick<CostInsightsCardProps, 'marks' | 'onMarks' | 'onRemind'> | null;
   /** Assistant summaries: "Summarise <month>" in the ⋯ menu, and the weekly and monthly switches when the server keeps them. Null with the Assistant off. */
   summaries?: { prefs: MoneySummaryPrefs; onChange: ((next: MoneySummaryPrefs) => void) | null } | null;
+  /** Recent spending on the Latest card: the person's windows and whether bills count. */
+  recent?: { prefs: RecentSpendPrefs; onChange: (next: RecentSpendPrefs) => void };
 }
 
 // Before the bank payments land: shapes where the total, chart and
@@ -196,6 +204,8 @@ export function CostsOverview(props: CostsOverviewProps) {
   const seenInsights = useSeenInsights();
   const lineById = useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
   const latest = (data?.recent ?? []).slice(0, 3);
+  const recentPrefs = props.recent?.prefs ?? DEFAULT_RECENT_SPEND;
+  const recent = useRecentSpend(upBankApi, items, recentPrefs);
   const movePayment = (t: SpendingTransaction, to: CostCategory, wholeShop: boolean) => {
     moveBankPayment(upBankApi, t, to, wholeShop)
       .then((message) => {
@@ -217,8 +227,22 @@ export function CostsOverview(props: CostsOverviewProps) {
     });
   };
   const glance: GlancePage[] = [];
-  if (month.when === 'current' && latest.length) {
-    glance.push({ key: 'latest', label: 'Latest', node: <LatestRows payments={latest} lineById={lineById} onOpen={() => onOpenPayments?.()} onMove={quickMove ? pickPayment : null} /> });
+  if (month.when === 'current' && (latest.length || recent.windows.length)) {
+    glance.push({
+      key: 'latest',
+      label: 'Latest',
+      node: (
+        <LatestPage
+          recent={recent}
+          latest={latest}
+          lineById={lineById}
+          onOpen={() => onOpenPayments?.()}
+          onMove={quickMove ? pickPayment : null}
+          onSettings={() => setMoreOpen(true)}
+          skipBills={recentPrefs.skipBills}
+        />
+      ),
+    });
   }
   if (props.insights && month.when === 'current' && insightKeys.length) {
     glance.push({
@@ -441,6 +465,44 @@ export function CostsOverview(props: CostsOverviewProps) {
             {props.summaries ? <MenuRow Icon={Sparkles} label={`Summarise ${name}`} divided={!!onOpenPayments} onClick={() => ask(costsSummaryAsk(name))} /> : null}
             <MenuRow Icon={MessageSquare} label="Ask the assistant" divided={!!onOpenPayments || !!props.summaries} onClick={() => ask(`Help me make sense of my costs in ${name}.`)} />
           </div>
+          {props.recent && data?.days ? (
+            <>
+              <h3 className={cn(LABEL, 'px-1 pt-3')}>Recent spending</h3>
+              <div className="rounded-2xl bg-muted/40 px-1">
+                <div className="flex flex-wrap gap-2 px-2 py-3" role="group" aria-label="Windows to show, up to three">
+                  {RECENT_WINDOW_CHOICES.map((w) => {
+                    const on = recentPrefs.windows.includes(w);
+                    return (
+                      <button
+                        key={w}
+                        type="button"
+                        role="checkbox"
+                        aria-checked={on}
+                        onClick={() => props.recent!.onChange(toggleRecentWindow(recentPrefs, w))}
+                        className={cn('rounded-full border px-3 py-1.5 text-sm', on ? 'border-primary bg-primary/15 text-foreground' : 'border-border text-muted-foreground hover:text-foreground')}
+                      >
+                        {recentWindowLabel(w)}
+                      </button>
+                    );
+                  })}
+                </div>
+                <SwitchRow
+                  label="Leave out bills"
+                  a11y="Leave out bills"
+                  hint="Rent and other regular bills don't count, so a rent day doesn't swamp the week."
+                  checked={recentPrefs.skipBills}
+                  onChange={(on) => props.recent!.onChange({ ...recentPrefs, skipBills: on })}
+                />
+                <SwitchRow
+                  label="Show recent spending"
+                  a11y="Show recent spending"
+                  hint="Off keeps just the last few payments."
+                  checked={recentPrefs.show}
+                  onChange={(on) => props.recent!.onChange({ ...recentPrefs, show: on })}
+                />
+              </div>
+            </>
+          ) : null}
           {props.summaries?.onChange ? (
             <>
               <h3 className={cn(LABEL, 'px-1 pt-3')}>Summaries in the Household chat</h3>
@@ -877,14 +939,14 @@ function ShopSheet({
   );
 }
 
-function SwitchRow({ label, hint, checked, onChange }: { label: string; hint: string; checked: boolean; onChange: (on: boolean) => void }) {
+function SwitchRow({ label, hint, checked, onChange, a11y }: { label: string; hint: string; checked: boolean; onChange: (on: boolean) => void; a11y?: string }) {
   return (
     <div className="flex min-h-12 items-center gap-3 rounded-xl px-2 py-2">
       <div className="min-w-0 flex-1">
         <div className="text-base font-medium text-foreground">{label}</div>
         <div className="text-xs text-muted-foreground">{hint}</div>
       </div>
-      <Switch checked={checked} onChange={onChange} label={`${label} summary`} />
+      <Switch checked={checked} onChange={onChange} label={a11y ?? `${label} summary`} />
     </div>
   );
 }

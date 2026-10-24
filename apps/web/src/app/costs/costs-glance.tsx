@@ -10,7 +10,7 @@
 // category. Phone twin: apps/mobile/src/features/costs/costs-glance.tsx.
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { costCategoryFromUp, formatMoney, timeAgo, type CostCategory, type CostItem, type SpendingTransaction } from '@homeup/core';
+import { costCategoryFromUp, formatMoney, recentDayLabel, recentVerdictText, timeAgo, type CostCategory, type CostItem, type RecentBar, type RecentSpendState, type SpendingTransaction } from '@homeup/core';
 import { tick } from '@/lib/haptics';
 import { cn } from '@/lib/utils';
 import { CategoryGlyph } from './category-glyph';
@@ -157,6 +157,125 @@ export function LatestRows({
           </button>
         );
       })}
+    </div>
+  );
+}
+
+const VERDICT_TONE = { under: 'text-success', usual: 'text-muted-foreground', over: 'text-warning' } as const;
+
+/**
+ * The Latest page with recent spending on top (Guy, 2026-10-24): a box per
+ * window (today, 3 days, 7 days by default), each against a usual stretch.
+ * Clicking a box opens it: the last two weeks as bars with the window lit,
+ * and that stretch's payments in a list that scrolls. Clicking it again goes
+ * back to the last few payments. Phone twin: costs-glance.tsx LatestPage.
+ */
+export function LatestPage({
+  recent,
+  latest,
+  lineById,
+  onOpen,
+  onMove,
+  onSettings,
+  skipBills,
+}: {
+  recent: RecentSpendState;
+  latest: readonly SpendingTransaction[];
+  lineById: ReadonlyMap<string, CostItem>;
+  onOpen: () => void;
+  onMove?: ((t: SpendingTransaction) => void) | null;
+  onSettings: () => void;
+  skipBills: boolean;
+}) {
+  const { windows, open, toggle, bars, payments, error } = recent;
+  return (
+    <div>
+      {windows.length ? (
+        <div role="tablist" aria-label="Recent spending" className="grid border-b border-border/60" style={{ gridTemplateColumns: `repeat(${windows.length}, minmax(0, 1fr))` }}>
+          {windows.map((w, n) => {
+            const verdict = recentVerdictText(w);
+            const on = open === w.days;
+            return (
+              <button
+                key={w.days}
+                type="button"
+                role="tab"
+                aria-selected={on}
+                onClick={() => {
+                  tick();
+                  toggle(w.days);
+                }}
+                className={cn('flex min-w-0 flex-col gap-0.5 px-3 py-2.5 text-left hover:bg-muted/40', n > 0 && 'border-l border-border/60', on && 'bg-muted/50')}
+              >
+                <span className={cn(LABEL, on && 'text-foreground')}>{w.label}</span>
+                <span className="text-lg font-semibold tabular-nums text-foreground">{formatMoney(w.cents)}</span>
+                {verdict ? <span className={cn('truncate text-[11px] tabular-nums', VERDICT_TONE[w.verdict!])}>{verdict}</span> : null}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+      {open != null && bars ? (
+        <div>
+          <RecentBars bars={bars} usualCents={windows.find((w) => w.days === open)?.usualCents ?? null} days={open} />
+          {payments ? (
+            payments.length ? (
+              <div className="max-h-[312px] overflow-y-auto border-t border-border/60">
+                <LatestRows payments={payments} lineById={lineById} onOpen={onOpen} onMove={onMove} />
+              </div>
+            ) : (
+              <p className="border-t border-border/60 px-4 py-4 text-sm text-muted-foreground">Nothing went out.</p>
+            )
+          ) : (
+            <p className="border-t border-border/60 px-4 py-4 text-sm text-muted-foreground">{error ?? 'Reading payments'}</p>
+          )}
+          <div className="flex items-center justify-between border-t border-border/60 px-4 py-2.5">
+            <span className="text-xs tabular-nums text-muted-foreground">
+              {[payments ? `${payments.length} ${payments.length === 1 ? 'payment' : 'payments'}` : null, skipBills ? 'Bills left out' : null].filter(Boolean).join(' · ')}
+            </span>
+            <button type="button" onClick={onSettings} className="text-xs font-medium text-primary hover:underline">
+              Change
+            </button>
+          </div>
+        </div>
+      ) : latest.length ? (
+        <LatestRows payments={latest} lineById={lineById} onOpen={onOpen} onMove={onMove} />
+      ) : null}
+    </div>
+  );
+}
+
+const BARS_HEIGHT = 72;
+
+/** A bar per day, the open window's days lit, a dashed line at a usual day. */
+function RecentBars({ bars, usualCents, days }: { bars: readonly RecentBar[]; usualCents: number | null; days: number }) {
+  const usualDay = usualCents != null ? usualCents / days : null;
+  const top = Math.max(1, ...bars.map((b) => b.cents), usualDay ?? 0);
+  const total = bars.filter((b) => b.lit).reduce((s, b) => s + b.cents, 0);
+  return (
+    <div className="space-y-1 px-4 pb-2 pt-3" role="img" aria-label={`${formatMoney(total)} over the last ${days === 1 ? 'day' : `${days} days`}, a bar per day`}>
+      <div className="relative flex items-end gap-[3px]" style={{ height: BARS_HEIGHT }}>
+        {bars.map((b) => (
+          <span
+            key={b.day}
+            title={`${recentDayLabel(b.day)}: ${formatMoney(b.cents)}`}
+            className={cn('flex-1 rounded-[3px]', b.lit ? 'bg-foreground' : 'bg-muted')}
+            style={{ height: Math.max(2, Math.round((b.cents / top) * BARS_HEIGHT)) }}
+          />
+        ))}
+        {usualDay ? (
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 border-t border-dashed border-muted-foreground/70"
+            style={{ bottom: Math.round((usualDay / top) * BARS_HEIGHT) }}
+          />
+        ) : null}
+      </div>
+      <div className="flex justify-between text-[10px] text-muted-foreground">
+        <span>{recentDayLabel(bars[0]?.day)}</span>
+        {usualDay ? <span>Dashed line: a usual day</span> : null}
+        <span>Today</span>
+      </div>
     </div>
   );
 }

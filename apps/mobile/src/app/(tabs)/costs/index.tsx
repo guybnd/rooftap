@@ -33,6 +33,8 @@ import {
   type Apartment,
   type CostInsightMarks,
   type MoneySummaryPrefs,
+  type RecentSpendPrefs,
+  useRecentSpendPrefs,
   type SubscriptionLine,
   type CostCategory,
   type CostItem,
@@ -172,6 +174,10 @@ function CostsScreenBody() {
     },
     [persistSettings],
   );
+  // Recent spending on the Latest card (recent-spend.ts): which windows show and whether bills count.
+  const canSaveRecent = modules.server('costs.recent-spend');
+  const saveRecent = React.useCallback((next: RecentSpendPrefs) => void persistSettings({ costs_recent_spend: next }), [persistSettings]);
+  const recentSpend = useRecentSpendPrefs(userSettings?.costs_recent_spend, canSaveRecent ? saveRecent : null);
   const remindToCancel = React.useCallback(
     async (sub: SubscriptionLine) => {
       if (!group?.id || !sub.item) return;
@@ -339,6 +345,7 @@ function CostsScreenBody() {
               onSetAmount={(item, cents) => patchRow(item.id, { amount: cents })}
               onPatchItem={(item, patch) => patchRow(item.id, patch)}
               footer={suggestions}
+              recent={recentSpend}
               summaries={summariesOn ? { prefs: summaryPrefs, onChange: modules.server('costs.money-summaries') ? saveSummaryPrefs : null } : null}
               insights={insightsOn ? { marks: insightMarks, onMarks: updateMarks, onRemind: modules.feature('insights.reminders') ? remindToCancel : null } : null}
             />

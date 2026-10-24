@@ -97,6 +97,10 @@ export const SERVER_FEATURES = {
     minSchema: '20261023040000_money_summaries',
     label: 'weekly and monthly money summaries from the assistant',
   },
+  'costs.recent-spend': {
+    minSchema: '20261024050000_costs_recent_spend',
+    label: 'keeping your recent spending windows on the Costs card',
+  },
   'costs.quick-move': {
     minSchema: '20261023080000_payment_cost_category',
     label: 'moving a shop or one payment to another Costs category',

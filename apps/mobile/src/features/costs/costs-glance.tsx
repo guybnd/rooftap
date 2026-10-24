@@ -9,7 +9,7 @@
 import * as React from 'react';
 import { Pressable, ScrollView, View, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { Text, cn, haptics } from '@homeup/ui';
-import { costCategoryFromUp, formatMoney, timeAgo, type CostCategory, type CostItem, type SpendingTransaction } from '@homeup/core';
+import { costCategoryFromUp, formatMoney, recentDayLabel, recentVerdictText, timeAgo, type CostCategory, type CostItem, type RecentSpendState, type SpendingTransaction } from '@homeup/core';
 import { CategoryChip } from './cost-card';
 
 const LABEL = 'text-micro-label uppercase text-muted-foreground';
@@ -153,6 +153,130 @@ export function LatestRows({
           </Pressable>
         );
       })}
+    </View>
+  );
+}
+
+const VERDICT_TONE = { under: 'text-success', usual: 'text-muted-foreground', over: 'text-warning' } as const;
+
+/**
+ * The Latest page with recent spending on top (Guy, 2026-10-24): a box per
+ * window (today, 3 days, 7 days by default), each against a usual stretch.
+ * Tapping a box opens it: the last two weeks as bars with the window lit,
+ * and that stretch's payments in a list that scrolls. Tapping it again goes
+ * back to the last few payments. Web twin: costs-glance.tsx RecentStrip.
+ */
+export function LatestPage({
+  recent,
+  latest,
+  lineById,
+  onOpen,
+  onHold,
+  onSettings,
+  skipBills,
+}: {
+  recent: RecentSpendState;
+  latest: readonly SpendingTransaction[];
+  lineById: ReadonlyMap<string, CostItem>;
+  onOpen: () => void;
+  onHold?: ((t: SpendingTransaction) => void) | null;
+  onSettings: () => void;
+  skipBills: boolean;
+}) {
+  const { windows, open, toggle, bars, payments, error } = recent;
+  return (
+    <View>
+      {windows.length ? (
+        <View className="flex-row border-b border-border/60" accessibilityRole="tablist">
+          {windows.map((w, n) => {
+            const verdict = recentVerdictText(w);
+            const on = open === w.days;
+            return (
+              <Pressable
+                key={w.days}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: on }}
+                accessibilityLabel={`${w.label}, ${formatMoney(w.cents)}${verdict ? `, ${verdict}` : ''}`}
+                onPress={() => {
+                  haptics.select();
+                  toggle(w.days);
+                }}
+                className={cn('flex-1 gap-0.5 px-3 py-2.5', n > 0 && 'border-l border-border/60', on && 'bg-muted/50')}
+              >
+                <Text className={cn(LABEL, on && 'text-foreground')}>{w.label}</Text>
+                <Text className="text-lg font-semibold text-foreground" style={TABULAR}>
+                  {formatMoney(w.cents)}
+                </Text>
+                {verdict ? (
+                  <Text numberOfLines={1} className={cn('text-[11px]', VERDICT_TONE[w.verdict!])} style={TABULAR}>
+                    {verdict}
+                  </Text>
+                ) : null}
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : null}
+      {open != null && bars ? (
+        <View>
+          <RecentBars bars={bars} usualCents={windows.find((w) => w.days === open)?.usualCents ?? null} days={open} />
+          {payments ? (
+            payments.length ? (
+              <ScrollView style={{ maxHeight: 312 }} nestedScrollEnabled className="border-t border-border/60">
+                <LatestRows payments={payments} lineById={lineById} onOpen={onOpen} onHold={onHold} />
+              </ScrollView>
+            ) : (
+              <Text className="border-t border-border/60 px-4 py-4 text-sm text-muted-foreground">Nothing went out.</Text>
+            )
+          ) : (
+            <Text className="border-t border-border/60 px-4 py-4 text-sm text-muted-foreground">{error ?? 'Reading payments'}</Text>
+          )}
+          <View className="flex-row items-center justify-between border-t border-border/60 px-4 py-2.5">
+            <Text className="text-xs text-muted-foreground" style={TABULAR}>
+              {[payments ? `${payments.length} ${payments.length === 1 ? 'payment' : 'payments'}` : null, skipBills ? 'Bills left out' : null].filter(Boolean).join(' · ')}
+            </Text>
+            <Pressable accessibilityRole="button" onPress={onSettings} hitSlop={8}>
+              <Text className="text-xs font-medium text-primary">Change</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : latest.length ? (
+        <LatestRows payments={latest} lineById={lineById} onOpen={onOpen} onHold={onHold} />
+      ) : null}
+    </View>
+  );
+}
+
+const BARS_HEIGHT = 72;
+
+/** A bar per day, the open window's days lit, a dashed line at a usual day. */
+function RecentBars({ bars, usualCents, days }: { bars: readonly { day: string; cents: number; lit: boolean }[]; usualCents: number | null; days: number }) {
+  const usualDay = usualCents != null ? usualCents / days : null;
+  const top = Math.max(1, ...bars.map((b) => b.cents), usualDay ?? 0);
+  const total = bars.filter((b) => b.lit).reduce((s, b) => s + b.cents, 0);
+  return (
+    <View className="gap-1 px-4 pb-2 pt-3" accessible accessibilityLabel={`${formatMoney(total)} over the last ${days === 1 ? 'day' : `${days} days`}, a bar per day`}>
+      <View style={{ height: BARS_HEIGHT }} className="flex-row items-end gap-[3px]">
+        {bars.map((b) => (
+          <View
+            key={b.day}
+            className={cn('flex-1 rounded-[3px]', b.lit ? 'bg-foreground' : 'bg-muted')}
+            style={{ height: Math.max(2, Math.round((b.cents / top) * BARS_HEIGHT)) }}
+          />
+        ))}
+        {usualDay ? (
+          <View
+            pointerEvents="none"
+            className="absolute left-0 right-0 border-t border-dashed border-muted-foreground/70"
+            style={{ bottom: Math.round((usualDay / top) * BARS_HEIGHT) }}
+          />
+        ) : null}
+      </View>
+      <View className="flex-row justify-between">
+        <Text className="text-[10px] text-muted-foreground">{recentDayLabel(bars[0]?.day)}</Text>
+        {usualDay ? <Text className="text-[10px] text-muted-foreground">Dashed line: a usual day</Text> : null}
+        <Text className="text-[10px] text-muted-foreground">Today</Text>
+      </View>
     </View>
   );
 }
