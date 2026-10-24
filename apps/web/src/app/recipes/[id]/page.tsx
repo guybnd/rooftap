@@ -468,6 +468,17 @@ export default function RecipeDetailPage() {
       )}
       </div>
 
+      {/* The way into To try: quiet, under the recipe; the card above takes it back out. */}
+      {toTryOn && !recipe.to_try && (
+        <button
+          type="button"
+          onClick={() => patchRecipe(recipe.id, { to_try: true })}
+          className="inline-flex min-h-11 items-center text-sm font-medium text-primary underline underline-offset-2 hover:text-primary/80"
+        >
+          Move to To try
+        </button>
+      )}
+
       <RecipeFormSheet
         key={isEditOpen ? 'edit-open' : 'edit-closed'}
         isOpen={isEditOpen}

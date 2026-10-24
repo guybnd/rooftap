@@ -44,6 +44,7 @@ export function RecipeRow({
   onNavigate,
   onEdit,
   onDelete,
+  onToggleToTry,
 }: {
   recipe: Recipe;
   ingredients: RecipeIngredient[];
@@ -57,6 +58,8 @@ export function RecipeRow({
   /** The row menu's Edit and Delete; omitted ones are left out. */
   onEdit?: () => void;
   onDelete?: () => void;
+  /** The row menu's Move to To try, or Keep in recipes for an idea (recipes.to-try). */
+  onToggleToTry?: () => void;
 }) {
   const meta = methodMeta(recipe.method);
   const { have, total } = recipeHaveCount(ingredients, groceryItems, staples);
@@ -84,6 +87,13 @@ export function RecipeRow({
       },
       { id: 'copy', label: 'Copy link', group: 'share', icon: 'copy', run: () => void navigator.clipboard?.writeText(new URL(href, window.location.href).toString()) },
       onEdit && { id: 'edit', label: 'Edit recipe', group: 'edit', icon: 'edit', run: onEdit },
+      onToggleToTry && {
+        id: 'to-try',
+        label: recipe.to_try ? 'Keep in recipes' : 'Move to To try',
+        group: 'edit',
+        icon: 'move',
+        run: onToggleToTry,
+      },
       onDelete && { id: 'delete', label: 'Delete', group: 'danger', icon: 'delete', danger: true, run: onDelete },
     ],
   }));

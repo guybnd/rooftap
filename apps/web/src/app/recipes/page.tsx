@@ -14,8 +14,6 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { use$ } from '@legendapp/state/react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Plus, ChefHat, Camera, ImagePlus, Loader2 } from 'lucide-react';
 import { useDataCache } from '@/lib/data-cache';
@@ -42,7 +40,6 @@ import { ScanMatchSheet } from './scan-match-sheet';
 import { RecipeRow } from './recipe-row';
 import { OfflineHint } from '@/components/offline-hint';
 import { cn } from '@/lib/utils';
-import { navLinkClickHandler } from '@/lib/view-transitions';
 import { useWideLayout } from '@/lib/desktop-layout';
 import { WideList } from '@/components/wide-list';
 import { SegmentedControl } from '@/components/ui/segmented-control';
@@ -77,7 +74,7 @@ export default function RecipesPage() {
   useReconnectSync(ings$);
   useReconnectSync(items$);
 
-  const { writeRow: writeRecipe, softDeleteRow: softDeleteRecipe } = useStoreHelpers(recs$, currentUserId);
+  const { writeRow: writeRecipe, patchRow: patchRecipe, softDeleteRow: softDeleteRecipe } = useStoreHelpers(recs$, currentUserId);
   const { writeRow: writeIngredient, patchRow: patchIngredient, softDeleteRow: softDeleteIngredient } =
     useStoreHelpers(ings$, currentUserId);
   const { writeRow: writeGrocery, patchRow: patchGrocery } = useStoreHelpers(items$, currentUserId);
@@ -93,7 +90,10 @@ export default function RecipesPage() {
   // Assistant, kept out of the book until someone keeps one).
   const { recipes, drafts, toTry } = useMemo(() => splitRecipeList(allRecipes), [allRecipes]);
   const toTryOn = modules.server('recipes.to-try');
-  const router = useRouter();
+  // The To try chip swaps the list for the ideas; search and filters apply to either.
+  const [toTryPicked, setToTryOnly] = useState(false);
+  const toTryOnly = toTryOn && toTryPicked;
+  const shown = toTryOnly ? toTry : recipes;
   const allIngredients = use$(() =>
     Object.values(ings$.get() ?? {}).filter((i): i is RecipeIngredient => !!i && !i.deleted),
   );
@@ -114,9 +114,9 @@ export default function RecipesPage() {
   // Cuisine filter options — union across all recipes.
   const cuisineOptions = useMemo(() => {
     const set = new Set<string>();
-    for (const r of recipes) for (const c of recipeCuisines(r)) set.add(c);
+    for (const r of shown) for (const c of recipeCuisines(r)) set.add(c);
     return [...set].sort((a, b) => a.localeCompare(b));
-  }, [recipes]);
+  }, [shown]);
 
   const [search, setSearch] = useState('');
   const wide = useWideLayout();
@@ -132,7 +132,7 @@ export default function RecipesPage() {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const searched = useFuzzySearch(recipes, search, ['title']);
+  const searched = useFuzzySearch(shown, search, ['title']);
 
   const filtered = useMemo(
     () =>
@@ -400,38 +400,28 @@ export default function RecipesPage() {
         </div>
       )}
 
-      {/* To try strip: the same neutral card as the drafts strip. Each chip
-          opens the recipe, where Keep moves it into the book. */}
-      {toTryOn && toTry.length > 0 && (
-        <div className="rounded-3xl border border-border/60 bg-card p-4 shadow-[var(--card-shadow)]">
-          <p className="mb-2.5 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-            To try <span className="tabular-nums">{toTry.length}</span>
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {toTry.map((r) => (
-              <Link
-                key={r.id}
-                href={`/recipes/${r.id}`}
-                onClick={navLinkClickHandler('descend', router, `/recipes/${r.id}`)}
-                className={cn(CHIP, 'border-border bg-muted text-foreground hover:bg-accent')}
-              >
-                {r.title || 'Untitled recipe'}
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Search */}
-      {recipes.length > 0 && (
+      {shown.length > 0 && (
         <SectionSearchBar value={search} onChange={setSearch} placeholder="Search recipes…" className="max-w-none" />
       )}
 
       {/* Filters */}
-      {recipes.length > 0 && (
+      {(recipes.length > 0 || toTry.length > 0) && (
         // Filter chips are chrome: words only, no method emoji (the emoji is
         // a recipe's own glyph, shown on its row). Active = coral (H2).
         <div className="flex flex-wrap items-center gap-2">
+          {/* To try: ideas kept out of the book (often saved by the Assistant).
+              Always offered with a count, so the list is easy to find. */}
+          {toTryOn && (
+            <button
+              type="button"
+              aria-pressed={toTryOnly}
+              onClick={() => setToTryOnly((v) => !v)}
+              className={cn(CHIP, toTryOnly ? CHIP_ON : CHIP_OFF)}
+            >
+              To try <span className="tabular-nums">{toTry.length}</span>
+            </button>
+          )}
           {groceriesLinked && (
             <button
               type="button"
@@ -474,7 +464,11 @@ export default function RecipesPage() {
       )}
 
       {/* List */}
-      {recipes.length === 0 ? (
+      {toTryOnly && toTry.length === 0 ? (
+        <p className="px-1 py-8 text-center text-sm text-muted-foreground">
+          Nothing to try yet. Ask the Assistant to save a recipe you want to try, or open a recipe and choose Move to To try.
+        </p>
+      ) : !toTryOnly && recipes.length === 0 ? (
         // Hearth §11 empty state, mirroring mobile's EmptyState: one headline,
         // one line, one CTA (scan) plus New recipe as a quiet text link.
         <div className="flex flex-col items-center gap-3 px-6 py-12 text-center">
@@ -522,6 +516,7 @@ export default function RecipesPage() {
               staples={staples}
               onEdit={() => openReview(r)}
               onDelete={() => void deleteRecipe(r)}
+              onToggleToTry={toTryOn ? () => patchRecipe(r.id, { to_try: !r.to_try }) : undefined}
             />
           ))}
         </WideList>

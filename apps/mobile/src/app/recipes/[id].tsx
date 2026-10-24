@@ -466,6 +466,20 @@ export default function RecipeDetailScreen() {
           />
         )}
 
+        {/* The way into To try: quiet, under the recipe; the card above takes it back out. */}
+        {toTryOn && !recipe.to_try && (
+          <Pressable
+            onPress={() => {
+              haptics.commit();
+              patchRecipe(recipe.id, { to_try: true });
+            }}
+            accessibilityRole="button"
+            className="min-h-11 justify-center self-start"
+          >
+            <Text className="text-sm font-medium text-primary underline">Move to To try</Text>
+          </Pressable>
+        )}
+
         <RecipeFormSheet
           key={isEditOpen ? 'edit-open' : 'edit-closed'}
           open={isEditOpen}

@@ -113,6 +113,10 @@ export default function RecipesSectionScreen() {
   // Assistant, kept out of the book until someone keeps one).
   const { recipes, drafts, toTry } = React.useMemo(() => splitRecipeList(allRecipes), [allRecipes]);
   const toTryOn = modules.server('recipes.to-try');
+  // The To try chip swaps the list for the ideas; search and filters apply to either.
+  const [toTryPicked, setToTryOnly] = React.useState(false);
+  const toTryOnly = toTryOn && toTryPicked;
+  const shown = toTryOnly ? toTry : recipes;
   const allIngredients = use$(() =>
     Object.values(ings$.get() ?? {}).filter((i): i is RecipeIngredient => !!i && !i.deleted)
   );
@@ -133,9 +137,9 @@ export default function RecipesSectionScreen() {
   // Cuisine filter options — union across all recipes.
   const cuisineOptions = React.useMemo(() => {
     const set = new Set<string>();
-    for (const r of recipes) for (const c of recipeCuisines(r)) set.add(c);
+    for (const r of shown) for (const c of recipeCuisines(r)) set.add(c);
     return [...set].sort((a, b) => a.localeCompare(b));
-  }, [recipes]);
+  }, [shown]);
 
   const [search, setSearch] = React.useState('');
   const [selectedCuisines, setSelectedCuisines] = React.useState<Set<string>>(new Set());
@@ -153,7 +157,7 @@ export default function RecipesSectionScreen() {
   const [sheetOpen, setSheetOpen] = React.useState(false);
   const [scanning, setScanning] = React.useState(false);
 
-  const searched = useFuzzySearch(recipes, search, ['title']);
+  const searched = useFuzzySearch(shown, search, ['title']);
 
   const filtered = React.useMemo(
     () =>
@@ -452,37 +456,32 @@ export default function RecipesSectionScreen() {
         </Card>
       )}
 
-      {/* To try strip: the same neutral card as the drafts strip. Each chip
-          opens the recipe, where Keep moves it into the book. */}
-      {toTryOn && toTry.length > 0 && (
-        <Card className="gap-2.5 rounded-3xl px-4">
-          <Text className="text-micro-label uppercase text-muted-foreground">
-            To try <Text style={{ fontVariant: ['tabular-nums'] }}>{toTry.length}</Text>
-          </Text>
-          <View className="flex-row flex-wrap gap-2">
-            {toTry.map((r) => (
-              <Pressable
-                key={r.id}
-                onPress={() => router.push(`/recipes/${r.id}` as Href)}
-                accessibilityRole="button"
-                hitSlop={8}
-                className="h-7 justify-center rounded-full border border-border bg-muted px-3"
-              >
-                <Text className="text-xs font-medium text-foreground">{r.title || 'Untitled recipe'}</Text>
-              </Pressable>
-            ))}
-          </View>
-        </Card>
-      )}
-
-      {recipes.length > 0 && (
+      {shown.length > 0 && (
         <SectionSearchBar value={search} onChange={setSearch} placeholder="Search recipes…" />
       )}
 
       {/* Filters: chips are chrome, so words only, no method emoji (the
           emoji is a recipe's own glyph, shown on its row). Active = coral (H2). */}
-      {recipes.length > 0 && (
+      {(recipes.length > 0 || toTry.length > 0) && (
         <View className="flex-row flex-wrap items-center gap-2">
+          {/* To try: ideas kept out of the book (often saved by the Assistant).
+              Always offered with a count, so the list is easy to find. */}
+          {toTryOn && (
+            <Pressable
+              onPress={() => setToTryOnly((v) => !v)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: toTryOnly }}
+              hitSlop={8}
+              className={cn(
+                'h-7 justify-center rounded-full border px-3',
+                toTryOnly ? 'border-primary bg-primary/15' : 'border-border bg-muted',
+              )}
+            >
+              <Text className={cn('text-xs font-medium', toTryOnly ? 'text-primary' : 'text-muted-foreground')}>
+                To try <Text style={{ fontVariant: ['tabular-nums'] }}>{toTry.length}</Text>
+              </Text>
+            </Pressable>
+          )}
           {groceriesLinked && (
             <Pressable
               onPress={() => setCanMakeOnly((v) => !v)}
@@ -551,7 +550,7 @@ export default function RecipesSectionScreen() {
           than main's ternary chain: under HOUP-208 the rows come from the
           FlashList below, so this header only ever renders the empty and
           no-match states, never the list itself. */}
-      {recipes.length === 0 && (
+      {!toTryOnly && recipes.length === 0 && (
         <EmptyState
           icon={ChefHat}
           title="No recipes yet"
@@ -569,7 +568,12 @@ export default function RecipesSectionScreen() {
           secondaryAction={{ label: 'New recipe', onPress: openNew }}
         />
       )}
-      {recipes.length > 0 && filtered.length === 0 && (
+      {toTryOnly && toTry.length === 0 && (
+        <Text className="px-1 py-8 text-center text-sm text-muted-foreground">
+          Nothing to try yet. Ask the Assistant to save a recipe you want to try, or open a recipe and tap Move to To try.
+        </Text>
+      )}
+      {shown.length > 0 && filtered.length === 0 && (
         <Text className="px-1 py-8 text-center text-sm text-muted-foreground">
           {hasFilters || search.trim() ? 'No recipes match your filters.' : 'No recipes yet.'}
         </Text>
