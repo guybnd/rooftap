@@ -39,6 +39,7 @@ import { assistantApi } from './assistant-api';
 import { archiveToast } from '@/lib/archive-toast';
 import { ConversationRow } from './conversation-row';
 import { ThreadFooter, ThreadMessages } from './thread-body';
+import { devicePosition } from '@/lib/device-position';
 
 const SWIFT_OUT = Easing.bezier(0.16, 1, 0.3, 1);
 const EASE_IN = Easing.bezier(0.42, 0, 1, 1);
@@ -105,6 +106,7 @@ function PopupThread({
     presence: () => (AppState.currentState !== 'active' ? 'background' : openRef.current ? 'here' : 'away'),
     toast: popupToast,
     screen: () => pathRef.current,
+    here: devicePosition,
   });
   const { conversation, loadError, send, reload } = thread;
   // A delete can be taken back on servers that have archiving.

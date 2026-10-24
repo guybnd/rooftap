@@ -67,7 +67,7 @@ const config: ExpoConfig = {
   ...(IS_DEV
     ? {}
     : {
-        runtimeVersion: '57.4',
+        runtimeVersion: '57.5',
         updates: {
           url: 'https://u.expo.dev/4a9e9340-0bd0-451a-bfbf-593a88495d82',
           checkAutomatically: 'ON_LOAD',
@@ -93,6 +93,16 @@ const config: ExpoConfig = {
       },
     ],
     'expo-sharing',
+    // The Assistant asks where the phone is for one "near me" question at a
+    // time, only while the app is open. No background location.
+    [
+      'expo-location',
+      {
+        locationWhenInUsePermission: 'Rooftap uses your location to find places near you when you ask the Assistant.',
+        isAndroidBackgroundLocationEnabled: false,
+        isIosBackgroundLocationEnabled: false,
+      },
+    ],
     [
       'expo-notifications',
       {

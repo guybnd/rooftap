@@ -14,6 +14,7 @@ import { Text, ScreenBackground, toast } from '@homeup/ui';
 import { archiveConversation, conversationTitle, deleteConversation, unarchiveConversation, useAssistantThread, useModules } from '@homeup/core';
 import { archiveToast } from '@/lib/archive-toast';
 import { useDataCache } from '@/lib/data-cache';
+import { devicePosition } from '@/lib/device-position';
 import { assistantApi } from '@/features/assistant/assistant-api';
 import { ThreadFooter, ThreadMessages } from '@/features/assistant/thread-body';
 
@@ -40,6 +41,7 @@ export default function AssistantThreadScreen() {
       api: assistantApi,
       presence: () => (!mounted.current ? 'away' : AppState.currentState === 'active' ? 'here' : 'background'),
       toast: screenToast,
+      here: devicePosition,
     }
   );
   const { conversation, kind, send } = thread;
