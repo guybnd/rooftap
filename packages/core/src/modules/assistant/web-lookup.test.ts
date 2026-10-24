@@ -88,7 +88,7 @@ describe('prompt', () => {
 
   it('asks for a suburb, not a guess, when there is no location', () => {
     expect(buildAssistantSystemPrompt({ ...base, web: { where: null } })).toContain('Never guess a city');
-    expect(buildAssistantSystemPrompt({ ...base, web: { where: 'device' } })).toContain('near them');
+    expect(buildAssistantSystemPrompt({ ...base, web: { where: 'device' } })).toContain('where they are right now');
   });
 });
 
@@ -109,7 +109,31 @@ describe('near me', () => {
 
   it('reads Google Maps places', () => {
     expect(serpPlaces({ local_results: [{ title: 'A', rating: 4.5, reviews: 10, open_state: 'Open now' }, { address: 'x' }] })).toEqual([
-      { name: 'A', address: null, type: null, rating: 4.5, reviews: 10, price: null, open: 'Open now', website: null },
+      { name: 'A', address: null, type: null, rating: 4.5, reviews: 10, price: null, open: 'Open now', website: null, distance_km: null },
     ]);
+  });
+
+  it('puts the nearest places first and drops far ones when enough are close', () => {
+    const at = (title: string, lat: number, lng: number) => ({ title, latitude: lat, longitude: lng });
+    const origin = { lat: -37.8, lng: 145.0 };
+    const body = {
+      places: [at('Far', -37.9, 145.2), at('Near', -37.801, 145.001), at('Mid', -37.81, 145.01), at('Close', -37.805, 145.0)],
+    };
+    expect(serpPlaces(body, 8, origin).map((p) => [p.name, p.distance_km])).toEqual([
+      ['Near', 0.1],
+      ['Close', 0.6],
+      ['Mid', 1.4],
+    ]);
+    // With too few close by, the far ones stay, nearest first.
+    expect(serpPlaces({ places: [at('Far', -37.9, 145.2), at('Near', -37.801, 145.001)] }, 8, origin).map((p) => p.name)).toEqual(['Near', 'Far']);
+  });
+});
+
+describe('home in the prompt', () => {
+  it('names the saved home and never claims location is out of reach', async () => {
+    const { webLookupText } = await import('./web-lookup');
+    const text = webLookupText('home', '12 Example St, Richmond VIC');
+    expect(text).toContain('12 Example St, Richmond VIC');
+    expect(text).toContain('Never say you cannot get their location');
   });
 });

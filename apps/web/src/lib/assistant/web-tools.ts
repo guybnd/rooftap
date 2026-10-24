@@ -127,7 +127,7 @@ async function serperSearch(key: string, kind: "web" | "places" | "shopping", q:
   const endpoint = kind === "places" ? "maps" : kind === "shopping" ? "shopping" : "search";
   const body: Record<string, unknown> = { q, hl: "en" };
   if (kind === "places") {
-    if (origin) body.ll = `@${origin.lat},${origin.lng},14z`;
+    if (origin) body.ll = `@${origin.lat},${origin.lng},15z`;
   } else {
     body.gl = region;
     body.num = 10;
@@ -146,7 +146,7 @@ async function serpapiSearch(key: string, kind: "web" | "places" | "shopping", q
   if (kind === "places") {
     params.set("engine", "google_maps");
     params.set("type", "search");
-    if (origin) params.set("ll", `@${origin.lat},${origin.lng},14z`);
+    if (origin) params.set("ll", `@${origin.lat},${origin.lng},15z`);
   } else {
     params.set("engine", kind === "shopping" ? "google_shopping" : "google");
     params.set("gl", region);
@@ -171,19 +171,20 @@ export async function webTools(
   admin: SupabaseClient,
   groupId: string,
   { here = null, capped = true }: WebToolOptions = {}
-): Promise<{ tools: AssistantTool[]; where: WebWhere; spentMicros: () => number }> {
+): Promise<{ tools: AssistantTool[]; where: WebWhere; home: string | null; spentMicros: () => number }> {
   const [serper, serpapi, switch_, { data: group }] = await Promise.all([
     resolveServerKey("SERPER_API_KEY"),
     resolveServerKey("SERPAPI_API_KEY"),
     resolveServerKey("ASSISTANT_WEB"),
-    admin.from("groups").select("region, home_lat, home_lng").eq("id", groupId).maybeSingle(),
+    admin.from("groups").select("region, home_address, home_lat, home_lng").eq("id", groupId).maybeSingle(),
   ]);
   let spent = 0;
   const spentMicros = () => spent;
   const provider: SearchProvider | null = serper?.trim() ? "serper" : serpapi?.trim() ? "serpapi" : null;
-  if (!provider || /^(off|false|0|no)$/i.test(switch_?.trim() ?? "")) return { tools: [], where: null, spentMicros };
+  if (!provider || /^(off|false|0|no)$/i.test(switch_?.trim() ?? "")) return { tools: [], where: null, home: null, spentMicros };
   const key = (provider === "serper" ? serper : serpapi)!.trim();
-  const g = (group ?? {}) as { region?: string | null; home_lat?: number | null; home_lng?: number | null };
+  const g = (group ?? {}) as { region?: string | null; home_address?: string | null; home_lat?: number | null; home_lng?: number | null };
+  const homeAddress = g.home_address?.trim() || null;
   const region = (g.region || "AU").toLowerCase();
   // The home is rounded to about a suburb, as Shopper does.
   const home = g.home_lat != null && g.home_lng != null ? { lat: Math.round(g.home_lat * 100) / 100, lng: Math.round(g.home_lng * 100) / 100 } : null;
@@ -230,7 +231,8 @@ export async function webTools(
         spent += SEARCH_COST_MICROS[provider];
         const body = await res.json();
         if (kind === "places") {
-          return ok({ query, kind, near: near || (here ? "where they are now" : "the household's home"), places: serpPlaces(body) });
+          const searchedFrom = near || (here ? "where they are now (their device)" : `the household's home${homeAddress ? `, ${homeAddress}` : ""}`);
+          return ok({ query, kind, searched_from: searchedFrom, places: serpPlaces(body, 8, from) });
         }
         return ok({ query, kind, region: region.toUpperCase(), ...serpSearchAnswer(body) });
       } catch {
@@ -263,5 +265,5 @@ export async function webTools(
     },
   };
 
-  return { tools: [search, read], where, spentMicros };
+  return { tools: [search, read], where, home: homeAddress, spentMicros };
 }

@@ -93,14 +93,14 @@ describe("webTools", () => {
     const out = JSON.parse((await device.tools[0].run({ query: "hot dogs", kind: "places" })).content[0].text);
     let url = new URL(String(fetchSpy.mock.calls[0][0]));
     expect(url.searchParams.get("engine")).toBe("google_maps");
-    expect(url.searchParams.get("ll")).toBe("@-37.768,144.962,14z");
+    expect(url.searchParams.get("ll")).toBe("@-37.768,144.962,15z");
     expect(out.places[0]).toMatchObject({ name: "Dogs R Us", address: "1 Lygon St", rating: 4.6 });
 
     const fromHome = await webTools(home, "g");
     expect(fromHome.where).toBe("home");
     await fromHome.tools[0].run({ query: "hot dogs", kind: "places" });
     url = new URL(String(fetchSpy.mock.calls[1][0]));
-    expect(url.searchParams.get("ll")).toBe("@-37.81,144.96,14z");
+    expect(url.searchParams.get("ll")).toBe("@-37.81,144.96,15z");
 
     await fromHome.tools[0].run({ query: "hot dogs", kind: "places", near: "Fitzroy VIC" });
     url = new URL(String(fetchSpy.mock.calls[2][0]));
@@ -136,7 +136,7 @@ describe("webTools", () => {
     await webTools(admin(true, { region: "AU", home_lat: -37.81, home_lng: 144.96 }), "g").then((w) => w.tools[0].run({ query: "hot dogs", kind: "places" }));
     const [mapsUrl, mapsInit] = fetchSpy.mock.calls[1];
     expect(String(mapsUrl)).toBe("https://google.serper.dev/maps");
-    expect(JSON.parse(String((mapsInit as RequestInit).body))).toMatchObject({ q: "hot dogs", ll: "@-37.81,144.96,14z" });
+    expect(JSON.parse(String((mapsInit as RequestInit).body))).toMatchObject({ q: "hot dogs", ll: "@-37.81,144.96,15z" });
     fetchSpy.mockRestore();
   });
 

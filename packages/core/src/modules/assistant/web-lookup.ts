@@ -47,10 +47,36 @@ export interface WebPlace {
   price: string | null;
   open: string | null;
   website: string | null;
+  /** Straight-line distance from where the search started, when both are known. */
+  distance_km: number | null;
 }
 
-/** The places in a Google Maps answer, from SerpApi (local_results) or Serper (places). */
-export function serpPlaces(body: unknown, max = 8): WebPlace[] {
+/** "Near me" keeps places this close when there are enough of them. */
+export const NEAR_KM = 5;
+
+/** Straight-line distance in km between two points. */
+export function distanceKm(a: WebHere, b: WebHere): number {
+  const rad = (d: number) => (d * Math.PI) / 180;
+  const dLat = rad(b.lat - a.lat);
+  const dLng = rad(b.lng - a.lng);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 6371 * 2 * Math.asin(Math.sqrt(h));
+}
+
+function placePoint(o: Record<string, unknown>): WebHere | null {
+  const gps = (o.gps_coordinates ?? {}) as Record<string, unknown>;
+  const lat = typeof gps.latitude === 'number' ? gps.latitude : typeof o.latitude === 'number' ? o.latitude : null;
+  const lng = typeof gps.longitude === 'number' ? gps.longitude : typeof o.longitude === 'number' ? o.longitude : null;
+  return lat !== null && lng !== null ? { lat, lng } : null;
+}
+
+/**
+ * The places in a Google Maps answer, from SerpApi (local_results) or Serper
+ * (places). With `origin`, each gets its distance, the nearest come first,
+ * and places past NEAR_KM drop out while at least three are closer: Google
+ * ranks by relevance, so a "near me" search otherwise lists the whole city.
+ */
+export function serpPlaces(body: unknown, max = 8, origin: WebHere | null = null): WebPlace[] {
   const b = (body ?? {}) as Record<string, unknown>;
   const list = Array.isArray(b.local_results) ? b.local_results : Array.isArray(b.places) ? b.places : b.place_results ? [b.place_results] : [];
   const places: WebPlace[] = [];
@@ -67,10 +93,17 @@ export function serpPlaces(body: unknown, max = 8): WebPlace[] {
       price: str(o.price) ?? str(o.priceLevel),
       open: str(o.open_state) ?? str(o.hours),
       website: str(o.website),
+      distance_km: (() => {
+        const at = origin ? placePoint(o) : null;
+        return origin && at ? Math.round(distanceKm(origin, at) * 10) / 10 : null;
+      })(),
     });
-    if (places.length >= max) break;
   }
-  return places;
+  if (!origin) return places.slice(0, max);
+  const known = places.filter((p) => p.distance_km !== null).sort((a, b) => a.distance_km! - b.distance_km!);
+  const close = known.filter((p) => p.distance_km! <= NEAR_KM);
+  const pick = close.length >= 3 ? close : known.length ? known : places;
+  return pick.slice(0, max);
 }
 
 export interface WebResult {
@@ -209,13 +242,18 @@ export function isPrivateAddress(address: string): boolean {
 /** Where "near me" searches start from this turn. */
 export type WebWhere = 'device' | 'home' | null;
 
-/** The prompt lines for the web tools, when the server offers them. */
-export function webLookupText(where: WebWhere = null): string {
+/** The prompt lines for the web tools, when the server offers them. `home` is the household's saved address. */
+export function webLookupText(where: WebWhere = null, home: string | null = null): string {
+  const homeLine = home ? ` The household's home, saved in Settings, is ${home}; you may tell them this.` : '';
   const near =
     where === 'device'
-      ? 'Their device shared where they are right now, so a places search finds what is near them.'
+      ? 'Their device shared where they are right now with this message, so a places search starts there.' + homeLine
       : where === 'home'
-        ? "A places search starts from the household's home, which is saved in Settings. If they say they are somewhere else, pass that place as `near`."
+        ? "This message came without the device's location, so a places search starts from the household's home." +
+          homeLine +
+          ' Never say you cannot get their location: the app sends it with questions about places near them when Rooftap ' +
+          'may use location. If they mean where they are now, ask them to ask again with "near me" (and allow location for ' +
+          'Rooftap), or to name the suburb, and pass it as `near`.'
         : 'Neither their device nor the household shared a location. Before a places search, ask once for their suburb or town, ' +
           'pass it as `near`, and remember it with a remember marker. Never guess a city.';
   return (
@@ -223,7 +261,9 @@ export function webLookupText(where: WebWhere = null): string {
     `You can search the web with ${WEB_SEARCH_TOOL} and open a result with ${READ_PAGE_TOOL}. Use them for facts from ` +
     'outside the household, such as a price, opening hours or how to fix something, before offering a Scout search: ' +
     'Scout is for longer research the person asks for. For somewhere to go (a cafe, a shop, a plumber), search with kind ' +
-    `"places". ${near} Name the site for each fact or price you give, and say that a ` +
+    `"places". ${near} A places result only has today's opening and a rating: when the person asks for more (hours on ` +
+    `another day, a price, a menu), search the web for that place and open its page with ${READ_PAGE_TOOL} before you answer. ` +
+    'Places results come nearest first with their distance in km; give the distance, and say where the search started (the `searched_from` field). Name the site or map listing for each fact or price you give, and say that a ' +
     'price came from a web search, not from a store Shopper watches. Never put member names, addresses, amounts or ' +
     'anything private from the household in a search. The household has a daily allowance of searches; when it runs ' +
     'out, say so and offer Scout instead.'

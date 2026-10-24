@@ -153,7 +153,7 @@ async function turnTools(
   return {
     tools: [...household, ...(homeAssistant?.tools ?? []), ...web.tools, feedback, ...(filing ? [filing] : [])],
     homeAssistant,
-    web: web.tools.length ? { where: web.where } : null,
+    web: web.tools.length ? { where: web.where, home: web.home } : null,
     webSpentMicros: web.spentMicros,
   };
 }

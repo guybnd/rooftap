@@ -95,7 +95,7 @@ export interface AssistantPromptInput {
   /** Asked from the pop-up chat: the route of the screen behind it (assistant-screen.ts). */
   screen?: string | null;
   /** The server offers web_search and read_page this turn (web-lookup.ts), and where places searches start. */
-  web?: { where: WebWhere } | null;
+  web?: { where: WebWhere; home?: string | null } | null;
 }
 
 /** Assembles the system prompt for one turn. Never empty. */
@@ -122,7 +122,7 @@ export function buildAssistantSystemPrompt(input: AssistantPromptInput): string 
   }
 
   sections.push(PRIVACY_TEXT);
-  if (input.web) sections.push(webLookupText(input.web.where));
+  if (input.web) sections.push(webLookupText(input.web.where, input.web.home ?? null));
 
   sections.push(
     'When a tool says a change was proposed, tell the person what you proposed in one line and that it ' +

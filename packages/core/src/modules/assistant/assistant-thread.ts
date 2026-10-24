@@ -207,6 +207,9 @@ export function useAssistantThread(target: ThreadTarget, host: ThreadHost) {
   // A closed quick ask the person chose to carry on: the next send reopens it.
   const [resumed, setResumed] = useState(false);
   const resumedRef = useRef(false);
+  // Once a message here asked about places near the person, follow-ups
+  // ("closer ones?") carry the device's position too.
+  const nearbyRef = useRef(false);
   const hostRef = useRef(host);
   hostRef.current = host;
   const shownCount = useRef(messages.length);
@@ -228,6 +231,7 @@ export function useAssistantThread(target: ThreadTarget, host: ThreadHost) {
   // The same surface moved on to a new conversation (the chat page's Start fresh): drop the old one.
   const shownTarget = useRef(target.id);
   useEffect(() => {
+    if (shownTarget.current !== target.id) nearbyRef.current = false;
     if (shownTarget.current !== target.id && target.id === 'new') {
       conversationIdRef.current = null;
       resumedRef.current = false;
@@ -305,7 +309,8 @@ export function useAssistantThread(target: ThreadTarget, host: ThreadHost) {
         const pacer = createDraftPacer(setDraft);
         const cook = hostRef.current.cook?.() ?? undefined;
         const screen = hostRef.current.screen?.() ?? undefined;
-        const here = hostRef.current.here && looksNearby(text) ? ((await hostRef.current.here().catch(() => null)) ?? undefined) : undefined;
+        if (looksNearby(text)) nearbyRef.current = true;
+        const here = hostRef.current.here && nearbyRef.current ? ((await hostRef.current.here().catch(() => null)) ?? undefined) : undefined;
         const res = await api.send(
           {
             text,
