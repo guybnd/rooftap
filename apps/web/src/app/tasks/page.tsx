@@ -21,7 +21,9 @@ import {
   X,
   ChevronDown,
   ChevronRight,
+  Settings as SettingsIcon,
 } from 'lucide-react';
+import { useModuleSettingsSheet } from '@/components/module-settings-sheet';
 import { HouseholdTaskModal } from './household-task-modal';
 import { TaskRow } from './task-row';
 import { ListGroup } from '@/components/ui/list-item';
@@ -131,6 +133,7 @@ export default function TasksPage() {
     return () => timers.forEach((t) => clearTimeout(t));
   }, []);
 
+  const settings = useModuleSettingsSheet('household');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<HouseholdTask | undefined>();
   const [isGenerating, setIsGenerating] = useState(false);
@@ -418,6 +421,7 @@ export default function TasksPage() {
 
   return (
     <div className={cn('space-y-3 p-4 md:p-6 mx-auto', wide ? 'max-w-[1400px] lg:px-8' : 'max-w-3xl')}>
+      {settings.sheet}
       {/* Row 1 — progress summary + actions. FLUX-193: no big "Add Task" button —
           add via the quick-add bar below or the "+" nav; refresh + generate live in
           the ⋯ overflow, search collapses to the icon. */}
@@ -477,6 +481,17 @@ export default function TasksPage() {
                     }}
                   >
                     {isGenerating ? 'Generating…' : 'Generate moving tasks'}
+                  </MenuItem>
+                )}
+                {settings.available && (
+                  <MenuItem
+                    icon={<SettingsIcon className="h-3.5 w-3.5" />}
+                    onClick={() => {
+                      close();
+                      settings.open();
+                    }}
+                  >
+                    {settings.label}
                   </MenuItem>
                 )}
               </>

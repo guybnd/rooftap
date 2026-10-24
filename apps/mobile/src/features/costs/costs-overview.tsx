@@ -12,8 +12,8 @@
 // Web twin: apps/web/src/app/costs/costs-overview.tsx.
 import * as React from 'react';
 import { Pressable, View } from 'react-native';
-import { Archive, ArrowRight, ChevronDown, ChevronRight, EyeOff, FileText, Landmark, MessageSquare, MoreHorizontal, PenLine, Plus, Repeat, Sparkles, Target, Wallet, List, type LucideIcon } from 'lucide-react-native';
-import { BottomSheet, SwipeActions, Switch, Text, cn, haptics, toast } from '@homeup/ui';
+import { Archive, ArrowRight, ChevronDown, ChevronRight, EyeOff, FileText, Landmark, MessageSquare, MoreHorizontal, PenLine, Plus, Repeat, Settings, Sparkles, Wallet, List, type LucideIcon } from 'lucide-react-native';
+import { BottomSheet, SwipeActions, Text, cn, haptics, toast } from '@homeup/ui';
 import {
   CADENCE_LABEL,
   bankDayLabel,
@@ -41,7 +41,6 @@ import {
   type CostMonth,
   type CostMonthCategory,
   type CostMonthLine,
-  type MoneySummaryPrefs,
   canHideCostLine,
   costCategoryMenu,
   costLineAmountLabel,
@@ -58,13 +57,6 @@ import {
   hasUnseenInsights,
   markInsightsSeen,
   useRecentSpend,
-  toggleRecentWindow,
-  recentWindowLabel,
-  RECENT_WINDOW_CHOICES,
-  ASK_AGAIN_CHOICES,
-  askAgainLabel,
-  askAgainMonths,
-  withAskAgain,
   DEFAULT_RECENT_SPEND,
   type RecentSpendPrefs,
   type SpendingTransaction,
@@ -89,7 +81,8 @@ export interface CostsOverviewProps {
   items: CostItem[];
   /** The monthly goal in cents, null when none is set. */
   goalCents: number | null;
-  onEditGoal: () => void;
+  /** Costs settings (module-settings.ts): the More menu's last row and the goal on the total open it. Null when there is nothing to set. */
+  onOpenSettings: { label: string; open: () => void } | null;
   onOpenItem: (item: CostItem) => void;
   onAdd: (category?: CostCategory) => void;
   onArchive: (item: CostItem, archived: boolean) => void;
@@ -105,10 +98,10 @@ export interface CostsOverviewProps {
   footer?: React.ReactNode;
   /** The money-insights module's "Worth a look" card, shown on this month; null when it's off. */
   insights?: Pick<CostInsightsCardProps, 'marks' | 'onMarks' | 'onRemind'> | null;
-  /** Assistant summaries: "Summarise <month>" in the ⋯ menu, and the weekly and monthly switches when the server keeps them. Null with the Assistant off. */
-  summaries?: { prefs: MoneySummaryPrefs; onChange: ((next: MoneySummaryPrefs) => void) | null } | null;
-  /** Recent spending on the Latest card: the person's windows and whether bills count. */
-  recent?: { prefs: RecentSpendPrefs; onChange: (next: RecentSpendPrefs) => void };
+  /** "Summarise <month>" in the ⋯ menu; false with the Assistant off. */
+  canSummarise?: boolean;
+  /** Recent spending on the Latest card: the person's windows and whether bills count (set in Costs settings). */
+  recentPrefs?: RecentSpendPrefs;
 }
 
 // Before the bank payments land: shapes where the total, chart and
@@ -129,10 +122,8 @@ function Waiting() {
 }
 
 export function CostsOverview(props: CostsOverviewProps) {
-  const { items, goalCents, onEditGoal, onOpenItem, onAdd, onArchive, onOpenPayments, canArchive } = props;
-  const { scope, setScope, data, ready, status } = useUpOverview();
-  // Someone sharing Up who never set the weekly switch gets the bank's weekly digest.
-  const upWeekly = !!status?.connection && status.connection.shareMode !== 'none' && status.connection.weeklyDigest !== false;
+  const { items, goalCents, onOpenSettings, onOpenItem, onAdd, onArchive, onOpenPayments, canArchive } = props;
+  const { scope, setScope, data, ready } = useUpOverview();
   const { months, month, name, setPicked, open, toggle, focus, setFocus, toggleFocus, openCategory: showCategory } = useCostsOverview(items);
   const [shop, setShop] = React.useState<CostMonthLine | null>(null);
   const [rowSheet, setRowSheet] = React.useState<CostRowSheetState | null>(null);
@@ -186,7 +177,7 @@ export function CostsOverview(props: CostsOverviewProps) {
   const seenInsights = useSeenInsights();
   const lineById = React.useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
   const latest = (data?.recent ?? []).slice(0, 3);
-  const recentPrefs = props.recent?.prefs ?? DEFAULT_RECENT_SPEND;
+  const recentPrefs = props.recentPrefs ?? DEFAULT_RECENT_SPEND;
   const recent = useRecentSpend(upBankApi, items, recentPrefs);
   const movePayment = (t: SpendingTransaction, to: CostCategory, wholeShop: boolean) => {
     moveBankPayment(upBankApi, t, to, wholeShop)
@@ -220,7 +211,7 @@ export function CostsOverview(props: CostsOverviewProps) {
           lineById={lineById}
           onOpen={() => onOpenPayments?.()}
           onHold={quickMove ? pickPayment : null}
-          onSettings={() => setMoreOpen(true)}
+          onSettings={onOpenSettings?.open ?? null}
           skipBills={recentPrefs.skipBills}
         />
       ),
@@ -311,7 +302,7 @@ export function CostsOverview(props: CostsOverviewProps) {
         <Waiting />
       ) : (
         <>
-        <Hero month={month} goalCents={goalCents} onEditGoal={onEditGoal} focus={focus} onFocus={(k) => { haptics.select(); toggleFocus(k); }} />
+        <Hero month={month} goalCents={goalCents} onEditGoal={onOpenSettings?.open ?? null} focus={focus} onFocus={(k) => { haptics.select(); toggleFocus(k); }} />
 
         <MonthChart months={months} picked={month.month} goalCents={goalCents} onPick={(k) => { haptics.select(); setPicked(k); }} focus={focus} onClearFocus={() => setFocus(null)} />
 
@@ -425,105 +416,26 @@ export function CostsOverview(props: CostsOverviewProps) {
 
       <BottomSheet open={moreOpen} onOpenChange={setMoreOpen} className="pb-3">
         <View className="gap-1 px-4 pb-2">
-          <Text className={cn(LABEL, 'px-1 pt-1')}>{name}</Text>
-          <View className="rounded-2xl bg-muted/40">
-            <MenuRow Icon={Target} label="Monthly goal" value={goalCents ? formatMoney(goalCents) : 'Not set'} onPress={() => { setMoreOpen(false); onEditGoal(); }} />
-            {canArchive && !month.income ? <MenuRow Icon={Wallet} label="Add income" hint="Pay or other money in. It never counts as a cost." divided onPress={() => { setMoreOpen(false); onAdd('income'); }} /> : null}
-          </View>
-          <Text className={cn(LABEL, 'px-1 pt-3')}>Look closer</Text>
+          {canArchive && !month.income ? (
+            <>
+              <Text className={cn(LABEL, 'px-1 pt-1')}>{name}</Text>
+              <View className="rounded-2xl bg-muted/40">
+                <MenuRow Icon={Wallet} label="Add income" hint="Pay or other money in. It never counts as a cost." onPress={() => { setMoreOpen(false); onAdd('income'); }} />
+              </View>
+            </>
+          ) : null}
+          <Text className={cn(LABEL, 'px-1', canArchive && !month.income ? 'pt-3' : 'pt-1')}>Look closer</Text>
           <View className="rounded-2xl bg-muted/40">
             {onOpenPayments ? <MenuRow Icon={List} label="All payments" hint="Every payment as a list, to search and move." onPress={() => { setMoreOpen(false); onOpenPayments(); }} /> : null}
-            {props.summaries ? (
+            {props.canSummarise ? (
               <MenuRow Icon={Sparkles} label={`Summarise ${name}`} divided={!!onOpenPayments} onPress={() => { setMoreOpen(false); ask(costsSummaryAsk(name)); }} />
             ) : null}
-            <MenuRow Icon={MessageSquare} label="Ask the assistant" divided={!!onOpenPayments || !!props.summaries} onPress={() => { setMoreOpen(false); ask(`Help me make sense of my costs in ${name}.`); }} />
+            <MenuRow Icon={MessageSquare} label="Ask the assistant" divided={!!onOpenPayments || !!props.canSummarise} onPress={() => { setMoreOpen(false); ask(`Help me make sense of my costs in ${name}.`); }} />
           </View>
-          {props.recent && data?.days ? (
-            <>
-              <Text className={cn(LABEL, 'px-1 pt-3')}>Recent spending</Text>
-              <View className="rounded-2xl bg-muted/40 px-3">
-                <View className="flex-row flex-wrap gap-2 py-3" accessibilityLabel="Windows to show, up to three">
-                  {RECENT_WINDOW_CHOICES.map((w) => {
-                    const on = recentPrefs.windows.includes(w);
-                    return (
-                      <Pressable
-                        key={w}
-                        accessibilityRole="checkbox"
-                        accessibilityState={{ checked: on }}
-                        onPress={() => {
-                          haptics.select();
-                          props.recent!.onChange(toggleRecentWindow(recentPrefs, w));
-                        }}
-                        className={cn('rounded-full border px-3 py-1.5', on ? 'border-primary bg-primary/15' : 'border-border')}
-                      >
-                        <Text className={cn('text-sm', on ? 'text-foreground' : 'text-muted-foreground')}>{recentWindowLabel(w)}</Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-                <SwitchRow
-                  label="Leave out bills"
-                  hint="Rent and other regular bills don't count, so a rent day doesn't swamp the week."
-                  a11y="Leave out bills"
-                  checked={recentPrefs.skipBills}
-                  onChange={(on) => props.recent!.onChange({ ...recentPrefs, skipBills: on })}
-                />
-                <SwitchRow
-                  label="Show recent spending"
-                  hint="Off keeps just the last few payments."
-                  a11y="Show recent spending"
-                  checked={recentPrefs.show}
-                  onChange={(on) => props.recent!.onChange({ ...recentPrefs, show: on })}
-                />
-              </View>
-            </>
-          ) : null}
-          {props.insights ? (
-            <>
-              <Text className={cn(LABEL, 'px-1 pt-3')}>Subscriptions</Text>
-              <View className="gap-2 rounded-2xl bg-muted/40 px-3 py-3">
-                <Text className="text-sm text-foreground">Ask again after</Text>
-                <View className="flex-row flex-wrap gap-2" accessibilityRole="radiogroup" accessibilityLabel="Ask about a kept or cancelled subscription again after">
-                  {ASK_AGAIN_CHOICES.map((m) => {
-                    const on = askAgainMonths(props.insights!.marks) === m;
-                    return (
-                      <Pressable
-                        key={m}
-                        accessibilityRole="radio"
-                        accessibilityState={{ checked: on }}
-                        onPress={() => {
-                          haptics.select();
-                          props.insights!.onMarks((cur) => withAskAgain(cur, m));
-                        }}
-                        className={cn('rounded-full border px-3 py-1.5', on ? 'border-primary bg-primary/15' : 'border-border')}
-                      >
-                        <Text className={cn('text-sm', on ? 'text-foreground' : 'text-muted-foreground')}>{askAgainLabel(m)}</Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-                <Text className="text-caption text-muted-foreground">A subscription you keep or cancel in Worth a look comes back to decide after this long.</Text>
-              </View>
-            </>
-          ) : null}
-          {props.summaries?.onChange ? (
-            <>
-              <Text className={cn(LABEL, 'px-1 pt-3')}>Summaries in the Household chat</Text>
-              <View className="rounded-2xl bg-muted/40 px-3">
-                <SwitchRow
-                  label="Weekly"
-                  hint="Sunday morning: the week, what is worth a look and the bills ahead."
-                  checked={props.summaries.prefs.weekly ?? upWeekly}
-                  onChange={(on) => props.summaries!.onChange!({ ...props.summaries!.prefs, weekly: on })}
-                />
-                <SwitchRow
-                  label="Monthly"
-                  hint="On the 1st: last month against the goal and the month before."
-                  checked={!!props.summaries.prefs.monthly}
-                  onChange={(on) => props.summaries!.onChange!({ ...props.summaries!.prefs, monthly: on })}
-                />
-              </View>
-            </>
+          {onOpenSettings ? (
+            <View className="mt-3 rounded-2xl bg-muted/40">
+              <MenuRow Icon={Settings} label={onOpenSettings.label} onPress={() => { setMoreOpen(false); onOpenSettings.open(); }} />
+            </View>
           ) : null}
         </View>
       </BottomSheet>
@@ -547,7 +459,7 @@ function Hero({
 }: {
   month: CostMonth;
   goalCents: number | null;
-  onEditGoal: () => void;
+  onEditGoal: (() => void) | null;
   focus: string | null;
   onFocus: (key: string) => void;
 }) {
@@ -560,7 +472,7 @@ function Hero({
   return (
     <View className="gap-2">
       <Text className={LABEL}>{month.when === 'future' ? `Expected in ${name}` : `Spent in ${name}`}</Text>
-      <Pressable accessibilityRole="button" accessibilityLabel="Change the monthly goal" onPress={onEditGoal} className="flex-row items-baseline gap-2">
+      <Pressable accessibilityRole="button" accessibilityLabel="Change the monthly goal" disabled={!onEditGoal} onPress={onEditGoal ?? undefined} className="flex-row items-baseline gap-2">
         <Text className="text-hero-section text-foreground" style={TABULAR}>
           {formatMoney(month.when === 'future' ? month.expectedCents : month.paidCents)}
         </Text>
@@ -979,18 +891,6 @@ function ShopSheet({
         onShopMoved={refresh}
       />
     </>
-  );
-}
-
-function SwitchRow({ label, hint, checked, onChange, a11y }: { label: string; hint: string; checked: boolean; onChange: (on: boolean) => void; a11y?: string }) {
-  return (
-    <View className="min-h-12 flex-row items-center gap-3 px-1 py-2">
-      <View className="min-w-0 flex-1">
-        <Text className="text-body font-medium text-foreground">{label}</Text>
-        <Text className="text-caption text-muted-foreground">{hint}</Text>
-      </View>
-      <Switch checked={checked} onChange={onChange} label={a11y ?? `${label} summary`} />
-    </View>
   );
 }
 

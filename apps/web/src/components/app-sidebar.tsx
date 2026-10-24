@@ -34,9 +34,9 @@ import { WhatsNewDialog } from "@/components/whats-new";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { OfflineIndicator } from "@/components/offline-indicator";
 import { RevalidatingIndicator } from "@/components/revalidating-indicator";
-import { clearThreadCache, sections, assignTabSlot, reorderVisibleSections, getSectionByPath, getEnabledSections, getModuleIdForPath, orderSections, settingsMenuHue, tabTravelDirection, glowDriftX, useModules } from "@homeup/core";
+import { clearThreadCache, sections, assignTabSlot, reorderVisibleSections, getSectionByPath, getEnabledSections, getModuleIdForPath, orderSections, settingsMenuHue, tabTravelDirection, glowDriftX, useModules, hasModuleSettings } from "@homeup/core";
 import { sectionIcons } from "@/lib/section-icons";
-import { globalMenus, sectionPanels, visiblePanels } from "@/app/settings/settings-registry";
+import { globalMenus, visiblePanels } from "@/app/settings/settings-registry";
 import { SectionSwitcherGrid, SectionTabBar } from "@/components/section-switcher";
 import { useSectionSettings } from "@/lib/use-section";
 import { useOverdueTaskCount } from "@/hooks/use-overdue-task-count";
@@ -223,7 +223,7 @@ export function AppSidebar({ children }: { children: React.ReactNode }) {
   // (General + App sections) instead of the current section's nav items —
   // this is the single drawer everywhere, contextual by route.
   const settingsSectionRows = getEnabledSections(modules.enabled).filter(
-    (s) => visiblePanels(sectionPanels[s.id] ?? [], modules.enabled).length > 0
+    (s) => hasModuleSettings(s.id, modules.enabled)
   );
 
   // Modules (.docs/modules.md): a switched-off module's routes are gone for

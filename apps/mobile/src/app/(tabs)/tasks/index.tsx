@@ -104,6 +104,7 @@ import { NoGroupScreen } from '@/components/no-group-screen';
 import { TaskRow } from '@/features/tasks/task-row';
 import { HouseholdTaskModal } from '@/features/tasks/household-task-modal';
 import { TasksActionSheet } from '@/features/tasks/tasks-action-sheet';
+import { useModuleSettingsSheet } from '@/features/settings/module-settings-sheet';
 import { getCurrentSupabaseClient } from '@/lib/supabase-client';
 import { perfMark } from '@/lib/perf-log';
 import { whyRender } from '@/lib/why-render';
@@ -474,6 +475,7 @@ export default function TasksSectionScreen() {
   }, [addRequested, router]);
   const [quickTitle, setQuickTitle] = React.useState('');
   const [actionSheetOpen, setActionSheetOpen] = React.useState(false);
+  const settings = useModuleSettingsSheet('household');
   const [isGenerating, setIsGenerating] = React.useState(false);
   const [isSyncingDates, setIsSyncingDates] = React.useState(false);
   const [countdownDismissed, setCountdownDismissed] = React.useState(false);
@@ -985,7 +987,9 @@ export default function TasksSectionScreen() {
         onGenerate={handleGenerate}
         isGenerating={isGenerating}
         movingActive={movingActive}
+        settings={settings.available ? settings : null}
       />
+      {settings.sheet}
     </ScreenBackground>
   );
 }

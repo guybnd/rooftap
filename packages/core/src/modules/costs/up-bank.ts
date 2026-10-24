@@ -1234,3 +1234,8 @@ export function createUpBankApi(call: UpBankCall) {
 }
 
 export type UpBankApi = ReturnType<typeof createUpBankApi>;
+
+/** Someone sharing Up who never set the weekly summary switch gets the bank's weekly digest, so the switch starts on. */
+export function upWeeklyDigestOn(status: UpBankStatus | null | undefined): boolean {
+  return !!status?.connection && status.connection.shareMode !== 'none' && status.connection.weeklyDigest !== false;
+}

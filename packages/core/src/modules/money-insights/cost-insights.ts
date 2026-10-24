@@ -18,7 +18,7 @@
 // Each person can hide an insight, and decide each subscription: keep it or
 // cancel it (user_settings.money_insight_marks). A decided one leaves the
 // list until the person's "ask again" time (3 months unless they pick
-// another in the Costs menu). A key carries what the insight says, so a
+// another in Costs settings). A key carries what the insight says, so a
 // hidden one comes back when that changes (a new price, a new month).
 
 import { CADENCE_LABEL, monthlyAmount, parseLocalDateOnly } from '../costs/costs';

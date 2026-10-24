@@ -341,7 +341,8 @@ After the generator runs:
 2. Change the starter list into the real module. Keep the split. Types, helpers, row menus and hooks go in the core folder. A screen only binds them and lays them out.
 3. Decide where else the module shows: the agenda, Home, the calendar, search and features that join two modules (`module-features.ts`).
 4. Write the What's new entry for the people who use the app.
-5. Run `npm run check`.
+5. If the module has settings, add its panels to `MODULE_SETTINGS` (section 16).
+6. Run `npm run check`.
 
 `apps/web/src/lib/module-conformance.test.ts` runs in `npm run check` and checks every module in the registry. It fails when:
 
@@ -351,5 +352,26 @@ After the generator runs:
 - rows do not use `ListItem`, or have no row menu (web `useRowContextMenu`, phone `useRowMenuSheet` or a long press);
 - the web and the phone screens declare a helper or a hook with the same name, which means shared logic is in the wrong place;
 - a screen queries Supabase, opens an OS dialog, or imports the React Native `Modal`.
+- a module with settings has no settings row in its screen menu (section 16).
 
 Modules that are older than these rules have their gaps in `module-conformance-baseline.ts`. The list can only get shorter. A new gap fails the test, and so does a fixed gap that is still on the list.
+
+## 16. Module settings
+
+Each module defines its settings one time, in `packages/core/src/module-settings.ts`. `MODULE_SETTINGS` lists the panels of each module by id. Two places show the same panels:
+
+- Settings, then the module, shows them as a page.
+- The module screen shows them as a sheet. The last row of its More menu is "<Module> settings".
+
+A screen does not edit a setting itself. A switch, a choice or a number that changes how the module works goes in a panel. Actions stay in the More menu, for example "Add income" or "Select". Choices for one item stay with that item, for example the sort order of one checklist.
+
+To add a setting:
+
+1. Add a panel id to `SettingsPanelId` and to the module in `MODULE_SETTINGS`.
+2. Write the panel for each app: `apps/web/src/components/` and `apps/mobile/src/features/settings/panels/`. Map the id in `SETTINGS_PANELS` in each app's `settings-registry.ts`. TypeScript fails when an app has no panel for an id.
+3. Read and save the value with `useUserSetting` from core. The panel shows the change at once, saves it and reloads the settings cache, so the screen gets the new value from the same row.
+4. In the screen, call `useModuleSettingsSheet(<id>)`. Put its row last in the More menu and render its `sheet` one time.
+
+A panel that applies only when a feature is on returns nothing when the feature is off. A panel that belongs to another module, such as Google Calendar, shows only while that module is on.
+
+`module-conformance.test.ts` fails a module that has settings but no `useModuleSettingsSheet` call in its screens. Some older modules (Home search, Home setup, Calendar, Assistant and Shopper) do not have a More menu yet. They are in the baseline.

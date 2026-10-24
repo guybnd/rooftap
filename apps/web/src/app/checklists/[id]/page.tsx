@@ -46,6 +46,7 @@ import {
 import { navLinkClickHandler } from '@/lib/view-transitions';
 import { toastUndoDelete } from '@/lib/undo-toast';
 import { PopMenu, MenuItem, MenuLabel, MenuDivider } from '@/app/setup/pop-menu';
+import { useModuleSettingsSheet } from '@/components/module-settings-sheet';
 import { EditableText } from '@/components/ui/editable-text';
 import { LeadingTile } from '@/components/ui/leading-tile';
 import { Switch } from '@/components/ui/switch';
@@ -125,6 +126,7 @@ export default function ChecklistDetailPage() {
   );
 
   const [menuOpen, setMenuOpen] = useState(false);
+  const settings = useModuleSettingsSheet('checklists');
   const [menuView, setMenuView] = useState<'menu' | 'sort'>('menu');
   const [dateMenuOpen, setDateMenuOpen] = useState(false);
   // HOUP-328: Rename lives in the menu but edits the header h1 in place —
@@ -375,6 +377,7 @@ export default function ChecklistDetailPage() {
 
   return (
     <div className={cn('mx-auto space-y-4 p-4 md:p-6 pb-24', wide ? 'max-w-6xl lg:px-8' : 'max-w-2xl')}>
+      {settings.sheet}
       {/* Header */}
       <div className="flex items-center gap-2">
         <Link
@@ -446,6 +449,21 @@ export default function ChecklistDetailPage() {
                 <MenuItem onClick={clearCompleted} disabled={doneItems.length === 0}>
                   {`Clear completed · ${doneItems.length}`}
                 </MenuItem>
+
+                {settings.available && (
+                  <>
+                    <MenuDivider />
+                    {/* The defaults for every list; Sort and Completed to bottom above are this list's. */}
+                    <MenuItem
+                      onClick={() => {
+                        close();
+                        settings.open();
+                      }}
+                    >
+                      {settings.label}
+                    </MenuItem>
+                  </>
+                )}
 
                 <MenuDivider />
 

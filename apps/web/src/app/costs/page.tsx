@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useDataCache } from '@/lib/data-cache';
 import { createClient } from '@/lib/supabase/client';
 import { use$ } from '@legendapp/state/react';
-import type { CostItem, CostCategory, Apartment, CostInsightMarks, MoneySummaryPrefs, RecentSpendPrefs, SubscriptionLine } from '@homeup/core';
+import type { CostItem, CostCategory, Apartment, CostInsightMarks, SubscriptionLine, UserSettings } from '@homeup/core';
 import { toast } from 'sonner';
 import { ArrowLeft, X } from 'lucide-react';
 import {
@@ -21,10 +21,9 @@ import {
   setupCostLine,
   type NewCostLine,
 } from '@homeup/core';
-import { deleteCostReminders, costItems$, setupItems$, apartments$, useReconnectSync, useRecentSpendPrefs, useStoreHelpers, useStoreLoaded } from '@homeup/core';
+import { deleteCostReminders, costItems$, setupItems$, apartments$, readRecentSpendPrefs, saveUserSettings, useReconnectSync, useStoreHelpers, useStoreLoaded } from '@homeup/core';
 import { LeadingTile } from '@/components/ui/leading-tile';
-import { BottomSheet } from '@/components/ui/bottom-sheet';
-import { Input } from '@/components/ui/input';
+import { useModuleSettingsSheet } from '@/components/module-settings-sheet';
 import { sectionIconFor } from '@/lib/section-icons';
 import { toastUndoAction } from '@/lib/undo-toast';
 import { CostModal } from './cost-modal';
@@ -39,8 +38,6 @@ import { cn } from '@/lib/utils';
 // time from core costMonth. This file keeps the data around it: the cost
 // lines store, the monthly goal, the rent and setup suggestions, the cost
 // sheet, and "All payments" (the raw bank list, behind the ⋯ menu).
-
-const BUDGET_KEY = 'costs_budget_monthly';
 
 export default function CostsPage() {
   const { group, memberProfiles, currentUserId, userSettings, refresh: refreshCache, loading: cacheLoading } = useDataCache();
@@ -87,42 +84,24 @@ export default function CostsPage() {
   const [newCategory, setNewCategory] = useState<CostCategory | undefined>();
   const [hideSectionSuggestions, setHideSectionSuggestions] = useState(false);
 
-  // The monthly goal in cents, synced via user_settings (FLUX-65).
-  const [goalCents, setGoalCents] = useState<number | null>(null);
-  const [editingGoal, setEditingGoal] = useState(false);
-  const [goalDraft, setGoalDraft] = useState('');
+  // The monthly goal in cents, set in Costs settings (module-settings.ts).
+  const goalCents = userSettings?.costs_budget_monthly ?? null;
+  const settings = useModuleSettingsSheet('costs');
 
-  // Hydrate once on load: DB wins when present, else the legacy localStorage
-  // mirror (dollars).
+  // Hydrate once on load.
   const hydratedRef = useRef(false);
   useEffect(() => {
     if (cacheLoading || hydratedRef.current) return;
     hydratedRef.current = true;
-
-    const dbBudgetCents = userSettings?.costs_budget_monthly;
-    if (dbBudgetCents != null) {
-      setGoalCents(dbBudgetCents);
-    } else {
-      const b = localStorage.getItem(BUDGET_KEY);
-      if (b && !Number.isNaN(Number(b))) setGoalCents(Math.round(Number(b) * 100));
-    }
-
     if (userSettings?.costs_hide_section_suggestions != null) setHideSectionSuggestions(userSettings.costs_hide_section_suggestions);
   }, [cacheLoading, userSettings]);
 
-  const persistSettings = useCallback(async (payload: Record<string, unknown>) => {
-    try {
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      await supabase
-        .from('user_settings')
-        .upsert({ user_id: user.id, updated_at: new Date().toISOString(), ...payload }, { onConflict: 'user_id' });
-      refreshCache();
-    } catch {
-      /* offline / not signed in — localStorage mirror still holds the value */
-    }
-  }, [refreshCache]);
+  const persistSettings = useCallback(
+    async (payload: Partial<UserSettings>) => {
+      if (await saveUserSettings(createClient(), payload)) refreshCache();
+    },
+    [refreshCache],
+  );
 
   const dismissSectionSuggestions = () => {
     setHideSectionSuggestions(true);
@@ -148,23 +127,9 @@ export default function CostsPage() {
     },
     [canSaveMarks, persistSettings],
   );
-  // Assistant summaries (money-summary.ts): asked for per person, posted to the Household chat.
-  const summariesOn = insightsOn && modules.isEnabled('assistant');
-  const [summaryPrefs, setSummaryPrefs] = useState<MoneySummaryPrefs>({});
-  useEffect(() => {
-    if (userSettings?.money_summaries) setSummaryPrefs(userSettings.money_summaries);
-  }, [userSettings?.money_summaries]);
-  const saveSummaryPrefs = useCallback(
-    (next: MoneySummaryPrefs) => {
-      setSummaryPrefs(next);
-      void persistSettings({ money_summaries: next });
-    },
-    [persistSettings],
-  );
-  // Recent spending on the Latest card (recent-spend.ts): which windows show and whether bills count.
-  const canSaveRecent = modules.server('costs.recent-spend');
-  const saveRecent = useCallback((next: RecentSpendPrefs) => void persistSettings({ costs_recent_spend: next }), [persistSettings]);
-  const recentSpend = useRecentSpendPrefs(userSettings?.costs_recent_spend, canSaveRecent ? saveRecent : null);
+  // Assistant summaries (money-summary.ts) and recent spending (recent-spend.ts) are set in Costs settings.
+  const canSummarise = insightsOn && modules.isEnabled('assistant');
+  const recentPrefs = readRecentSpendPrefs(userSettings?.costs_recent_spend);
   const remindToCancel = useCallback(
     async (sub: SubscriptionLine) => {
       if (!group?.id || !sub.item) return;
@@ -182,15 +147,6 @@ export default function CostsPage() {
     },
     [group?.id, currentUserId],
   );
-
-  const saveGoal = (cents: number | null) => {
-    const value = cents && cents > 0 ? cents : null;
-    setGoalCents(value);
-    if (value) localStorage.setItem(BUDGET_KEY, String(value / 100));
-    else localStorage.removeItem(BUDGET_KEY);
-    setEditingGoal(false);
-    persistSettings({ costs_budget_monthly: value });
-  };
 
   // Single-item delete: soft-delete in Legend (offline-safe) + fire-and-forget
   // reminder cleanup (reminders are nice-to-have; the cost delete is what matters).
@@ -327,10 +283,7 @@ export default function CostsPage() {
         <CostsOverview
           items={items}
           goalCents={goalCents}
-          onEditGoal={() => {
-            setGoalDraft(goalCents ? String(goalCents / 100) : '');
-            setEditingGoal(true);
-          }}
+          onOpenSettings={settings.available ? settings : null}
           onOpenItem={openItem}
           onAdd={openNew}
           onArchive={archive}
@@ -341,43 +294,13 @@ export default function CostsPage() {
           onPatchItem={(item, patch) => patchRow(item.id, patch)}
           footer={suggestions}
           wide={wide}
-          recent={recentSpend}
-          summaries={summariesOn ? { prefs: summaryPrefs, onChange: modules.server('costs.money-summaries') ? saveSummaryPrefs : null } : null}
+          recentPrefs={recentPrefs}
+          canSummarise={canSummarise}
           insights={insightsOn ? { marks: insightMarks, onMarks: updateMarks, onRemind: modules.feature('insights.reminders') ? remindToCancel : null } : null}
         />
       )}
 
-      <BottomSheet
-        open={editingGoal}
-        onOpenChange={setEditingGoal}
-        overlayClassName="bg-black/40"
-        className="rounded-t-2xl border-t border-border bg-popover px-4 pb-[max(1rem,env(safe-area-inset-bottom))] text-popover-foreground shadow-2xl shadow-black/50 sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:w-full sm:max-w-sm sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:border sm:pt-4"
-        handleClassName="sm:hidden"
-        popupProps={{ 'aria-label': 'Monthly goal' }}
-      >
-        <form
-          className="space-y-3 pb-2 pt-1"
-          onSubmit={(e) => {
-            e.preventDefault();
-            const dollars = parseFloat(goalDraft);
-            saveGoal(Number.isFinite(dollars) ? Math.round(dollars * 100) : null);
-          }}
-        >
-          <p className="text-lg font-semibold text-foreground">Monthly goal</p>
-          <p className="text-sm text-muted-foreground">What the household aims to spend in a month. Leave it empty to have no goal.</p>
-          <Input type="number" inputMode="decimal" step="1" min="0" autoFocus value={goalDraft} onChange={(e) => setGoalDraft(e.target.value)} placeholder="4000" aria-label="Monthly goal in dollars" />
-          <div className="flex justify-end gap-2">
-            {goalCents ? (
-              <button type="button" onClick={() => saveGoal(null)} className="h-10 rounded-xl px-3 text-sm text-muted-foreground hover:bg-muted">
-                Remove goal
-              </button>
-            ) : null}
-            <button type="submit" className="h-10 rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90">
-              Save
-            </button>
-          </div>
-        </form>
-      </BottomSheet>
+      {settings.sheet}
 
       <CostModal
         key={editingItem?.id ?? `new-${newCategory ?? ''}`}

@@ -85,6 +85,7 @@ import {
   dialog,
 } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
+import { useModuleSettingsSheet } from '@/features/settings/module-settings-sheet';
 import { NoGroupScreen } from '@/components/no-group-screen';
 import { createUndoToastPresenter } from '@/lib/undo-toast';
 import { useOpenRoute } from '@/lib/tab-routes';
@@ -214,6 +215,7 @@ export default function ChecklistDetailScreen() {
   // HOUP-327: header overflow menu (replaces the resting Trash2) + its Sort
   // sub-panel (E3 — back row, selection as accent text + check).
   const [showMenuSheet, setShowMenuSheet] = React.useState(false);
+  const settings = useModuleSettingsSheet('checklists');
   const [menuView, setMenuView] = React.useState<MenuView>('menu');
   // HOUP-328: List rename sub-panel draft — set when entering the panel.
   const [renameDraft, setRenameDraft] = React.useState('');
@@ -614,6 +616,8 @@ export default function ChecklistDetailScreen() {
           </View>
         </BottomSheet>
 
+        {settings.sheet}
+
         {/* HOUP-327: header overflow menu (D3 — Delete list is the lone
             danger row here, replacing the resting Trash2 above). */}
         <BottomSheet open={showMenuSheet} onOpenChange={setShowMenuSheet}>
@@ -649,6 +653,20 @@ export default function ChecklistDetailScreen() {
                   onPress={clearCompleted}
                   disabled={doneItems.length === 0}
                 />
+
+                {settings.available ? (
+                  <>
+                    <View className="my-1 h-px bg-border" />
+                    {/* The defaults for every list; Sort and Completed to bottom above are this list's. */}
+                    <MenuItem
+                      label={settings.label}
+                      onPress={() => {
+                        setShowMenuSheet(false);
+                        settings.open();
+                      }}
+                    />
+                  </>
+                ) : null}
 
                 <View className="my-1 h-px bg-border" />
 

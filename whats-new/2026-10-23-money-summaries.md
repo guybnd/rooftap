@@ -4,4 +4,4 @@ module: money-insights
 kind: feature
 link: /costs
 ---
-Ask for a weekly or monthly money summary in the Costs menu. The Assistant posts it to the Household chat. You can also ask it to sum up any month.
+Ask for a weekly or monthly money summary in Costs settings. The Assistant posts it to the Household chat. You can also ask it to sum up any month.

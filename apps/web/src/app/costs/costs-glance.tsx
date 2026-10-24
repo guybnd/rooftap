@@ -184,7 +184,7 @@ export function LatestPage({
   lineById: ReadonlyMap<string, CostItem>;
   onOpen: () => void;
   onMove?: ((t: SpendingTransaction) => void) | null;
-  onSettings: () => void;
+  onSettings: (() => void) | null;
   skipBills: boolean;
 }) {
   const { windows, open, toggle, bars, payments, day, pickDay, error } = recent;
@@ -233,9 +233,11 @@ export function LatestPage({
             <span className="text-xs tabular-nums text-muted-foreground">
               {[payments ? `${payments.length} ${payments.length === 1 ? 'payment' : 'payments'}${day ? ` on ${recentDayLabel(day)}` : ''}` : null, skipBills ? 'Bills left out' : null].filter(Boolean).join(' · ')}
             </span>
-            <button type="button" onClick={onSettings} className="text-xs font-medium text-primary hover:underline">
-              Change
-            </button>
+            {onSettings ? (
+              <button type="button" onClick={onSettings} className="text-xs font-medium text-primary hover:underline">
+                Change
+              </button>
+            ) : null}
           </div>
         </div>
       ) : latest.length ? (

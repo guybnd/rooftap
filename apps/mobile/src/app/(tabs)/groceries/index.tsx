@@ -42,7 +42,7 @@ import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import * as FileSystem from 'expo-file-system/legacy';
 import { decode } from 'base64-arraybuffer';
 import * as SecureStore from 'expo-secure-store';
-import { ArrowUpDown, BookOpen, ChevronDown, ChevronRight, Plus, Receipt, RotateCcw, SquareCheck, Trash2, X } from 'lucide-react-native';
+import { ArrowUpDown, BookOpen, ChevronDown, ChevronRight, Plus, Receipt, RotateCcw, Settings, SquareCheck, Trash2, X } from 'lucide-react-native';
 import { Text, ActionMenu, type ActionMenuAnchor, type ActionMenuItem, Button, cn, GroceryGlyph, haptics, Input, PopIn, ReorderableList, ScreenBackground, toast, useArrivals } from '@homeup/ui';
 import { AISLE_ORDER, CUSTOM_AISLE_COLOR_KEYS, countHave, countNeeded, createPendingActionTracker, getAisleMeta, getRegionProvider, resolveItemDefaults, suggestReAdd, grocerySearchAddOptions, groceryBuyableItems, groceryEstimate, groceryTripTotals, useGrocerySearch, canonicalizeItemName, sortGroceriesFlat, DEFAULT_GROCERY_SORT_MODE, GROCERY_SHOW_KEY, parseGroceryShow, type GroceryShowFilter, todayStr, isBoughtToday, ensureSession, updateSession, closeSession, syncSession, getEnabledModules, isFeatureEnabled, fetchTodaySession, uploadReceipt, applyReceiptLearning, formatMoney, groceryItems$, loyaltyCards$, sortLoyaltyCards, learnItemPrice, MOTION_DURATIONS_MS, usePendingIds, useReconnectSync, useStoreHelpers, useStoreLoaded, type GroceryItem, type GrocerySession, type LoyaltyCard, type GrocerySortMode, POP_IN_HOLD_MS, type SuggestReAddItem, type DocumentUploadInput, dialog } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
@@ -64,6 +64,7 @@ import { useGroceryArchive } from '@/features/groceries/use-grocery-archive';
 import { useSuggestDismiss } from '@/features/groceries/use-suggest-dismiss';
 import { useGroceryUndo } from '@/features/groceries/use-grocery-undo';
 import { RewardsCardsSheet } from '@/features/groceries/rewards-cards-sheet';
+import { useModuleSettingsSheet } from '@/features/settings/module-settings-sheet';
 import { BulkActionsSheet } from '@/features/groceries/bulk-actions-sheet';
 import { BulkAssignSheet } from '@/features/groceries/bulk-assign-sheet';
 import { GroceriesSearchAdd } from '@/features/groceries/search-add';
@@ -239,6 +240,7 @@ export default function GroceriesSectionScreen() {
   // HOUP-175 (HOUP-95 deferral): drag-to-reorder within an aisle, mutually
   // exclusive with Select mode — mirrors HOUP-129's Setup reorder toggle.
   const [reorderMode, setReorderMode] = React.useState(false);
+  const settings = useModuleSettingsSheet('groceries');
   // Compact header menus (More, List view options), anchored to their buttons.
   const [moreAnchor, setMoreAnchor] = React.useState<ActionMenuAnchor | null>(null);
   const [viewAnchor, setViewAnchor] = React.useState<ActionMenuAnchor | null>(null);
@@ -1329,6 +1331,7 @@ export default function GroceriesSectionScreen() {
     ...(boughtStatusCount > 0
       ? [{ key: 'reset', label: `Reset bought (${boughtStatusCount})`, Icon: RotateCcw, onPress: () => (closeMenus(), resetBought()) }]
       : []),
+    ...(settings.available ? [{ key: 'settings', label: settings.label, Icon: Settings, onPress: () => (closeMenus(), settings.open()) }] : []),
   ];
   const viewItems: ActionMenuItem[] = [
     { key: 'aisle', label: 'By aisle', checked: sortMode === 'aisle', onPress: () => (closeMenus(), handleSortModeChange('aisle')) },
@@ -1651,6 +1654,7 @@ export default function GroceriesSectionScreen() {
       />
 
       <BulkActionsSheet open={bulkSheetOpen} onOpenChange={setBulkSheetOpen} customAisles={customAisles} onSetAisle={bulkSetAisle} />
+      {settings.sheet}
       <RewardsCardsSheet
         open={cardsOpen}
         onOpenChange={setCardsOpen}

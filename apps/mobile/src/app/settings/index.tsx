@@ -43,14 +43,14 @@ import {
   SectionScreen,
   haptics,
 } from '@homeup/ui';
-import { getEnabledSections, settingsMenuHue, useModules, dialog } from '@homeup/core';
+import { getEnabledSections, settingsMenuHue, useModules, dialog, hasModuleSettings } from '@homeup/core';
 import { OFFICIAL_SERVER_LABEL, getStoredServer, type ServerSelection } from '@/lib/server-config';
 import { sectionIcons } from '@/lib/section-icons';
 import { signOut } from '@/lib/supabase-client';
 import { useAppTheme } from '@/lib/theme-context';
 import { themePreferenceLabel } from '@/lib/theme-meta';
 import { useDataCache } from '@/lib/data-cache';
-import { globalMenus, sectionPanels, visiblePanels } from '@/features/settings/settings-registry';
+import { globalMenus } from '@/features/settings/settings-registry';
 import { TOKEN_KEY as PUSH_TOKEN_KEY } from '@/features/settings/panels/notifications-settings';
 
 const GLOBAL_MENU_ICONS: Record<string, LucideIcon> = {
@@ -129,7 +129,7 @@ export default function SettingsScreen() {
   );
 
   const sectionsWithPanels = getEnabledSections(modules.enabled).filter(
-    (section) => visiblePanels(sectionPanels[section.id] ?? [], modules.enabled).length > 0
+    (section) => hasModuleSettings(section.id, modules.enabled)
   );
 
   const themeName = themePreferenceLabel(preference);

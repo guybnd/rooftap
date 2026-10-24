@@ -66,7 +66,9 @@ import {
   ArrowUpDown,
   Receipt,
   RotateCcw,
+  Settings as SettingsIcon,
 } from 'lucide-react';
+import { useModuleSettingsSheet } from '@/components/module-settings-sheet';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { GroceryItemCard, GroceryItemCardStandalone } from './grocery-item-card';
@@ -186,6 +188,7 @@ export default function GroceriesPage() {
     sortLoyaltyCards(Object.values(cards$.get() ?? {}).filter((c): c is LoyaltyCard => !!c && !c.deleted))
   );
   const [cardsOpen, setCardsOpen] = useState(false);
+  const settings = useModuleSettingsSheet('groceries');
 
   // HOUP-245: tick-off "linger" (checking an item off while "Only needed" is on
   // would otherwise remove it from view instantly) + the delete-undo pill. One
@@ -248,9 +251,6 @@ export default function GroceriesPage() {
   const twoAisleColumns = useMediaQuery('(min-width: 1280px)');
   const [collapsedAisles, setCollapsedAisles] = useState<Set<string>>(new Set());
   const [selectMode, setSelectMode] = useState(false);
-  // Reorder aisles (More menu, By aisle only): aisles fold to their headers
-  // and the drag grip shows at every width, phones included.
-  const [reorderMode, setReorderMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBulkSaving, setIsBulkSaving] = useState(false);
 
@@ -385,9 +385,6 @@ export default function GroceriesPage() {
     io.observe(headEl);
     return () => io.disconnect();
   }, [headEl]);
-
-  // Reorder is a By-aisle mode; leaving for One list ends it.
-  useEffect(() => { if (sortMode === 'flat') setReorderMode(false); }, [sortMode]);
 
   // The bar's Search: back to the head, with the search box focused. Focus
   // first (inside the tap, so a phone raises its keyboard), then glide.
@@ -708,8 +705,7 @@ export default function GroceriesPage() {
     });
 
   const exitSelectMode = () => { setSelectMode(false); setSelectedIds(new Set()); };
-  const enterSelectMode = () => { setReorderMode(false); setSelectMode(true); };
-  const enterReorderMode = () => { exitSelectMode(); setReorderMode(true); };
+  const enterSelectMode = () => setSelectMode(true);
 
   const bulkUpdate = async (payload: Partial<GroceryItem>) => {
     const ids = [...selectedIds];
@@ -1027,14 +1023,11 @@ export default function GroceriesPage() {
   // collapsed bar (56px: py-1.5 around 44px targets) while it shows.
   const sessionBarActive = session?.tracking === 'on';
   const aisleStickyTop = headGone ? 'top-14' : 'top-0';
-  // Reorder only means something in By aisle.
-  const reordering = reorderMode && sortMode === 'aisle';
   // Hearth §13.7 "Desktop shell": on a wide screen the aisles flow into
-  // columns like a store map, beside the Running low sidebar. Reorder
-  // aisles stays one column so the drag reads top to bottom.
+  // columns like a store map, beside the Running low sidebar.
   // One list stays a single centred column.
   const wideAisles = wide && sortMode === 'aisle';
-  const aisleColumns = wideAisles && !reordering;
+  const aisleColumns = wideAisles;
 
   // Lede caption fragments (H6): what's left beyond the to-buy count. The
   // estimate moved to the "This trip" card at the end of the list.
@@ -1054,9 +1047,9 @@ export default function GroceriesPage() {
   // Purchasing session (to Costs when costs.from-groceries is on): the
   // floating ask until decided, then the shop pill in the same spot. Both
   // step aside while searching and while Select's bulk bar owns the bottom
-  // edge; the pill also yields to Reorder.
+  // edge.
   const showTrackPrompt = !searching && !selectMode && session === null && boughtToday.length > 0;
-  const showShopPill = !searching && !selectMode && !reordering && session?.tracking === 'on' && !session.closed_at;
+  const showShopPill = !searching && !selectMode && session?.tracking === 'on' && !session.closed_at;
   const shopTotal = cartCents ?? sessionSum;
   const openAdd = () => { setEditingItem(undefined); setDefaultAisle('other'); setIsModalOpen(true); };
 
@@ -1250,7 +1243,7 @@ export default function GroceriesPage() {
           with its label and caption stacked beside it, then the head verbs on
           the same row. H5: "+ Add" is the screen's one accent fill; Rewards
           cards stays a one-tap shortcut to the checkout barcode (Guy), and
-          the rarer verbs (Select, Reorder, Library, Track shop, Reset) live
+          the rarer verbs (Select, Library, Track shop, Reset, Groceries settings) live
           behind More. M2: every target is 44px. */}
       <div ref={setHeadEl} className="!mt-0 space-y-3">
         <HeroLede
@@ -1263,11 +1256,11 @@ export default function GroceriesPage() {
               <button onClick={() => setCardsOpen(true)} aria-label="Rewards cards" title="Rewards cards" className={iconButtonClass}>
                 <WalletCards className="h-4 w-4" />
               </button>
-              {/* A mode is never stuck behind a menu: while Select or Reorder
-                  is on, More yields to a visible Done. */}
-              {selectMode || reordering ? (
+              {/* A mode is never stuck behind a menu: while Select is on,
+                  More yields to a visible Done. */}
+              {selectMode ? (
                 <button
-                  onClick={() => { exitSelectMode(); setReorderMode(false); }}
+                  onClick={exitSelectMode}
                   className="flex h-11 flex-shrink-0 items-center whitespace-nowrap rounded-lg border border-primary/40 bg-primary/15 px-3 text-sm font-medium tabular-nums text-primary transition-colors hover:bg-primary/20"
                 >
                   {selectMode && selectedIds.size > 0 ? `${selectedIds.size} selected` : 'Done'}
@@ -1287,11 +1280,6 @@ export default function GroceriesPage() {
                           Select
                         </MenuItem>
                       )}
-                      {sortMode === 'aisle' && orderedAisles.length > 1 && (
-                        <MenuItem icon={<ArrowUpDown className="h-4 w-4" />} onClick={() => { enterReorderMode(); close(); }}>
-                          Reorder aisles
-                        </MenuItem>
-                      )}
                       <MenuItem icon={<BookOpen className="h-4 w-4" />} onClick={() => { close(); router.push('/groceries/shelf-life'); }}>
                         Item library
                       </MenuItem>
@@ -1307,6 +1295,11 @@ export default function GroceriesPage() {
                       {bought > 0 && (
                         <MenuItem icon={<RotateCcw className="h-4 w-4" />} onClick={() => { close(); void resetBought(); }}>
                           Reset bought ({bought})
+                        </MenuItem>
+                      )}
+                      {settings.available && (
+                        <MenuItem icon={<SettingsIcon className="h-4 w-4" />} onClick={() => { close(); settings.open(); }}>
+                          {settings.label}
                         </MenuItem>
                       )}
                     </>
@@ -1510,15 +1503,15 @@ export default function GroceriesPage() {
                           !aisleColumns && ['sticky z-20 bg-background/90 backdrop-blur-sm', aisleStickyTop]
                         )}
                       >
-                        {/* The grip shows on wide screens always, and at every
-                            width in Reorder aisles (then at a 44px target, M2). */}
+                        {/* The grip shows on wide screens; on a phone, aisle
+                            order is in Groceries settings. */}
                         {!disabled && (
                           <span
                             {...attributes}
                             {...(listeners ?? {})}
                             className={cn(
                               'place-items-center text-muted-foreground/70 hover:text-muted-foreground cursor-grab active:cursor-grabbing flex-shrink-0 touch-none',
-                              reordering ? 'grid -my-2 h-11 w-8 text-muted-foreground' : 'hidden sm:grid'
+                              'hidden sm:grid'
                             )}
                             title="Drag to reorder aisle"
                           >
@@ -1559,9 +1552,7 @@ export default function GroceriesPage() {
                         </div>
                       </div>
 
-                      {/* Reorder aisles folds every aisle to its header so the
-                          drag is short; the saved collapse state is untouched. */}
-                      {!collapsed && !reordering && (
+                      {!collapsed && (
                         <div className="space-y-2">
                           {sortedItems.length > 0 ? (
                             <ListGroup>
@@ -1678,7 +1669,7 @@ export default function GroceriesPage() {
 
       {/* Add custom aisle — HOUP-317: also gated to By aisle, so a list
           showing no aisles never offers one. */}
-      {!hideNonNeeded && !searching && !selectMode && !reordering && sortMode === 'aisle' && (
+      {!hideNonNeeded && !searching && !selectMode && sortMode === 'aisle' && (
         <div>
           {showAddAisle ? (
             <div className="space-y-3 rounded-3xl border border-border/60 bg-card p-4 shadow-[var(--card-shadow)]">
@@ -1872,6 +1863,7 @@ export default function GroceriesPage() {
         </div>
       )}
 
+      {settings.sheet}
       <RewardsCardsSheet
         open={cardsOpen}
         onOpenChange={setCardsOpen}

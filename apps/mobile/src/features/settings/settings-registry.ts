@@ -5,7 +5,7 @@
 // packages/core/scripts/check-import-boundary.mjs and this map holds live
 // component refs).
 import type { ComponentType } from 'react';
-import type { ModuleId } from '@homeup/core';
+import { moduleSettingsPanels, type ModuleId, type SettingsPanelId } from '@homeup/core';
 import { AppearanceSettings, HapticsSettings, MotionSettings } from './panels/appearance-settings';
 import { SectionPreferences } from './panels/section-preferences';
 import { HomeProfileSettings } from './panels/home-profile-settings';
@@ -30,7 +30,7 @@ import { SavedSearchesSettings } from './panels/saved-searches-settings';
 import { AgentsManager } from './panels/agents-manager';
 import { SetupStoresSettings } from './panels/setup-stores-settings';
 import { HouseholdSettings } from './panels/household-settings';
-import { CostsSettings } from './panels/costs-settings';
+import { CostsSettings, CostsRecentSettings, CostsSubscriptionsSettings, CostsSummariesSettings } from './panels/costs-settings';
 import { UpBankSettings } from './panels/up-bank-settings';
 import { GroceriesSettings } from './panels/groceries-settings';
 import { ChecklistsSettings } from './panels/checklists-settings';
@@ -55,22 +55,39 @@ export const globalMenus: GlobalMenu[] = [
   { key: 'about', label: 'About & updates', panels: [AppUpdates] },
 ];
 
-export const sectionPanels: Record<string, ComponentType[]> = {
-  search: [BudgetSettings, AppointmentSettings, SavedSearchesSettings, AgentsManager],
-  setup: [SetupStoresSettings],
-  household: [HouseholdSettings],
-  costs: [CostsSettings],
-  groceries: [GroceriesSettings],
-  checklists: [ChecklistsSettings],
-  calendar: [CalendarSetup],
-  assistant: [AssistantSettings, AssistantSpending, AssistantTelegram, AssistantHomeAssistant],
-  shopper: [ShopperSettings],
+// Every module settings panel by its core id (module-settings.ts). The
+// Settings page and the module screen's settings sheet both render
+// moduleSettingsPanels() through this map, so a module's settings are listed
+// once, in core.
+export const SETTINGS_PANELS: Record<SettingsPanelId, ComponentType> = {
+  'search-budget': BudgetSettings,
+  'search-appointments': AppointmentSettings,
+  'search-saved': SavedSearchesSettings,
+  'search-agents': AgentsManager,
+  'setup-stores': SetupStoresSettings,
+  'task-defaults': HouseholdSettings,
+  'costs-goal': CostsSettings,
+  'costs-recent': CostsRecentSettings,
+  'costs-subscriptions': CostsSubscriptionsSettings,
+  'costs-summaries': CostsSummariesSettings,
+  groceries: GroceriesSettings,
+  checklists: ChecklistsSettings,
+  'google-calendar': CalendarSetup,
+  assistant: AssistantSettings,
+  'assistant-spending': AssistantSpending,
+  'assistant-telegram': AssistantTelegram,
+  'assistant-home-assistant': AssistantHomeAssistant,
+  'shopper-sources': ShopperSettings,
 };
+
+/** A module's settings panels for this household, ready to render. */
+export function moduleSettingsComponents(id: string, enabled: ReadonlySet<string>): ComponentType[] {
+  return moduleSettingsPanels(id, enabled).map((panel) => SETTINGS_PANELS[panel]);
+}
 
 // Modules (.docs/modules.md): a panel for an integration module shows only
 // while that module is on. Every other panel follows its section or menu.
 const PANEL_MODULE = new Map<ComponentType, ModuleId>([
-  [CalendarSetup, 'google-calendar'],
   [McpSettings, 'mcp'],
 ]);
 

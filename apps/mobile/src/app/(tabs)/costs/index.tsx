@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { use$ } from '@legendapp/state/react';
 import { ChevronLeft, X } from 'lucide-react-native';
-import { Text, BottomSheet, Button, Card, Input, LeadingTile, ScreenBackground, haptics, toast } from '@homeup/ui';
+import { Text, Button, Card, LeadingTile, ScreenBackground, haptics, toast } from '@homeup/ui';
 import {
   apartments$,
   costItems$,
@@ -32,9 +32,9 @@ import {
   toISODate,
   type Apartment,
   type CostInsightMarks,
-  type MoneySummaryPrefs,
-  type RecentSpendPrefs,
-  useRecentSpendPrefs,
+  type UserSettings,
+  readRecentSpendPrefs,
+  saveUserSettings,
   type SubscriptionLine,
   type CostCategory,
   type CostItem,
@@ -52,6 +52,7 @@ import { CostModal } from '@/features/costs/cost-modal';
 import { CostsOverview } from '@/features/costs/costs-overview';
 import { upBankApi } from '@/features/costs/up-bank-api';
 import { MoneyView } from '@/features/costs/money-view';
+import { useModuleSettingsSheet } from '@/features/settings/module-settings-sheet';
 import { sectionIconFor } from '@/lib/section-icons';
 
 type MemberProfiles = Record<string, { email: string; name: string | null; avatar: string | null }>;
@@ -109,9 +110,9 @@ function CostsScreenBody() {
       .reduce((sum, i) => sum + (i.est_price ?? 0), 0) * 100
   );
 
-  const [goal, setGoal] = React.useState<number | null>(null);
-  const [editingGoal, setEditingGoal] = React.useState(false);
-  const [goalDraft, setGoalDraft] = React.useState('');
+  // The monthly goal in cents, set in Costs settings (module-settings.ts).
+  const goal = userSettings?.costs_budget_monthly ?? null;
+  const settings = useModuleSettingsSheet('costs');
   const [hideSectionSuggestions, setHideSectionSuggestions] = React.useState(false);
   const [modalOpen, setModalOpen] = React.useState(false);
   const [editingItem, setEditingItem] = React.useState<CostItem | undefined>();
@@ -120,26 +121,16 @@ function CostsScreenBody() {
   // Two "Add" opens in a row both key to 'new': this nonce remounts the form each time.
   const [addNonce, setAddNonce] = React.useState(0);
 
-  // FLUX-65: the monthly goal (budget) syncs via user_settings. Hydrate once.
+  // Hydrate once.
   const hydrated = React.useRef(false);
   React.useEffect(() => {
     if (cacheLoading || hydrated.current) return;
     hydrated.current = true;
-    if (userSettings?.costs_budget_monthly != null) setGoal(userSettings.costs_budget_monthly);
     if (userSettings?.costs_hide_section_suggestions != null) setHideSectionSuggestions(userSettings.costs_hide_section_suggestions);
   }, [cacheLoading, userSettings]);
 
-  const persistSettings = React.useCallback(async (payload: Record<string, unknown>) => {
-    try {
-      const supabase = getCurrentSupabaseClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return;
-      await supabase.from('user_settings').upsert({ user_id: user.id, updated_at: new Date().toISOString(), ...payload }, { onConflict: 'user_id' });
-    } catch {
-      // Offline, or the client isn't bound yet: the local state already shows it.
-    }
+  const persistSettings = React.useCallback(async (payload: Partial<UserSettings>) => {
+    await saveUserSettings(getCurrentSupabaseClient(), payload);
   }, []);
 
   // Money insights: what this person hid and the subscriptions they kept
@@ -161,23 +152,9 @@ function CostsScreenBody() {
     },
     [canSaveMarks, persistSettings],
   );
-  // Assistant summaries (money-summary.ts): asked for per person, posted to the Household chat.
-  const summariesOn = insightsOn && modules.isEnabled('assistant');
-  const [summaryPrefs, setSummaryPrefs] = React.useState<MoneySummaryPrefs>({});
-  React.useEffect(() => {
-    if (userSettings?.money_summaries) setSummaryPrefs(userSettings.money_summaries);
-  }, [userSettings?.money_summaries]);
-  const saveSummaryPrefs = React.useCallback(
-    (next: MoneySummaryPrefs) => {
-      setSummaryPrefs(next);
-      void persistSettings({ money_summaries: next });
-    },
-    [persistSettings],
-  );
-  // Recent spending on the Latest card (recent-spend.ts): which windows show and whether bills count.
-  const canSaveRecent = modules.server('costs.recent-spend');
-  const saveRecent = React.useCallback((next: RecentSpendPrefs) => void persistSettings({ costs_recent_spend: next }), [persistSettings]);
-  const recentSpend = useRecentSpendPrefs(userSettings?.costs_recent_spend, canSaveRecent ? saveRecent : null);
+  // Assistant summaries (money-summary.ts) and recent spending (recent-spend.ts) are set in Costs settings.
+  const canSummarise = insightsOn && modules.isEnabled('assistant');
+  const recentPrefs = readRecentSpendPrefs(userSettings?.costs_recent_spend);
   const remindToCancel = React.useCallback(
     async (sub: SubscriptionLine) => {
       if (!group?.id || !sub.item) return;
@@ -200,14 +177,6 @@ function CostsScreenBody() {
     },
     [group?.id, currentUserId],
   );
-
-  const saveGoal = () => {
-    const dollars = Number(goalDraft);
-    const cents = goalDraft && Number.isFinite(dollars) && dollars > 0 ? Math.round(dollars * 100) : null;
-    setGoal(cents);
-    setEditingGoal(false);
-    void persistSettings({ costs_budget_monthly: cents });
-  };
 
   const dismissSectionSuggestions = () => {
     setHideSectionSuggestions(true);
@@ -332,10 +301,7 @@ function CostsScreenBody() {
             <CostsOverview
               items={items}
               goalCents={goal}
-              onEditGoal={() => {
-                setGoalDraft(goal ? String(goal / 100) : '');
-                setEditingGoal(true);
-              }}
+              onOpenSettings={settings.available ? settings : null}
               onOpenItem={openItem}
               onAdd={openNew}
               onArchive={archive}
@@ -345,21 +311,14 @@ function CostsScreenBody() {
               onSetAmount={(item, cents) => patchRow(item.id, { amount: cents })}
               onPatchItem={(item, patch) => patchRow(item.id, patch)}
               footer={suggestions}
-              recent={recentSpend}
-              summaries={summariesOn ? { prefs: summaryPrefs, onChange: modules.server('costs.money-summaries') ? saveSummaryPrefs : null } : null}
+              recentPrefs={recentPrefs}
+              canSummarise={canSummarise}
               insights={insightsOn ? { marks: insightMarks, onMarks: updateMarks, onRemind: modules.feature('insights.reminders') ? remindToCancel : null } : null}
             />
           )}
         </KeyboardAwareScrollView>
 
-        <BottomSheet open={editingGoal} onOpenChange={setEditingGoal} className="pb-3">
-          <View className="gap-3 px-4 pb-2">
-            <Text className="font-heading text-title font-semibold text-foreground">Monthly goal</Text>
-            <Text className="text-caption text-muted-foreground">What the household aims to spend in a month. Leave it empty for no goal.</Text>
-            <Input autoFocus keyboardType="decimal-pad" value={goalDraft} onChangeText={setGoalDraft} placeholder="e.g. 9000" onSubmitEditing={saveGoal} />
-            <Button onPress={saveGoal}>{goal && !goalDraft ? 'Remove the goal' : 'Save'}</Button>
-          </View>
-        </BottomSheet>
+        {settings.sheet}
 
         <CostModal
           key={editingItem?.id ?? `new-${addNonce}`}

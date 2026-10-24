@@ -6,7 +6,7 @@
 // same substitution task-quick-menu.tsx already makes for the per-row menu.
 import * as React from 'react';
 import { Pressable, View } from 'react-native';
-import { RotateCw, Sparkles } from 'lucide-react-native';
+import { RotateCw, Settings, Sparkles } from 'lucide-react-native';
 import { Text, BottomSheet } from '@homeup/ui';
 
 function ActionRow({
@@ -42,9 +42,11 @@ export interface TasksActionSheetProps {
   isGenerating: boolean;
   /** False when no move-in date is set, or the move is long past. */
   movingActive: boolean;
+  /** "Tasks & Reminders settings" (module-settings.ts), or null when there is nothing to set. */
+  settings: { label: string; open: () => void } | null;
 }
 
-export function TasksActionSheet({ open, onOpenChange, onRefresh, onGenerate, isGenerating, movingActive }: TasksActionSheetProps) {
+export function TasksActionSheet({ open, onOpenChange, onRefresh, onGenerate, isGenerating, movingActive, settings }: TasksActionSheetProps) {
   const close = () => onOpenChange(false);
 
   return (
@@ -66,6 +68,16 @@ export function TasksActionSheet({ open, onOpenChange, onRefresh, onGenerate, is
             onPress={() => {
               close();
               onGenerate();
+            }}
+          />
+        )}
+        {settings && (
+          <ActionRow
+            icon={<Settings size={16} className="text-muted-foreground" />}
+            label={settings.label}
+            onPress={() => {
+              close();
+              settings.open();
             }}
           />
         )}

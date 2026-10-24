@@ -58,6 +58,7 @@ export * from './modules/setup/setup-list-view';
 export * from './modules/setup/use-setup-list';
 export * from './modules/setup/setup-item-form';
 export * from './sections';
+export * from './module-settings';
 export * from './recent-sections';
 export * from './modules';
 export * from './modules-store';
@@ -193,6 +194,7 @@ export * from './modules/occasions/occasions-view';
 export * from './modules/occasions/use-occasions-view';
 export * from './modules/bins/use-bins';
 export * from './modules/bins/use-bins-view';
+export * from './use-user-setting';
 // new-module:module-hooks (scripts/new-module.mjs adds above this line)
 export * from './modules/recipes/use-recipe-match';
 
