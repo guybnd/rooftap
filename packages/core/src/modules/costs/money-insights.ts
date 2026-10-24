@@ -8,7 +8,7 @@
 import { CADENCE_LABEL, CATEGORY_META, costTargets, isOneOff, monthlyProjection, nextOccurrence, parseLocalDateOnly, type BankActuals } from './costs';
 import { formatMoney } from '../../money-format';
 import { BILL_CATEGORIES } from './recent-spend';
-import type { BankAccountSummary, BankTransaction, CostActual, CostBankLink } from './up-bank';
+import { mergeJointCopies, type BankAccountSummary, type BankTransaction, type CostActual, type CostBankLink } from './up-bank';
 import type { CostCadence, CostCategory, CostItem } from '../../types';
 
 const DAY_MS = 86_400_000;
@@ -355,7 +355,7 @@ export function weeklyMoneyDigest(input: WeeklyDigestInput): string | null {
   const seen = new Set<string>();
   const byPayee = new Map<string, number>();
   let spent = 0;
-  for (const r of input.week) {
+  for (const r of mergeJointCopies(input.week)) {
     if (r.is_transfer || r.hidden || r.amount_cents >= 0 || seen.has(r.external_id)) continue;
     seen.add(r.external_id);
     spent += -r.amount_cents;

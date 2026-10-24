@@ -581,16 +581,20 @@ async function keepAmountsInStep(admin: SupabaseClient, groupId: string, rules: 
     const sharing = await bankSharing(admin, rule.created_by!, groupId);
     const { data: recent } = await admin
       .from("bank_transactions")
-      .select("user_id, account_id, account_name, amount_cents, is_transfer")
+      .select("external_id, user_id, account_id, account_name, amount_cents, is_transfer")
       .eq("cost_item_id", rule.cost_item_id)
       .in("user_id", bankScopePeople(sharing, "all"))
       .eq("status", "SETTLED")
       .eq("hidden", false)
       .order("occurred_at", { ascending: false })
       .limit(20);
-    const paid = ((recent ?? []) as Pick<BankTransaction, "user_id" | "account_id" | "account_name" | "amount_cents" | "is_transfer">[]).filter(
-      (r) => bankRowVisible(r, sharing, "all") && isLinkablePayment(r),
-    );
+    // A joint payment read by two people is one payment, not two of the latest three.
+    const seen = new Set<string>();
+    const paid = ((recent ?? []) as Pick<BankTransaction, "external_id" | "user_id" | "account_id" | "account_name" | "amount_cents" | "is_transfer">[]).filter((r) => {
+      if (!bankRowVisible(r, sharing, "all") || !isLinkablePayment(r) || seen.has(r.external_id)) return false;
+      seen.add(r.external_id);
+      return true;
+    });
     const { data: line } = await admin.from("cost_items").select("is_estimate").eq("id", rule.cost_item_id).maybeSingle();
     const amount = bankLineAmount(
       paid.map((r) => Number(r.amount_cents)),

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { CostItem } from '../../types';
 import {
   ledgerRows,
+  mergeJointCopies,
   addBankMatch,
   actualsSinceOf,
   bankMatchParts,
@@ -540,5 +541,33 @@ describe('ledgerRows', () => {
     expect(rows).toHaveLength(2);
     expect(rows.find((r) => r.category === 'insurance')).toMatchObject({ outCents: 5000, count: 1 });
     expect(rows.find((r) => !r.category)).toMatchObject({ outCents: 3000, count: 2 });
+  });
+});
+
+describe('joint payments read by two people', () => {
+  const guy = row({ id: 'a', user_id: 'u1', external_id: 'j1', account_name: '2Up', description: 'Rent', amount_cents: -50000 });
+  const tegan = { ...guy, id: 'b', user_id: 'u2' };
+
+  it('counts the payment once', () => {
+    const [line] = ledgerRows([guy, tegan]);
+    expect(line.outCents).toBe(50000);
+    expect(line.count).toBe(1);
+  });
+
+  it('leaves the payment out when either copy is hidden', () => {
+    expect(ledgerRows([guy, { ...tegan, hidden: true }])).toEqual([]);
+    expect(ledgerRows([{ ...guy, hidden: true }, tegan])).toEqual([]);
+  });
+
+  it('files the payment under the line either copy names', () => {
+    const filed = { ...tegan, cost_item_id: 'rent', link_kind: 'manual' as const };
+    expect(ledgerRows([guy, filed])[0].costItemId).toBe('rent');
+    expect(costActuals([guy, filed])).toEqual([{ costItemId: 'rent', month: '2026-10', cents: 50000 }]);
+  });
+
+  it('prefers a line filed by hand over one a rule picked', () => {
+    const rule = { ...guy, cost_item_id: 'bills', link_kind: 'rule' as const };
+    const hand = { ...tegan, cost_item_id: 'rent', link_kind: 'manual' as const };
+    expect(mergeJointCopies([rule, hand])[0].cost_item_id).toBe('rent');
   });
 });

@@ -110,11 +110,15 @@ export async function changeBankTransaction(
     .single();
   if (error || !saved)
     return { error: error?.message ?? "Couldn't save.", status: 500 };
-  // A joint payment is stored once per person who reads it: they share a category.
-  if ("cost_category" in patch)
+  // A joint payment is stored once per person who reads it: the copies share
+  // whether it's hidden, its line and its category. The note stays the writer's.
+  const shared = Object.fromEntries(
+    Object.entries(patch).filter(([k]) => k !== "note"),
+  );
+  if (Object.keys(shared).length)
     await c.admin
       .from("bank_transactions")
-      .update({ cost_category: patch.cost_category })
+      .update(shared)
       .eq("group_id", c.groupId)
       .eq("external_id", row.external_id)
       .neq("id", id);
@@ -236,7 +240,8 @@ export async function makeCostFromPayment(
   await c.admin
     .from("bank_transactions")
     .update({ cost_item_id: item.id, link_kind: "manual" })
-    .eq("id", t!.id);
+    .eq("group_id", c.groupId)
+    .eq("external_id", t!.external_id);
   if (input.linkPayee) {
     const linked = await setBankLinkRule(
       c,

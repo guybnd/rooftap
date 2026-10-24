@@ -194,11 +194,42 @@ export function monthKeyAt(iso: string, tzOffset: number): string {
 }
 
 /**
+ * One row per Up transaction. A joint account read by two people arrives
+ * twice, and the copies can disagree when one was changed before changes
+ * reached both: the payment counts as hidden when either copy is, and a
+ * copy filed by hand (then any filed copy) gives its line and category.
+ */
+export function mergeJointCopies<T extends Pick<BankTransaction, 'external_id' | 'hidden' | 'cost_item_id' | 'link_kind' | 'cost_category'>>(rows: readonly T[]): T[] {
+  const firstAt = new Map<string, number>();
+  const out: T[] = [];
+  for (const r of rows) {
+    const at = firstAt.get(r.external_id);
+    if (at === undefined) {
+      firstAt.set(r.external_id, out.length);
+      out.push(r);
+      continue;
+    }
+    const kept = out[at];
+    const filedBy = (x: T) => (x.link_kind === 'manual' ? 2 : x.cost_item_id ? 1 : 0);
+    const line = filedBy(r) > filedBy(kept) ? r : kept;
+    out[at] = {
+      ...kept,
+      hidden: !!kept.hidden || !!r.hidden,
+      cost_item_id: line.cost_item_id ?? null,
+      link_kind: line.link_kind ?? null,
+      cost_category: kept.cost_category ?? r.cost_category ?? null,
+    } as T;
+  }
+  return out;
+}
+
+/**
  * Each cost line's real spend per month: money out filed under it, hidden
  * payments and transfers left out, a joint payment counted once. Months are
  * the device's (tzOffset as in monthKeyAt).
  */
-export function costActuals(rows: readonly BankTransaction[], tzOffset = 0): CostActual[] {
+export function costActuals(all: readonly BankTransaction[], tzOffset = 0): CostActual[] {
+  const rows = mergeJointCopies(all);
   const seen = new Set<string>();
   const sums = new Map<string, CostActual>();
   for (const r of rows) {
@@ -224,7 +255,8 @@ export function costActuals(rows: readonly BankTransaction[], tzOffset = 0): Cos
  * view (a person's own account paying into the joint one) is money in, like
  * a deposit from another bank; one out to such an account is left out.
  */
-export function ledgerRows(rows: readonly BankTransaction[], tzOffset = 0): LedgerRow[] {
+export function ledgerRows(all: readonly BankTransaction[], tzOffset = 0): LedgerRow[] {
+  const rows = mergeJointCopies(all);
   const seen = new Set<string>();
   const out = new Map<string, LedgerRow>();
   const transfersIn = transfersFromOutside(rows);
@@ -253,7 +285,8 @@ export function ledgerRows(rows: readonly BankTransaction[], tzOffset = 0): Ledg
  * Costs recent spending strip (recent-spend.ts). Counted once per bank
  * transaction; transfers and hidden payments stay out.
  */
-export function dayRows(rows: readonly BankTransaction[], since: string, tzOffset = 0): DaySpend[] {
+export function dayRows(all: readonly BankTransaction[], since: string, tzOffset = 0): DaySpend[] {
+  const rows = mergeJointCopies(all);
   const seen = new Set<string>();
   const out = new Map<string, DaySpend>();
   for (const r of rows) {
@@ -502,15 +535,7 @@ export function summariseSpending(
   month: string,
   opts: { recent?: number } = {},
 ): UpSpending {
-  const seen = new Set<string>();
-  const unique = rows
-    .slice()
-    .sort((a, b) => b.occurred_at.localeCompare(a.occurred_at))
-    .filter((r) => {
-      if (seen.has(r.external_id)) return false;
-      seen.add(r.external_id);
-      return true;
-    });
+  const unique = mergeJointCopies(rows.slice().sort((a, b) => b.occurred_at.localeCompare(a.occurred_at)));
 
   let spent = 0;
   let received = 0;
