@@ -42,6 +42,8 @@ vi.mock('@homeup/core', () => ({
   setModuleRows: vi.fn(),
   setAvailableModules: vi.fn(),
   setServerSchema: vi.fn(),
+  setServerRelease: vi.fn(),
+  serverReleaseFromConfig: vi.fn(() => ({ version: null, minAppRuntime: null, latestApp: null })),
   getModulesSnapshot: () => ({ rows: null, available: null }),
   setHouseholdCurrency: vi.fn(),
   householdCurrency: () => 'AUD',

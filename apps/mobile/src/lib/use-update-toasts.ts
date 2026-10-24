@@ -15,11 +15,18 @@
 //   the commit CI inlined (EXPO_PUBLIC_GIT_SHA), same value as the panel's
 //   Commit row.
 //
+// - "Rooftap 1.1.3 is out": once per release whose APK has a newer native
+//   build than this phone (core app-release.ts), with a Get it action that
+//   opens the release page. Until then this phone gets no more OTAs, so the
+//   toast is the only sign. A phone too old for its server hears it on every
+//   launch.
+//
 // Mobile only: web is served fresh per deploy and has no pending-bundle state.
 import * as React from 'react';
-import { AppState } from 'react-native';
+import { AppState, Linking } from 'react-native';
 import * as Updates from 'expo-updates';
 import { toast } from '@homeup/ui';
+import { SEEN_APP_RELEASE_KEY, appStanding, appUpdateNotice, shouldAnnounceRelease, useServerRelease } from '@homeup/core';
 import { nativeStoreEnvironment } from './legend/environment';
 import {
   LAST_SEEN_UPDATE_KEY,
@@ -29,10 +36,13 @@ import {
 } from './update-toast-logic';
 
 const READY_TOAST_MS = 10000;
+const RELEASE_TOAST_MS = 15000;
 
 export function useUpdateToasts(): void {
   const { currentlyRunning, isUpdatePending, downloadedUpdate } = Updates.useUpdates();
   const announcedReady = React.useRef<string | null>(null);
+  const release = useServerRelease();
+  const announcedRelease = React.useRef(false);
 
   React.useEffect(() => {
     if (!Updates.isEnabled) return;
@@ -102,4 +112,35 @@ export function useUpdateToasts(): void {
       },
     });
   }, [isUpdatePending, downloadedUpdate?.updateId]);
+
+  // The stored config answers first and the refresh may bring a newer
+  // release, so only a notice ends the watch for this launch.
+  React.useEffect(() => {
+    if (announcedRelease.current) return;
+    const standing = appStanding(Updates.runtimeVersion, release);
+    if (standing.kind === 'unknown' || standing.kind === 'current') return;
+    announcedRelease.current = true;
+    let seen: string | null = null;
+    try {
+      seen = nativeStoreEnvironment.keyValue.getItem(SEEN_APP_RELEASE_KEY);
+    } catch {
+      // Storage unavailable: announce, and maybe again next launch.
+    }
+    const notice = appUpdateNotice(standing);
+    if (!notice || !shouldAnnounceRelease(standing, seen)) return;
+    if (standing.kind === 'update') {
+      try {
+        nativeStoreEnvironment.keyValue.setItem(SEEN_APP_RELEASE_KEY, standing.latest.version);
+      } catch {
+        // Worst case the toast repeats next launch.
+      }
+    }
+    const url = standing.latest?.url;
+    toast.message(notice.title, {
+      description: notice.description,
+      duration: RELEASE_TOAST_MS,
+      placement: 'top',
+      ...(url ? { action: { label: 'Get it', onPress: () => void Linking.openURL(url).catch(() => {}) } } : {}),
+    });
+  }, [release]);
 }

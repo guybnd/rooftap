@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { parseModuleList } from "@homeup/core";
+import { serverRelease } from "@/lib/app-release";
 
 // HOUP-69: runtime server-config endpoint for the native app's first-run
 // server picker (Official vs self-host). Deliberately reads a plain runtime
@@ -38,9 +39,12 @@ export async function GET() {
   // so the store app can hide features this server is too old for
   // (packages/core/src/server-features.ts).
   const schemaVersion = process.env.HOMEUP_SCHEMA_VERSION || null;
+  // The release this server was built from, the oldest phone build it serves
+  // and the newest phone release (packages/core/src/app-release.ts).
+  const { version, minAppRuntime, latestApp } = await serverRelease();
 
   return NextResponse.json(
-    { supabaseUrl, supabaseAnonKey, modules, schemaVersion },
+    { supabaseUrl, supabaseAnonKey, modules, schemaVersion, version, minAppRuntime, latestApp },
     {
       headers: {
         ...CORS_HEADERS,

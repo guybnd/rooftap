@@ -193,6 +193,8 @@ export interface UseModules {
   server: (id: ServerFeatureId) => boolean;
   /** What updating this self-hosted server would add; empty when it is current. */
   serverUpdateAdds: ServerFeatureDef[];
+  /** The server's schema (server-features.ts); undefined until known. */
+  schema: ServerSchema;
 }
 
 export function useModules(): UseModules {
@@ -213,6 +215,7 @@ export function useModules(): UseModules {
           .map((m) => ({ minSchema: m.minSchema as string, label: m.label })),
         ...missingServerFeatures(s.schema),
       ],
+      schema: s.schema,
     }),
     [s]
   );

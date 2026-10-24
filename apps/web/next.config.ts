@@ -20,6 +20,21 @@ function newestMigration(): string {
   }
 }
 
+// The release version and phone runtime this build ships with, from the
+// phone app's config (the one place both are kept), served by
+// /api/public-config (packages/core/src/app-release.ts). Empty when the file
+// isn't there or doesn't match, which the route reports as no version.
+function appRelease(): { version: string; runtime: string } {
+  try {
+    const config = fs.readFileSync(path.join(__dirname, "../mobile/app.config.ts"), "utf8");
+    const version = /^  version: '([^']+)'/m.exec(config)?.[1] ?? "";
+    const runtime = /runtimeVersion: '([^']+)'/.exec(config)?.[1] ?? "";
+    return { version, runtime };
+  } catch {
+    return { version: "", runtime: "" };
+  }
+}
+
 // FLUX-1546: `/~offline`'s HTML is server-rendered App Router output, which
 // @serwist/next's manifest scan excludes (only the public/ dir is globbed;
 // `server/`-prefixed build assets are skipped) — so it never lands in the
@@ -66,6 +81,8 @@ const nextConfig: NextConfig = {
   output: "standalone",
   env: {
     HOMEUP_SCHEMA_VERSION: newestMigration(),
+    HOMEUP_APP_VERSION: appRelease().version,
+    HOMEUP_APP_RUNTIME: appRelease().runtime,
   },
   // HOUP-66: workspace packages ship raw .ts (no build step) — Next only
   // transpiles workspace packages named here.

@@ -19,6 +19,8 @@ import {
   getModulesSnapshot,
   setAvailableModules,
   setServerSchema,
+  setServerRelease,
+  serverReleaseFromConfig,
   setModuleRows,
   setHouseholdCurrency,
   householdCurrency,
@@ -150,12 +152,16 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
     // Same for the server's schema: the stored config answered, so a missing
     // version means a server that predates versions (core server-features.ts).
     if (snapshot?.serverSchema === undefined) setServerSchema(server.config.schemaVersion ?? null);
+    // Versions (core app-release.ts) start from the stored config too, and the
+    // refresh below brings the newest release.
+    setServerRelease(serverReleaseFromConfig(server.config));
     // Refresh the offered modules in the background, never blocking the
     // household fetch below; a failure keeps the cached list.
     fetchPublicConfig(server.origin)
       .then((config) => {
         setAvailableModules(config.modules ?? null);
         setServerSchema(config.schemaVersion ?? null);
+        setServerRelease(serverReleaseFromConfig(config));
         const cached = readDataCacheSnapshot();
         if (cached) {
           writeDataCacheSnapshot({

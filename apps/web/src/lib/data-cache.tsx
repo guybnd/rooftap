@@ -4,7 +4,7 @@ import { createContext, useContext, useCallback, useEffect, useLayoutEffect, use
 import { createClient } from "@/lib/supabase/client";
 import { putAll, getAll, setMeta, getMeta, STORES } from "@/lib/offline-store";
 import { readDataCacheSnapshot, writeDataCacheSnapshot } from "@/lib/legend/data-cache-snapshot";
-import { fetchGroupData, getModulesSnapshot, householdCurrency, isPublicConfig, setAvailableModules, setHouseholdCurrency, setModuleRows, setServerSchema } from "@homeup/core";
+import { fetchGroupData, getModulesSnapshot, householdCurrency, isPublicConfig, setAvailableModules, setHouseholdCurrency, setModuleRows, setServerRelease, setServerSchema, serverReleaseFromConfig } from "@homeup/core";
 import type { ApartmentPreliminaryScore, UserSettings, Group, GroupMember, GroupInvitation } from '@homeup/core';
 
 // FLUX-150 slice 8: DataCacheProvider is now a slim group/identity provider.
@@ -56,6 +56,7 @@ async function refreshAvailableModules(): Promise<void> {
     if (!isPublicConfig(json)) return;
     setAvailableModules(json.modules ?? null);
     setServerSchema(json.schemaVersion ?? null);
+    setServerRelease(serverReleaseFromConfig(json));
     const cached = readDataCacheSnapshot();
     if (cached) {
       writeDataCacheSnapshot({ ...cached, availableModules: json.modules ?? null, serverSchema: json.schemaVersion ?? null });

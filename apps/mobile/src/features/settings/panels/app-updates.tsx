@@ -3,13 +3,22 @@
 // state and lets the user trigger check/download/restart on demand instead
 // of only ever picking up updates silently on cold launch.
 import * as React from 'react';
-import { View } from 'react-native';
+import { Linking, View } from 'react-native';
 import * as Updates from 'expo-updates';
 import * as Application from 'expo-application';
 import { useRouter } from 'expo-router';
-import { Info, RefreshCw, Sparkles, TriangleAlert } from 'lucide-react-native';
+import { Download, Info, RefreshCw, Sparkles, TriangleAlert } from 'lucide-react-native';
 import { Text, ListItem, ListItemContent, ListItemTitle, ListItemTrailing, Button } from '@homeup/ui';
-import { timeAgo, useWhatsNewHistory } from '@homeup/core';
+import {
+  appStanding,
+  appStandingLabel,
+  appUpdateNotice,
+  serverVersionLabel,
+  timeAgo,
+  useModules,
+  useServerRelease,
+  useWhatsNewHistory,
+} from '@homeup/core';
 import { WhatsNewGroups } from '@/components/whats-new/whats-new-list';
 import { useDataCache } from '@/lib/data-cache';
 import { SettingsInset, SettingsPanel } from './settings-panel';
@@ -48,8 +57,30 @@ function WhatsNewHistory() {
   );
 }
 
+/** A newer APK, or one the server needs: what it is and where to get it (core app-release.ts). */
+function NewAppVersion() {
+  const release = useServerRelease();
+  const standing = appStanding(Updates.runtimeVersion, release);
+  const notice = appUpdateNotice(standing);
+  if (!notice || standing.kind === 'current' || standing.kind === 'unknown') return null;
+  const url = standing.latest?.url;
+  return (
+    <SettingsPanel icon={Download} title={notice.title}>
+      <Text className="text-body text-muted-foreground">{notice.description}</Text>
+      {url && (
+        <Button onPress={() => Linking.openURL(url).catch(() => {})} size="sm" className="self-start px-3">
+          {standing.latest ? `Get Rooftap ${standing.latest.version}` : 'Get the app'}
+        </Button>
+      )}
+    </SettingsPanel>
+  );
+}
+
 export function AppUpdates() {
   const { currentlyRunning, isUpdatePending, isDownloading, downloadProgress } = Updates.useUpdates();
+  const release = useServerRelease();
+  const { schema, serverUpdateAdds } = useModules();
+  const standingLabel = appStandingLabel(appStanding(Updates.runtimeVersion, release));
   const [checkState, setCheckState] = React.useState<CheckState>('idle');
   const [error, setError] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
@@ -99,9 +130,16 @@ export function AppUpdates() {
 
   return (
     <>
+      <NewAppVersion />
       <SettingsPanel icon={Info} title="Version">
         <SettingsInset>
           <InfoRow label="App version" value={`${version} (${build})`} />
+          {standingLabel && <InfoRow label="App status" value={standingLabel} />}
+          <InfoRow label="App build" value={Updates.runtimeVersion ?? '–'} />
+          <InfoRow label="Server version" value={serverVersionLabel(release, schema)} />
+          {serverUpdateAdds.length > 0 && (
+            <InfoRow label="Server status" value={`An update adds ${serverUpdateAdds.length} ${serverUpdateAdds.length === 1 ? "feature" : "features"}`} />
+          )}
           <InfoRow label="Bundle" value={bundleLabel} />
           <InfoRow label="Channel" value={channel} />
           <InfoRow label="Commit" value={commit} mono />

@@ -31,6 +31,7 @@ import { AssistantTelegram } from "@/components/assistant-telegram";
 import { AssistantHomeAssistant } from "@/components/assistant-home-assistant";
 import { ShopperSettings } from "@/components/shopper-settings";
 import { WhatsNewHistory } from "@/components/whats-new";
+import { VersionSettings } from "@/components/version-settings";
 
 export interface GlobalMenu {
   key: string;
@@ -48,7 +49,7 @@ export const globalMenus: GlobalMenu[] = [
   { key: "notifications", label: "Notifications", panels: [NotificationsSettings, NotificationKinds] },
   { key: "connectors", label: "Connectors", panels: [UpBankSettings] },
   { key: "integrations", label: "Integrations & keys", panels: [HouseholdAiKeys, AiProvidersSettings, ApiKeysSettings, FeedbackInbox, PatSettings, McpSettings] },
-  { key: "whats-new", label: "What's new", panels: [WhatsNewHistory] },
+  { key: "whats-new", label: "About & updates", panels: [VersionSettings, WhatsNewHistory] },
 ];
 
 // Per-section tabs. Adding a future panel/section is a single edit here (AC#7).

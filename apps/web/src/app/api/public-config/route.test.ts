@@ -1,4 +1,5 @@
 import { describe, expect, it, afterEach } from "vitest";
+import { MIN_APP_RUNTIME } from "@homeup/core";
 import { GET } from "./route";
 
 const ORIGINAL_ENV = { ...process.env };
@@ -10,6 +11,9 @@ function resetEnv() {
   delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   delete process.env.HOMEUP_MODULES;
   delete process.env.HOMEUP_SCHEMA_VERSION;
+  delete process.env.HOMEUP_APP_VERSION;
+  delete process.env.HOMEUP_APP_RUNTIME;
+  delete process.env.APP_DOWNLOAD_URL;
 }
 
 describe("GET /api/public-config", () => {
@@ -31,6 +35,9 @@ describe("GET /api/public-config", () => {
       supabaseAnonKey: "anon-key",
       modules: null,
       schemaVersion: null,
+      version: null,
+      minAppRuntime: MIN_APP_RUNTIME,
+      latestApp: null,
     });
   });
 
@@ -47,6 +54,9 @@ describe("GET /api/public-config", () => {
       supabaseAnonKey: "anon-key",
       modules: null,
       schemaVersion: null,
+      version: null,
+      minAppRuntime: MIN_APP_RUNTIME,
+      latestApp: null,
     });
   });
 
@@ -74,7 +84,7 @@ describe("GET /api/public-config", () => {
     expect(json.schemaVersion).toBe("20261020050000_mcp_oauth");
   });
 
-  it("returns exactly { supabaseUrl, supabaseAnonKey, modules, schemaVersion } — no service-role or other env leaks", async () => {
+  it("returns exactly the public fields, no service-role or other env leaks", async () => {
     resetEnv();
     process.env.NEXT_PUBLIC_SUPABASE_URL = "https://official.example.com";
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "anon-key";
@@ -84,7 +94,7 @@ describe("GET /api/public-config", () => {
     const res = await GET();
     const json = await res.json();
 
-    expect(Object.keys(json).sort()).toEqual(["modules", "schemaVersion", "supabaseAnonKey", "supabaseUrl"]);
+    expect(Object.keys(json).sort()).toEqual(["latestApp", "minAppRuntime", "modules", "schemaVersion", "supabaseAnonKey", "supabaseUrl", "version"]);
     expect(JSON.stringify(json)).not.toContain("service-role-secret");
     expect(JSON.stringify(json)).not.toContain("hunter2");
   });

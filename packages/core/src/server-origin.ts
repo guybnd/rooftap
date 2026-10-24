@@ -11,6 +11,12 @@ export interface PublicConfig {
    * Absent on servers older than this field, which count as the 1.0.0 baseline.
    */
   schemaVersion?: string | null;
+  /** The Rooftap release the server was built from (app-release.ts). Absent on older servers. */
+  version?: string | null;
+  /** The oldest phone runtime the server still serves. */
+  minAppRuntime?: string | null;
+  /** The newest phone release, with its runtime and page; null when there is none to offer. */
+  latestApp?: { version: string; runtime: string; url: string } | null;
 }
 
 // HOUP-69: response-shape guard for GET /api/public-config — the native

@@ -268,7 +268,7 @@ export function WhatsNewDialog() {
             <Button className="h-[50px] w-full shrink-0 rounded-2xl text-[15px]" onClick={dismiss}>
               Got it
             </Button>
-            <p className="text-center text-xs text-muted-foreground">Every update is in Settings › What&apos;s new</p>
+            <p className="text-center text-xs text-muted-foreground">Every update is in Settings › About &amp; updates</p>
           </DialogPrimitive.Popup>
         )}
       </DialogPrimitive.Portal>

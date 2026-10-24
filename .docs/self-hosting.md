@@ -114,6 +114,8 @@ Each feature (Tasks, Calendar, Groceries, Home Search and so on) is a module ([m
 
 To offer fewer, set `HOMEUP_MODULES` in `.env` to a comma-separated list of ids, for example `household,calendar,checklists,documents,groceries,recipes,costs,setup,search`. Then restart `app` and `edge-runtime`. The edge functions also read the list, so notifications skip the modules that the server does not offer. No household can turn on a module that is not on the list. The app reads the list at runtime, and the phone app gets it from `/api/public-config`, so you rebuild nothing.
 
+When a new Rooftap release has an APK, the phone app shows a note with a link to its release page. Your server offers the release it was built from, so phones hear about a new version after you update the server. To send people to your own download page, set `APP_DOWNLOAD_URL` in `.env`. To show no note, set `ROOFTAP_APP_RELEASES=off`.
+
 ## The household assistant
 
 Turn on the **Assistant** module in **Settings → Modules**. The household then gets a chat agent. It reads tasks, the calendar, the budget, groceries, recipes and checklists, and it changes them when you agree. It also reads Home Setup and the Shopper watchlist. On a self-hosted server, it needs no paid plan and has no spending cap unless an owner sets one.
