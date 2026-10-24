@@ -4,8 +4,9 @@
 // chat page (assistant/[id]/page.tsx) and the pop-up chat that grows out of
 // the + (components/assistant-chat-popup.tsx). State comes from core's
 // useAssistantThread. Native twin: apps/mobile/src/features/assistant/thread-body.tsx.
-import { useEffect, useRef } from 'react';
-import { minutesLeft, type AssistantThread } from '@homeup/core';
+import { useEffect, useMemo, useRef } from 'react';
+import { mentionOptions, minutesLeft, type AssistantThread } from '@homeup/core';
+import { useDataCache } from '@/lib/data-cache';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Composer, MessageBubble, Thinking } from './assistant-parts';
@@ -107,6 +108,11 @@ export function ThreadFooter({
 }) {
   const { conversation, kind, blocked, sending, send, closed, resume } = thread;
   const left = conversation && !closed ? minutesLeft(conversation) : null;
+  const { groupMembers, memberProfiles, currentUserId } = useDataCache();
+  const mentions = useMemo(
+    () => (kind === 'household' ? mentionOptions(groupMembers, memberProfiles, currentUserId) : undefined),
+    [kind, groupMembers, memberProfiles, currentUserId]
+  );
   return (
     <div className={cn('space-y-2', className)}>
       {blocked && blocked !== 'assistant_conversation_closed' && <AssistantNotice code={blocked} />}
@@ -120,6 +126,7 @@ export function ThreadFooter({
             busy={sending}
             autoFocus={autoFocus || thread.resumed}
             photos={thread.photos}
+            mentions={mentions}
             onSend={send}
           />
           {left != null && left > 0 && (

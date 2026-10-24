@@ -130,6 +130,22 @@ describe("notifyHousehold", () => {
     expect(sendPushToUsers).toHaveBeenCalledWith(admin, ["u4"], expect.objectContaining({ body: "Tap to read it." }), noWait);
   });
 
+  it("tells a tagged member they were mentioned", async () => {
+    vi.mocked(sendPushToUsers).mockClear();
+    const admin = fakeAdmin({
+      group_members: [
+        { group_id: "g1", user_id: "u1" },
+        { group_id: "g1", user_id: "u2" },
+        { group_id: "g1", user_id: "u3" },
+      ],
+    });
+    const names = async () => new Map([["u1", "Guy"], ["u2", "Dana"], ["u3", "Sam"]]);
+    const tagging = { ...said, content: "@dana can you grab milk?" };
+    expect(await notifyHousehold({ admin, userId: "u1", groupId: "g1" }, household, tagging, { ...noWait, names })).toBe(2);
+    expect(sendPushToUsers).toHaveBeenCalledWith(admin, ["u2"], expect.objectContaining({ title: "Guy mentioned you" }), expect.anything());
+    expect(sendPushToUsers).toHaveBeenCalledWith(admin, ["u3"], expect.objectContaining({ title: "Guy in Household" }), expect.anything());
+  });
+
   it("sends nothing when the writer is alone in the home", async () => {
     vi.mocked(sendPushToUsers).mockClear();
     const admin = fakeAdmin({ group_members: [{ group_id: "g1", user_id: "u1" }] });

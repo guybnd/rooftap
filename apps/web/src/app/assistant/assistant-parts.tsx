@@ -7,13 +7,17 @@
 // apps/mobile/src/features/assistant/assistant-parts.tsx.
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
-import { ArrowUp, Check, ImageOff, ImagePlus, Loader2, X } from 'lucide-react';
+import { ArrowUp, AtSign, Check, ImageOff, ImagePlus, Loader2, Sparkles, X } from 'lucide-react';
 import {
   GHOST_REPLY_GROW_MS,
   GHOST_REPLY_LINES,
   GHOST_REPLY_STAGGER_MS,
   formatMicros,
+  insertMention,
+  mentionAt,
   parseReply,
+  suggestMentions,
+  type MentionOption,
   timeAgo,
   useComposerPhotos,
   useProposalPicks,
@@ -311,6 +315,34 @@ function imageFiles(list: FileList | null | undefined): File[] {
   return Array.from(list ?? []).filter((f) => f.type.startsWith('image/'));
 }
 
+/** The `@` suggestions over the composer: click one (or arrow to it and press Enter) to put the tag in. */
+function MentionChips({ options, active, onPick }: { options: MentionOption[]; active: number; onPick: (option: MentionOption) => void }) {
+  return (
+    <div id="composer-mentions" role="listbox" aria-label="Tag someone" className="flex gap-2 overflow-x-auto px-1 pb-1.5 pt-0.5">
+      {options.map((o, i) => (
+        <button
+          key={o.userId ?? o.name}
+          id={`composer-mention-${i}`}
+          type="button"
+          role="option"
+          aria-selected={i === active}
+          // Keep the textarea focused, so typing carries on after a click.
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => onPick(o)}
+          className={cn(
+            'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-border/60 px-3 text-sm hover:bg-muted',
+            i === active ? 'bg-muted' : 'bg-background'
+          )}
+        >
+          {o.kind === 'rooftap' ? <Sparkles className="h-3.5 w-3.5" /> : <AtSign className="h-3.5 w-3.5 text-muted-foreground" />}
+          <span className="font-medium text-foreground">{o.name}</span>
+          {o.kind === 'rooftap' && <span className="text-xs text-muted-foreground">ask it</span>}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function Composer({
   placeholder,
   disabled,
@@ -318,6 +350,7 @@ export function Composer({
   autoFocus,
   maxLength = 4000,
   photos: allowPhotos = false,
+  mentions,
   onSend,
 }: {
   placeholder: string;
@@ -327,9 +360,31 @@ export function Composer({
   maxLength?: number;
   /** Offer to attach photos (pick, paste or drop), when the household's model can look at them. */
   photos?: boolean;
+  /** Who `@` offers to tag (the household thread): Rooftap and the other members. */
+  mentions?: MentionOption[];
   onSend: (text: string, photos: OutgoingPhoto[]) => Promise<boolean> | boolean;
 }) {
   const [text, setText] = useState('');
+  // Where the caret is, for the `@` suggestions; arrows move `active`, Escape hides them until the next keystroke.
+  const [caret, setCaret] = useState(0);
+  const [active, setActive] = useState(0);
+  const [dismissed, setDismissed] = useState(false);
+  const draft = mentions && !dismissed ? mentionAt(text, caret) : null;
+  const suggestions = draft && mentions ? suggestMentions(mentions, draft.query) : [];
+  const highlighted = Math.min(active, Math.max(0, suggestions.length - 1));
+  const pickMention = (option: MentionOption) => {
+    const el = ref.current;
+    if (!draft) return;
+    const next = insertMention(text, draft, caret, option);
+    setText(next.text);
+    setCaret(next.caret);
+    setActive(0);
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(next.caret, next.caret);
+    });
+  };
+  const trackCaret = (el: HTMLTextAreaElement) => setCaret(el.selectionEnd ?? el.value.length);
   const [dragging, setDragging] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -352,6 +407,7 @@ export function Composer({
   const submit = async () => {
     const value = text.trim();
     if (!canSend) return;
+    setCaret(0);
     const outgoing = tray.outgoing;
     const taken = tray.take();
     setText('');
@@ -411,6 +467,7 @@ export function Composer({
           ))}
         </div>
       )}
+      {suggestions.length > 0 && <MentionChips options={suggestions} active={highlighted} onPick={pickMention} />}
       <div className="flex items-end gap-2">
         {allowPhotos && (
           <>
@@ -445,7 +502,13 @@ export function Composer({
           maxLength={maxLength}
           placeholder={placeholder}
           aria-label={placeholder}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => {
+            setText(e.target.value);
+            trackCaret(e.target);
+            setDismissed(false);
+            setActive(0);
+          }}
+          onSelect={(e) => trackCaret(e.currentTarget)}
           onPaste={(e) => {
             const files = imageFiles(e.clipboardData.files);
             if (allowPhotos && files.length) {
@@ -453,7 +516,28 @@ export function Composer({
               attach(files);
             }
           }}
+          aria-autocomplete={mentions ? 'list' : undefined}
+          aria-controls={suggestions.length > 0 ? 'composer-mentions' : undefined}
+          aria-activedescendant={suggestions.length > 0 ? `composer-mention-${highlighted}` : undefined}
           onKeyDown={(e) => {
+            if (suggestions.length > 0 && !e.nativeEvent.isComposing) {
+              if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                e.preventDefault();
+                const step = e.key === 'ArrowDown' ? 1 : -1;
+                setActive((highlighted + step + suggestions.length) % suggestions.length);
+                return;
+              }
+              if ((e.key === 'Enter' && !e.shiftKey) || e.key === 'Tab') {
+                e.preventDefault();
+                pickMention(suggestions[highlighted]);
+                return;
+              }
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                setDismissed(true);
+                return;
+              }
+            }
             if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault();
               void submit();

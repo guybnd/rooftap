@@ -4,7 +4,7 @@
 // its rows follow the three-slot line item (H6).
 // Web twin: apps/web/src/app/assistant/assistant-parts.tsx.
 import * as React from 'react';
-import { ActivityIndicator, Image, Linking, Pressable, TextInput, View } from 'react-native';
+import { ActivityIndicator, Image, Linking, Pressable, ScrollView, TextInput, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { decode } from 'base64-arraybuffer';
@@ -18,7 +18,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useRouter, type Href } from 'expo-router';
-import { ArrowUp, Camera, Check, ImageOff, ImagePlus, Images, X } from 'lucide-react-native';
+import { ArrowUp, AtSign, Camera, Check, ImageOff, ImagePlus, Images, Sparkles, X } from 'lucide-react-native';
 import {
   BottomSheet,
   ListGroup,
@@ -28,6 +28,7 @@ import {
   Text,
   LeadingTile,
   cn,
+  haptics,
   toast,
   useStillMotion,
 } from '@homeup/ui';
@@ -36,7 +37,11 @@ import {
   GHOST_REPLY_LINES,
   GHOST_REPLY_STAGGER_MS,
   formatMicros,
+  insertMention,
+  mentionAt,
   parseReply,
+  suggestMentions,
+  type MentionOption,
   MAX_ASSISTANT_PHOTOS,
   useComposerPhotos,
   useProposalPicks,
@@ -387,6 +392,28 @@ function PhotoSourceSheet({ open, onOpenChange, onPick }: { open: boolean; onOpe
   );
 }
 
+/** The `@` suggestions over the composer: tap one to put the tag in. */
+function MentionChips({ options, onPick }: { options: MentionOption[]; onPick: (option: MentionOption) => void }) {
+  return (
+    <ScrollView horizontal keyboardShouldPersistTaps="always" showsHorizontalScrollIndicator={false} contentContainerClassName="gap-2 px-1 pb-1.5 pt-0.5">
+      {options.map((o) => (
+        <Pressable
+          key={o.userId ?? o.name}
+          onPress={() => onPick(o)}
+          accessibilityRole="button"
+          accessibilityLabel={o.kind === 'rooftap' ? 'Tag Rooftap to ask it' : `Tag ${o.name}`}
+          hitSlop={{ top: 8, bottom: 8 }}
+          className="h-9 flex-row items-center gap-1.5 rounded-full border border-border/60 bg-background px-3 active:bg-muted"
+        >
+          {o.kind === 'rooftap' ? <Sparkles size={14} className="text-foreground" /> : <AtSign size={14} className="text-muted-foreground" />}
+          <Text className="text-sm font-medium text-foreground">{o.name}</Text>
+          {o.kind === 'rooftap' && <Text className="text-xs text-muted-foreground">ask it</Text>}
+        </Pressable>
+      ))}
+    </ScrollView>
+  );
+}
+
 export function Composer({
   placeholder,
   disabled,
@@ -394,6 +421,7 @@ export function Composer({
   autoFocus,
   maxLength = 4000,
   photos: allowPhotos = false,
+  mentions,
   onSend,
 }: {
   placeholder: string;
@@ -403,9 +431,24 @@ export function Composer({
   maxLength?: number;
   /** Offer to attach photos, when the household's model can look at them. */
   photos?: boolean;
+  /** Who `@` offers to tag (the household thread): Rooftap and the other members. */
+  mentions?: MentionOption[];
   onSend: (text: string, photos: OutgoingPhoto[]) => Promise<boolean> | boolean;
 }) {
   const [text, setText] = React.useState('');
+  // Where the caret is, for the `@` suggestions; `place` moves it once after a pick.
+  const [caret, setCaret] = React.useState(0);
+  const [place, setPlace] = React.useState<{ start: number; end: number } | undefined>();
+  const draft = mentions ? mentionAt(text, caret) : null;
+  const suggestions = draft && mentions ? suggestMentions(mentions, draft.query) : [];
+  const pickMention = (option: MentionOption) => {
+    if (!draft) return;
+    haptics.select();
+    const next = insertMention(text, draft, caret, option);
+    setText(next.text);
+    setCaret(next.caret);
+    setPlace({ start: next.caret, end: next.caret });
+  };
   const [choosing, setChoosing] = React.useState(false);
   const tray = useComposerPhotos({
     api: assistantApi,
@@ -456,6 +499,7 @@ export function Composer({
           ))}
         </View>
       )}
+      {suggestions.length > 0 && <MentionChips options={suggestions} onPick={pickMention} />}
       <View className="flex-row items-end gap-2">
         {allowPhotos && (
           <Pressable
@@ -470,7 +514,16 @@ export function Composer({
         )}
         <TextInput
           value={text}
-          onChangeText={setText}
+          onChangeText={(next) => {
+            setText(next);
+            // Typing moves the caret with the text; the selection event lands after.
+            if (next.length > text.length && caret === text.length) setCaret(next.length);
+          }}
+          selection={place}
+          onSelectionChange={(e) => {
+            setCaret(e.nativeEvent.selection.end);
+            if (place) setPlace(undefined);
+          }}
           multiline
           autoFocus={autoFocus}
           editable={!disabled}

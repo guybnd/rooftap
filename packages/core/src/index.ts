@@ -85,6 +85,7 @@ export * from './modules/documents/documents';
 export * from './modules/documents/document-storage';
 export * from './entitlements';
 export * from './modules/assistant/assistant';
+export * from './modules/assistant/assistant-mentions';
 export * from './ai-keys';
 export * from './ai-providers';
 export * from './modules/assistant/assistant-prompt';

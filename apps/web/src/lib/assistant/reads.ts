@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { conversationTitle, replyPreview, type AssistantConversation, type AssistantMessage, type AssistantNotifyPrefs } from "@homeup/core";
+import { conversationTitle, mentionedMembers, replyPreview, type AssistantConversation, type AssistantMessage, type AssistantNotifyPrefs } from "@homeup/core";
 import { sendPushToUsers, type PushDeps, type PushPayload } from "@/lib/push";
+import { memberNames } from "@/lib/member-names";
 
 // "It answered" for the assistant: how far each member has read each
 // conversation (assistant_reads), and the push that goes out when a reply
@@ -94,6 +95,8 @@ export function replyPush(conversation: AssistantConversation, reply: AssistantM
 
 export interface NotifyDeps extends PushDeps {
   sleep?: (ms: number) => Promise<void>;
+  /** Members' first names by user id, to read `@Name` tags (default: from auth). */
+  names?: (who: Who) => Promise<Map<string, string>>;
 }
 
 /**
@@ -148,18 +151,26 @@ export async function notifyHousehold(
   const prefs = new Map(((prefRows ?? []) as (AssistantNotifyPrefs & { user_id: string })[]).map((p) => [p.user_id, p]));
   const due = others.filter((id) => !noticed.has(id) && prefs.get(id)?.replies !== false);
   if (due.length === 0) return 0;
-  const title = `${message.author ?? "Someone"} in Household`;
-  const payload = (preview: boolean): PushPayload => ({
-    title,
+  // A member tagged by `@Name` gets "Guy mentioned you"; the rest the plain line.
+  const tagged = new Set(
+    message.content.includes("@") ? mentionedMembers(message.content, await (deps.names ?? ((w) => memberNames(w.admin, w.groupId)))(who)) : []
+  );
+  const author = message.author ?? "Someone";
+  const payload = (preview: boolean, mentioned: boolean): PushPayload => ({
+    title: mentioned ? `${author} mentioned you` : `${author} in Household`,
     body: preview ? replyPreview(message.content) || "Tap to read it." : "Tap to read it.",
     url: `/assistant/${conversation.id}`,
     tag: `assistant-${conversation.id}`,
   });
-  const withPreview = due.filter((id) => prefs.get(id)?.preview !== false);
-  const without = due.filter((id) => prefs.get(id)?.preview === false);
-  const results = await Promise.all([
-    withPreview.length ? sendPushToUsers(who.admin, withPreview, payload(true), deps) : { sent: 0 },
-    without.length ? sendPushToUsers(who.admin, without, payload(false), deps) : { sent: 0 },
-  ]);
+  const groups = [true, false].flatMap((mentioned) =>
+    [true, false].map((preview) => ({
+      mentioned,
+      preview,
+      ids: due.filter((id) => tagged.has(id) === mentioned && (prefs.get(id)?.preview !== false) === preview),
+    }))
+  );
+  const results = await Promise.all(
+    groups.map((g) => (g.ids.length ? sendPushToUsers(who.admin, g.ids, payload(g.preview, g.mentioned), deps) : { sent: 0 }))
+  );
   return results.reduce((n, r) => n + r.sent, 0);
 }

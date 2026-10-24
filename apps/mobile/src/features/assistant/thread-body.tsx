@@ -5,7 +5,8 @@
 import * as React from 'react';
 import { ScrollView, View } from 'react-native';
 import { Button, Text } from '@homeup/ui';
-import { minutesLeft, type AssistantThread } from '@homeup/core';
+import { mentionOptions, minutesLeft, type AssistantThread } from '@homeup/core';
+import { useDataCache } from '@/lib/data-cache';
 import { Composer, MessageBubble, Thinking } from './assistant-parts';
 import { AssistantNotice } from './assistant-notice';
 
@@ -105,6 +106,11 @@ export function ThreadFooter({
 }) {
   const { conversation, kind, blocked, sending, send, closed, resume } = thread;
   const left = conversation && !closed ? minutesLeft(conversation) : null;
+  const { groupMembers, memberProfiles, currentUserId } = useDataCache();
+  const mentions = React.useMemo(
+    () => (kind === 'household' ? mentionOptions(groupMembers, memberProfiles, currentUserId) : undefined),
+    [kind, groupMembers, memberProfiles, currentUserId]
+  );
   return (
     <View className="gap-2 px-4 pb-3">
       {blocked && blocked !== 'assistant_conversation_closed' && <AssistantNotice code={blocked} />}
@@ -118,6 +124,7 @@ export function ThreadFooter({
             busy={sending}
             autoFocus={autoFocus || thread.resumed}
             photos={thread.photos}
+            mentions={mentions}
             onSend={send}
           />
           {left != null && left > 0 && (
