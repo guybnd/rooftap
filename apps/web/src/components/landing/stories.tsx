@@ -103,15 +103,11 @@ export const GROCERIES_STORY: Story = {
     {
       title: "Intuitive UI",
       features: [
-        play("Aisle sort.", "Items group by aisle, in the order you set for your store. One list is in the View menu.", [
-          { at: 300, tap: m("groceries-aisles", "view") },
-          { at: 600, show: { a: "groceries-aisles-menu" } },
-          { at: 1300, tap: m("groceries-aisles-menu", "oneList") },
-          { at: 1700, show: { a: "groceries-flat" } },
-          { at: 3200, tap: m("groceries-flat", "view") },
-          { at: 3500, show: { a: "groceries-flat-menu" } },
-          { at: 4200, tap: m("groceries-flat-menu", "byAisle") },
-          { at: 4600, show: { a: "groceries-aisles" } },
+        play("Aisle sort.", "Items group by aisle, in the order you set for your store. One list shows every item in one list.", [
+          { at: 300, tap: m("groceries-aisles", "oneList") },
+          { at: 700, show: { a: "groceries-flat" } },
+          { at: 2600, tap: m("groceries-flat", "aisles") },
+          { at: 3000, show: { a: "groceries-aisles" } },
         ]),
         play("Swipe right: got.", "The item moves to the trolley. Swipe left: have, it is in the house. Undo on both.", [
           { at: 300, swipe: m("groceries-aisles", "lemons"), dx: 190 },
@@ -158,7 +154,7 @@ export const GROCERIES_STORY: Story = {
     {
       title: "One-tap cost logging",
       features: [
-        play("Done.", "Done confirms the total and the receipt, and writes the trip to Costs with the store and the date.", [
+        play("Done.", "Done confirms the total and the receipt, and writes the trip to Costs as one line with its total and date.", [
           { at: 300, tap: m("groceries-shopping", "done") },
           { at: 900, show: { b: "costs-groceries" } },
           { at: 900, pop: "b" },
@@ -239,7 +235,7 @@ export const RECIPES_STORY: Story = {
   id: "recipes",
   room: "recipes",
   eyebrow: "Recipes",
-  label: "Recipes: a cookbook page scanned into a recipe, then its missing ingredients added to Groceries",
+  label: "Recipes: a cookbook page scanned into a recipe, its missing ingredients added to Groceries, a week of dinners, and cook mode with timers",
   steps: [
     {
       title: "Easy recipe management",
@@ -280,6 +276,39 @@ export const RECIPES_STORY: Story = {
       ],
       a: "recipe-lasagne",
       b: "groceries-no-recipe",
+    },
+    {
+      title: "Plan the week",
+      features: [
+        play("Seven nights.", "Each night has a recipe and a cook, and shows what is in stock.", [
+          { at: 200, highlight: at("a", m("recipes-week", "curry"), true) },
+          { at: 2200, highlight: null },
+        ]),
+        point("Draft my week.", "The Assistant plans the empty nights from your recipes and the food in the house.", at("a", m("recipes-week", "draft"))),
+        play("Several dishes.", "A main, a side and a dessert on one night.", [
+          { at: 200, highlight: at("a", m("recipes-week", "sat"), true) },
+          { at: 2200, highlight: null },
+        ]),
+        play("Busy evenings.", "A dinner out on the calendar shows as a hint on its night.", [
+          { at: 200, highlight: at("a", m("recipes-week", "hint")) },
+          { at: 2200, highlight: null },
+        ]),
+        fact("Missing ingredients.", "The week's missing ingredients go to Groceries in one tap."),
+        fact("Tonight on Home.", "Home shows the dinner for tonight."),
+      ],
+      a: "recipes-week",
+    },
+    {
+      title: "Cook mode",
+      features: [
+        point("One step at a time.", "The step shows in large text and the screen stays on. Swipe to go to the next step.", at("a", m("cook-lasagne", "step"))),
+        point("Timers from the steps.", "A step that says 40 minutes gets a 40 minute timer. On Android the timer shows in the notification bar.", at("a", m("cook-lasagne", "timer"))),
+        point("Steps with times.", "Each step shows its times before you start.", at("b", m("recipe-lasagne-steps", "bake"))),
+        fact("Several at once.", "Cook more than one recipe. Each keeps its own step and timers, in a small head over every screen."),
+        fact("Ask while you cook.", "Ask the Assistant about the step you are on."),
+      ],
+      a: "cook-lasagne",
+      b: "recipe-lasagne-steps",
     },
   ],
 };
@@ -532,6 +561,17 @@ export const ASSISTANT_STORY: Story = {
       a: "assistant-household",
     },
     {
+      title: "Searches and finds",
+      features: [
+        point("Near me.", "Ask for places near you. The phone sends where you are, and the answer gives each place's distance and hours.", at("a", m("assistant-near-me", "places"))),
+        point("Where it looked.", "The answer says where the search started.", at("a", m("assistant-near-me", "from"))),
+        fact("Web search.", "It searches the web when the answer is not in the house. The server operator can turn web search off."),
+        fact("Photos.", "Send a photo with a message. The Assistant can file a copy in Documents."),
+        point("Then it acts.", "The filter goes on the grocery list, under the same trust level as any change.", at("a", m("assistant-near-me", "added"))),
+      ],
+      a: "assistant-near-me",
+    },
+    {
       title: "Home Assistant, built in",
       features: [
         play("Connect it.", "Add the Model Context Protocol Server integration in Home Assistant. Paste its URL and a long-lived token in Settings. The server stores the token encrypted.", [
@@ -588,25 +628,17 @@ export const COSTS_STORY: Story = {
   id: "costs",
   room: "costs",
   eyebrow: "Bills and costs",
-  label: "Costs: the year and the month in one chart, grocery trips imported from Groceries, and costs from other modules",
+  label: "Costs: the month against a goal, a bar per month, Worth a look, the categories, and lines from other modules",
   steps: [
     {
       title: "Robust cost tracking",
       features: [
-        play("Plan and actual.", "$2,801 of $4,200 planned this month, against a budget you set.", [
-          { at: 200, highlight: at("a", m("costs", "planned")) },
-          { at: 2200, highlight: null },
-        ]),
-        play("The year in one chart.", "A bar per month. Past months actual, future months projected from the recurring items.", [
-          { at: 200, highlight: at("a", m("costs", "chart")) },
-          { at: 2200, highlight: null },
-        ]),
-        play("Recurring items.", "Rent, utilities, subscriptions, each with an amount and a cadence.", [
-          { at: 200, highlight: at("a", m("costs", "recurring")) },
-          { at: 2200, highlight: null },
-        ]),
-        fact("Who pays.", "Each cost splits between the people in the house."),
-        fact("From other modules.", "Grocery trips, event tickets, checklist purchases and contracts in Documents write their own cost lines."),
+        point("Spent and goal.", "$3,056 of a $4,200 goal this month.", at("a", m("costs", "spent"))),
+        point("On track.", "Under goal so far, and where the month ends with what is still to come.", at("a", m("costs", "status"))),
+        point("The year in one chart.", "A bar per month, in the colours of the categories.", at("a", m("costs", "chart"))),
+        point("Worth a look.", "A category that runs ahead of usual, and plans that end soon, so you can look for a better deal.", at("a", m("costs", "worth"))),
+        fact("Paid and to come.", "Each category shows what is paid and what is still to come this month."),
+        fact("From other modules.", "Grocery trips, event tickets, checklist purchases, gifts and contracts in Documents write their own cost lines."),
       ],
       a: "costs",
     },
@@ -698,6 +730,79 @@ export const CHECKLISTS_STORY: Story = {
   ],
 };
 
+export const OCCASIONS_STORY: Story = {
+  id: "occasions",
+  room: "occasions",
+  eyebrow: "Occasions",
+  label: "Occasions: birthdays and anniversaries with a countdown, gift ideas with a budget, wishlists, and plans kept from the person they are for",
+  steps: [
+    {
+      title: "Birthdays and gifts",
+      features: [
+        play("Every occasion.", "Birthdays, anniversaries and holidays, each with a date, a person and a countdown. They repeat every year.", [
+          { at: 200, highlight: at("a", m("occasions", "mum"), true) },
+          { at: 1600, highlight: at("a", m("occasions", "noa"), true) },
+          { at: 3000, highlight: null },
+        ]),
+        point("Gift ideas and a budget.", "$180 of $250 for Mum. Each idea is an idea, watching, bought or booked.", at("a", m("occasions", "budget"))),
+        point("Wishlists.", "Each person keeps a wishlist that the household can read. The others take an item from it as a gift idea.", at("a", m("occasions", "wishlist"), true)),
+        fact("On the calendar.", "Birthdays show in Calendar as all-day rows."),
+      ],
+      a: "occasions",
+    },
+    {
+      title: "Keep it a surprise",
+      features: [
+        point("Kept from Noa.", "Noa does not see the plan, its gift ideas or their price watches. The database hides the rows from Noa's account.", at("a", m("occasions-noa", "kept"))),
+        point("Watch the price.", "A gift idea can go on the Shopper watchlist, kept from the same people.", at("a", m("occasions-noa", "watching"), true)),
+        fact("In the budget.", "A bought gift writes a Budget line named Gift until the day has passed."),
+        fact("With the Assistant.", "Ask the Assistant to add gift ideas. In the household thread it does not mention a surprise."),
+      ],
+      a: "occasions-noa",
+    },
+  ],
+};
+
+export const HOUSE_STORY: Story = {
+  id: "house",
+  room: "bins",
+  eyebrow: "Around the house",
+  label: "Around the house: bin night on Home with whose turn it is, bin days from the council or Home Assistant, and home care jobs on a schedule",
+  steps: [
+    {
+      title: "Bin night",
+      features: [
+        point("Bins out tonight.", "The night before a collection, Home shows which bins go out. Slide to finish when they are out.", at("a", m("home-bins", "bins"))),
+        play("Whose turn.", "The household takes turns. Each collection shows whose turn it is.", [
+          { at: 200, highlight: at("b", m("bins", "turn"), true) },
+          { at: 2200, highlight: null },
+        ]),
+        fact("A push at 9 pm.", "If nobody marks the bins out, a push comes at 9 pm."),
+        play("Read the days.", "Type the days, read the council calendar from a photo or PDF, or read Home Assistant's Waste Collection Schedule.", [
+          { at: 200, show: { b: "bins-setup" } },
+          { at: 200, pop: "b" },
+          { at: 600, highlight: at("b", m("bins-setup", "ha")) },
+          { at: 2600, highlight: null },
+        ]),
+        fact("On the calendar.", "Collection days show in Calendar."),
+      ],
+      a: "home-bins",
+      b: "bins",
+    },
+    {
+      title: "Home care",
+      features: [
+        point("Jobs on a schedule.", "Smoke alarms, aircon filters, gutters. Each job repeats on its own schedule and can have a person.", at("a", m("setup-care", "smoke"), true)),
+        point("Due soon first.", "The list shows what is overdue and what is due in the next 30 days.", at("a", m("setup-care", "aircon"), true)),
+        point("Suggestions.", "Pick from a list of common jobs. Hide the ones your home does not have.", at("a", m("setup-care", "suggestions"))),
+        fact("Reminders.", "A reminder comes a few days before each job is due."),
+        fact("Seasons.", "A job can come once a year in the month you pick, such as before summer."),
+      ],
+      a: "setup-care",
+    },
+  ],
+};
+
 export const NATIVE_STORY: Story = {
   id: "native",
   room: "home",
@@ -722,4 +827,4 @@ export const NATIVE_STORY: Story = {
 /** The first stage: the Home dashboard, under the self-hosting section. */
 export const HERO_STORIES: readonly Story[] = [HOME_STORY];
 /** The modules, one continuous stage, the Android app last. */
-export const ROOM_STORIES: readonly Story[] = [CAPTURE_STORY, GROCERIES_STORY, CALENDAR_STORY, RECIPES_STORY, SHOPPER_STORY, REWARDS_STORY, ASSISTANT_STORY, MCP_STORY, COSTS_STORY, DOCUMENTS_STORY, CHECKLISTS_STORY, NATIVE_STORY];
+export const ROOM_STORIES: readonly Story[] = [CAPTURE_STORY, GROCERIES_STORY, CALENDAR_STORY, RECIPES_STORY, SHOPPER_STORY, OCCASIONS_STORY, REWARDS_STORY, ASSISTANT_STORY, MCP_STORY, COSTS_STORY, DOCUMENTS_STORY, CHECKLISTS_STORY, HOUSE_STORY, NATIVE_STORY];

@@ -113,7 +113,7 @@ export function LandingPage({
                   Your home, your server.
                 </h1>
                 <p className={styles.sectionLede}>
-                  One shared app for the tasks, groceries, costs, calendar, recipes, documents, checklists and shopping of a household. Everyone in the house sees each change as it happens.
+                  One shared app for the tasks, groceries, costs, calendar, recipes, documents, checklists and shopping of a household. It also plans meals, gifts, bin nights and home upkeep. Everyone in the house sees each change as it happens.
                 </p>
                 <p className={styles.sectionLede}>
                   Run it on a machine you own with one script. The web app and the Android app point at your server. A household assistant runs there too, with your model and your Telegram bot.

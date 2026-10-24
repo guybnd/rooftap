@@ -3,7 +3,7 @@
 // page's eight stories are told with these frames.
 import { lazy, type ComponentType, type LazyExoticComponent } from "react";
 import { buildPlanToBuyTask } from "@homeup/core";
-import { costItems, documentLinks, documents, events, fridgeReceipt, groceries, groceriesMidShop, grocery, HOUSEHOLD, jazzTicket, jazzTicketLink, lasagnePhoto, mapDocumentLinks, SATURDAY, seed, seedTable, shopperOffers, shopperWants, tasks, ticketsFolder, todaysSession, vacuumWarranty } from "./fixtures";
+import { binPlans, binStreams, cookSessions, costItems, giftCost, documentLinks, documents, events, fridgeReceipt, groceries, groceriesMidShop, grocery, HOUSEHOLD, jazzTicket, jazzTicketLink, lasagnePhoto, mapDocumentLinks, SATURDAY, seed, seedTable, shopperOffers, shopperWants, tasks, ticketsFolder, todaysSession, vacuumWarranty } from "./fixtures";
 
 /** A tap, a drag or a wait the screenshot script performs in order, in the page. */
 export type Action =
@@ -57,6 +57,9 @@ const Apartment = lazy(() => import("../../src/app/apartment/[id]/page"));
 const MapView = lazy(() => import("../../src/app/map/page"));
 const SearchChecklist = lazy(() => import("../../src/app/checklist/page"));
 const ShelfLife = lazy(() => import("../../src/app/groceries/shelf-life/page"));
+const Occasions = lazy(() => import("../../src/app/occasions/page"));
+const Bins = lazy(() => import("../../src/app/bins/page"));
+const Cook = lazy(() => import("../../src/app/recipes/cook/[id]/page"));
 
 /** The to-do that Plan to buy writes for the robot vacuum, at the cheapest store. */
 const planToBuyTask = () =>
@@ -67,7 +70,8 @@ const planToBuyTask = () =>
  * card button. The first of each sits in the collapsed bar, hidden until the
  * list scrolls, so these take the second: the one in the head.
  */
-const VIEW = "[aria-label^='View options'] >> nth=1";
+const ONE_LIST = "text=/^One list$/ >> visible=true";
+const AISLES = "text=/^Aisles$/ >> visible=true";
 const REWARDS = "[aria-label='Rewards cards'] >> nth=1";
 const ROOF = "button[aria-label^='Add (hold']";
 const CAPTURE_FIELD = "input[placeholder='Add or ask anything']";
@@ -102,6 +106,15 @@ const toSaturday: Action[] = SATURDAY === 0 ? [] : [{ click: `text=/^${saturday.
 /** The Sunday after it opens the next week of the strip: the arrow, then the day. */
 const sunday = new Date(saturday);
 sunday.setDate(sunday.getDate() + 1);
+/** Tomorrow, the bins' night; and Mum's birthday, next Wednesday. */
+const tuesday = new Date();
+tuesday.setDate(tuesday.getDate() + 1);
+const mumsDay = new Date();
+mumsDay.setDate(mumsDay.getDate() + 9);
+/** Bin night's streams and plan, only in the scenes about it, so Home elsewhere has no bins card. */
+const withBins = () => seed({ bin_streams: binStreams, bin_plans: binPlans });
+/** The lasagne's two missing ingredients not yet on the list. */
+const withoutLasagneItems = () => seed({ grocery_items: groceries.filter((g) => g.recipe_source_id !== "r-lasagne") });
 const toSunday: Action[] = [{ tap: [360, 178] }, { wait: 400 }, { click: `text=/^${sunday.getDate()}$/` }, { wait: 300 }];
 
 export const SCENES: Scene[] = [
@@ -138,7 +151,7 @@ export const SCENES: Scene[] = [
     id: "home-upcoming",
     path: "/home",
     page: Home,
-    actions: [{ scroll: 560 }, { wait: 400 }],
+    actions: [{ scroll: 670 }, { wait: 400 }],
     marks: {
       dentist: '[class*="list-item"]:has-text("Dentist")',
       plumber: '[class*="list-item"]:has-text("Book the plumber")',
@@ -148,11 +161,9 @@ export const SCENES: Scene[] = [
   },
 
   // 2. Groceries.
-  { id: "groceries-aisles", path: "/groceries", page: Groceries, prepare: () => groceriesView("aisle"), marks: { view: VIEW, lemons: "text=Lemons", addAll: "text=Add all >> visible=true", reAdd: "[aria-label='Might be running low']", onions: "text=Onions >> visible=true" } },
+  { id: "groceries-aisles", path: "/groceries", page: Groceries, prepare: () => groceriesView("aisle"), marks: { oneList: ONE_LIST, lemons: "text=Lemons", addAll: "text=Add all >> visible=true", reAdd: "[aria-label='Might be running low']", onions: "text=Onions >> visible=true" } },
   // The View menu open, on each sort.
-  { id: "groceries-aisles-menu", path: "/groceries", page: Groceries, prepare: () => groceriesView("aisle"), actions: [{ click: VIEW }, { wait: 400 }], marks: { oneList: "text=One list >> visible=true" } },
-  { id: "groceries-flat-menu", path: "/groceries", page: Groceries, prepare: () => groceriesView("flat"), actions: [{ click: VIEW }, { wait: 400 }], marks: { byAisle: "text=By aisle >> visible=true" } },
-  { id: "groceries-flat", path: "/groceries", page: Groceries, prepare: () => groceriesView("flat"), marks: { view: VIEW, ricotta: "text=Ricotta", sheets: "text=Lasagne sheets" } },
+  { id: "groceries-flat", path: "/groceries", page: Groceries, prepare: () => groceriesView("flat"), marks: { aisles: AISLES, ricotta: "text=Ricotta", sheets: "text=Lasagne sheets" } },
   // A swipe to the right marks an item as got: held mid-way, then released.
   { id: "groceries-swipe", path: "/groceries", page: Groceries, prepare: () => groceriesView("aisle"), actions: [{ drag: ["text=Lemons", 90, 0, true] }, { wait: 200 }], marks: { lemons: "text=Lemons" } },
   { id: "groceries-got", path: "/groceries", page: Groceries, prepare: () => groceriesView("aisle"), actions: [{ drag: ["text=Lemons", 180, 0] }, { wait: 700 }], marks: { track: ["text=Track today", 2] } },
@@ -212,13 +223,13 @@ export const SCENES: Scene[] = [
 
   // 4. Recipes.
   { id: "recipes", path: "/recipes", page: Recipes, marks: { scan: "text=Scan a recipe", lasagne: "text=Lasagne >> visible=true", canMake: "text=Can make now" } },
-  { id: "recipe-lasagne", path: "/recipes/r-lasagne", params: { id: "r-lasagne" }, page: RecipeDetail, marks: { addMissing: "text=/Add \\d+ missing/", have: "text=/\\d of \\d have/" } },
-  { id: "recipe-lasagne-steps", path: "/recipes/r-lasagne", params: { id: "r-lasagne" }, page: RecipeDetail, actions: [{ scroll: 720 }, { wait: 400 }] },
+  { id: "recipe-lasagne", path: "/recipes/r-lasagne", params: { id: "r-lasagne" }, page: RecipeDetail, prepare: withoutLasagneItems, marks: { addMissing: "text=/Add \\d+ missing/", have: "text=/\\d of \\d have/" } },
+  { id: "recipe-lasagne-steps", path: "/recipes/r-lasagne", params: { id: "r-lasagne" }, page: RecipeDetail, actions: [{ click: "text=/^Steps/ >> visible=true" }, { wait: 400 }, { scroll: 300 }, { wait: 300 }], marks: { bake: "text=/· 40 min/ >> visible=true" } },
 
   // 6. Costs.
-  { id: "costs", path: "/costs", page: Costs, marks: { jazz: "text=Jazz at the Lighthouse >> visible=true", planned: ["text=planned", 2], chart: ["text=Projected", 2], recurring: ["text=Rent", 2] } },
-  { id: "costs-groceries", path: "/costs", page: Costs, actions: [{ click: "text=Groceries >> visible=true" }, { wait: 500 }, { scroll: 520 }, { wait: 300 }], marks: { trip: "text=FreshCo >> visible=true" } },
-  { id: "costs-groceries-before", path: "/costs", page: Costs, prepare: () => seed({ cost_items: costItems.filter((c) => c.id !== "c-trip-0") }), actions: [{ click: "text=Groceries >> visible=true" }, { wait: 500 }, { scroll: 520 }, { wait: 300 }] },
+  { id: "costs", path: "/costs", page: Costs, marks: { spent: ["text=/of \\$4,200/", 1], status: ["text=Under goal so far.", 1], chart: ["text=/^Jan$/", 2], worth: ["text=Worth a look >> visible=true", 1], categories: "text=/paid · to come/i" } },
+  { id: "costs-groceries", path: "/costs", page: Costs, actions: [{ scroll: 700 }, { wait: 300 }, { click: "text=4 costs >> visible=true" }, { wait: 600 }], marks: { trip: "text=/^\\$64$/ >> visible=true" } },
+  { id: "costs-groceries-before", path: "/costs", page: Costs, prepare: () => seed({ cost_items: costItems.filter((c) => c.id !== "c-trip-0") }), actions: [{ scroll: 700 }, { wait: 300 }, { click: "text=3 costs >> visible=true" }, { wait: 600 }] },
 
   // 7. Documents.
   { id: "documents", path: "/documents", page: Documents, marks: { warranty: "text=Dishwasher warranty >> visible=true", gym: "text=Gym membership contract >> visible=true" } },
@@ -457,6 +468,32 @@ export const SCENES: Scene[] = [
   { id: "map-documents-receipts", path: "/documents", page: Documents, prepare: withMapDocuments, actions: [{ click: "text=Receipts >> visible=true" }, { wait: 400 }], marks: { receipt: "text=FreshCo receipt >> visible=true", fridge: "text=Fridge receipt >> visible=true" } },
   { id: "map-documents-recipe", path: "/documents", page: Documents, prepare: withMapDocuments, actions: [{ fill: "input[placeholder^='Search documents']", value: "Lasagne" }, { wait: 500 }], marks: { photo: "text=Lasagne recipe photo >> visible=true" } },
   { id: "map-setup-doc", path: "/setup", page: Setup, prepare: withMapDocuments, actions: [{ wait: 400 }], marks: { doc: "text=/^Doc$/ >> visible=true" } },
+
+  // Occasions: the next birthday's gift ideas, the list, a wishlist; a surprise kept from Noa.
+  { id: "occasions", path: "/occasions", page: Occasions, marks: { budget: "text=/of \\$250/", lunch: "text=Lunch at Rosa's", mum: "text=/^Mum's birthday$/", noa: "text=/^Noa's birthday$/", wishlist: "text=Le Creuset casserole, 26 cm" } },
+  { id: "occasions-noa", path: "/occasions", page: Occasions, actions: [{ click: "text=/^Noa's birthday$/" }, { wait: 600 }], marks: { kept: "text=/Kept from Noa/", watching: "text=Noise-cancelling headphones" } },
+  // Recipes: this week's dinners, and cook mode on the lasagne's bake step.
+  { id: "recipes-week", path: "/recipes", page: Recipes, actions: [{ click: "text=This week >> visible=true" }, { wait: 500 }], marks: { count: "text=dinners planned", draft: "text=Draft my week", curry: "text=Green curry", sat: "text=Lasagne + Banana bread", hint: "text=/Dinner at Sam/" } },
+  { id: "cook-lasagne", path: "/recipes/cook/r-lasagne", params: { id: "r-lasagne" }, page: Cook, prepare: () => seed({ cook_sessions: cookSessions }), marks: { step: "text=/Top with the rest/", progress: "text=Step 4 of 5", timer: ["text=/27:00/", 1] } },
+  // Around the house: the bin night card on Home, whose turn, Home Assistant as a source, and home care.
+  { id: "home-bins", prepare: withBins, path: "/home", page: Home, marks: { bins: "text=Bins out tonight >> nth=0", tonight: "text=/Tonight: Steak/" } },
+  { id: "bins", prepare: withBins, path: "/bins", page: Bins, marks: { next: "text=Next two weeks", turn: "text=/^Tonight$/" } },
+  { id: "bins-setup", prepare: withBins, path: "/bins", page: Bins, actions: [{ click: "button[aria-label=\"Edit days\"]" }, { wait: 500 }, { click: "text=Home Assistant >> visible=true" }, { wait: 400 }], marks: { ha: "text=Read from Waste Collection Schedule", council: "text=Council calendar" } },
+  { id: "setup-care", path: "/setup", page: Setup, actions: [{ click: "text=Care >> visible=true" }, { wait: 500 }], marks: { smoke: "text=Test smoke alarms", aircon: "text=Clean aircon filters", suggestions: "text=Suggestions" } },
+  // The Assistant: a web search for places near Ava.
+  {
+    id: "assistant-near-me",
+    path: "/assistant/conv-filter",
+    params: { id: "conv-filter" },
+    page: AssistantThread,
+    actions: [{ scroll: 2000 }, { wait: 400 }],
+    marks: { places: "text=/2.1 km/", from: "text=/started from where you are/", added: ["text=Add \"Aircon filter\" to Groceries", 3] },
+  },
+  // The module map's frames for the new modules.
+  { id: "map-calendar-bins", path: "/calendar", page: Calendar, prepare: withBins, actions: [{ click: `text=/^${tuesday.getDate()}$/` }, { wait: 300 }, { click: "text=Agenda" }, { wait: 500 }], marks: { bins: "text=/Rubbish/ >> visible=true" } },
+  { id: "map-calendar-occasion", path: "/calendar", page: Calendar, actions: [{ tap: [360, 178] }, { wait: 400 }, { click: `text=/^${mumsDay.getDate()}$/` }, { wait: 300 }, { click: "text=Agenda" }, { wait: 500 }], marks: { birthday: "text=Mum's birthday >> visible=true" } },
+  { id: "map-costs-jazz", path: "/costs", page: Costs, actions: [{ scroll: 700 }, { wait: 300 }, { click: "text=/^Going out$/ >> visible=true" }, { wait: 600 }], marks: { jazz: "text=Jazz at the Lighthouse >> visible=true" } },
+  { id: "map-costs-gift", path: "/costs", page: Costs, prepare: () => seed({ cost_items: [...costItems, giftCost] }), actions: [{ scroll: 700 }, { wait: 300 }, { click: "text=/^Purchase/ >> visible=true" }, { wait: 600 }], marks: { gift: "text=/^Gift$/ >> visible=true" } },
 ];
 
 /** The live demo's pages, by path; a path with an id matches its prefix. */
@@ -466,6 +503,7 @@ const LIVE_PAGES: ReadonlyArray<[path: string, page: LazyExoticComponent<Compone
   ["/groceries", Groceries],
   ["/calendar", Calendar],
   ["/recipes/new", RecipeNew],
+  ["/recipes/cook/", Cook],
   ["/recipes/", RecipeDetail],
   ["/recipes", Recipes],
   ["/costs", Costs],
@@ -479,6 +517,8 @@ const LIVE_PAGES: ReadonlyArray<[path: string, page: LazyExoticComponent<Compone
   ["/shopper/", ShopperItem],
   ["/shopper", Shopper],
   ["/rewards", Rewards],
+  ["/occasions", Occasions],
+  ["/bins", Bins],
   ["/setup", Setup],
   ["/homesearch", HomeSearch],
   ["/appointments", Appointments],

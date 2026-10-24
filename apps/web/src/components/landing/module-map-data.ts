@@ -7,9 +7,8 @@ import type { ScreenId } from "./screens";
 // module-map-data.test.ts fails when a two-module feature has no line here,
 // or a line names a feature that does not join its two modules.
 
-// Occasions isn't on the map yet: it needs its own spot and demo frames.
-// Bin night has no demo screens yet, so it isn't on the map (nor are its lines).
-export type MapModule = Exclude<ModuleId, "mcp" | "money-insights" | "occasions" | "bins" | "home-care" | "meals">;
+// Money insights is part of Costs on the map, and MCP is not a module people see.
+export type MapModule = Exclude<ModuleId, "mcp" | "money-insights">;
 
 /** Short names: the map has no room for "Tasks & Reminders". */
 export const MAP_LABEL: Record<MapModule, string> = {
@@ -26,14 +25,18 @@ export const MAP_LABEL: Record<MapModule, string> = {
   rewards: "Rewards",
   "google-calendar": "Google Calendar",
   assistant: "Assistant",
+  meals: "Meal plan",
+  occasions: "Occasions",
+  bins: "Bin night",
+  "home-care": "Home care",
 };
 
 /** The section whose hue a module's tile takes. */
-export const mapSection = (id: MapModule) => (id === "google-calendar" ? "calendar" : id);
+export const mapSection = (id: MapModule) => ({ "google-calendar": "calendar", meals: "recipes", "home-care": "setup" } as Partial<Record<MapModule, string>>)[id] ?? id;
 
-/** Where each module sits, in map units: wide (1200 by 480) and tall (360 by 560). */
-export const MAP_WIDE = { w: 1200, h: 480 } as const;
-export const MAP_TALL = { w: 360, h: 580 } as const;
+/** Where each module sits, in map units: wide (1200 by 560) and tall (360 by 680). */
+export const MAP_WIDE = { w: 1200, h: 560 } as const;
+export const MAP_TALL = { w: 360, h: 680 } as const;
 export const POS: Record<MapModule, { wide: [number, number]; tall: [number, number] }> = {
   checklists: { wide: [130, 60], tall: [62, 40] },
   household: { wide: [420, 60], tall: [180, 40] },
@@ -41,13 +44,17 @@ export const POS: Record<MapModule, { wide: [number, number]; tall: [number, num
   "google-calendar": { wide: [1040, 60], tall: [262, 150] },
   shopper: { wide: [130, 240], tall: [62, 160] },
   costs: { wide: [500, 240], tall: [180, 220] },
-  search: { wide: [1070, 200], tall: [282, 270] },
-  setup: { wide: [1070, 340], tall: [284, 420] },
+  search: { wide: [1080, 230], tall: [282, 270] },
+  setup: { wide: [1080, 340], tall: [284, 420] },
   documents: { wide: [800, 345], tall: [180, 380] },
   rewards: { wide: [130, 420], tall: [62, 530] },
   groceries: { wide: [400, 420], tall: [62, 360] },
   recipes: { wide: [650, 420], tall: [180, 530] },
   assistant: { wide: [290, 330], tall: [62, 262] },
+  occasions: { wide: [300, 150], tall: [100, 100] },
+  bins: { wide: [830, 150], tall: [300, 340] },
+  meals: { wide: [530, 510], tall: [100, 620] },
+  "home-care": { wide: [1060, 460], tall: [270, 620] },
 };
 
 export interface MapShot {
@@ -177,7 +184,7 @@ export const MAP_LINKS: readonly MapLink[] = [
     text: "An event's ticket cost goes in the budget as a Going out line.",
     shots: [
       { scene: "readme-event-ticket", mark: "budget" },
-      { scene: "costs", mark: "jazz@row" },
+      { scene: "map-costs-jazz", mark: "jazz@row" },
     ],
   },
   {
@@ -262,6 +269,76 @@ export const MAP_LINKS: readonly MapLink[] = [
       { scene: "map-documents-recipe", mark: "photo@row" },
     ],
   },
+  {
+    a: "recipes",
+    b: "meals",
+    features: ["recipes.meal-plan", "hub.meals"],
+    text: "The meal plan is the This week tab in Recipes. Each night takes a recipe and a cook. Home shows the dinner for tonight.",
+    shots: [{ scene: "recipes-week", mark: "count" }],
+  },
+  {
+    a: "meals",
+    b: "groceries",
+    features: ["meals.groceries"],
+    text: "Each night shows what is in stock. The week's missing ingredients go to Groceries in one tap.",
+    shots: [{ scene: "recipes-week", mark: "curry@row" }],
+  },
+  {
+    a: "meals",
+    b: "assistant",
+    features: ["meals.assistant-draft"],
+    text: "Draft my week: the Assistant plans the empty nights from your recipes and the food in the house.",
+    shots: [{ scene: "recipes-week", mark: "draft" }],
+  },
+  {
+    a: "meals",
+    b: "calendar",
+    features: ["meals.calendar"],
+    text: "A dinner out on the calendar shows as a hint on its night.",
+    shots: [{ scene: "recipes-week", mark: "hint" }],
+  },
+  {
+    a: "calendar",
+    b: "occasions",
+    features: ["calendar.occasions"],
+    text: "Birthdays and other occasions show on the calendar as all-day rows.",
+    shots: [{ scene: "map-calendar-occasion", mark: "birthday@row" }],
+  },
+  {
+    a: "occasions",
+    b: "shopper",
+    features: ["occasions.shopper"],
+    text: "Watch the price on a gift idea. The Shopper watch is kept from the same people as the gift.",
+    shots: [{ scene: "occasions-noa", mark: "watching@row" }],
+  },
+  {
+    a: "occasions",
+    b: "costs",
+    features: ["occasions.costs"],
+    text: "A gift writes a Budget line named Gift until the day has passed.",
+    shots: [{ scene: "map-costs-gift", mark: "gift@row" }],
+  },
+  {
+    a: "calendar",
+    b: "bins",
+    features: ["calendar.bins"],
+    text: "Bin collection days show on the calendar.",
+    shots: [{ scene: "map-calendar-bins", mark: "bins@row" }],
+  },
+  {
+    a: "bins",
+    b: "assistant",
+    features: ["bins.home-assistant"],
+    text: "Bin night reads the bin days from Home Assistant's Waste Collection Schedule, through the Assistant's Home Assistant connection.",
+    shots: [{ scene: "bins-setup", mark: "ha" }],
+  },
+  {
+    a: "home-care",
+    b: "setup",
+    features: [],
+    text: "Home care is the Care tab in Home Setup: upkeep jobs with a schedule, a person and a reminder.",
+    shots: [{ scene: "setup-care", mark: "smoke@row" }],
+  },
 ];
 
 export const MAP_MODULES = Object.keys(POS) as MapModule[];
@@ -269,8 +346,9 @@ export const MAP_MODULES = Object.keys(POS) as MapModule[];
 /**
  * Every two-module feature in core between modules on the map, so the test can
  * hold the map to it. Money insights is part of Costs on the map, so its
- * features (Compare with Scout, a reminder to cancel) have no line of their own;
- * the same goes for Meal plan, a tab in Recipes.
+ * features (Compare with Scout, a reminder to cancel) have no line of their own.
+ * A meal plan feature names Recipes too (the plan is a tab there), so a line
+ * from Meal plan may stand for a feature of three modules.
  */
 export const PAIR_FEATURES = (Object.keys(MODULE_FEATURES) as ModuleFeatureId[]).filter(
   (id) => MODULE_FEATURES[id].modules.length === 2 && MODULE_FEATURES[id].modules.every((m) => m in POS),

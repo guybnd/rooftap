@@ -12,10 +12,13 @@ describe("landing module map", () => {
     expect(missing).toEqual([]);
   });
 
-  it("puts each feature on the line between its own two modules", () => {
+  it("puts each feature on a line between its own modules", () => {
     for (const link of MAP_LINKS) {
       for (const id of link.features) {
-        expect([id, pair(...(MODULE_FEATURES[id].modules as [string, string]))]).toEqual([id, pair(link.a, link.b)]);
+        const modules = MODULE_FEATURES[id].modules as readonly string[];
+        // A two-module feature sits on its own pair; a meal plan feature also names Recipes.
+        if (modules.length === 2) expect([id, pair(...(modules as [string, string]))]).toEqual([id, pair(link.a, link.b)]);
+        else expect([id, modules.includes(link.a) && modules.includes(link.b)]).toEqual([id, true]);
       }
     }
   });

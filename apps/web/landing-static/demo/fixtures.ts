@@ -34,6 +34,14 @@ import type {
   Apartment,
   Appointment,
   ChecklistItem,
+  Occasion,
+  WishlistItem,
+  GiftIdea,
+  MealPlanEntry,
+  BinStream,
+  BinPlan,
+  CareJob,
+  CookSession,
 } from "@homeup/core";
 import type { AssistantScope, AssistantSettings, HomeAssistantStatus, HomeAssistantToolInfo } from "@homeup/core";
 
@@ -839,9 +847,9 @@ export const assistantConversations: AssistantConversation[] = [
   conv("conv-house", "chat", "The house tonight", 35),
   conv("conv-hosting", "chat", "Hosting Saturday", 120, { pinned: true }),
   conv("conv-holiday", "chat", "Holiday in March", 3 * 24 * 60),
-  conv("conv-spend", "chat", "Grocery spend this month", 2 * 24 * 60),
   conv("conv-week", "chat", "Cooking this week", 4 * 24 * 60),
   conv("conv-microwave", "chat", "Find a microwave", 19),
+  conv("conv-filter", "chat", "Aircon filter", 5 * 24 * 60),
   // Quick asks still open, so each one shows its answer and takes a follow-up.
   conv("conv-dinner", "quick", "Dinner tonight", 8, { closes_at: minutesFromNow(22) }),
   conv("conv-dentist", "quick", "When is the dentist?", 12, { closes_at: minutesFromNow(18) }),
@@ -925,6 +933,16 @@ const weekChat: AssistantMessage[] = [
     proposal: proposal("confirmed", [["add_recipe_to_groceries", "recipes", { recipe: "Lasagne" }, "Add a recipe's ingredients to Groceries"]]),
   }),
   msg("w-3", "assistant", 4 * 24 * 60 + 4, "Done. Ricotta and lasagne sheets are on the list, marked for the lasagne."),
+];
+
+/** A named chat that searched the web for places near Ava, then added the part to the list. */
+const filterChat: AssistantMessage[] = [
+  msg("f-1", "user", 5 * 24 * 60 + 9, "The lounge aircon filter is torn. Where can I get a Fujitsu one near me today?", { author: "Ava" }),
+  msg("f-2", "assistant", 5 * 24 * 60 + 8, "Two places near you list Fujitsu filters:\n\n1. **Bunnings Hawthorn East**, 2.1 km, open until 9 PM\n2. **Appliance Spare Parts Richmond**, 4.8 km, open until 5:30 PM\n\nThe search started from where you are now. Bring the old filter to match the size. Shall I put it on the list?"),
+  msg("f-3", "user", 5 * 24 * 60 + 7, "Yes, under hardware.", { author: "Ava" }),
+  msg("f-4", "assistant", 5 * 24 * 60 + 6, "Done. **Aircon filter** is on the list under Hardware.", {
+    proposal: proposal("confirmed", [["create_grocery_item", "groceries", { name: "Aircon filter" }, 'Add "Aircon filter" to Groceries']]),
+  }),
 ];
 
 /** A quick ask, read only. */
@@ -1045,6 +1063,7 @@ export const assistantMessages: Record<string, AssistantMessage[]> = {
   "conv-dentist": dentistChat,
   "conv-week": weekChat,
   "conv-microwave": microwaveChat,
+  "conv-filter": filterChat,
 };
 
 /** Home Assistant, connected through its MCP Server integration, under Act. */
@@ -1222,6 +1241,84 @@ export const appointments: Appointment[] = [
   appointment("vw-crown", "ap-crown", at(SATURDAY + 1, "11:15")),
 ];
 
+
+// ── Occasions, meals, bins, home care, cooking ───────────────────────────────
+const who = { created_by: AVA };
+/** Mia's birthday in 16 days, kept from Mia: Ava plans the gift and the party. */
+export const occasions: Occasion[] = [
+  { ...base, ...who, id: "oc-noa", title: "Noa's birthday", kind: "birthday", date: day(16), repeats: true, person_id: NOA, person_name: null, budget_cents: 15000, notes: null, hidden_from: [NOA], on_calendar: true },
+  { ...base, ...who, id: "oc-mum", title: "Mum's birthday", kind: "birthday", date: day(9), repeats: true, person_id: null, person_name: "Mum", budget_cents: 25000, notes: null, hidden_from: [], on_calendar: true },
+  { ...base, ...who, id: "oc-anniv", title: "Our anniversary", kind: "anniversary", date: day(48), repeats: true, person_id: null, person_name: null, budget_cents: null, notes: null, hidden_from: [], on_calendar: true },
+];
+const gift = (id: string, occasion_id: string, title: string, status: GiftIdea["status"], price: number | null, extra: Partial<GiftIdea> = {}): GiftIdea => ({
+  ...base, ...who, id, occasion_id, for_user_id: null, for_name: null, title, status, price_cents: price, url: null, notes: null, wishlist_item_id: null, shopper_want_id: null, cost_item_id: null, hidden_from: [], ...extra,
+});
+export const giftIdeas: GiftIdea[] = [
+  gift("g-headphones", "oc-noa", "Noise-cancelling headphones", "watching", 32900, { for_user_id: NOA, hidden_from: [NOA] }),
+  gift("g-pottery", "oc-noa", "Pottery class for two", "booked", 9000, { for_user_id: NOA, hidden_from: [NOA] }),
+  gift("g-cake", "oc-noa", "Order the cake", "idea", 6500, { for_user_id: NOA, hidden_from: [NOA] }),
+  gift("g-mum-plant", "oc-mum", "Fiddle leaf fig", "bought", 6000, { for_name: "Mum", cost_item_id: "c-gift-mum" }),
+  gift("g-mum-lunch", "oc-mum", "Lunch at Rosa's", "booked", 12000, { for_name: "Mum" }),
+  gift("g-mum-book", "oc-mum", "The new Liane Moriarty", "idea", 3500, { for_name: "Mum" }),
+];
+
+/** The fig's Budget line (occasions.costs): a one-off Purchase, named "Gift" until the day. */
+export const giftCost = cost("c-gift-mum", "Gift", "purchase", 6000, "one_off", { start_date: day(-1), linked_section: "occasions" });
+
+/** Ava's own wishlist, which the household can read. */
+export const wishlistItems: WishlistItem[] = [
+  { ...base, id: "wl-1", user_id: AVA, title: "Le Creuset casserole, 26 cm", url: null, price_cents: 54900, notes: "Cerise red" },
+  { ...base, id: "wl-2", user_id: AVA, title: "Kindle Paperwhite", url: null, price_cents: 26900, notes: null },
+];
+
+const meal = (id: string, days: number, recipe_id: string | null, extra: Partial<MealPlanEntry> = {}): MealPlanEntry => ({
+  ...base, ...who, id, date: day(days), slot: "dinner", recipe_id, label: null, cook_user_id: null, note: null, position: 0, role: "main", ...extra,
+});
+/** This week's dinners, Monday to Sunday. */
+export const mealPlan: MealPlanEntry[] = [
+  meal("mp-0", 0, "r-steak", { cook_user_id: AVA }),
+  meal("mp-1", 1, "r-curry", { cook_user_id: NOA }),
+  meal("mp-2", 2, null, { label: "Leftovers" }),
+  meal("mp-3", 3, "r-lasagne", { cook_user_id: AVA }),
+  meal("mp-4", 4, null, { label: "Out" }),
+  meal("mp-5", 5, "r-lasagne", { cook_user_id: AVA }),
+  meal("mp-5b", 5, "r-banana", { role: "dessert", position: 1, cook_user_id: MIA }),
+];
+
+/** Red every Tuesday, yellow and green on alternate Tuesdays. */
+export const binStreams: BinStream[] = [
+  { ...base, ...who, id: "bin-red", name: "Rubbish", lid: "red", weekday: 2, every_weeks: 1, anchor_date: day(1), sort_order: 0 },
+  { ...base, ...who, id: "bin-yellow", name: "Recycling", lid: "yellow", weekday: 2, every_weeks: 2, anchor_date: day(1), sort_order: 1 },
+  { ...base, ...who, id: "bin-green", name: "Garden", lid: "green", weekday: 2, every_weeks: 2, anchor_date: day(8), sort_order: 2 },
+];
+export const binPlans: BinPlan[] = [
+  { ...base, ...who, id: "bin-plan", remind_at: "13:00", push_at: "21:00", rotation: [NOA, AVA, MIA], rotation_anchor: day(1), out_for: null, out_by: null, timezone: "Australia/Melbourne", setup_source: "council" },
+];
+
+const care = (id: string, suggestion_id: string | null, title: string, area: CareJob["area"], room: string | null, every_n: number, every_unit: CareJob["every_unit"], next_due: string | null, extra: Partial<CareJob> = {}): CareJob => ({
+  ...base, ...who, id, title, area, room, suggestion_id, state: "active", every_n, every_unit, season_month: null, next_due, last_done: null, assigned_to: null, remind: true, remind_days_before: 3, notes: null, done_log: [], ...extra,
+});
+export const careJobs: CareJob[] = [
+  care("cj-smoke", "smoke-alarm-test", "Test smoke alarms", "safety", "Whole house", 6, "month", day(-2), { assigned_to: NOA }),
+  care("cj-aircon", "aircon-filter", "Clean aircon filters", "climate", "Living", 3, "month", day(4)),
+  care("cj-gutters", "gutters", "Clear the gutters", "outside", "Roof", 6, "month", day(19), { assigned_to: AVA }),
+  care("cj-dishwasher", null, "Clean the dishwasher filter", "kitchen", "Kitchen", 1, "month", day(9)),
+  care("cj-service", "aircon-service", "Service the air conditioner", "climate", "Whole house", 1, "year", day(40)),
+];
+
+/** Ava is on step 4 of the lasagne, with the bake timer running. */
+export const cookSessions: CookSession[] = [
+  {
+    ...base,
+    id: "cook-lasagne",
+    user_id: AVA,
+    recipe_id: "r-lasagne",
+    step: 3,
+    timers: [{ id: "tm-bake", step: 3, index: 0, label: "Bake", seconds: 40 * 60, endsAt: at(0, "14:27"), pausedRemaining: null, deviceId: null }],
+    started_at: at(0, "13:20"),
+  },
+];
+
 // ── Assembled ────────────────────────────────────────────────────────────────
 const byId = <T extends { id: string }>(rows: T[]) => Object.fromEntries(rows.map((r) => [r.id, r]));
 
@@ -1265,6 +1362,15 @@ export const HOUSEHOLD: Household = {
     apartments: byId(apartments),
     appointments: byId(appointments),
     checklist_items: byId(searchChecklist),
+    occasions: byId(occasions),
+    gift_ideas: byId(giftIdeas),
+    wishlist_items: byId(wishlistItems),
+    meal_plan_entries: byId(mealPlan),
+    bin_streams: {},
+    bin_plans: {},
+    bin_changes: {},
+    care_jobs: byId(careJobs),
+    cook_sessions: {},
   },
   tables: {
     document_links: documentLinks,
