@@ -9,8 +9,8 @@
 import * as React from 'react';
 import { Pressable, ScrollView, View, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { Text, cn, haptics } from '@homeup/ui';
-import { costCategoryFromUp, formatMoney, recentDayLabel, recentVerdictText, timeAgo, type CostCategory, type CostItem, type RecentSpendState, type SpendingTransaction } from '@homeup/core';
-import { CategoryChip } from './cost-card';
+import { costCategoryFromUp, formatMoney, recentDayLabel, recentVerdictText, timeAgo, type CostCategory, type CostItem, type RecentBar, type RecentSpendState, type SpendingTransaction } from '@homeup/core';
+import { CATEGORY_BAR_FILL, CategoryChip } from './cost-card';
 
 const LABEL = 'text-micro-label uppercase text-muted-foreground';
 const CARD = 'overflow-hidden rounded-3xl border border-border/60 bg-card';
@@ -183,7 +183,7 @@ export function LatestPage({
   onSettings: () => void;
   skipBills: boolean;
 }) {
-  const { windows, open, toggle, bars, payments, error } = recent;
+  const { windows, open, toggle, bars, payments, day, pickDay, error } = recent;
   return (
     <View>
       {windows.length ? (
@@ -219,21 +219,21 @@ export function LatestPage({
       ) : null}
       {open != null && bars ? (
         <View>
-          <RecentBars bars={bars} usualCents={windows.find((w) => w.days === open)?.usualCents ?? null} days={open} />
+          <RecentBars bars={bars} usualCents={windows.find((w) => w.days === open)?.usualCents ?? null} days={open} picked={day} onPick={pickDay} />
           {payments ? (
             payments.length ? (
               <ScrollView style={{ maxHeight: 312 }} nestedScrollEnabled className="border-t border-border/60">
                 <LatestRows payments={payments} lineById={lineById} onOpen={onOpen} onHold={onHold} />
               </ScrollView>
             ) : (
-              <Text className="border-t border-border/60 px-4 py-4 text-sm text-muted-foreground">Nothing went out.</Text>
+              <Text className="border-t border-border/60 px-4 py-4 text-sm text-muted-foreground">{day ? `Nothing went out on ${recentDayLabel(day)}.` : 'Nothing went out.'}</Text>
             )
           ) : (
             <Text className="border-t border-border/60 px-4 py-4 text-sm text-muted-foreground">{error ?? 'Reading payments'}</Text>
           )}
           <View className="flex-row items-center justify-between border-t border-border/60 px-4 py-2.5">
             <Text className="text-xs text-muted-foreground" style={TABULAR}>
-              {[payments ? `${payments.length} ${payments.length === 1 ? 'payment' : 'payments'}` : null, skipBills ? 'Bills left out' : null].filter(Boolean).join(' · ')}
+              {[payments ? `${payments.length} ${payments.length === 1 ? 'payment' : 'payments'}${day ? ` on ${recentDayLabel(day)}` : ''}` : null, skipBills ? 'Bills left out' : null].filter(Boolean).join(' · ')}
             </Text>
             <Pressable accessibilityRole="button" onPress={onSettings} hitSlop={8}>
               <Text className="text-xs font-medium text-primary">Change</Text>
@@ -249,21 +249,58 @@ export function LatestPage({
 
 const BARS_HEIGHT = 72;
 
-/** A bar per day, the open window's days lit, a dashed line at a usual day. */
-function RecentBars({ bars, usualCents, days }: { bars: readonly { day: string; cents: number; lit: boolean }[]; usualCents: number | null; days: number }) {
+/**
+ * A bar per day, split by category like the month chart, the open window's
+ * days lit and a dashed line at a usual day. Tapping a bar lists just that
+ * day; tapping it again shows the whole window.
+ */
+function RecentBars({
+  bars,
+  usualCents,
+  days,
+  picked,
+  onPick,
+}: {
+  bars: readonly RecentBar[];
+  usualCents: number | null;
+  days: number;
+  picked: string | null;
+  onPick: (day: string) => void;
+}) {
+  // A usual day: the usual stretch spread over its days.
   const usualDay = usualCents != null ? usualCents / days : null;
   const top = Math.max(1, ...bars.map((b) => b.cents), usualDay ?? 0);
-  const total = bars.filter((b) => b.lit).reduce((s, b) => s + b.cents, 0);
   return (
-    <View className="gap-1 px-4 pb-2 pt-3" accessible accessibilityLabel={`${formatMoney(total)} over the last ${days === 1 ? 'day' : `${days} days`}, a bar per day`}>
+    <View className="gap-1 px-4 pb-2 pt-3">
       <View style={{ height: BARS_HEIGHT }} className="flex-row items-end gap-[3px]">
-        {bars.map((b) => (
-          <View
-            key={b.day}
-            className={cn('flex-1 rounded-[3px]', b.lit ? 'bg-foreground' : 'bg-muted')}
-            style={{ height: Math.max(2, Math.round((b.cents / top) * BARS_HEIGHT)) }}
-          />
-        ))}
+        {bars.map((b) => {
+          const dim = picked ? b.day !== picked : !b.lit;
+          return (
+            <Pressable
+              key={b.day}
+              accessibilityRole="button"
+              accessibilityState={{ selected: b.day === picked }}
+              accessibilityLabel={`${recentDayLabel(b.day)}, ${formatMoney(b.cents)}`}
+              onPress={() => {
+                haptics.select();
+                onPick(b.day);
+              }}
+              className="h-full flex-1 justify-end"
+            >
+              <View
+                className={cn('overflow-hidden rounded-[3px]', dim && 'opacity-35', !b.cents && 'bg-muted')}
+                style={{ height: Math.max(2, Math.round((b.cents / top) * BARS_HEIGHT)) }}
+              >
+                {b.segments
+                  .slice()
+                  .reverse()
+                  .map((seg) => (
+                    <View key={seg.category ?? 'none'} className={seg.category ? CATEGORY_BAR_FILL[seg.category] : 'bg-muted-foreground/60'} style={{ flex: seg.cents }} />
+                  ))}
+              </View>
+            </Pressable>
+          );
+        })}
         {usualDay ? (
           <View
             pointerEvents="none"

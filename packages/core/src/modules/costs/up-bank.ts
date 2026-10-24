@@ -249,7 +249,7 @@ export function ledgerRows(rows: readonly BankTransaction[], tzOffset = 0): Ledg
 }
 
 /**
- * Money out per local day and cost line since `since` (an instant), for the
+ * Money out per local day, cost line and category since `since` (an instant), for the
  * Costs recent spending strip (recent-spend.ts). Counted once per bank
  * transaction; transfers and hidden payments stay out.
  */
@@ -261,8 +261,10 @@ export function dayRows(rows: readonly BankTransaction[], since: string, tzOffse
     seen.add(r.external_id);
     const day = new Date(Date.parse(r.occurred_at) - tzOffset * 60_000).toISOString().slice(0, 10);
     const costItemId = r.cost_item_id ?? null;
-    const key = `${day}|${costItemId ?? ''}`;
-    const cur = out.get(key) ?? { day, costItemId, outCents: 0 };
+    const category = ownCostCategory(r.cost_category);
+    const sourceCategory = r.category ?? null;
+    const key = `${day}|${costItemId ?? ''}|${category ?? ''}|${sourceCategory ?? ''}`;
+    const cur = out.get(key) ?? { day, costItemId, category, sourceCategory, outCents: 0 };
     cur.outCents += -r.amount_cents;
     out.set(key, cur);
   }

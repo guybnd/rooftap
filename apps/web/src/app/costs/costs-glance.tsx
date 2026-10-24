@@ -10,7 +10,7 @@
 // category. Phone twin: apps/mobile/src/features/costs/costs-glance.tsx.
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { costCategoryFromUp, formatMoney, recentDayLabel, recentVerdictText, timeAgo, type CostCategory, type CostItem, type RecentBar, type RecentSpendState, type SpendingTransaction } from '@homeup/core';
+import { CATEGORY_COLOR, costCategoryFromUp, formatMoney, recentDayLabel, recentVerdictText, timeAgo, type CostCategory, type CostItem, type RecentBar, type RecentSpendState, type SpendingTransaction } from '@homeup/core';
 import { tick } from '@/lib/haptics';
 import { cn } from '@/lib/utils';
 import { CategoryGlyph } from './category-glyph';
@@ -187,7 +187,7 @@ export function LatestPage({
   onSettings: () => void;
   skipBills: boolean;
 }) {
-  const { windows, open, toggle, bars, payments, error } = recent;
+  const { windows, open, toggle, bars, payments, day, pickDay, error } = recent;
   return (
     <div>
       {windows.length ? (
@@ -217,21 +217,21 @@ export function LatestPage({
       ) : null}
       {open != null && bars ? (
         <div>
-          <RecentBars bars={bars} usualCents={windows.find((w) => w.days === open)?.usualCents ?? null} days={open} />
+          <RecentBars bars={bars} usualCents={windows.find((w) => w.days === open)?.usualCents ?? null} days={open} picked={day} onPick={pickDay} />
           {payments ? (
             payments.length ? (
               <div className="max-h-[312px] overflow-y-auto border-t border-border/60">
                 <LatestRows payments={payments} lineById={lineById} onOpen={onOpen} onMove={onMove} />
               </div>
             ) : (
-              <p className="border-t border-border/60 px-4 py-4 text-sm text-muted-foreground">Nothing went out.</p>
+              <p className="border-t border-border/60 px-4 py-4 text-sm text-muted-foreground">{day ? `Nothing went out on ${recentDayLabel(day)}.` : 'Nothing went out.'}</p>
             )
           ) : (
             <p className="border-t border-border/60 px-4 py-4 text-sm text-muted-foreground">{error ?? 'Reading payments'}</p>
           )}
           <div className="flex items-center justify-between border-t border-border/60 px-4 py-2.5">
             <span className="text-xs tabular-nums text-muted-foreground">
-              {[payments ? `${payments.length} ${payments.length === 1 ? 'payment' : 'payments'}` : null, skipBills ? 'Bills left out' : null].filter(Boolean).join(' · ')}
+              {[payments ? `${payments.length} ${payments.length === 1 ? 'payment' : 'payments'}${day ? ` on ${recentDayLabel(day)}` : ''}` : null, skipBills ? 'Bills left out' : null].filter(Boolean).join(' · ')}
             </span>
             <button type="button" onClick={onSettings} className="text-xs font-medium text-primary hover:underline">
               Change
@@ -247,22 +247,56 @@ export function LatestPage({
 
 const BARS_HEIGHT = 72;
 
-/** A bar per day, the open window's days lit, a dashed line at a usual day. */
-function RecentBars({ bars, usualCents, days }: { bars: readonly RecentBar[]; usualCents: number | null; days: number }) {
+/**
+ * A bar per day, split by category like the month chart, the open window's
+ * days lit and a dashed line at a usual day. Clicking a bar lists just that
+ * day; clicking it again shows the whole window.
+ */
+function RecentBars({
+  bars,
+  usualCents,
+  days,
+  picked,
+  onPick,
+}: {
+  bars: readonly RecentBar[];
+  usualCents: number | null;
+  days: number;
+  picked: string | null;
+  onPick: (day: string) => void;
+}) {
+  // A usual day: the usual stretch spread over its days.
   const usualDay = usualCents != null ? usualCents / days : null;
   const top = Math.max(1, ...bars.map((b) => b.cents), usualDay ?? 0);
-  const total = bars.filter((b) => b.lit).reduce((s, b) => s + b.cents, 0);
   return (
-    <div className="space-y-1 px-4 pb-2 pt-3" role="img" aria-label={`${formatMoney(total)} over the last ${days === 1 ? 'day' : `${days} days`}, a bar per day`}>
+    <div className="space-y-1 px-4 pb-2 pt-3">
       <div className="relative flex items-end gap-[3px]" style={{ height: BARS_HEIGHT }}>
-        {bars.map((b) => (
-          <span
-            key={b.day}
-            title={`${recentDayLabel(b.day)}: ${formatMoney(b.cents)}`}
-            className={cn('flex-1 rounded-[3px]', b.lit ? 'bg-foreground' : 'bg-muted')}
-            style={{ height: Math.max(2, Math.round((b.cents / top) * BARS_HEIGHT)) }}
-          />
-        ))}
+        {bars.map((b) => {
+          const dim = picked ? b.day !== picked : !b.lit;
+          return (
+            <button
+              key={b.day}
+              type="button"
+              aria-pressed={b.day === picked}
+              aria-label={`${recentDayLabel(b.day)}, ${formatMoney(b.cents)}`}
+              title={`${recentDayLabel(b.day)}: ${formatMoney(b.cents)}`}
+              onClick={() => {
+                tick();
+                onPick(b.day);
+              }}
+              className="flex h-full flex-1 flex-col justify-end"
+            >
+              <span
+                className={cn('flex flex-col-reverse overflow-hidden rounded-[3px] transition-opacity', dim && 'opacity-35', !b.cents && 'bg-muted')}
+                style={{ height: Math.max(2, Math.round((b.cents / top) * BARS_HEIGHT)) }}
+              >
+                {b.segments.map((seg) => (
+                  <span key={seg.category ?? 'none'} className={seg.category ? CATEGORY_COLOR[seg.category].fill : 'bg-muted-foreground/60'} style={{ flex: seg.cents }} />
+                ))}
+              </span>
+            </button>
+          );
+        })}
         {usualDay ? (
           <span
             aria-hidden

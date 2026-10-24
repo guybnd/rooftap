@@ -7,6 +7,7 @@
 
 import { CADENCE_LABEL, CATEGORY_META, costTargets, isOneOff, monthlyProjection, nextOccurrence, parseLocalDateOnly, type BankActuals } from './costs';
 import { formatMoney } from '../../money-format';
+import { BILL_CATEGORIES } from './recent-spend';
 import type { BankAccountSummary, BankTransaction, CostActual, CostBankLink } from './up-bank';
 import type { CostCadence, CostCategory, CostItem } from '../../types';
 
@@ -115,7 +116,6 @@ export function nextDue(item: CostItem, lastPaidAt: string | null | undefined, n
 }
 
 /** Categories whose lines are bills even when the amount changes (electricity). */
-const BILL_CATEGORIES: ReadonlySet<CostCategory> = new Set(['rent', 'utilities', 'internet', 'insurance', 'subscription']);
 
 /**
  * A bill is a recurring line with a due date: a fixed amount, or an estimate

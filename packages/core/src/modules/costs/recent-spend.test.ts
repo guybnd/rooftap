@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readRecentSpendPrefs, recentSpend, toggleRecentWindow, DEFAULT_RECENT_SPEND, type DaySpend } from './recent-spend';
+import { readRecentSpendPrefs, recentBars, recentSpend, toggleRecentWindow, DEFAULT_RECENT_SPEND, type DaySpend } from './recent-spend';
 import { dayRows, type BankTransaction } from './up-bank';
 
 const now = new Date(2026, 9, 24, 15, 0);
@@ -14,8 +14,9 @@ const history: DaySpend[] = [
   { day: day(2), costItemId: 'rent', outCents: 450000 },
 ];
 const items = [
-  { id: 'rent', cadence: 'monthly' as const, deleted: false },
-  { id: 'shop', cadence: 'one_off' as const, deleted: false },
+  { id: 'rent', cadence: 'monthly' as const, deleted: false, category: 'rent' as const },
+  { id: 'shop', cadence: 'one_off' as const, deleted: false, category: 'purchase' as const },
+  { id: 'aia', cadence: 'one_off' as const, deleted: false, category: 'insurance' as const },
 ];
 
 describe('recentSpend', () => {
@@ -38,10 +39,33 @@ describe('recentSpend', () => {
     expect(today.verdict).toBeNull();
   });
 
+  it('keeps one big buy from moving usual', () => {
+    const spiky = [...history, { day: day(20), costItemId: 'shop', outCents: 156000 }];
+    const [week] = recentSpend(spiky, items, { windows: [7], skipBills: true }, now);
+    expect(week).toMatchObject({ usualCents: 35000, verdict: 'usual' });
+  });
+
+  it('leaves out bills in a bill category even on a one-off line, and by the bank category', () => {
+    const more = [...history, { day: day(1), costItemId: 'aia', outCents: 21600 }, { day: day(1), costItemId: null, sourceCategory: 'utilities', outCents: 9000 }];
+    const [three] = recentSpend(more, items, { windows: [3], skipBills: true }, now);
+    expect(three.cents).toBe(15000);
+  });
+
   it('calls a quiet stretch under usual', () => {
     const quiet = history.map((d) => (d.day >= day(6) ? { ...d, outCents: 1000 } : d));
     const [week] = recentSpend(quiet, items, { windows: [7], skipBills: true }, now);
     expect(week.verdict).toBe('under');
+  });
+});
+
+describe('recentBars', () => {
+  it('splits each day by category and lights the window', () => {
+    const bars = recentBars([{ day: day(0), costItemId: 'shop', outCents: 900 }, { day: day(0), costItemId: null, sourceCategory: 'groceries', outCents: 100 }], items, true, 3, now);
+    expect(bars).toHaveLength(14);
+    const today = bars[13];
+    expect(today).toMatchObject({ cents: 1000, lit: true, today: true });
+    expect(today.segments.map((s) => s.category)).toEqual(['grocery_estimate', 'purchase']);
+    expect(bars[10].lit).toBe(false);
   });
 });
 
@@ -65,6 +89,6 @@ describe('dayRows', () => {
   });
   it('files money out by local day, once per transaction', () => {
     const rows = [row({}), row({ id: 'dup' }), row({ external_id: 'y', amount_cents: 500 }), row({ external_id: 'z', is_transfer: true })];
-    expect(dayRows(rows, '2026-10-01T00:00:00Z', -600)).toEqual([{ day: '2026-10-24', costItemId: null, outCents: 1000 }]);
+    expect(dayRows(rows, '2026-10-01T00:00:00Z', -600)).toEqual([{ day: '2026-10-24', costItemId: null, category: null, sourceCategory: null, outCents: 1000 }]);
   });
 });

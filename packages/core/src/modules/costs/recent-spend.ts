@@ -2,21 +2,47 @@
 // few days and over the last week, each set against a usual stretch of the
 // same length. It sits on the Costs Latest card on web and phone. The server
 // sends money out per local day (up-bank dayRows); these helpers add up the
-// windows. Bills (payments filed under a recurring cost line) stay out by
-// default, so a rent day doesn't swamp the week. Platform-agnostic.
+// windows. Bills (payments filed under a recurring cost line, or in a bill
+// category like rent) stay out by default, so a rent day doesn't swamp the
+// week. Usual is the median stretch, not the average, so one big day doesn't
+// make every other week read low (Guy, 2026-10-24). Platform-agnostic.
 
-import { isOneOff } from './costs';
+import { CATEGORY_META, isOneOff } from './costs';
+import { costCategoryFromUp } from './up-bank';
 import { formatMoney } from '../../money-format';
-import type { CostItem } from '../../types';
+import type { CostCategory, CostItem } from '../../types';
 
-/** Money out on one local day, per cost line. */
+/** Money out on one local day, per cost line and category. */
 export interface DaySpend {
   /** YYYY-MM-DD, the viewer's local day. */
   day: string;
   /** The cost line these payments are filed under, if any. */
   costItemId: string | null;
+  /** A category picked for these payments alone. */
+  category?: CostCategory | null;
+  /** The bank's own category. */
+  sourceCategory?: string | null;
   /** Money out, positive cents. */
   outCents: number;
+}
+
+/** Categories whose payments count as bills even off a recurring line. */
+export const BILL_CATEGORIES: ReadonlySet<CostCategory> = new Set<CostCategory>(['rent', 'utilities', 'internet', 'insurance', 'subscription']);
+
+type BillItem = Pick<CostItem, 'id' | 'cadence' | 'deleted' | 'category'>;
+
+/**
+ * Whether payments are a bill: filed under a recurring cost line, or in a
+ * bill category (their own pick, else their line's, else the bank's).
+ */
+export function isBillSpend(
+  p: { costItemId: string | null; category?: CostCategory | null; sourceCategory?: string | null },
+  itemById: ReadonlyMap<string, BillItem>,
+): boolean {
+  const line = p.costItemId ? itemById.get(p.costItemId) : undefined;
+  if (line && !line.deleted && !isOneOff(line)) return true;
+  const category = p.category ?? (line && !line.deleted ? line.category : p.sourceCategory ? costCategoryFromUp(p.sourceCategory) : null);
+  return !!category && BILL_CATEGORIES.has(category);
 }
 
 /** How many days back the server sends: the windows plus the usual. */
@@ -87,8 +113,15 @@ export interface RecentSpendWindow {
 /** Within this share of usual (or this many cents) counts as about usual. */
 const USUAL_SHARE = 0.15;
 const USUAL_CENTS = 1000;
-/** A usual needs at least this many days of history. */
+/** A usual needs at least this many days of history, and this many stretches to take the median of. */
 const MIN_USUAL_DAYS = 14;
+const MIN_USUAL_STRETCHES = 7;
+
+function median(values: number[]): number {
+  const v = values.slice().sort((a, b) => a - b);
+  const mid = v.length >> 1;
+  return v.length % 2 ? v[mid] : (v[mid - 1] + v[mid]) / 2;
+}
 
 function dayKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -99,25 +132,16 @@ function daysBefore(now: Date, n: number): string {
 }
 
 /** Money out per local day, bills left out when asked, and the first day the data has. */
-function spendByDay(
-  days: readonly DaySpend[],
-  items: readonly Pick<CostItem, 'id' | 'cadence' | 'deleted'>[],
-  skipBills: boolean,
-): { byDay: Map<string, number>; first: string | null } {
-  const bills = billLines(items, skipBills);
+function spendByDay(days: readonly DaySpend[], items: readonly BillItem[], skipBills: boolean): { byDay: Map<string, number>; first: string | null } {
+  const itemById = new Map(items.map((i) => [i.id, i]));
   const byDay = new Map<string, number>();
   let first: string | null = null;
   for (const d of days) {
     if (!first || d.day < first) first = d.day;
-    if (d.costItemId && bills.has(d.costItemId)) continue;
+    if (skipBills && isBillSpend(d, itemById)) continue;
     byDay.set(d.day, (byDay.get(d.day) ?? 0) + d.outCents);
   }
   return { byDay, first };
-}
-
-/** The recurring cost lines whose payments count as bills, or none when bills count. */
-export function billLines(items: readonly Pick<CostItem, 'id' | 'cadence' | 'deleted'>[], skipBills: boolean): Set<string> {
-  return new Set(skipBills ? items.filter((i) => !i.deleted && !isOneOff(i)).map((i) => i.id) : []);
 }
 
 /** Where a window starts: local midnight of its first day. */
@@ -129,39 +153,66 @@ export interface RecentBar {
   /** YYYY-MM-DD. */
   day: string;
   cents: number;
+  /** The day's spend per category, in CATEGORY_META order, for a stacked bar. */
+  segments: { category: CostCategory | null; cents: number }[];
   /** Inside the window. */
   lit: boolean;
   today: boolean;
 }
 
+/** Payments' Costs category: their own pick, else their line's, else the bank's closest fit. */
+export function dayCategory(d: Pick<DaySpend, 'costItemId' | 'category' | 'sourceCategory'>, itemById: ReadonlyMap<string, BillItem>): CostCategory | null {
+  if (d.category) return d.category;
+  const line = d.costItemId ? itemById.get(d.costItemId) : undefined;
+  if (line) return line.category;
+  return d.sourceCategory ? costCategoryFromUp(d.sourceCategory) : null;
+}
+
+const CATEGORY_ORDER = Object.keys(CATEGORY_META) as CostCategory[];
+
 /**
  * The bars under an open window: one per day for the last two weeks (or the
- * window, when longer), the window's own days lit, oldest first.
+ * window, when longer), the window's own days lit, oldest first, each split
+ * by category like the month chart.
  */
-export function recentBars(
-  days: readonly DaySpend[],
-  items: readonly Pick<CostItem, 'id' | 'cadence' | 'deleted'>[],
-  skipBills: boolean,
-  w: number,
-  now: Date = new Date(),
-): RecentBar[] {
-  const { byDay } = spendByDay(days, items, skipBills);
-  const count = Math.max(14, w);
+export function recentBars(days: readonly DaySpend[], items: readonly BillItem[], skipBills: boolean, w: number, now: Date = new Date()): RecentBar[] {
+  const itemById = new Map(items.map((i) => [i.id, i]));
+  const byDay = new Map<string, Map<CostCategory | null, number>>();
+  for (const d of days) {
+    if (skipBills && isBillSpend(d, itemById)) continue;
+    const cats = byDay.get(d.day) ?? new Map<CostCategory | null, number>();
+    const c = dayCategory(d, itemById);
+    cats.set(c, (cats.get(c) ?? 0) + d.outCents);
+    byDay.set(d.day, cats);
+  }
+  const rank = (c: CostCategory | null) => (c ? CATEGORY_ORDER.indexOf(c) : CATEGORY_ORDER.length);
+  const count = recentBarCount(w);
   return Array.from({ length: count }, (_, i) => {
     const n = count - 1 - i;
     const day = daysBefore(now, n);
-    return { day, cents: byDay.get(day) ?? 0, lit: n < w, today: n === 0 };
+    const segments = Array.from(byDay.get(day) ?? [], ([category, cents]) => ({ category, cents })).sort((a, b) => rank(a.category) - rank(b.category));
+    return { day, cents: segments.reduce((s, x) => s + x.cents, 0), segments, lit: n < w, today: n === 0 };
   });
+}
+
+/** How many day bars show under a window: two weeks, or the window when longer. */
+export function recentBarCount(w: number): number {
+  return Math.max(14, w);
+}
+
+/** A payment's local day, YYYY-MM-DD. */
+export function localDayOf(iso: string): string {
+  return dayKey(new Date(iso));
 }
 
 /**
  * Each window's total, ending today (today counts as day one), with a usual
- * stretch of the same length: the average day over the USUAL_DAYS full days
- * before today (fewer when the bank data starts later), times the window.
+ * stretch of the same length: the median of every stretch that long in the
+ * USUAL_DAYS full days before today (fewer when the bank data starts later).
  */
 export function recentSpend(
   days: readonly DaySpend[],
-  items: readonly Pick<CostItem, 'id' | 'cadence' | 'deleted'>[],
+  items: readonly BillItem[],
   prefs: Pick<RecentSpendPrefs, 'windows' | 'skipBills'>,
   now: Date = new Date(),
 ): RecentSpendWindow[] {
@@ -174,11 +225,19 @@ export function recentSpend(
   // Full days before today that the data covers (the first day may be partial, so it's left out).
   let covered = 0;
   if (first) for (let n = 1; n <= USUAL_DAYS && daysBefore(now, n) > first; n++) covered++;
-  const perDay = covered >= MIN_USUAL_DAYS ? sumBack(1, covered + 1) / covered : null;
+  // A usual stretch of w days: the median of every w-day stretch in the
+  // covered days, so one big day or a rent week doesn't move it.
+  const usualOf = (w: number): number | null => {
+    if (covered < MIN_USUAL_DAYS || covered - w + 1 < MIN_USUAL_STRETCHES) return null;
+    const sums: number[] = [];
+    for (let end = 1; end + w - 1 <= covered; end++) sums.push(sumBack(end, end + w));
+    return median(sums);
+  };
 
   return prefs.windows.map((w) => {
     const cents = sumBack(0, w);
-    const usualCents = perDay == null ? null : Math.round(perDay * w);
+    const usual = usualOf(w);
+    const usualCents = usual == null ? null : Math.round(usual);
     const diffCents = usualCents == null ? null : cents - usualCents;
     let verdict: RecentVerdict | null = null;
     if (usualCents != null && diffCents != null) {
