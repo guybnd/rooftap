@@ -66,6 +66,10 @@ import {
   toggleRecentWindow,
   recentWindowLabel,
   RECENT_WINDOW_CHOICES,
+  ASK_AGAIN_CHOICES,
+  askAgainLabel,
+  askAgainMonths,
+  withAskAgain,
   DEFAULT_RECENT_SPEND,
   type RecentSpendPrefs,
   type SpendingTransaction,
@@ -506,6 +510,32 @@ export function CostsOverview(props: CostsOverviewProps) {
                   checked={recentPrefs.show}
                   onChange={(on) => props.recent!.onChange({ ...recentPrefs, show: on })}
                 />
+              </div>
+            </>
+          ) : null}
+          {props.insights ? (
+            <>
+              <h3 className={cn(LABEL, 'px-1 pt-3')}>Subscriptions</h3>
+              <div className="rounded-2xl bg-muted/40 px-3 py-3">
+                <p className="pb-2 text-sm">Ask again after</p>
+                <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Ask about a kept or cancelled subscription again after">
+                  {ASK_AGAIN_CHOICES.map((m) => {
+                    const on = askAgainMonths(props.insights!.marks) === m;
+                    return (
+                      <button
+                        key={m}
+                        type="button"
+                        role="radio"
+                        aria-checked={on}
+                        onClick={() => props.insights!.onMarks((cur) => withAskAgain(cur, m))}
+                        className={cn('rounded-full border px-3 py-1.5 text-sm', on ? 'border-primary bg-primary/15 text-foreground' : 'border-border text-muted-foreground hover:text-foreground')}
+                      >
+                        {askAgainLabel(m)}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="pt-2 text-xs text-muted-foreground">A subscription you keep or cancel in Worth a look comes back to decide after this long.</p>
               </div>
             </>
           ) : null}

@@ -61,6 +61,10 @@ import {
   toggleRecentWindow,
   recentWindowLabel,
   RECENT_WINDOW_CHOICES,
+  ASK_AGAIN_CHOICES,
+  askAgainLabel,
+  askAgainMonths,
+  withAskAgain,
   DEFAULT_RECENT_SPEND,
   type RecentSpendPrefs,
   type SpendingTransaction,
@@ -471,6 +475,34 @@ export function CostsOverview(props: CostsOverviewProps) {
                   checked={recentPrefs.show}
                   onChange={(on) => props.recent!.onChange({ ...recentPrefs, show: on })}
                 />
+              </View>
+            </>
+          ) : null}
+          {props.insights ? (
+            <>
+              <Text className={cn(LABEL, 'px-1 pt-3')}>Subscriptions</Text>
+              <View className="gap-2 rounded-2xl bg-muted/40 px-3 py-3">
+                <Text className="text-sm text-foreground">Ask again after</Text>
+                <View className="flex-row flex-wrap gap-2" accessibilityRole="radiogroup" accessibilityLabel="Ask about a kept or cancelled subscription again after">
+                  {ASK_AGAIN_CHOICES.map((m) => {
+                    const on = askAgainMonths(props.insights!.marks) === m;
+                    return (
+                      <Pressable
+                        key={m}
+                        accessibilityRole="radio"
+                        accessibilityState={{ checked: on }}
+                        onPress={() => {
+                          haptics.select();
+                          props.insights!.onMarks((cur) => withAskAgain(cur, m));
+                        }}
+                        className={cn('rounded-full border px-3 py-1.5', on ? 'border-primary bg-primary/15' : 'border-border')}
+                      >
+                        <Text className={cn('text-sm', on ? 'text-foreground' : 'text-muted-foreground')}>{askAgainLabel(m)}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <Text className="text-caption text-muted-foreground">A subscription you keep or cancel in Worth a look comes back to decide after this long.</Text>
               </View>
             </>
           ) : null}

@@ -15,9 +15,11 @@
 // - going-well: a price that went down, a category under its usual, the
 //   month finishing under the goal.
 //
-// Each person can hide an insight, and keep a subscription for a year
-// (user_settings.money_insight_marks). A key carries what the insight says,
-// so a hidden one comes back when that changes (a new price, a new month).
+// Each person can hide an insight, and decide each subscription: keep it or
+// cancel it (user_settings.money_insight_marks). A decided one leaves the
+// list until the person's "ask again" time (3 months unless they pick
+// another in the Costs menu). A key carries what the insight says, so a
+// hidden one comes back when that changes (a new price, a new month).
 
 import { CADENCE_LABEL, monthlyAmount, parseLocalDateOnly } from '../costs/costs';
 import { formatMoney } from '../../money-format';
@@ -76,16 +78,61 @@ export interface SubscriptionLine {
   name: string;
   item?: CostItem;
   monthlyCents: number;
-  /** Kept in the last year: left out of the counts and overlaps. */
+  /** Kept, and not yet due to be asked again: left out of the counts and overlaps. */
   kept: boolean;
+  /** Marked to cancel, and not yet due to be asked again; also left out. */
+  cancelling: boolean;
+  /** When a kept or cancelling one comes back to decide (ISO), else null. */
+  askAgainAt: string | null;
   /** "Streaming" or "Music" when another subscription of the same kind is on. */
   overlap: string | null;
   /** The price before the latest change, when it changed in the last 6 weeks. */
   wasCents: number | null;
 }
 
-/** Insight key -> when the person marked it (ISO). `keep:<sub key>` keeps a subscription. */
+/**
+ * Insight key -> when the person marked it (ISO). `keep:<sub key>` keeps a
+ * subscription, `cancel:<sub key>` marks it to cancel. One setting rides
+ * along: ASK_AGAIN_MARK holds the months before a decided one comes back.
+ */
 export type CostInsightMarks = Record<string, string>;
+
+/** The marks key that holds how many months a decided subscription stays decided. */
+export const ASK_AGAIN_MARK = 'set:ask-again';
+/** The choices for it, in months. */
+export const ASK_AGAIN_CHOICES = [1, 3, 6, 12] as const;
+export const DEFAULT_ASK_AGAIN_MONTHS = 3;
+
+/** How many months a decided subscription stays decided. */
+export function askAgainMonths(marks: CostInsightMarks | null | undefined): number {
+  const n = Number(marks?.[ASK_AGAIN_MARK]);
+  return (ASK_AGAIN_CHOICES as readonly number[]).includes(n) ? n : DEFAULT_ASK_AGAIN_MONTHS;
+}
+
+/** The marks with a new ask-again time. */
+export function withAskAgain(marks: CostInsightMarks | null | undefined, months: number): CostInsightMarks {
+  return { ...(marks ?? {}), [ASK_AGAIN_MARK]: String(months) };
+}
+
+/** "3 months", "1 year". */
+export function askAgainLabel(months: number): string {
+  if (months === 12) return '1 year';
+  return `${months} month${months === 1 ? '' : 's'}`;
+}
+
+/** Keep or cancel a subscription; the same choice again clears it. */
+export function withSubscriptionDecision(
+  marks: CostInsightMarks | null | undefined,
+  sub: Pick<SubscriptionLine, 'key'>,
+  decision: 'keep' | 'cancel',
+  now: Date = new Date(),
+): CostInsightMarks {
+  const mine = `${decision}:${sub.key}`;
+  const other = `${decision === 'keep' ? 'cancel' : 'keep'}:${sub.key}`;
+  const had = !!marks?.[mine];
+  const next = withoutInsightMark(marks, other);
+  return had ? withoutInsightMark(next, mine) : withInsightMark(next, mine, now);
+}
 
 export interface CostInsightsInput {
   /** Live cost lines (not deleted). */
@@ -191,7 +238,7 @@ export function costInsights(input: CostInsightsInput): CostInsights {
       item: s.item,
     });
   }
-  const open = subscriptions.filter((s) => !s.kept);
+  const open = subscriptions.filter((s) => !s.kept && !s.cancelling);
   for (const { label } of OVERLAPS) {
     const same = open.filter((s) => s.overlap === label);
     if (same.length < 2) continue;
@@ -208,13 +255,13 @@ export function costInsights(input: CostInsightsInput): CostInsights {
   }
   if (open.length) {
     const monthly = open.reduce((sum, s) => sum + s.monthlyCents, 0);
-    const kept = subscriptions.length - open.length;
+    const all = subscriptions.length;
     push(21, {
       key: `subs:${open.map((s) => s.key).sort().join(',')}`,
       group: 'reconsider',
       kind: 'subscriptions',
-      title: `${subscriptions.length} subscription${subscriptions.length === 1 ? '' : 's'}`,
-      detail: `${formatMoney(monthly)} a month${kept ? `, ${kept} kept` : ''}${open.length < subscriptions.length ? `, ${open.length} to look at` : ''}`,
+      title: `${all} subscription${all === 1 ? '' : 's'}`,
+      detail: all === 1 ? `${formatMoney(monthly)} a month, keep or cancel` : `${open.length} of ${all} to decide, ${formatMoney(monthly)} a month`,
       figure: { text: `${formatMoney(monthly * 12)} a year`, tone: 'muted' },
       action: 'review',
     });
@@ -338,6 +385,7 @@ export function costInsights(input: CostInsightsInput): CostInsights {
 
 /** The household's subscriptions from the months, biggest first. */
 function subscriptionLines(input: CostInsightsInput, marks: CostInsightMarks, now: Date): SubscriptionLine[] {
+  const months = askAgainMonths(marks);
   const recent = input.months.slice(-3);
   const seen = new Map<string, { name: string; item?: CostItem; byMonth: Map<string, CostMonthLine> }>();
   for (const m of recent) {
@@ -378,18 +426,24 @@ function subscriptionLines(input: CostInsightsInput, marks: CostInsightMarks, no
     }
     if (monthlyCents <= 0) continue;
     const key = `sub:${id}`;
-    const keptAt = marks[`keep:${key}`];
+    const until = (at: string | undefined) => (at ? addMonths(new Date(at), months) : null);
+    const keepUntil = until(marks[`keep:${key}`]);
+    const cancelUntil = until(marks[`cancel:${key}`]);
+    const kept = !!keepUntil && now < keepUntil;
+    const cancelling = !kept && !!cancelUntil && now < cancelUntil;
     out.push({
       key,
       name: entry.name,
       item: entry.item,
       monthlyCents,
-      kept: !!keptAt && now.getTime() - new Date(keptAt).getTime() < 365 * DAY_MS,
+      kept,
+      cancelling,
+      askAgainAt: kept ? keepUntil!.toISOString() : cancelling ? cancelUntil!.toISOString() : null,
       overlap: null,
       wasCents,
     });
   }
-  const open = out.filter((s) => !s.kept);
+  const open = out.filter((s) => !s.kept && !s.cancelling);
   for (const { label, re } of OVERLAPS) {
     const same = open.filter((s) => re.test(s.name));
     if (same.length >= 2) for (const s of same) s.overlap = label;
@@ -401,7 +455,7 @@ function subscriptionLines(input: CostInsightsInput, marks: CostInsightMarks, no
 export function withInsightMark(marks: CostInsightMarks | null | undefined, key: string, now: Date = new Date()): CostInsightMarks {
   const keepFrom = now.getTime() - 400 * DAY_MS;
   const next: CostInsightMarks = {};
-  for (const [k, at] of Object.entries(marks ?? {})) if (k !== key && new Date(at).getTime() >= keepFrom) next[k] = at;
+  for (const [k, at] of Object.entries(marks ?? {})) if (k !== key && (k.startsWith('set:') || new Date(at).getTime() >= keepFrom)) next[k] = at;
   next[key] = now.toISOString();
   return next;
 }
@@ -411,6 +465,23 @@ export function withoutInsightMark(marks: CostInsightMarks | null | undefined, k
   const next = { ...(marks ?? {}) };
   delete next[key];
   return next;
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** The line under a subscription in the review list: its cost, or what was decided and when it comes back. */
+export function subscriptionNote(s: SubscriptionLine): string {
+  if ((s.kept || s.cancelling) && s.askAgainAt) {
+    const at = new Date(s.askAgainAt);
+    return `${s.kept ? 'Kept' : 'To cancel'}, asks again ${MONTHS[at.getMonth()]} ${at.getFullYear()}`;
+  }
+  return `${formatMoney(s.monthlyCents)} a month${s.overlap ? `, ${s.overlap.toLowerCase()} overlap` : ''}`;
+}
+
+function addMonths(d: Date, months: number): Date {
+  const out = new Date(d);
+  out.setMonth(out.getMonth() + months);
+  return out;
 }
 
 function listOf(names: string[]): string {

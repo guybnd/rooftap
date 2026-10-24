@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { costInsights, withInsightMark, withoutInsightMark } from './cost-insights';
+import { ASK_AGAIN_MARK, askAgainMonths, costInsights, withAskAgain, withInsightMark, withoutInsightMark, subscriptionNote, withSubscriptionDecision } from './cost-insights';
 import { costMonths, monthKeys, type LedgerRow } from '../costs/cost-month';
 import type { CostItem } from '../../types';
 
@@ -63,12 +63,44 @@ describe('costInsights', () => {
     expect(insights.find((i) => i.kind === 'subscriptions')?.title).toBe('3 subscriptions');
   });
 
-  it('keeps a subscription out of the overlap for a year', () => {
-    const marks = withInsightMark({}, 'keep:sub:stan', now);
+  it('keeps a subscription out of the overlap until it is time to ask again', () => {
+    const marks = withSubscriptionDecision({}, { key: 'sub:stan' }, 'keep', now);
     const { insights, subscriptions } = run([netflix, stan, spotify], [], { marks });
-    expect(subscriptions.find((s) => s.name === 'Stan')?.kept).toBe(true);
+    const kept = subscriptions.find((s) => s.name === 'Stan')!;
+    expect(kept).toMatchObject({ kept: true, cancelling: false });
+    expect(new Date(kept.askAgainAt!).getMonth()).toBe((now.getMonth() + 3) % 12);
     expect(insights.find((i) => i.kind === 'overlap')).toBeUndefined();
-    expect(insights.find((i) => i.kind === 'subscriptions')?.detail).toContain('1 kept');
+    expect(insights.find((i) => i.kind === 'subscriptions')?.detail).toBe('2 of 3 to decide, $39 a month');
+    expect(subscriptionNote(kept)).toMatch(/^Kept, asks again [A-Z][a-z]{2} \d{4}$/);
+    expect(subscriptionNote(subscriptions.find((s) => s.name === 'Netflix')!)).toBe('$25 a month');
+  });
+
+  it('asks again after the months the person picked', () => {
+    const at = new Date(now.getTime() - 100 * 86_400_000);
+    const marks = withSubscriptionDecision({}, { key: 'sub:stan' }, 'keep', at);
+    expect(run([stan, spotify], [], { marks }).subscriptions.find((s) => s.name === 'Stan')?.kept).toBe(false);
+    const longer = withAskAgain(marks, 6);
+    expect(askAgainMonths(longer)).toBe(6);
+    expect(run([stan, spotify], [], { marks: longer }).subscriptions.find((s) => s.name === 'Stan')?.kept).toBe(true);
+    // The setting outlives the marks that age out.
+    expect(withInsightMark(longer, 'x', new Date(now.getTime() + 500 * 86_400_000))[ASK_AGAIN_MARK]).toBe('6');
+    expect(askAgainMonths({ [ASK_AGAIN_MARK]: '7' })).toBe(3);
+  });
+
+  it('switches between keep and cancel, and clears on the same choice', () => {
+    const sub = { key: 'sub:stan' };
+    const cancel = withSubscriptionDecision({}, sub, 'cancel', now);
+    const s1 = run([stan, spotify], [], { marks: cancel }).subscriptions.find((s) => s.name === 'Stan')!;
+    expect(s1).toMatchObject({ kept: false, cancelling: true });
+    const keep = withSubscriptionDecision(cancel, sub, 'keep', now);
+    expect(Object.keys(keep)).toEqual(['keep:sub:stan']);
+    expect(withSubscriptionDecision(keep, sub, 'keep', now)).toEqual({});
+  });
+
+  it('drops the subscriptions insight once every one is decided', () => {
+    let marks = {};
+    for (const key of ['sub:stan', 'sub:sp']) marks = withSubscriptionDecision(marks, { key }, key === 'sub:sp' ? 'cancel' : 'keep', now);
+    expect(run([stan, spotify], [], { marks }).insights.find((i) => i.kind === 'subscriptions')).toBeUndefined();
   });
 
   it('hides an insight until what it says changes', () => {

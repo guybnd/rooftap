@@ -198,7 +198,7 @@ export const MODULE_FEATURES = {
   },
   'insights.reminders': {
     modules: ['money-insights', 'household'],
-    what: '"Remind me to cancel" on a subscription, which adds a reminder task.',
+    what: '"Cancel" on a subscription in Worth a look, which also adds a reminder task to cancel it.',
   },
 
   // ── Documents ────────────────────────────────────────────────────────────

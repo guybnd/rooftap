@@ -4,7 +4,8 @@
 // look" card with the three most pressing, and "See all" opening a sheet
 // grouped into Heads up, Save, Reconsider and Going well. Tapping a row in the
 // sheet opens its actions: open the cost or category, compare with Scout,
-// review the subscriptions (Keep for a year, or a reminder to cancel), or hide
+// review the subscriptions (Keep or Cancel each one, with a reminder task to
+// cancel; a decided one comes back after the person's ask-again time), or hide
 // it. The list comes from core useCostInsights, the same on both apps. Phone
 // twin: apps/mobile/src/features/costs/cost-insights.tsx.
 
@@ -29,9 +30,11 @@ import {
   formatMoney,
   scoutPrefillHref,
   useCostInsights,
+  subscriptionNote,
   useModules,
   withInsightMark,
   withoutInsightMark,
+  withSubscriptionDecision,
   type CostCategory,
   type CostInsight,
   type CostInsightMarks,
@@ -194,34 +197,7 @@ function InsightActions({
 
   return (
     <div className="space-y-2 px-4 pb-3 pl-[64px]">
-      {i.action === 'review' && (
-        <ul className="divide-y divide-border/60 rounded-xl bg-card">
-          {subscriptions.map((s) => (
-            <li key={s.key} className="flex flex-wrap items-center gap-x-2 gap-y-1.5 px-3 py-2">
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm">{s.name}</span>
-                <span className="block text-xs text-muted-foreground tabular-nums">
-                  {formatMoney(s.monthlyCents)} a month
-                  {s.overlap ? ` · ${s.overlap.toLowerCase()} overlap` : ''}
-                </span>
-              </span>
-              <button
-                type="button"
-                className={cn(CHIP, s.kept && 'border-transparent bg-muted text-muted-foreground')}
-                onClick={() => onMarks((cur) => (s.kept ? withoutInsightMark(cur, `keep:${s.key}`) : withInsightMark(cur, `keep:${s.key}`)))}
-                aria-pressed={s.kept}
-              >
-                {s.kept ? 'Kept' : 'Keep'}
-              </button>
-              {onRemind && s.item && !s.kept && (
-                <button type="button" className={CHIP} onClick={() => onRemind(s)}>
-                  Remind me to cancel
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
+      {i.action === 'review' && <SubscriptionReview subscriptions={subscriptions} onMarks={onMarks} onRemind={onRemind} />}
       <div className="flex flex-wrap gap-2">
         {i.action === 'open-item' && i.item && (
           <button type="button" className={CHIP} onClick={() => { onDone(); onOpenItem(i.item!); }}>
@@ -247,6 +223,63 @@ function InsightActions({
           Hide
         </button>
       </div>
+    </div>
+  );
+}
+
+/** Keep or Cancel each subscription; the bar counts the ones decided. */
+function SubscriptionReview({
+  subscriptions,
+  onMarks,
+  onRemind,
+}: Pick<CostInsightsCardProps, 'onMarks' | 'onRemind'> & { subscriptions: SubscriptionLine[] }) {
+  const decided = subscriptions.filter((s) => s.kept || s.cancelling).length;
+  const decide = (s: SubscriptionLine, choice: 'keep' | 'cancel') => {
+    onMarks((cur) => withSubscriptionDecision(cur, s, choice));
+    if (choice === 'cancel' && !s.cancelling && onRemind && s.item) onRemind(s);
+  };
+  return (
+    <div className="space-y-2">
+      <div
+        className="h-1 overflow-hidden rounded-full bg-muted"
+        role="progressbar"
+        aria-label="Subscriptions decided"
+        aria-valuemin={0}
+        aria-valuemax={subscriptions.length}
+        aria-valuenow={decided}
+      >
+        <div className="h-full rounded-full bg-success transition-[width] duration-300 motion-reduce:transition-none" style={{ width: `${(decided / Math.max(1, subscriptions.length)) * 100}%` }} />
+      </div>
+      <ul className="divide-y divide-border/60 rounded-xl bg-card">
+        {subscriptions.map((s) => {
+          const choice = s.kept ? 'keep' : s.cancelling ? 'cancel' : null;
+          return (
+            <li key={s.key} className="flex items-center gap-2 px-3 py-2">
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm">{s.name}</span>
+                <span className="block truncate text-xs text-muted-foreground tabular-nums">{subscriptionNote(s)}</span>
+              </span>
+              <span role="radiogroup" aria-label={`Keep or cancel ${s.name}`} className="inline-flex shrink-0 rounded-full border border-border p-0.5">
+                {(['keep', 'cancel'] as const).map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    role="radio"
+                    aria-checked={choice === c}
+                    onClick={() => decide(s, c)}
+                    className={cn(
+                      'min-h-7 rounded-full px-3 text-xs font-medium transition-colors',
+                      choice === c ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    {c === 'keep' ? 'Keep' : 'Cancel'}
+                  </button>
+                ))}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }

@@ -980,7 +980,7 @@ export function moduleTools({ admin, userId, groupId, enabled, shared = false }:
     "get_money_insights",
     {
       description:
-        "Money insights: what the Costs page's \"Worth a look\" card says: price rises, bills ending, subscriptions to rethink (with overlaps such as two streaming services), categories running ahead or under, and the monthly goal. Each has a group (heads-up, save, reconsider, going-well), a title and a detail line. subscriptions lists every subscription with its monthly cost in cents. Insights the person hid are left out.",
+        "Money insights: what the Costs page's \"Worth a look\" card says: price rises, bills ending, subscriptions to rethink (with overlaps such as two streaming services), categories running ahead or under, and the monthly goal. Each has a group (heads-up, save, reconsider, going-well), a title and a detail line. subscriptions lists every subscription with its monthly cost in cents, and whether the person decided to keep it (kept) or cancel it (cancelling) and when it comes back to decide (ask_again_at). Insights the person hid are left out.",
     },
     async (_args, gid) => {
       if (!enabled.has("costs")) return fail("Costs is switched off.");
@@ -995,7 +995,7 @@ export function moduleTools({ admin, userId, groupId, enabled, shared = false }:
       });
       return ok({
         insights: result.insights.map((i) => compact({ group: i.group, title: i.title, detail: i.detail, figure: i.figure?.text, cost_item_id: i.item?.id })),
-        subscriptions: result.subscriptions.map((s) => compact({ name: s.name, monthly_cents: s.monthlyCents, kept: s.kept || null, overlap: s.overlap, was_cents: s.wasCents })),
+        subscriptions: result.subscriptions.map((s) => compact({ name: s.name, monthly_cents: s.monthlyCents, kept: s.kept || null, cancelling: s.cancelling || null, ask_again_at: s.askAgainAt, overlap: s.overlap, was_cents: s.wasCents })),
       });
     },
     { insights: [], subscriptions: [] },

@@ -2,7 +2,8 @@
 // look" card with the three most pressing, and "See all" opening a sheet
 // grouped into Heads up, Save, Reconsider and Going well. Tapping a row in the
 // sheet opens its actions: open the cost or category, compare with Scout,
-// review the subscriptions (Keep for a year, or a reminder to cancel), or hide
+// review the subscriptions (Keep or Cancel each one, with a reminder task to
+// cancel; a decided one comes back after the person's ask-again time), or hide
 // it. The list comes from core useCostInsights, the same on both apps. Web
 // twin: apps/web/src/app/costs/cost-insights.tsx.
 import * as React from 'react';
@@ -28,9 +29,11 @@ import {
   formatMoney,
   scoutPrefillHref,
   useCostInsights,
+  subscriptionNote,
   useModules,
   withInsightMark,
   withoutInsightMark,
+  withSubscriptionDecision,
   type CostCategory,
   type CostInsight,
   type CostInsightMarks,
@@ -203,41 +206,66 @@ function InsightActions({
 
   return (
     <View className="gap-2 px-4 pb-3 pl-[56px]">
-      {i.action === 'review' ? (
-        <View className="overflow-hidden rounded-xl bg-card">
-          {subscriptions.map((s, n) => (
-            <View key={s.key} className={cn('gap-1.5 px-3 py-2', n > 0 && 'border-t border-border/60')}>
-              <View className="flex-row items-center gap-2">
-                <View className="min-w-0 flex-1">
-                  <Text className="text-sm text-foreground" numberOfLines={1}>{s.name}</Text>
-                  <Text className="text-caption text-muted-foreground" style={TABULAR}>
-                    {formatMoney(s.monthlyCents)} a month{s.overlap ? ` · ${s.overlap.toLowerCase()} overlap` : ''}
-                  </Text>
-                </View>
-                <Chip
-                  label={s.kept ? 'Kept' : 'Keep'}
-                  pressed={s.kept}
-                  onPress={() => {
-                    haptics.tick();
-                    onMarks((cur) => (s.kept ? withoutInsightMark(cur, `keep:${s.key}`) : withInsightMark(cur, `keep:${s.key}`)));
-                  }}
-                />
-              </View>
-              {onRemind && s.item && !s.kept ? (
-                <View className="flex-row">
-                  <Chip label="Remind me to cancel" onPress={() => onRemind(s)} />
-                </View>
-              ) : null}
-            </View>
-          ))}
-        </View>
-      ) : null}
+      {i.action === 'review' ? <SubscriptionReview subscriptions={subscriptions} onMarks={onMarks} onRemind={onRemind} /> : null}
       <View className="flex-row flex-wrap gap-2">
         {i.action === 'open-item' && i.item ? <Chip label={`Open ${i.item.name}`} onPress={() => { onDone(); onOpenItem(i.item!); }} /> : null}
         {i.action === 'open-category' ? <Chip label="Show the category" onPress={() => { onDone(); onOpenCategory(i.category ?? null); }} /> : null}
         {i.action === 'compare' && compare ? <Chip label="Compare with Scout" onPress={() => { onDone(); openRoute(scoutPrefillHref(i.compare!)); }} /> : null}
         {i.action === 'compare' && i.item ? <Chip label={`Open ${i.item.name}`} onPress={() => { onDone(); onOpenItem(i.item!); }} /> : null}
         <Chip label="Hide" muted onPress={onHide} />
+      </View>
+    </View>
+  );
+}
+
+/** Keep or Cancel each subscription; the bar counts the ones decided. */
+function SubscriptionReview({
+  subscriptions,
+  onMarks,
+  onRemind,
+}: Pick<CostInsightsCardProps, 'onMarks' | 'onRemind'> & { subscriptions: SubscriptionLine[] }) {
+  const decided = subscriptions.filter((s) => s.kept || s.cancelling).length;
+  const decide = (s: SubscriptionLine, choice: 'keep' | 'cancel') => {
+    haptics.tick();
+    onMarks((cur) => withSubscriptionDecision(cur, s, choice));
+    if (choice === 'cancel' && !s.cancelling && onRemind && s.item) onRemind(s);
+  };
+  return (
+    <View className="gap-2">
+      <View
+        className="h-1 overflow-hidden rounded-full bg-muted"
+        accessibilityRole="progressbar"
+        accessibilityLabel="Subscriptions decided"
+        accessibilityValue={{ min: 0, max: subscriptions.length, now: decided }}
+      >
+        <View className="h-full rounded-full bg-success" style={{ width: `${(decided / Math.max(1, subscriptions.length)) * 100}%` }} />
+      </View>
+      <View className="overflow-hidden rounded-xl bg-card">
+        {subscriptions.map((s, n) => {
+          const choice = s.kept ? 'keep' : s.cancelling ? 'cancel' : null;
+          return (
+            <View key={s.key} className={cn('flex-row items-center gap-2 px-3 py-2', n > 0 && 'border-t border-border/60')}>
+              <View className="min-w-0 flex-1">
+                <Text className="text-sm text-foreground" numberOfLines={1}>{s.name}</Text>
+                <Text className="text-caption text-muted-foreground" style={TABULAR} numberOfLines={1}>{subscriptionNote(s)}</Text>
+              </View>
+              <View accessibilityRole="radiogroup" accessibilityLabel={`Keep or cancel ${s.name}`} className="flex-row rounded-full border border-border p-0.5">
+                {(['keep', 'cancel'] as const).map((c) => (
+                  <Pressable
+                    key={c}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: choice === c }}
+                    onPress={() => decide(s, c)}
+                    hitSlop={4}
+                    className={cn('min-h-8 justify-center rounded-full px-3', choice === c && 'bg-muted')}
+                  >
+                    <Text className={cn('text-caption font-medium', choice === c ? 'text-foreground' : 'text-muted-foreground')}>{c === 'keep' ? 'Keep' : 'Cancel'}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          );
+        })}
       </View>
     </View>
   );
