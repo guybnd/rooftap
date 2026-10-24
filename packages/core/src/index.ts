@@ -92,6 +92,7 @@ export * from './ai-providers';
 export * from './modules/assistant/assistant-prompt';
 export * from './modules/assistant/assistant-screen';
 export * from './modules/assistant/assistant-links';
+export * from './assistant-reply-items';
 export * from './modules/assistant/web-lookup';
 export * from './modules/assistant/assistant-api';
 export * from './modules/assistant/assistant-photos';
@@ -198,6 +199,7 @@ export * from './modules/bins/use-bins-view';
 export * from './use-user-setting';
 // new-module:module-hooks (scripts/new-module.mjs adds above this line)
 export * from './modules/recipes/use-recipe-match';
+export * from './hooks/use-reply-items';
 
 // hooks/use-debounce + hooks/use-fuzzy-search are deliberately NOT exported
 // here: they import React client hooks, and this barrel is also consumed by

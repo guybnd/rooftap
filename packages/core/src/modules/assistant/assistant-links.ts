@@ -14,6 +14,39 @@ export const ITEM_LINK_ROUTES = {
 
 export type ItemLinkKind = keyof typeof ITEM_LINK_ROUTES;
 
+/** The module (and section, for its tile) each item kind belongs to. */
+export const ITEM_LINK_MODULE: Record<ItemLinkKind, 'recipes' | 'checklists' | 'shopper' | 'search'> = {
+  recipe: 'recipes',
+  checklist: 'checklists',
+  watch: 'shopper',
+  scout: 'shopper',
+  listing: 'search',
+};
+
+/** The item an app route opens, or null for any other route. Longest prefix first, so a Scout run is not a watch. */
+export function parseItemLink(href: string): { kind: ItemLinkKind; id: string } | null {
+  const kinds = (Object.keys(ITEM_LINK_ROUTES) as ItemLinkKind[]).sort(
+    (a, b) => ITEM_LINK_ROUTES[b].length - ITEM_LINK_ROUTES[a].length
+  );
+  const path = href.split(/[?#]/)[0];
+  for (const kind of kinds) {
+    const prefix = ITEM_LINK_ROUTES[kind];
+    if (!path.startsWith(prefix)) continue;
+    const rest = path.slice(prefix.length);
+    if (!rest || rest.includes('/')) continue;
+    let id: string;
+    try {
+      id = decodeURIComponent(rest);
+    } catch {
+      return null;
+    }
+    // /shopper/scout is the Scout list, not a watch called "scout".
+    if (kind === 'watch' && id === 'scout') return null;
+    return { kind, id };
+  }
+  return null;
+}
+
 /** The route that opens one item, e.g. `/recipes/<id>`. */
 export function itemLink(kind: ItemLinkKind, id: string): string {
   return `${ITEM_LINK_ROUTES[kind]}${encodeURIComponent(id)}`;

@@ -54,5 +54,5 @@ export const MODULE_BASELINE: Partial<Record<ModuleId, ModuleBaseline>> = {
   shopper: { gaps: ["mobile-skips-core-hook", "mobile-no-row-menu"], duplicated: ["centsText", "dealToneClass", "statusWord"] },
   rewards: { gaps: ["mobile-no-row-menu"] },
   bins: { gaps: ["web-no-row-menu", "mobile-no-row-menu"] },
-  assistant: { gaps: ["mobile-no-row-menu"], localModals: 1 },
+  assistant: { gaps: [], localModals: 1 },
 };

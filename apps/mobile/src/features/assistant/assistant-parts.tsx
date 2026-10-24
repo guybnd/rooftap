@@ -18,18 +18,21 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useRouter, type Href } from 'expo-router';
-import { ArrowUp, AtSign, Camera, Check, ImageOff, ImagePlus, Images, Sparkles, X } from 'lucide-react-native';
+import { ArrowUp, AtSign, Camera, Check, ChevronRight, ImageOff, ImagePlus, Images, Sparkles, X } from 'lucide-react-native';
 import {
   BottomSheet,
   ListGroup,
   ListItem,
   ListItemContent,
+  ListItemMeta,
   ListItemTitle,
+  ListItemTrailing,
   Text,
   LeadingTile,
   cn,
   haptics,
   toast,
+  useRowMenuSheet,
   useStillMotion,
 } from '@homeup/ui';
 import {
@@ -45,6 +48,9 @@ import {
   MAX_ASSISTANT_PHOTOS,
   useComposerPhotos,
   useProposalPicks,
+  useReplyItems,
+  type ReplyItemRow,
+  type RowMenu,
   type AssistantPhoto,
   type OutgoingPhoto,
   type PickedPhoto,
@@ -56,6 +62,7 @@ import {
   type ReplySpan,
 } from '@homeup/core';
 import { sectionIconFor } from '@/lib/section-icons';
+import { useDataCache } from '@/lib/data-cache';
 import { getBoundSupabaseClient } from '@/lib/supabase-client';
 import { assistantApi } from './assistant-api';
 
@@ -257,6 +264,7 @@ export function MessageBubble({
       >
         {message.photos?.length ? <MessagePhotos photos={message.photos} spaced={!!message.content} /> : null}
         {message.content ? <ReplyText text={message.content} /> : null}
+        {!user && message.content ? <ReplyItems text={message.content} /> : null}
         {!user && <ProposalCard message={message} busy={busy} onDecide={(d, picks) => onDecide(message.id, d, picks)} />}
       </View>
       <Text className="mt-1 px-1 text-[11px] text-muted-foreground" style={{ fontVariant: ['tabular-nums'] }}>
@@ -389,6 +397,72 @@ function PhotoSourceSheet({ open, onOpenChange, onPick }: { open: boolean; onOpe
         </ListGroup>
       </View>
     </BottomSheet>
+  );
+}
+
+const ITEM_KIND_LABEL: Record<ReplyItemRow['kind'], string> = {
+  recipe: 'Recipe',
+  checklist: 'Checklist',
+  watch: 'Watch',
+  scout: 'Scout',
+  listing: 'Listing',
+};
+
+/**
+ * The items a reply links to, as line-item rows under it (H6), read live from
+ * the household's stores: a ticked list item or a recipe kept from To try
+ * shows here too. Tap opens the item; hold gives its row menu (§13.7) when it
+ * has more than Open. Web twin: ReplyItems in apps/web assistant-parts.tsx.
+ */
+function ReplyItems({ text }: { text: string }) {
+  const router = useRouter();
+  const { group, currentUserId } = useDataCache();
+  const { rows, toggleToTry } = useReplyItems(group?.id, text, currentUserId);
+  const rowMenu = useRowMenuSheet();
+  if (!rows.length) return null;
+  const menuFor = (row: ReplyItemRow): RowMenu | null => {
+    if (row.kind !== 'recipe' || !toggleToTry) return null;
+    return {
+      title: row.title,
+      kind: ITEM_KIND_LABEL[row.kind],
+      actions: [
+        { id: 'open', label: 'Open', group: 'open', icon: 'open', run: () => router.push(row.href as Href) },
+        { id: 'to-try', label: row.toTry ? 'Keep in recipes' : 'Move to To try', group: 'edit', icon: 'move', run: () => toggleToTry(row.id) },
+      ],
+    };
+  };
+  return (
+    <>
+      <ListGroup className="mt-2.5">
+        {rows.map((row) => {
+          const menu = menuFor(row);
+          return (
+            <ListItem
+              key={row.key}
+              className="items-center gap-3"
+              onPress={() => router.push(row.href as Href)}
+              onLongPress={menu ? () => rowMenu.open(menu) : undefined}
+              accessibilityRole="link"
+              accessibilityLabel={row.meta ? `${row.title}, ${row.meta}` : row.title}
+            >
+              <LeadingTile sectionId={row.module} Icon={sectionIconFor(row.module)} size="md" />
+              <ListItemContent>
+                <ListItemTitle numberOfLines={1}>{row.title}</ListItemTitle>
+                {row.meta ? (
+                  <ListItemMeta>
+                    <Text className={cn('text-caption tabular-nums', row.good ? 'text-success' : 'text-muted-foreground')}>{row.meta}</Text>
+                  </ListItemMeta>
+                ) : null}
+              </ListItemContent>
+              <ListItemTrailing className="mt-0">
+                <ChevronRight size={16} className="text-muted-foreground" />
+              </ListItemTrailing>
+            </ListItem>
+          );
+        })}
+      </ListGroup>
+      {rowMenu.sheet}
+    </>
   );
 }
 

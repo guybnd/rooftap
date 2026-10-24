@@ -7,7 +7,8 @@
 // apps/mobile/src/features/assistant/assistant-parts.tsx.
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
-import { ArrowUp, AtSign, Check, ImageOff, ImagePlus, Loader2, Sparkles, X } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { ArrowUp, AtSign, Check, ChevronRight, ImageOff, ImagePlus, Loader2, Sparkles, X } from 'lucide-react';
 import {
   GHOST_REPLY_GROW_MS,
   GHOST_REPLY_LINES,
@@ -21,6 +22,8 @@ import {
   timeAgo,
   useComposerPhotos,
   useProposalPicks,
+  useReplyItems,
+  type ReplyItemRow,
   type AssistantDraft,
   type AssistantMessage,
   type AssistantPhoto,
@@ -33,6 +36,10 @@ import {
 import { cn } from '@/lib/utils';
 import { sectionIconFor } from '@/lib/section-icons';
 import { LeadingTile } from '@/components/ui/leading-tile';
+import { ListGroup, ListItem, ListItemContent, ListItemMeta, ListItemTitle, ListItemTrailing } from '@/components/ui/list-item';
+import { useRowContextMenu } from '@/components/ui/row-context-menu';
+import { navLinkClickHandler } from '@/lib/view-transitions';
+import { useDataCache } from '@/lib/data-cache';
 import { toast } from 'sonner';
 import { assistantApi } from '@/lib/assistant-client';
 import { createClient } from '@/lib/supabase/client';
@@ -242,6 +249,7 @@ export function MessageBubble({
       >
         {message.photos?.length ? <MessagePhotos photos={message.photos} spaced={!!message.content} /> : null}
         {message.content ? <ReplyText text={message.content} /> : null}
+        {!user && message.content ? <ReplyItems text={message.content} /> : null}
         {!user && <ProposalCard message={message} busy={busy} onDecide={(d, picks) => onDecide(message.id, d, picks)} />}
       </div>
       <p className="mt-1 px-1 text-[11px] text-muted-foreground tabular-nums">
@@ -250,6 +258,64 @@ export function MessageBubble({
         {showCost && message.cost_micros != null ? ` · ${formatMicros(message.cost_micros)}` : ''}
       </p>
     </div>
+  );
+}
+
+const ITEM_KIND_LABEL: Record<ReplyItemRow['kind'], string> = {
+  recipe: 'Recipe',
+  checklist: 'Checklist',
+  watch: 'Watch',
+  scout: 'Scout',
+  listing: 'Listing',
+};
+
+/**
+ * The items a reply links to, as line-item rows under it (H6), read live from
+ * the household's stores: a ticked list item or a recipe kept from To try
+ * shows here too. Click opens the item; right-click gives its row menu (§13.7).
+ * The links stay in the text, so an item the stores lack still opens.
+ */
+function ReplyItems({ text }: { text: string }) {
+  const { group, currentUserId } = useDataCache();
+  const { rows, toggleToTry } = useReplyItems(group?.id, text, currentUserId);
+  if (!rows.length) return null;
+  return (
+    <ListGroup className="mt-2.5">
+      {rows.map((row) => (
+        <ReplyItemLine key={row.key} row={row} onToggleToTry={row.kind === 'recipe' && toggleToTry ? () => toggleToTry(row.id) : undefined} />
+      ))}
+    </ListGroup>
+  );
+}
+
+function ReplyItemLine({ row, onToggleToTry }: { row: ReplyItemRow; onToggleToTry?: () => void }) {
+  const router = useRouter();
+  const Icon = sectionIconFor(row.module);
+  const rowMenu = useRowContextMenu(() => ({
+    title: row.title,
+    kind: ITEM_KIND_LABEL[row.kind],
+    actions: [
+      { id: 'open', label: 'Open', group: 'open', icon: 'open', run: () => router.push(row.href) },
+      { id: 'copy', label: 'Copy link', group: 'share', icon: 'copy', run: () => void navigator.clipboard?.writeText(new URL(row.href, window.location.href).toString()) },
+      onToggleToTry && { id: 'to-try', label: row.toTry ? 'Keep in recipes' : 'Move to To try', group: 'edit', icon: 'move', run: onToggleToTry },
+    ],
+  }));
+  return (
+    <ListItem onContextMenu={rowMenu.onContextMenu}>
+      {rowMenu.menu}
+      <Link href={row.href} onClick={navLinkClickHandler('descend', router, row.href)} className="flex min-w-0 flex-1 items-center gap-3">
+        <LeadingTile sectionId={row.module} Icon={Icon} size="md" />
+        <ListItemContent>
+          <ListItemTitle>
+            <span className="truncate text-foreground">{row.title}</span>
+          </ListItemTitle>
+          {row.meta && <ListItemMeta className={cn('tabular-nums', row.good && 'text-success')}>{row.meta}</ListItemMeta>}
+        </ListItemContent>
+        <ListItemTrailing>
+          <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden />
+        </ListItemTrailing>
+      </Link>
+    </ListItem>
   );
 }
 
