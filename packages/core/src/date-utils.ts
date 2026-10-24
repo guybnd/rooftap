@@ -163,19 +163,31 @@ const SNOOZE_DAYS: Record<'1d' | '1w' | '1m', number> = { '1d': 1, '1w': 7, '1m'
 
 /**
  * The task patch a snooze choice resolves to, shared by web and mobile so
- * every snooze surface (swipe undercard, quick menu, Home hero) agrees. 1h
- * nudges the time and stays on Today; 1d/1w/1m push the due date forward from
- * the current one (or today when undated); a custom date replaces it. "1
- * month" is 30 days, matching the groceries snooze and the Monthly repeat.
+ * every snooze surface (swipe undercard, quick menu, Home hero) agrees.
+ * 1d/1w/1m push the due date forward from the current one when it is still
+ * ahead, and from today when the task is overdue or undated, so snoozing an
+ * overdue task for 1 day lands on tomorrow. 1h counts from now when the task
+ * is already late (an earlier day, or a time today that has passed) and
+ * moves it onto today; otherwise it nudges the set time. A custom date
+ * replaces the due date. "1 month" is 30 days, matching the groceries snooze
+ * and the Monthly repeat.
  */
 export function taskSnoozePatch(
   task: { due_date: string | null; due_time: string | null },
   dur: TaskSnooze,
   today: string = todayISO(),
+  now: string = currentHHMM(),
 ): { due_date?: string; due_time?: string } {
-  if (dur === '1h') return { due_time: addHourClampToday(task.due_time) };
+  const pastDay = task.due_date != null && task.due_date < today;
+  if (dur === '1h') {
+    const late = pastDay || (task.due_date === today && task.due_time != null && task.due_time < now);
+    if (!late) return { due_time: addHourClampToday(task.due_time) };
+    const due_time = addHourClampToday(now);
+    return pastDay ? { due_date: today, due_time } : { due_time };
+  }
   if (dur === '1d' || dur === '1w' || dur === '1m') {
-    return { due_date: addDaysISO(task.due_date ?? today, SNOOZE_DAYS[dur]) };
+    const from = task.due_date && !pastDay ? task.due_date : today;
+    return { due_date: addDaysISO(from, SNOOZE_DAYS[dur]) };
   }
   return { due_date: dur };
 }

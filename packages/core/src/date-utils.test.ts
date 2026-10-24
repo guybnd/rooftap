@@ -3,15 +3,42 @@ import { dueDayLabel, formatPastDay, formatRelativeDay, formatTime12h, localDate
 
 describe('taskSnoozePatch', () => {
   const task = { due_date: '2026-10-18', due_time: '09:30' };
+  const today = '2026-10-18';
 
   it('1h nudges the time and keeps the date', () => {
-    expect(taskSnoozePatch(task, '1h')).toEqual({ due_time: '10:30' });
+    expect(taskSnoozePatch(task, '1h', today, '08:00')).toEqual({ due_time: '10:30' });
   });
 
   it('pushes the due date by 1 day, 1 week and 1 month (30 days)', () => {
-    expect(taskSnoozePatch(task, '1d')).toEqual({ due_date: '2026-10-19' });
-    expect(taskSnoozePatch(task, '1w')).toEqual({ due_date: '2026-10-25' });
-    expect(taskSnoozePatch(task, '1m')).toEqual({ due_date: '2026-11-17' });
+    expect(taskSnoozePatch(task, '1d', today)).toEqual({ due_date: '2026-10-19' });
+    expect(taskSnoozePatch(task, '1w', today)).toEqual({ due_date: '2026-10-25' });
+    expect(taskSnoozePatch(task, '1m', today)).toEqual({ due_date: '2026-11-17' });
+  });
+
+  it('pushes a future due date forward from that date', () => {
+    expect(taskSnoozePatch({ due_date: '2026-10-30', due_time: null }, '1d', today)).toEqual({ due_date: '2026-10-31' });
+  });
+
+  it('counts an overdue task from today, so 1 day means tomorrow', () => {
+    const overdue = { due_date: '2026-10-15', due_time: null };
+    expect(taskSnoozePatch(overdue, '1d', today)).toEqual({ due_date: '2026-10-19' });
+    expect(taskSnoozePatch(overdue, '1w', today)).toEqual({ due_date: '2026-10-25' });
+    expect(taskSnoozePatch(overdue, '1m', today)).toEqual({ due_date: '2026-11-17' });
+  });
+
+  it('1h on an overdue task moves it to an hour from now today', () => {
+    expect(taskSnoozePatch({ due_date: '2026-10-15', due_time: '09:00' }, '1h', today, '14:05')).toEqual({
+      due_date: today,
+      due_time: '15:05',
+    });
+    expect(taskSnoozePatch({ due_date: '2026-10-15', due_time: null }, '1h', today, '14:05')).toEqual({
+      due_date: today,
+      due_time: '15:05',
+    });
+  });
+
+  it('1h on a time today that has passed counts from now', () => {
+    expect(taskSnoozePatch(task, '1h', today, '14:05')).toEqual({ due_time: '15:05' });
   });
 
   it('counts from today when the task has no due date', () => {
