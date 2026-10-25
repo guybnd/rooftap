@@ -10,7 +10,7 @@ import { ModuleMap } from "./module-map";
 import { DESKTOP_ALT, EINK_ALT, EINK_H, EINK_W, SCREEN_ALT, desktopScreenSrc, einkScreenSrc, screenSrc } from "./screens";
 import styles from "./landing.module.css";
 import { SignIn, SignInHref } from "./sign-in";
-import { HERO_STORIES, ROOM_STORIES } from "./stories";
+import { STORIES } from "./stories";
 import { StoryPlayer, storyAnchor } from "./story-player";
 
 /**
@@ -79,10 +79,10 @@ export function LandingPage({
               <details ref={menuRef} className={styles.navMenu} onClick={closeMenuOnPick}>
                 <summary className={styles.navLink}>Modules</summary>
                 <div className={styles.navMenuList}>
-                  {[...HERO_STORIES, ...ROOM_STORIES].map((story) => (
+                  {STORIES.map((story) => (
                     <a key={story.id} href={`#${storyAnchor(story)}`}>
                       <SectionTile sectionId={story.room} small />
-                      {story.eyebrow}
+                      {story.name}
                     </a>
                   ))}
                 </div>
@@ -108,7 +108,6 @@ export function LandingPage({
           <section id="top" className={styles.hero} aria-labelledby="hero-title">
             <div className={cn(styles.wrap, styles.heroInner)}>
               <div className={styles.heroText}>
-                <p className={styles.eyebrow}>Household management you can host</p>
                 <h1 id="hero-title" className={cn(styles.display, styles.heroTitle)}>
                   Your home, your server.
                 </h1>
@@ -156,7 +155,6 @@ export function LandingPage({
           <section id="fits" className={styles.section} aria-labelledby="fits-title">
             <div className={styles.wrap}>
               <div className={styles.sectionHead}>
-                <p className={styles.eyebrow}>Connected modules</p>
                 <h2 id="fits-title" className={cn(styles.display, styles.sectionTitle)}>
                   Dynamic and interconnected
                 </h2>
@@ -172,14 +170,12 @@ export function LandingPage({
           </section>
 
           <div id="modules">
-            <StoryPlayer stories={HERO_STORIES} eager />
-            <StoryPlayer stories={ROOM_STORIES} />
+            <StoryPlayer stories={STORIES} eager />
           </div>
 
           <section id="layouts" className={styles.section} aria-labelledby="layouts-title">
             <div className={styles.wrap}>
               <div className={styles.sectionHead}>
-                <p className={styles.eyebrow}>Phone, tablet and desktop</p>
                 <h2 id="layouts-title" className={cn(styles.display, styles.sectionTitle)}>
                   One app, laid out for the screen
                 </h2>
@@ -226,7 +222,6 @@ export function LandingPage({
               </div>
               <div className={styles.einkCopy}>
                 <div className={styles.sectionHead}>
-                  <p className={styles.eyebrow}>E-Ink theme</p>
                   <h2 id="e-ink-title" className={cn(styles.display, styles.sectionTitle)}>
                     Leave it on the wall
                   </h2>
@@ -246,7 +241,6 @@ export function LandingPage({
           <section id="compare" className={styles.section} aria-labelledby="compare-title">
             <div className={styles.wrap}>
               <div className={styles.sectionHead}>
-                <p className={styles.eyebrow}>Instead of</p>
                 <h2 id="compare-title" className={cn(styles.display, styles.sectionTitle)}>
                   One app, not eight
                 </h2>
@@ -277,7 +271,6 @@ export function LandingPage({
           <section id="assistant" className={styles.section} aria-labelledby="assistant-title">
             <div className={cn(styles.wrap, styles.split)}>
               <div className={styles.sectionHead}>
-                <p className={styles.eyebrow}>Self-hosted assistant</p>
                 <h2 id="assistant-title" className={cn(styles.display, styles.sectionTitle)}>
                   An assistant on your own server
                 </h2>
@@ -302,7 +295,6 @@ export function LandingPage({
           <section id="mcp" className={styles.section} aria-labelledby="mcp-title">
             <div className={cn(styles.wrap, styles.split)}>
               <div className={styles.sectionHead}>
-                <p className={styles.eyebrow}>MCP server</p>
                 <h2 id="mcp-title" className={cn(styles.display, styles.sectionTitle)}>
                   Ask your assistant
                 </h2>
@@ -317,7 +309,6 @@ export function LandingPage({
           <section id="self-host" className={cn(styles.section, styles.selfHostSection)} aria-labelledby="self-host-title">
             <div className={styles.wrap}>
               <div className={styles.sectionHead}>
-                <p className={styles.eyebrow}>Self-hosting</p>
                 <h2 id="self-host-title" className={cn(styles.display, styles.sectionTitle)}>
                   Run your own server
                 </h2>
@@ -353,7 +344,6 @@ export function LandingPage({
           <section id="features" className={styles.section} aria-labelledby="features-title">
             <div className={styles.wrap}>
               <div className={styles.sectionHead}>
-                <p className={styles.eyebrow}>Feature list</p>
                 <h2 id="features-title" className={cn(styles.display, styles.sectionTitle)}>
                   Every feature
                 </h2>
@@ -385,7 +375,6 @@ export function LandingPage({
           <section id="faq" className={styles.section} aria-labelledby="faq-title">
             <div className={styles.wrap}>
               <div className={styles.sectionHead}>
-                <p className={styles.eyebrow}>FAQ</p>
                 <h2 id="faq-title" className={cn(styles.display, styles.sectionTitle)}>
                   Questions
                 </h2>

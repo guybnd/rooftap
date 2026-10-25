@@ -18,7 +18,9 @@ import type { Rect as PxRect, StreamsScene } from "./scenes/streams";
 // at a time: its row, its ring and (side by side) one line to the spot on the
 // phone. A mouse over another feature lights that one instead. A click on a
 // feature plays it again. The stage is sticky; the page's scroll picks the
-// step; the step plays on its own.
+// module, one screen of scroll each; its steps play in turn on their own. A
+// chip per module along the top jumps to it, and the step tabs under the
+// chips jump to a step.
 
 /** A real screen by id, or a drawn one. */
 export type Screen = ScreenId | { node: ReactNode; label: string };
@@ -75,7 +77,8 @@ export interface Story {
   /** The section whose hue lights the stage and whose tile names it. */
   room: string;
   label: string;
-  eyebrow: string;
+  /** The module's name, on its chip and in the nav's module menu. */
+  name: string;
   steps: readonly Step[];
 }
 
@@ -132,8 +135,10 @@ interface Pin {
 const SEGMENT_PAUSE = 1900;
 /** How long a feature that only points at a spot stays lit. */
 const TARGET_HOLD = 2200;
-/** After the last feature, before the step plays again. */
+/** After the last feature, before the next step. */
 const LOOP_PAUSE = 2400;
+/** How long a step with nothing to play stays up. */
+const STILL_HOLD = 6000;
 
 interface Segment {
   lit: number;
@@ -159,8 +164,24 @@ export interface Replay {
   key: number;
 }
 
-/** Plays a step's timeline: the screens, the lit feature, the finger, the highlight, the pops. */
-function useTimeline(step: Step, active: boolean, replay: Replay | null) {
+/** How long a step plays, from the segment it starts at; the step tab's bar fills over it. */
+function stepLength(step: Step, from = 0): number {
+  const segs = segmentsOf(step).slice(from);
+  if (!segs.length) return STILL_HOLD;
+  return (from === 0 ? 500 : 0) + segs.reduce((t, seg) => t + seg.length, 0) + LOOP_PAUSE - SEGMENT_PAUSE;
+}
+
+/** Where a replay starts in its step's segments; 0 when it is not this step's. */
+const replayFrom = (step: Step, replay: Replay | null) => (replay && replay.step === step ? Math.max(0, segmentsOf(step).findIndex((s) => s.lit === replay.feature)) : 0);
+
+/**
+ * Plays a step's timeline: the screens, the lit feature, the finger, the
+ * highlight, the pops. At the end it calls onEnd, which moves to the next
+ * step; `round` restarts the same step (a one-step module plays again).
+ */
+function useTimeline(step: Step, active: boolean, replay: Replay | null, round: number, onEnd: () => void) {
+  const onEndRef = useRef(onEnd);
+  onEndRef.current = onEnd;
   const [screens, setScreens] = useState<Record<Slot, Screen | undefined>>({ a: step.a, b: step.b });
   const [lit, setLit] = useState(-1);
   const [touch, setTouch] = useState<Touch | null>(null);
@@ -175,8 +196,11 @@ function useTimeline(step: Step, active: boolean, replay: Replay | null) {
     setPop(null);
     if (!active) return;
     const segs = segmentsOf(step);
-    if (!segs.length) return;
     const timers: number[] = [];
+    if (!segs.length) {
+      timers.push(window.setTimeout(() => onEndRef.current(), STILL_HOLD));
+      return () => timers.forEach(clearTimeout);
+    }
     let key = 0;
     const apply = (ev: PlayEvent) => {
       key += 1;
@@ -206,12 +230,11 @@ function useTimeline(step: Step, active: boolean, replay: Replay | null) {
         for (const ev of seg.events) timers.push(window.setTimeout(() => apply(ev), t + ev.at));
         t += seg.length;
       }
-      timers.push(window.setTimeout(() => schedule(0), t + LOOP_PAUSE - SEGMENT_PAUSE));
+      timers.push(window.setTimeout(() => onEndRef.current(), t + LOOP_PAUSE - SEGMENT_PAUSE));
     };
-    const from = replay && replay.step === step ? segs.findIndex((s) => s.lit === replay.feature) : 0;
-    schedule(Math.max(0, from));
+    schedule(replayFrom(step, replay));
     return () => timers.forEach(clearTimeout);
-  }, [step, active, replay]);
+  }, [step, active, replay, round]);
 
   return { screens, lit, touch, highlight, pop };
 }
@@ -371,14 +394,15 @@ function linePath(from: PxRect, to: PxRect, within: PxRect, startX?: number): st
 
 /**
  * One sticky stage that a tall scroll run plays through every story: the
- * scroll picks the step, the step plays its features in turn, and between
+ * scroll picks the story, its steps play their features in turn, and between
  * stories the room's colour moves first and the next phones flip in. three.js
  * draws the light behind: the hue, the motes, and the streams from one phone
  * to the other. Without WebGL the screens, captions and timelines still play.
  */
 export function StoryPlayer({ stories, eager = false }: { stories: readonly Story[]; eager?: boolean }) {
   const flat = useMemo<Flat[]>(() => stories.flatMap((story, storyIndex) => story.steps.map((step) => ({ story, storyIndex, step }))), [stories]);
-  const n = flat.length;
+  /** One screen of scroll per story. */
+  const n = stories.length;
   const runRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
@@ -389,16 +413,29 @@ export function StoryPlayer({ stories, eager = false }: { stories: readonly Stor
   const highlightEl = useRef<HTMLElement | null>(null);
   const pathEls = useRef<(SVGPathElement | null)[]>([]);
   const livePath = useRef<SVGPathElement | null>(null);
-  const [active, setActive] = useState(0);
+  const railRef = useRef<HTMLDivElement>(null);
+  const chipEls = useRef<(HTMLButtonElement | null)[]>([]);
+  const tabsRef = useRef<HTMLOListElement>(null);
+  // The story the scroll is on, and the step of it that is playing.
+  const [storyIndex, setStoryIndex] = useState(0);
   const activeRef = useRef(0);
+  const [stepIndex, setStepIndex] = useState(0);
+  const [round, setRound] = useState(0);
   const [visible, setVisible] = useState(false);
   const [gl, setGl] = useState(false);
   const [replay, setReplay] = useState<Replay | null>(null);
   const [hover, setHover] = useState(-1);
   const popRef = useRef(0);
 
-  const current = flat[active];
-  const { screens, lit, touch, highlight, pop } = useTimeline(current.step, visible, replay);
+  const story = stories[storyIndex];
+  const step = story.steps[stepIndex] ?? story.steps[0];
+  const active = flat.findIndex((f) => f.step === step);
+  const nextStep = () => {
+    setReplay(null);
+    setStepIndex((i) => (i + 1) % story.steps.length);
+    setRound((r) => r + 1);
+  };
+  const { screens, lit, touch, highlight, pop } = useTimeline(step, visible, replay, round, nextStep);
   if (pop) popRef.current = pop.key;
   // One feature is lit at a time: the one the mouse is over, else the playing one.
   const shown = hover >= 0 ? hover : lit;
@@ -513,7 +550,10 @@ export function StoryPlayer({ stories, eager = false }: { stories: readonly Stor
       const index = Math.min(n - 1, Math.floor(eased * n + 0.0001));
       if (index !== activeRef.current) {
         activeRef.current = index;
-        setActive(index);
+        setStoryIndex(index);
+        setStepIndex(0);
+        setReplay(null);
+        setHover(-1);
       }
 
       // The lines from the features to their spots, measured every frame so
@@ -564,9 +604,6 @@ export function StoryPlayer({ stories, eager = false }: { stories: readonly Stor
     };
   }, [n]);
 
-  const story = current.story;
-  const step = current.step;
-  const stepIndex = story.steps.indexOf(step);
   const screensA = useMemo(() => screensFor(story, "a"), [story]);
   const screensB = useMemo(() => screensFor(story, "b"), [story]);
   const two = !!screens.b;
@@ -575,15 +612,30 @@ export function StoryPlayer({ stories, eager = false }: { stories: readonly Stor
     [step]
   );
 
-  const firstOfStory = flat.findIndex((f) => f.story === story);
-  const goToStep = (i: number) => {
+  const goToStory = (i: number) => {
     const run = runRef.current;
     const stage = stageRef.current;
     if (!run || !stage) return;
     const top = run.getBoundingClientRect().top + window.scrollY;
     const travel = run.offsetHeight - stage.clientHeight;
-    window.scrollTo({ top: top + ((firstOfStory + i + 0.5) / n) * travel, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    window.scrollTo({ top: top + ((i + 0.5) / n) * travel, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
   };
+  const goToStep = (i: number) => {
+    setReplay(null);
+    setStepIndex(i);
+    setRound((r) => r + 1);
+  };
+
+  // The rail keeps the story's chip in view, and the tabs (one sideways row on
+  // a phone) the playing step's; each scrolls itself, never the page.
+  useEffect(() => {
+    const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+    const center = (row: HTMLElement | null, item: HTMLElement | null | undefined) => {
+      if (row && item) row.scrollTo({ left: item.offsetLeft - (row.clientWidth - item.offsetWidth) / 2, behavior });
+    };
+    center(railRef.current, chipEls.current[storyIndex]);
+    center(tabsRef.current, tabsRef.current?.children[stepIndex] as HTMLElement | undefined);
+  }, [storyIndex, stepIndex]);
 
   // Stale refs from the last step must not draw lines.
   featureEls.current.length = 0;
@@ -592,20 +644,45 @@ export function StoryPlayer({ stories, eager = false }: { stories: readonly Stor
 
   return (
     <div ref={runRef} className={styles.run} style={{ height: `${n * 100 + 60}svh` }}>
-      {/* An anchor per story at the scroll offset of its first step, for the nav's module menu (goToStep's formula, in svh). */}
-      {stories.map((st) => (
-        <span
-          key={st.id}
-          id={storyAnchor(st)}
-          className={styles.storyAnchor}
-          style={{ top: `${((flat.findIndex((f) => f.story === st) + 0.5) / n) * (n * 100 - 40)}svh` }}
-        />
+      {/* An anchor per story at its scroll offset, for the nav's module menu (goToStory's formula, in svh). */}
+      {stories.map((st, i) => (
+        <span key={st.id} id={storyAnchor(st)} className={styles.storyAnchor} style={{ top: `${((i + 0.5) / n) * (n * 100 - 40)}svh` }} />
       ))}
       <div ref={stageRef} className={cn(styles.stage, gl && styles.stageGl)} data-hue={sectionHue(story.room)} role="group" aria-label={story.label}>
-        {/* Which section this is, at the top the whole time. */}
-        <div className={styles.stageLabel}>
-          <SectionTile sectionId={story.room} small />
-          <span>{story.eyebrow}</span>
+        {/* A chip per module, the current one lit; a tap scrolls to it. Under it, the module's steps. */}
+        <div className={styles.stageTop}>
+          <div ref={railRef} className={styles.rail}>
+            {stories.map((st, i) => (
+              <button
+                key={st.id}
+                ref={(el) => {
+                  chipEls.current[i] = el;
+                }}
+                type="button"
+                className={cn(styles.chip, i === storyIndex && styles.chipOn)}
+                data-hue={sectionHue(st.room)}
+                aria-current={i === storyIndex ? "true" : undefined}
+                onClick={() => goToStory(i)}
+              >
+                <SectionTile sectionId={st.room} small />
+                {st.name}
+              </button>
+            ))}
+          </div>
+          {story.steps.length > 1 && (
+            <ol ref={tabsRef} className={styles.stepTabs} aria-label={`${story.name} steps`}>
+              {story.steps.map((s, i) => (
+                <li key={i}>
+                  <button type="button" className={cn(styles.stepTab, i === stepIndex && styles.stepTabOn)} aria-current={i === stepIndex ? "step" : undefined} onClick={() => goToStep(i)}>
+                    {s.title}
+                    {i === stepIndex && visible && (
+                      <span key={`${round}-${replay?.key ?? 0}`} className={styles.stepBar} style={{ animationDuration: `${stepLength(s, replayFrom(s, replay))}ms` }} aria-hidden="true" />
+                    )}
+                  </button>
+                </li>
+              ))}
+            </ol>
+          )}
         </div>
 
         <div ref={innerRef} className={styles.stageInner}>
@@ -674,7 +751,7 @@ export function StoryPlayer({ stories, eager = false }: { stories: readonly Stor
               touch={touch}
               highlight={ring}
               pop={pop}
-              eager={eager && current.storyIndex === 0}
+              eager={eager && storyIndex === 0}
               phoneRef={(el) => {
                 phoneA.current = el;
               }}
@@ -731,15 +808,6 @@ export function StoryPlayer({ stories, eager = false }: { stories: readonly Stor
           </svg>
         </div>
 
-        {story.steps.length > 1 && (
-          <ol className={styles.steps} aria-label={`${story.eyebrow} steps`}>
-            {story.steps.map((s, i) => (
-              <li key={i}>
-                <button type="button" className={cn(styles.stepDot, i === stepIndex && styles.stepDotOn)} aria-label={`Step ${i + 1} of ${story.steps.length}: ${s.title}`} aria-current={i === stepIndex ? "step" : undefined} onClick={() => goToStep(i)} />
-              </li>
-            ))}
-          </ol>
-        )}
       </div>
     </div>
   );

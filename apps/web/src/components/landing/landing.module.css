@@ -30,14 +30,6 @@
   max-width: clamp(var(--measure), 88vw, 1720px);
 }
 
-.eyebrow {
-  font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 12px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--muted-foreground);
-}
-
 .display {
   font-family: var(--font-heading), system-ui, sans-serif;
   font-weight: 800;
@@ -245,6 +237,8 @@
   grid-template-areas: "caption phone";
   align-items: center;
   gap: clamp(24px, 4vw, 56px);
+  padding-top: 150px;
+  padding-bottom: 24px;
 }
 
 /* Captions: stacked, one shown. */
@@ -339,22 +333,6 @@
   color: var(--foreground);
   font-weight: 650;
 }
-.badge {
-  display: inline-flex;
-  justify-self: start;
-  align-items: center;
-  gap: 8px;
-  height: 28px;
-  padding: 0 12px;
-  border-radius: 999px;
-  background: var(--hue-tile);
-  color: var(--hue-glyph);
-  font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 11.5px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  font-weight: 600;
-}
 
 /* The phones: photographs of the app in thin shells. Two when a step shows
    cause and effect; a new story's phones flip in after the colour moved. */
@@ -378,7 +356,7 @@
 }
 .phone {
   /* As tall as the stage allows, so the app's own text stays readable. */
-  --phone-w: min(360px, 24vw, calc((100svh - 150px) * 0.462));
+  --phone-w: min(360px, 24vw, calc((100svh - 200px) * 0.462));
   position: relative;
   width: var(--phone-w);
   aspect-ratio: 390 / 844;
@@ -392,7 +370,7 @@
   flex: none;
 }
 .phonesTwo .phone {
-  --phone-w: min(320px, 21vw, calc((100svh - 150px) * 0.462));
+  --phone-w: min(320px, 21vw, calc((100svh - 200px) * 0.462));
 }
 .phoneScreen {
   position: relative;
@@ -494,13 +472,35 @@
   }
 }
 
-/* The section this stage is in, at the top the whole time. */
-.stageLabel {
+/* A chip per module along the top, the current one lit in its hue; the
+   rail scrolls sideways on its own to keep that chip in view. Under it, the
+   module's steps as tabs, the playing one with a bar that fills as it plays. */
+.stageTop {
   position: absolute;
-  z-index: 3;
-  top: 76px;
-  left: 50%;
-  transform: translateX(-50%);
+  z-index: 4;
+  top: 72px;
+  left: 0;
+  right: 0;
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+}
+/* Positioned, so a chip's offsetLeft is measured from its own row. */
+.rail {
+  position: relative;
+  display: flex;
+  gap: 8px;
+  max-width: min(100%, 1240px);
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 2px max(20px, env(safe-area-inset-right, 0px)) 2px var(--gutter);
+  mask-image: linear-gradient(90deg, transparent, #000 var(--gutter), #000 calc(100% - 24px), transparent);
+}
+.rail::-webkit-scrollbar {
+  display: none;
+}
+.chip {
+  flex: none;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -510,20 +510,85 @@
   background: color-mix(in oklab, var(--background) 72%, transparent);
   border: 1px solid var(--border);
   backdrop-filter: blur(10px);
-  color: var(--foreground);
+  color: var(--muted-foreground);
+  font: inherit;
   font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
-  pointer-events: none;
+  cursor: pointer;
+  transition:
+    color 200ms ease,
+    border-color 200ms ease,
+    background 200ms ease;
 }
-.stageLabel .tileSm {
+.chip:hover {
+  color: var(--foreground);
+}
+.chip:focus-visible,
+.stepTab:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.chipOn {
+  color: var(--foreground);
+  border-color: color-mix(in oklab, var(--hue-glyph) 55%, transparent);
+  background: color-mix(in oklab, var(--hue-tile) 70%, var(--background));
+}
+.chip .tileSm {
   width: 24px;
   height: 24px;
   border-radius: 8px;
 }
-.stageLabel .tileSm svg {
+.chip .tileSm svg {
   width: 14px;
   height: 14px;
+}
+.stepTabs {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0 var(--gutter);
+  list-style: none;
+}
+.stepTab {
+  position: relative;
+  overflow: hidden;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.stepTab:hover {
+  color: var(--foreground);
+}
+.stepTabOn {
+  color: var(--foreground);
+  border-color: var(--border);
+  background: color-mix(in oklab, var(--background) 72%, transparent);
+}
+.stepBar {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  width: 100%;
+  background: var(--hue-glyph);
+  transform-origin: left;
+  animation: stepFill linear both;
+}
+@keyframes stepFill {
+  from {
+    transform: scaleX(0);
+  }
 }
 
 /* The lines from a feature to its spot on the phone. */
@@ -576,55 +641,6 @@
     0 0 24px 2px var(--hue-glow);
 }
 
-/* Step dots: buttons that scroll to their step. The hit area is 28px; the dot is drawn inside it. */
-.steps {
-  position: absolute;
-  z-index: 4;
-  right: max(20px, env(safe-area-inset-right, 0px));
-  bottom: max(20px, env(safe-area-inset-bottom, 0px));
-  display: flex;
-  gap: 2px;
-  margin: 0;
-  padding: 4px 6px;
-  list-style: none;
-  border-radius: 999px;
-  background: color-mix(in oklab, var(--background) 72%, transparent);
-  border: 1px solid var(--border);
-  backdrop-filter: blur(10px);
-}
-.stepDot {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-}
-.stepDot::before {
-  content: "";
-  width: 10px;
-  height: 10px;
-  border-radius: 5px;
-  background: color-mix(in oklab, var(--foreground) 40%, transparent);
-  transition:
-    width 300ms ease,
-    background 300ms ease;
-}
-.stepDot:hover::before {
-  background: var(--foreground);
-}
-.stepDot:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: -2px;
-  border-radius: 999px;
-}
-.stepDotOn::before {
-  width: 22px;
-  background: var(--hue-glyph);
-}
-
 @media (max-width: 899px) {
   /* Phone: the screens on top, the caption under them. */
   .stageInner {
@@ -639,14 +655,14 @@
   }
   .phones {
     align-self: center;
-    padding-top: max(112px, calc(env(safe-area-inset-top, 0px) + 104px));
+    padding-top: max(146px, calc(env(safe-area-inset-top, 0px) + 138px));
     gap: 10px;
   }
   .phone {
-    --phone-w: min(54vw, calc((60svh - 124px) * 0.462));
+    --phone-w: min(54vw, calc((60svh - 158px) * 0.462));
   }
   .phonesTwo .phone {
-    --phone-w: min(44vw, calc((60svh - 124px) * 0.462));
+    --phone-w: min(44vw, calc((60svh - 158px) * 0.462));
   }
   .captions {
     align-content: start;
@@ -681,37 +697,42 @@
   .lines {
     display: none;
   }
-  .stageLabel {
-    top: max(70px, calc(env(safe-area-inset-top, 0px) + 66px));
-    left: var(--gutter);
-    transform: none;
+  .stageTop {
+    top: max(66px, calc(env(safe-area-inset-top, 0px) + 62px));
+    justify-items: stretch;
+    gap: 6px;
+  }
+  .rail {
+    max-width: 100%;
+  }
+  .chip {
     height: 32px;
     font-size: 12px;
-    max-width: calc(100vw - 150px);
   }
-  .stageLabel span {
-    overflow: hidden;
-    text-overflow: ellipsis;
+  /* One row that scrolls sideways, so long step names never push the phones down. */
+  .stepTabs {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .stepTab {
+    height: 26px;
+    font-size: 11.5px;
   }
   .navLinks .navLink,
   .navLinks .navMenu {
     display: none;
   }
-  .steps {
-    bottom: auto;
-    top: max(68px, calc(env(safe-area-inset-top, 0px) + 64px));
-    padding: 2px 4px;
-  }
-  .stepDot {
-    width: 24px;
-    height: 24px;
-  }
 }
 @media (prefers-reduced-motion: reduce) {
   .caption,
   .frame,
-  .stepDot {
+  .chip {
     transition: none;
+  }
+  .stepBar {
+    animation: none;
   }
   .phones,
   .highlight,

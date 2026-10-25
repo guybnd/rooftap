@@ -55,9 +55,8 @@ export function PrivacyPage({ homeHref = "/" }: { homeHref?: string }) {
       <main className={cn(styles.section, styles.legal)}>
         <div className={styles.wrap}>
           <div className={styles.sectionHead}>
-            <p className={styles.eyebrow}>Updated 19 October 2026</p>
             <h1 className={cn(styles.display, styles.sectionTitle)}>Privacy</h1>
-            <p className={styles.sectionLede}>This page covers the Rooftap app: the hosted service and the software that you run yourself.</p>
+            <p className={styles.sectionLede}>This page covers the Rooftap app: the hosted service and the software that you run yourself. Last updated 19 October 2026.</p>
           </div>
           {SECTIONS.map(([title, paragraphs]) => (
             <section key={title} className={styles.legalSection}>

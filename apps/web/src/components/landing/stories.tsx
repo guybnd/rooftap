@@ -23,7 +23,7 @@ const HOME_SCREEN: Screen = { node: <HomeScreen />, label: "The Android home scr
 export const HOME_STORY: Story = {
   id: "home",
   room: "home",
-  eyebrow: "Home",
+  name: "Home",
   label: "The Home screen: the day's count, the weather, the next item, and the Upcoming feed that every module fills",
   steps: [
     {
@@ -52,7 +52,7 @@ export const HOME_STORY: Story = {
 export const CAPTURE_STORY: Story = {
   id: "capture",
   room: "home",
-  eyebrow: "Capture",
+  name: "Capture",
   label: "Capture: one + opens a sheet for every module; type first, see what already matches, then add it where it belongs or ask Rooftap",
   steps: [
     {
@@ -97,7 +97,7 @@ export const CAPTURE_STORY: Story = {
 export const GROCERIES_STORY: Story = {
   id: "groceries",
   room: "groceries",
-  eyebrow: "Groceries",
+  name: "Groceries",
   label: "Groceries: aisles or one list, a swipe to get an item, shelf life, the rewards card, and the trip that lands in Costs",
   steps: [
     {
@@ -173,7 +173,7 @@ export const GROCERIES_STORY: Story = {
 export const CALENDAR_STORY: Story = {
   id: "calendar",
   room: "calendar",
-  eyebrow: "Calendar",
+  name: "Calendar",
   label: "Calendar: dated tasks and checklists in the agenda, an event from a link, and the push that says when to leave",
   steps: [
     {
@@ -234,7 +234,7 @@ const COOKBOOK: Screen = {
 export const RECIPES_STORY: Story = {
   id: "recipes",
   room: "recipes",
-  eyebrow: "Recipes",
+  name: "Recipes",
   label: "Recipes: a cookbook page scanned into a recipe, its missing ingredients added to Groceries, a week of dinners, and cook mode with timers",
   steps: [
     {
@@ -328,7 +328,7 @@ const chat = (lines: ChatLine[], label: string, typing = false): Screen => ({ no
 export const MCP_STORY: Story = {
   id: "mcp",
   room: "household",
-  eyebrow: "Your own agent · MCP",
+  name: "MCP",
   label: "AI assistants over MCP: a chat that reads the groceries, and a sensor battery that becomes a grocery item and a to-do",
   steps: [
     {
@@ -369,7 +369,7 @@ export const MCP_STORY: Story = {
 export const SHOPPER_STORY: Story = {
   id: "shopper",
   room: "shopper",
-  eyebrow: "Shopper",
+  name: "Shopper",
   label: "Shopper: a watchlist with a deal rating per item, a price history, every store's price, a plan to buy that lands in Tasks and Costs, and Scout picks for a brief",
   steps: [
     {
@@ -470,7 +470,7 @@ export const SHOPPER_STORY: Story = {
 export const REWARDS_STORY: Story = {
   id: "rewards",
   room: "rewards",
-  eyebrow: "Rewards",
+  name: "Rewards",
   label: "Rewards: loyalty cards and memberships with the stores they work at, a store lookup at the till, the card's barcode, and the perks that end soon",
   steps: [
     {
@@ -524,7 +524,7 @@ const tg1c: ChatLine[] = [...tg1b, { from: "assistant", text: "Done. Dishwasher 
 export const ASSISTANT_STORY: Story = {
   id: "assistant",
   room: "assistant",
-  eyebrow: "Assistant",
+  name: "Assistant",
   label: "The Assistant: quick asks, named chats and a household thread, changes that wait for an OK, Home Assistant, trust and spending per household, and Telegram",
   steps: [
     {
@@ -627,7 +627,7 @@ export const ASSISTANT_STORY: Story = {
 export const COSTS_STORY: Story = {
   id: "costs",
   room: "costs",
-  eyebrow: "Bills and costs",
+  name: "Costs",
   label: "Costs: the month against a goal, a bar per month, Worth a look, the categories, and lines from other modules",
   steps: [
     {
@@ -648,7 +648,7 @@ export const COSTS_STORY: Story = {
 export const DOCUMENTS_STORY: Story = {
   id: "documents",
   room: "documents",
-  eyebrow: "Documents",
+  name: "Documents",
   label: "Documents: a warranty that adds a dated reminder, and a contract that is a cost and a reminder",
   steps: [
     {
@@ -695,7 +695,7 @@ export const DOCUMENTS_STORY: Story = {
 export const CHECKLISTS_STORY: Story = {
   id: "checklists",
   room: "checklists",
-  eyebrow: "Checklists",
+  name: "Checklists",
   label: "Checklists: a dated list that becomes a to-do in Tasks, and a shopping list that logs its items in Costs",
   steps: [
     {
@@ -733,7 +733,7 @@ export const CHECKLISTS_STORY: Story = {
 export const OCCASIONS_STORY: Story = {
   id: "occasions",
   room: "occasions",
-  eyebrow: "Occasions",
+  name: "Occasions",
   label: "Occasions: birthdays and anniversaries with a countdown, gift ideas with a budget, wishlists, and plans kept from the person they are for",
   steps: [
     {
@@ -766,7 +766,7 @@ export const OCCASIONS_STORY: Story = {
 export const HOUSE_STORY: Story = {
   id: "house",
   room: "bins",
-  eyebrow: "Around the house",
+  name: "Around the house",
   label: "Around the house: bin night on Home with whose turn it is, bin days from the council or Home Assistant, and home care jobs on a schedule",
   steps: [
     {
@@ -806,7 +806,7 @@ export const HOUSE_STORY: Story = {
 export const NATIVE_STORY: Story = {
   id: "native",
   room: "home",
-  eyebrow: "Android",
+  name: "Android",
   label: "The Android app: the widget on the home screen, the share sheet, notifications, offline reads and haptics",
   steps: [
     {
@@ -824,7 +824,5 @@ export const NATIVE_STORY: Story = {
   ],
 };
 
-/** The first stage: the Home dashboard, under the self-hosting section. */
-export const HERO_STORIES: readonly Story[] = [HOME_STORY];
-/** The modules, one continuous stage, the Android app last. */
-export const ROOM_STORIES: readonly Story[] = [CAPTURE_STORY, GROCERIES_STORY, CALENDAR_STORY, RECIPES_STORY, SHOPPER_STORY, OCCASIONS_STORY, REWARDS_STORY, ASSISTANT_STORY, MCP_STORY, COSTS_STORY, DOCUMENTS_STORY, CHECKLISTS_STORY, HOUSE_STORY, NATIVE_STORY];
+/** Every module on one stage, a chip each: Home first, the Android app last. */
+export const STORIES: readonly Story[] = [HOME_STORY, CAPTURE_STORY, GROCERIES_STORY, CALENDAR_STORY, RECIPES_STORY, SHOPPER_STORY, OCCASIONS_STORY, REWARDS_STORY, ASSISTANT_STORY, MCP_STORY, COSTS_STORY, DOCUMENTS_STORY, CHECKLISTS_STORY, HOUSE_STORY, NATIVE_STORY];
