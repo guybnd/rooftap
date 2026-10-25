@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isPublicConfig, normalizeServerOrigin } from "./server-origin";
+import { isPublicConfig, normalizeServerOrigin, officialServerMove } from "./server-origin";
 
 describe("normalizeServerOrigin", () => {
   it("forces https on a schemeless host", () => {
@@ -63,5 +63,59 @@ describe("isPublicConfig", () => {
     expect(isPublicConfig(undefined)).toBe(false);
     expect(isPublicConfig("a string")).toBe(false);
     expect(isPublicConfig([])).toBe(false);
+  });
+});
+
+describe("officialServerMove", () => {
+  const known = ["https://homeup.vercel.app"];
+
+  it("moves a phone that picked Official to the new Official address", () => {
+    expect(
+      officialServerMove({
+        storedOrigin: "https://homeup.vercel.app",
+        pickedOfficial: true,
+        officialUrl: "https://rooftap.example.com/",
+        knownOfficialOrigins: known,
+      }),
+    ).toBe("https://rooftap.example.com");
+  });
+
+  it("moves a phone from before the marker when it sits on a known Official address", () => {
+    expect(
+      officialServerMove({
+        storedOrigin: "https://homeup.vercel.app",
+        pickedOfficial: false,
+        officialUrl: "https://rooftap.example.com",
+        knownOfficialOrigins: known,
+      }),
+    ).toBe("https://rooftap.example.com");
+  });
+
+  it("moves back when Official returns to the hosted address", () => {
+    expect(
+      officialServerMove({
+        storedOrigin: "https://rooftap.example.com",
+        pickedOfficial: true,
+        officialUrl: "https://homeup.vercel.app",
+        knownOfficialOrigins: known,
+      }),
+    ).toBe("https://homeup.vercel.app");
+  });
+
+  it("leaves a server the person typed in", () => {
+    expect(
+      officialServerMove({
+        storedOrigin: "https://my-nas.example.com",
+        pickedOfficial: false,
+        officialUrl: "https://rooftap.example.com",
+        knownOfficialOrigins: known,
+      }),
+    ).toBeNull();
+  });
+
+  it("stays when already on Official or when there is no Official", () => {
+    const base = { pickedOfficial: true, knownOfficialOrigins: known };
+    expect(officialServerMove({ ...base, storedOrigin: "https://homeup.vercel.app", officialUrl: "https://homeup.vercel.app" })).toBeNull();
+    expect(officialServerMove({ ...base, storedOrigin: "https://homeup.vercel.app", officialUrl: null })).toBeNull();
   });
 });

@@ -63,3 +63,37 @@ export function normalizeServerOrigin(input: string): string {
 
   return `${url.protocol}//${url.host}`;
 }
+
+// Emergency swap (.docs/server-swap.md): a phone that picked "Official"
+// follows the Official address, so moving the hosted service to another
+// server is one OTA that changes EXPO_PUBLIC_OFFICIAL_SERVER_URL, not a
+// manual server change on every phone. Returns the origin the phone should
+// move to, or null to stay. `pickedOfficial` is the stored marker; phones
+// from before it existed count as Official when their origin is one of
+// `knownOfficialOrigins` (the addresses Official has had). A server someone
+// typed in themselves never moves.
+export function officialServerMove(input: {
+  storedOrigin: string;
+  pickedOfficial: boolean;
+  officialUrl: string | null;
+  knownOfficialOrigins: readonly string[];
+}): string | null {
+  if (!input.officialUrl) return null;
+  let official: string;
+  try {
+    official = normalizeServerOrigin(input.officialUrl);
+  } catch {
+    return null;
+  }
+  if (input.storedOrigin === official) return null;
+  const wasOfficial =
+    input.pickedOfficial ||
+    input.knownOfficialOrigins.some((url) => {
+      try {
+        return normalizeServerOrigin(url) === input.storedOrigin;
+      } catch {
+        return false;
+      }
+    });
+  return wasOfficial ? official : null;
+}

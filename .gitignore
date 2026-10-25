@@ -85,3 +85,6 @@ packages/core/src/whats-new.generated.ts
 *.p12
 *.jks
 *.keystore
+
+# emergency server swap exports (scripts/server-swap/export-hosted.sh)
+server-export/
