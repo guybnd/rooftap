@@ -1,6 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { observable } from '@legendapp/state';
 import {
+  createFallbackScheduler,
   MAX_SERVER_ERROR_ATTEMPTS,
   reconcileDeletedRows,
   writeErrorAction,
@@ -109,5 +110,65 @@ describe('writeErrorAction', () => {
     expect(writeErrorAction(error, 500, { online: true, attempts: MAX_SERVER_ERROR_ATTEMPTS - 1 })).toBe('retry');
     expect(writeErrorAction(error, 500, { online: true, attempts: MAX_SERVER_ERROR_ATTEMPTS })).toBe('drop');
     expect(writeErrorAction({ message: 'JWT expired', code: 'PGRST301' }, 401, { online: true, attempts: MAX_SERVER_ERROR_ATTEMPTS })).toBe('drop');
+  });
+});
+
+// The fallback pull only runs fast while realtime is down. A healthy channel
+// already delivers every change, so polling each store every 20s on top of it
+// only filled the hosted Supabase request logs.
+describe('createFallbackScheduler', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const intervals = { fast: 20_000, healthy: 300_000 };
+
+  it('pulls fast until the channel joins, then slows to the safety net', () => {
+    vi.useFakeTimers();
+    const sync = vi.fn();
+    const scheduler = createFallbackScheduler(sync, intervals);
+    scheduler.start();
+    vi.advanceTimersByTime(40_000);
+    expect(sync).toHaveBeenCalledTimes(2);
+
+    scheduler.onChannelStatus('SUBSCRIBED');
+    expect(sync).toHaveBeenCalledTimes(2);
+    vi.advanceTimersByTime(299_000);
+    expect(sync).toHaveBeenCalledTimes(2);
+    vi.advanceTimersByTime(1_000);
+    expect(sync).toHaveBeenCalledTimes(3);
+  });
+
+  it('pulls at once on a channel failure, goes fast, and catches up on rejoin', () => {
+    vi.useFakeTimers();
+    const sync = vi.fn();
+    const scheduler = createFallbackScheduler(sync, intervals);
+    scheduler.start();
+    scheduler.onChannelStatus('SUBSCRIBED');
+
+    scheduler.onChannelStatus('CHANNEL_ERROR');
+    expect(sync).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(20_000);
+    expect(sync).toHaveBeenCalledTimes(2);
+
+    scheduler.onChannelStatus('SUBSCRIBED');
+    expect(sync).toHaveBeenCalledTimes(3);
+    vi.advanceTimersByTime(60_000);
+    expect(sync).toHaveBeenCalledTimes(3);
+  });
+
+  it('runs no timer while stopped (backgrounded)', () => {
+    vi.useFakeTimers();
+    const sync = vi.fn();
+    const scheduler = createFallbackScheduler(sync, intervals);
+    scheduler.start();
+    scheduler.stop();
+    scheduler.onChannelStatus('SUBSCRIBED');
+    vi.advanceTimersByTime(600_000);
+    expect(sync).not.toHaveBeenCalled();
+
+    scheduler.start();
+    vi.advanceTimersByTime(300_000);
+    expect(sync).toHaveBeenCalledTimes(1);
   });
 });

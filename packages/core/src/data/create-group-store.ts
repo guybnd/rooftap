@@ -80,11 +80,18 @@ export function ensureLegendConfigured(): void {
 // consumer (11 stores across the app already call `useReconnectSync(store$)`).
 const storeMeta = new WeakMap<Observable<GroupRecord<SyncedRow>>, { collection: string; groupId: string }>();
 
-// Fast delta cadence: caps worst-case staleness while the tab stays visible,
-// even if the realtime socket is fully dead. Delta-only (changesSince:
-// 'last-sync'), so it's cheap — but by construction it cannot backfill a row
-// that already sits below the advanced `lastSync` watermark.
-const FALLBACK_SYNC_INTERVAL_MS = 20_000;
+// Fast delta cadence: caps worst-case staleness while the realtime channel is
+// down. Delta-only (changesSince: 'last-sync'), so each pull is small — but by
+// construction it cannot backfill a row that already sits below the advanced
+// `lastSync` watermark.
+export const FALLBACK_SYNC_INTERVAL_MS = 20_000;
+// Safety-net cadence while the realtime channel reports SUBSCRIBED: realtime
+// already delivers every change, so this only catches a silently dropped event.
+// Polling every store every 20s regardless of channel health was the likely
+// main source of hosted Supabase log ingestion: about 20 mounted stores times two
+// requests (delta pull + delete reconcile) per tick is ~7,000 requests an hour
+// for each visible tab or open phone.
+export const HEALTHY_SYNC_INTERVAL_MS = 5 * 60_000;
 // Slow reset cadence (absorbs FLUX-266): the only thing that repairs a
 // permanent hole left by a dropped realtime event advancing `lastSync` past a
 // missed row. Group tables are small, so a daily full re-pull is trivial.
@@ -339,6 +346,68 @@ export function createGroupStore<T extends SyncedRow>(config: {
   return Object.assign(store$, { collection });
 }
 
+export interface FallbackScheduler {
+  /** Foregrounded: run the fallback timer at the cadence the channel health calls for. */
+  start(): void;
+  /** Backgrounded or unmounted: no timer at all. */
+  stop(): void;
+  /** Feed the watchdog channel's subscribe status in. */
+  onChannelStatus(status: string): void;
+}
+
+/**
+ * The fallback pull timer for one store, paced by realtime health: every 20s
+ * while the watchdog channel is down (or not yet joined), every 5 minutes
+ * while it is SUBSCRIBED. A channel failure pulls at once; a channel that
+ * rejoins after a failure pulls once more to catch up on what it missed.
+ */
+export function createFallbackScheduler(
+  sync: () => void,
+  intervals: { fast: number; healthy: number } = { fast: FALLBACK_SYNC_INTERVAL_MS, healthy: HEALTHY_SYNC_INTERVAL_MS },
+): FallbackScheduler {
+  let timer: ReturnType<typeof setInterval> | null = null;
+  let running = false;
+  let healthy = false;
+  let everFailed = false;
+
+  const clear = () => {
+    if (timer) {
+      clearInterval(timer);
+      timer = null;
+    }
+  };
+  const schedule = () => {
+    clear();
+    if (running) timer = setInterval(sync, healthy ? intervals.healthy : intervals.fast);
+  };
+
+  return {
+    start() {
+      if (running) return;
+      running = true;
+      schedule();
+    },
+    stop() {
+      running = false;
+      clear();
+    },
+    onChannelStatus(status) {
+      if (status === 'SUBSCRIBED') {
+        if (healthy) return;
+        healthy = true;
+        if (everFailed) sync();
+        schedule();
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+        everFailed = true;
+        sync();
+        if (!healthy) return;
+        healthy = false;
+        schedule();
+      }
+    },
+  };
+}
+
 interface SyncCoordinator {
   refCount: number;
   stop: () => void;
@@ -391,18 +460,12 @@ function acquireSyncCoordinator(
       void syncState(store$ as Observable).sync({ resetLastSync: true });
     };
 
-    let fastTimer: ReturnType<typeof setInterval> | null = null;
+    const scheduler = createFallbackScheduler(sync);
     const startTimer = () => {
-      if (fastTimer) return;
-      fastTimer = setInterval(sync, FALLBACK_SYNC_INTERVAL_MS);
+      scheduler.start();
       runResetIfDue();
     };
-    const stopTimer = () => {
-      if (fastTimer) {
-        clearInterval(fastTimer);
-        fastTimer = null;
-      }
-    };
+    const stopTimer = () => scheduler.stop();
 
     // Distinct "watchdog:" topic namespace — never the bare
     // `rt:${collection}:${groupId}` topic a feature channel might hold.
@@ -415,9 +478,7 @@ function acquireSyncCoordinator(
         { event: '*', schema: 'public', table: collection, filter: `group_id=eq.${groupId}` },
         () => {},
       )
-      .subscribe((status: string) => {
-        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') sync();
-      });
+      .subscribe((status: string) => scheduler.onChannelStatus(status));
 
     const unsubscribeForeground = env.subscribeForeground(startTimer, stopTimer);
     if (env.isForeground()) startTimer();
