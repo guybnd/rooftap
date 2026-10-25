@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useDataCache } from "@/lib/data-cache";
 import { useLegendPendingCount } from "@/lib/legend/sync-status";
-import { WifiOffIcon, CloudIcon, Loader2Icon, CheckIcon } from "lucide-react";
+import { dismissWriteFailures, useWriteFailures, type WriteFailure } from "@homeup/core";
+import { WifiOffIcon, CloudIcon, Loader2Icon, CheckIcon, AlertCircleIcon } from "lucide-react";
 
 // How long the brief "synced" confirmation stays up once pending drains to 0.
 const SYNCED_CONFIRMATION_MS = 2500;
@@ -15,6 +16,9 @@ export function OfflineIndicator() {
   // hand-rolled sync-queue.ts counter it used to add here was retired
   // alongside it (it was always 0 anyway; nothing ever enqueued to it).
   const totalPending = useLegendPendingCount();
+  // Writes the server refused (dropped from the outbox), so a change that
+  // never landed is said out loud instead of hanging as "Syncing" forever.
+  const failures = useWriteFailures();
 
   // Tracks whether there was pending work recently, so draining to 0 shows a
   // brief "synced" confirmation instead of silently vanishing — distinct from
@@ -34,6 +38,8 @@ export function OfflineIndicator() {
       return () => clearTimeout(timer);
     }
   }, [isOnline, totalPending]);
+
+  if (isOnline && failures.length > 0) return <WriteFailureBanner failures={failures} />;
 
   if (isOnline && totalPending === 0 && !showSynced) return null;
 
@@ -72,7 +78,9 @@ export function OfflineIndicator() {
     return (
       <div className="mx-4 mt-2 flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-xs text-primary md:mx-6">
         <Loader2Icon className="h-3.5 w-3.5 shrink-0 animate-spin" />
-        <span className="flex-1">Syncing {totalPending} pending changes...</span>
+        <span className="flex-1">
+          Syncing {totalPending} pending {totalPending === 1 ? "change" : "changes"}...
+        </span>
         <CloudIcon className="h-3.5 w-3.5 shrink-0" />
       </div>
     );
@@ -84,6 +92,37 @@ export function OfflineIndicator() {
     <div className="mx-4 mt-2 flex items-center gap-2 rounded-lg border border-success/30 bg-success/10 px-3 py-2 text-xs text-success md:mx-6">
       <CheckIcon className="h-3.5 w-3.5 shrink-0" />
       <span className="flex-1">Synced</span>
+    </div>
+  );
+}
+
+function tableLabel(collection: string): string {
+  return collection.replace(/_/g, " ");
+}
+
+function WriteFailureBanner({ failures }: { failures: WriteFailure[] }) {
+  const latest = failures[failures.length - 1];
+  const count = failures.length;
+  return (
+    <div
+      role="alert"
+      className="mx-4 mt-2 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive md:mx-6"
+    >
+      <AlertCircleIcon className="mt-px h-3.5 w-3.5 shrink-0" />
+      <span className="min-w-0 flex-1">
+        {count === 1
+          ? `A change to ${tableLabel(latest.collection)} couldn't be saved.`
+          : `${count} changes couldn't be saved.`}{" "}
+        It stays on this device only.
+        <span className="mt-0.5 block break-words opacity-70">{latest.message}</span>
+      </span>
+      <button
+        type="button"
+        onClick={dismissWriteFailures}
+        className="shrink-0 rounded-md px-2 py-0.5 font-medium hover:bg-destructive/15"
+      >
+        Dismiss
+      </button>
     </div>
   );
 }

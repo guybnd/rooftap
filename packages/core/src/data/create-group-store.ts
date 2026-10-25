@@ -32,6 +32,7 @@ import { onChangeRemote } from '@legendapp/state/sync';
 import { syncedSupabase, configureSyncedSupabase } from '@legendapp/state/sync-plugins/supabase';
 import { useCallback, useEffect } from 'react';
 import { getStoreEnvironment, envRandomUUID, type StoreEnvironment } from './store-environment';
+import { reportWriteFailure } from './write-failures';
 
 // Minimum shape every synced row must have.
 export interface SyncedRow {
@@ -179,6 +180,28 @@ function isTransientWriteError(
   return String(error.code ?? '') === 'PGRST301';
 }
 
+// Stuck-sync fix: a server that answers with a "transient" error (5xx, 401,
+// 429, a statement timeout) on every attempt used to be retried forever, so
+// one bad row kept the "Syncing 1 pending change" banner up for good. Only a
+// write that got no answer at all (offline, dropped connection) may wait
+// indefinitely. One the server keeps refusing gets this many attempts
+// (1s + 2s + 4s + ... about 2 minutes with the backoff below), then it is
+// dropped and reported like a permanent error.
+export const MAX_SERVER_ERROR_ATTEMPTS = 8;
+
+export type WriteErrorAction = 'retry' | 'drop';
+
+export function writeErrorAction(
+  error: { message?: string; code?: string },
+  status: number | undefined,
+  context: { online: boolean; attempts: number },
+): WriteErrorAction {
+  if (!isTransientWriteError(error, status)) return 'drop';
+  // No HTTP status means the request never got an answer.
+  if (!context.online || !status) return 'retry';
+  return context.attempts < MAX_SERVER_ERROR_ATTEMPTS ? 'retry' : 'drop';
+}
+
 /**
  * Returns a `store$(groupId)` function backed by a memoised synced observable.
  * Call once at module level per table:
@@ -208,6 +231,8 @@ export function createGroupStore<T extends SyncedRow>(config: {
   const logTag = config.logTag ?? `[legend ${collection}]`;
 
   const stores = new Map<string, Observable<GroupRecord<T>>>();
+  // Server-error attempts per row id since its last success (see writeErrorAction).
+  const serverErrorAttempts = new Map<string, number>();
   const empty$ = observable<GroupRecord<T>>({});
 
   function store$(groupId: string | undefined | null): Observable<GroupRecord<T>> {
@@ -217,6 +242,45 @@ export function createGroupStore<T extends SyncedRow>(config: {
 
     let store = stores.get(groupId);
     if (!store) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const pushRow = async (input: any): Promise<any> => {
+        const key = String(input?.id);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const res = await (env.supabase.from(collection) as any)
+          .upsert(input, { onConflict: 'id' })
+          .select();
+        const { data, error } = res;
+        if (error) {
+          const attempts = (serverErrorAttempts.get(key) ?? 0) + 1;
+          if (res.status) serverErrorAttempts.set(key, attempts);
+          // Transient failure (network drop, aborted fetch, expired JWT,
+          // rate limit, 5xx) → rethrow so runWithRetry backs off and
+          // retries, and retrySync replays it across restarts (upsert is
+          // idempotent, so retrying is always safe). Returning instead of
+          // throwing marks the write SAVED and drops it permanently while
+          // the row stays visible in the local cache — that is how recipe
+          // ingredients and checklist items went missing on every other
+          // device (FLUX-263). A server that refuses it every time is capped
+          // by writeErrorAction, so the outbox can't stall on it forever.
+          if (writeErrorAction(error, res.status, { online: env.isOnline(), attempts }) === 'retry') {
+            throw error instanceof Error ? error : new Error(String(error.message ?? error));
+          }
+          // Permanent error (RLS / constraint / schema, or a server error
+          // that never cleared). Do NOT return {error} here: Legend's
+          // wrapSupabaseFn reads onError off the input row for the create
+          // path (a library quirk) and would throw a confusing TypeError.
+          // Log and report it ourselves, and drop the write.
+          serverErrorAttempts.delete(key);
+          console.warn(logTag, error);
+          reportWriteFailure(collection, key, error);
+          return { data: null, error: null };
+        }
+        serverErrorAttempts.delete(key);
+        // wrapSupabaseFn hands this `data` straight to saveResult, which wants
+        // a single row — not the array .select() returns. Unwrap [0] here.
+        return { data: (data as unknown[] | null)?.[0] ?? null, error: null };
+      };
+
       store = observable(
         syncedSupabase({
           supabase: env.supabase,
@@ -236,62 +300,19 @@ export function createGroupStore<T extends SyncedRow>(config: {
           // and bumps updated_at, so the retry returns 200 with real timestamps
           // instead of failing. Bonus: this self-heals any stale created_at:null
           // rows left in IndexedDB by older builds — no manual cache clear needed.
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          create: async (input: any): Promise<any> => {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const res = await (env.supabase.from(collection) as any)
-              .upsert(input, { onConflict: 'id' })
-              .select();
-            const { data, error } = res;
-            if (error) {
-              // Transient failure (network drop, aborted fetch, expired JWT,
-              // rate limit, 5xx) → rethrow so runWithRetry backs off and
-              // retries, and retrySync replays it across restarts (upsert is
-              // idempotent, so retrying is always safe). Returning instead of
-              // throwing marks the write SAVED and drops it permanently while
-              // the row stays visible in the local cache — that is how recipe
-              // ingredients and checklist items went missing on every other
-              // device (FLUX-263).
-              if (isTransientWriteError(error, res.status)) {
-                throw error instanceof Error ? error : new Error(String(error.message ?? error));
-              }
-              // Genuine permanent error (RLS / constraint / schema). Do NOT
-              // return {error} here: Legend's wrapSupabaseFn reads onError off
-              // the input row for the create path (a library quirk) and would
-              // throw a confusing TypeError. Log it ourselves and drop the write.
-              console.warn(logTag, error);
-              return { data: null, error: null };
-            }
-            // wrapSupabaseFn hands this `data` straight to saveResult, which wants
-            // a single row — not the array .select() returns. Unwrap [0] here.
-            return { data: (data as unknown[] | null)?.[0] ?? null, error: null };
-          },
-          // FLUX-265: idempotent update — the same "ghost row" fix as `create`
-          // above, but for the UPDATE path. If a row exists in this device's
-          // local cache but never reached Supabase (a hole left by a dropped
-          // create, e.g. pre-FLUX-263), the default `.update().eq('id', ...)`
-          // matches 0 server rows and returns `data: []` — treated as success,
-          // so the edit silently syncs nowhere. upsert self-heals the hole by
+          //
+          // FLUX-265: update uses the same upsert — the "ghost row" fix for the
+          // UPDATE path. If a row exists in this device's local cache but never
+          // reached Supabase (a hole left by a dropped create, e.g.
+          // pre-FLUX-263), the default `.update().eq('id', ...)` matches 0
+          // server rows and returns `data: []` — treated as success, so the
+          // edit silently syncs nowhere. upsert self-heals the hole by
           // recreating the row with the edit applied. Safe because deletes are
           // soft (tombstone `deleted` column), so upsert can never resurrect a
           // hard-deleted row, and the store syncs with updatePartial: false, so
           // `input` here is always the full row — valid as an insert too.
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          update: async (input: any): Promise<any> => {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const res = await (env.supabase.from(collection) as any)
-              .upsert(input, { onConflict: 'id' })
-              .select();
-            const { data, error } = res;
-            if (error) {
-              if (isTransientWriteError(error, res.status)) {
-                throw error instanceof Error ? error : new Error(String(error.message ?? error));
-              }
-              console.warn(logTag, error);
-              return { data: null, error: null };
-            }
-            return { data: (data as unknown[] | null)?.[0] ?? null, error: null };
-          },
+          create: pushRow,
+          update: pushRow,
           // Gotcha 1: plugin must be passed explicitly — it is NOT inherited.
           // HOUP-70: also where the group-scoping fix lives — the env's
           // getPersistConfig keys the local cache by groupId, not just

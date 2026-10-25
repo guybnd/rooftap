@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { observable } from '@legendapp/state';
-import { reconcileDeletedRows, type GroupRecord, type SyncedRow } from './create-group-store';
+import {
+  MAX_SERVER_ERROR_ATTEMPTS,
+  reconcileDeletedRows,
+  writeErrorAction,
+  type GroupRecord,
+  type SyncedRow,
+} from './create-group-store';
 
 interface Row extends SyncedRow {
   title: string;
@@ -76,5 +82,32 @@ describe('reconcileDeletedRows', () => {
     expect(store$.peek()).toEqual({
       'task-a': { id: 'task-a', group_id: 'group-1', deleted: false, title: 'Buy milk' },
     });
+  });
+});
+
+// Stuck-sync fix: a write the server keeps refusing must not hold the outbox
+// (and the "Syncing 1 pending change" banner) forever.
+describe('writeErrorAction', () => {
+  const online = { online: true, attempts: 1 };
+
+  it('drops a permanent error at once', () => {
+    expect(writeErrorAction({ message: 'violates row-level security', code: '42501' }, 403, online)).toBe('drop');
+  });
+
+  it('keeps retrying a request that got no answer, however many times it failed', () => {
+    const error = { message: 'TypeError: Failed to fetch' };
+    expect(writeErrorAction(error, 0, { online: true, attempts: 500 })).toBe('retry');
+    expect(writeErrorAction(error, undefined, { online: true, attempts: 500 })).toBe('retry');
+  });
+
+  it('keeps retrying while offline', () => {
+    expect(writeErrorAction({ message: 'server error' }, 503, { online: false, attempts: 500 })).toBe('retry');
+  });
+
+  it('retries a server error a few times, then drops it', () => {
+    const error = { message: 'canceling statement due to statement timeout', code: '57014' };
+    expect(writeErrorAction(error, 500, { online: true, attempts: MAX_SERVER_ERROR_ATTEMPTS - 1 })).toBe('retry');
+    expect(writeErrorAction(error, 500, { online: true, attempts: MAX_SERVER_ERROR_ATTEMPTS })).toBe('drop');
+    expect(writeErrorAction({ message: 'JWT expired', code: 'PGRST301' }, 401, { online: true, attempts: MAX_SERVER_ERROR_ATTEMPTS })).toBe('drop');
   });
 });

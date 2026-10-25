@@ -2,6 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { dismissWriteFailures, reportWriteFailure } from "@homeup/core";
 import { OfflineIndicator } from "./offline-indicator";
 
 // FLUX-150 retired the old hand-rolled sync-queue counter that useDataCache
@@ -28,6 +29,7 @@ describe("OfflineIndicator", () => {
   beforeEach(() => {
     dataCacheState.current = { isOnline: true, lastSyncedAt: null };
     pendingState.current = 0;
+    dismissWriteFailures();
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -91,6 +93,30 @@ describe("OfflineIndicator", () => {
 
     await act(async () => {
       vi.advanceTimersByTime(1);
+    });
+    expect(container.textContent).toBe("");
+  });
+
+  it("says one change is pending in the singular", async () => {
+    pendingState.current = 1;
+
+    await renderIndicator();
+
+    expect(container.textContent).toContain("Syncing 1 pending change...");
+  });
+
+  it("shows a refused write instead of syncing forever, and Dismiss clears it", async () => {
+    pendingState.current = 0;
+    reportWriteFailure("household_tasks", "task-1", { message: "canceling statement due to statement timeout" });
+
+    await renderIndicator();
+
+    expect(container.textContent).toContain("A change to household tasks couldn't be saved.");
+    expect(container.textContent).toContain("statement timeout");
+
+    const button = Array.from(container.querySelectorAll("button")).find((b) => b.textContent === "Dismiss");
+    await act(async () => {
+      button?.click();
     });
     expect(container.textContent).toBe("");
   });
