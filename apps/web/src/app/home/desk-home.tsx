@@ -8,8 +8,9 @@
 // height back to the content. Done keeps the grid on this browser. Outside
 // Arrange nothing drags, so taps and right-clicks work as before.
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import ReactGridLayout, { useContainerWidth, verticalCompactor, type Layout, type ResizeHandleAxis } from 'react-grid-layout';
+import { useCallback, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { flushSync } from 'react-dom';
+import ReactGridLayout, { bottom, calcGridItemPosition, verticalCompactor, type Layout, type ResizeHandleAxis } from 'react-grid-layout';
 import { GripVertical, MoveVertical } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -37,16 +38,26 @@ export interface DeskModule {
 }
 
 const HANDLES: ResizeHandleAxis[] = ['e', 'w', 's', 'se', 'sw'];
+const MARGIN: [number, number] = [20, 0];
+const PADDING: [number, number] = [0, 0];
 
 export function DeskHome({ modules }: { modules: Record<string, DeskModule> }) {
-  const [items, setItems] = useState<DeskItem[]>(DEFAULT_DESK_ITEMS);
+  // The grid only renders on a wide screen, which the server never assumes,
+  // so the saved arrangement is read for the first paint, not after it.
+  const [items, setItems] = useState<DeskItem[]>(() => (typeof window === 'undefined' ? DEFAULT_DESK_ITEMS : readDeskItems()));
   const [arranging, setArranging] = useState(false);
-  const { width, containerRef, mounted } = useContainerWidth();
-  // Read after mount so the server render and the first paint agree.
-  useEffect(() => setItems(readDeskItems()), []);
+  const { width, containerRef } = useGridWidth();
 
   const shown = items.filter((it) => modules[it.i]?.node);
   const layout: Layout = shown.map((it) => ({ i: it.i, x: it.x, y: it.y, w: it.w, h: it.h, minW: DESK_MIN_W, minH: DESK_MIN_H }));
+
+  // The grid copies its layout prop into its own state in an effect, so it
+  // places modules a frame or more after they change. On load a module that
+  // grows to its content painted over the one under it until the grid caught
+  // up. Outside Arrange the modules are placed from the same layout in this
+  // render instead (globals.css reads these variables), so a module and its
+  // neighbours move in the same frame.
+  const placed = width ? placeModules(layout, width) : null;
 
   // A fitting module reports its content height; its rows follow it.
   const onMeasure = useCallback((id: string, px: number) => {
@@ -104,12 +115,16 @@ export function DeskHome({ modules }: { modules: Record<string, DeskModule> }) {
           {arranging ? 'Done' : 'Arrange'}
         </button>
       </div>
-      <div ref={containerRef} className={cn('desk-grid -mx-2.5', arranging && 'desk-arranging select-none')}>
-        {mounted && (
+      <div
+        ref={containerRef}
+        className={cn('desk-grid -mx-2.5', arranging && 'desk-arranging select-none')}
+        style={placed ? ({ '--desk-height': `${placed.height}px` } as CSSProperties) : undefined}
+      >
+        {width > 0 && (
           <ReactGridLayout
             layout={layout}
             width={width}
-            gridConfig={{ cols: DESK_COLS, rowHeight: DESK_ROW_PX, margin: [20, 0], containerPadding: [0, 0] }}
+            gridConfig={{ cols: DESK_COLS, rowHeight: DESK_ROW_PX, margin: MARGIN, containerPadding: PADDING }}
             dragConfig={{ enabled: arranging, handle: '.desk-grip', threshold: 4 }}
             resizeConfig={{
               enabled: arranging,
@@ -121,7 +136,7 @@ export function DeskHome({ modules }: { modules: Record<string, DeskModule> }) {
             onResizeStop={onResizeStop}
           >
             {shown.map((it) => (
-              <div key={it.i}>
+              <div key={it.i} style={placeStyle(placed?.at.get(it.i))}>
                 <DeskCell
                   id={it.i}
                   label={modules[it.i].label}
@@ -140,6 +155,39 @@ export function DeskHome({ modules }: { modules: Record<string, DeskModule> }) {
       </div>
     </div>
   );
+}
+
+/** The grid's measure of the container: before the first paint, then on every resize in the same frame. */
+function useGridWidth() {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(0);
+  useLayoutEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const read = () => setWidth(Math.round(el.clientWidth));
+    read();
+    const ro = new ResizeObserver(() => flushSync(read));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return { width, containerRef };
+}
+
+function placeModules(layout: Layout, width: number) {
+  const compacted = verticalCompactor.compact(layout, DESK_COLS);
+  const params = { cols: DESK_COLS, rowHeight: DESK_ROW_PX, margin: MARGIN, containerPadding: PADDING, containerWidth: width, maxRows: Infinity };
+  const at = new Map(compacted.map((l) => [l.i, calcGridItemPosition(params, l.x, l.y, l.w, l.h)]));
+  return { at, height: bottom(compacted) * DESK_ROW_PX };
+}
+
+function placeStyle(pos: { left: number; top: number; width: number; height: number } | undefined): CSSProperties | undefined {
+  if (!pos) return undefined;
+  return {
+    '--desk-x': `${pos.left}px`,
+    '--desk-y': `${pos.top}px`,
+    '--desk-w': `${pos.width}px`,
+    '--desk-h': `${pos.height}px`,
+  } as CSSProperties;
 }
 
 function renderNode(node: DeskModule['node'], cols: number): ReactNode {
@@ -171,7 +219,8 @@ function DeskCell({
     if (!el || !fit) return;
     const report = () => onMeasure(id, el.offsetHeight);
     report();
-    const ro = new ResizeObserver(report);
+    // Rendered before the browser paints, so neighbours move with the growth.
+    const ro = new ResizeObserver(() => flushSync(report));
     ro.observe(el);
     return () => ro.disconnect();
   }, [id, fit, onMeasure, cols]);

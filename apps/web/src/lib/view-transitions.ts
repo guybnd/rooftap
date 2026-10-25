@@ -93,7 +93,7 @@ function holdNavContent(target: string | undefined): void {
 
 // Hearth §8.1 "Arrive": a page that lands after a tab switch fills in as a
 // cascade, its blocks fading and rising into place one after another from
-// the top, instead of appearing at once. Transform and opacity only, so it
+// the top, instead of appearing at once. Translate and opacity only, so it
 // stays smooth while the page is still settling.
 // Timing shared with native (core ARRIVE); at most this many blocks.
 const ARRIVE_MAX_BLOCKS = 16;
@@ -147,8 +147,12 @@ function revealCascade(region: HTMLElement): void {
   arriveBlocks(region).forEach((el, i) => {
     el.animate(
       [
-        { opacity: 0, transform: `translateY(${ARRIVE.risePx}px)` },
-        { opacity: 1, transform: "translateY(0)" },
+        // `translate`, not `transform`: a block placed by its own transform
+        // (a Home grid module, a carousel slide) keeps its place while it
+        // rises. Animating `transform` replaced it, so Home's modules piled
+        // up at the grid's top-left for the length of the cascade.
+        { opacity: 0, translate: `0 ${ARRIVE.risePx}px` },
+        { opacity: 1, translate: "0 0" },
       ],
       {
         duration: ARRIVE.durationMs,

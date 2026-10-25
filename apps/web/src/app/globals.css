@@ -1239,6 +1239,18 @@ html:not([data-layout="classic"]) .desk-classic {
 .desk-grid .react-grid-item {
   transition: height var(--motion-base) var(--motion-ease-out);
 }
+/* Outside Arrange desk-home.tsx places each module itself, in the same
+   render that changed it; the grid's own inline position trails by a frame. */
+.desk-grid:not(.desk-arranging) .react-grid-layout {
+  height: var(--desk-height) !important;
+}
+.desk-grid:not(.desk-arranging) .react-grid-item {
+  top: 0 !important;
+  left: 0 !important;
+  width: var(--desk-w) !important;
+  height: var(--desk-h) !important;
+  transform: translate(var(--desk-x), var(--desk-y)) !important;
+}
 /* Modules glide to a new spot only in Arrange; a window resize follows at once. */
 .desk-grid.desk-arranging .react-grid-item {
   transition: transform var(--motion-base) var(--motion-ease-out), width var(--motion-base) var(--motion-ease-out),
