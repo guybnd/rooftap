@@ -6,17 +6,17 @@
 // read-only via read-merge, deduped by storage path. So every file in the group
 // is visible here regardless of which surface uploaded it.
 
-import { Suspense, useState, useEffect, useCallback, useMemo } from 'react';
+import { Suspense, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useDataCache } from '@/lib/data-cache';
 import { useGroupTableRefetch } from '@/lib/hooks/use-group-table-realtime';
 import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
-import { useWideLayout } from '@/lib/desktop-layout';
+import { useMediaQuery, useWideLayout } from '@/lib/desktop-layout';
 import { use$ } from '@legendapp/state/react';
-import { listUnifiedDocuments, listLinksForGroup, deleteDocument, deleteLegacyDocument, adoptLegacyDocument, docTypeLabel, type UnifiedDocument } from '@/lib/documents';
+import { listUnifiedDocuments, listLinksForGroup, deleteDocument, deleteLegacyDocument, adoptLegacyDocument, docTypeLabel, uploadDocument, DOCUMENT_ACCEPT_ATTR, type UnifiedDocument } from '@/lib/documents';
 import { deleteDocumentReminder } from '@homeup/core';
 import { dialog } from '@homeup/core';
-import { DocumentsSectionLabel, FolderPath, FolderTile, NewFolderButton, ROW_LEAVE_MS } from '@/components/documents/folder-browser';
+import { DocumentsSectionLabel, FolderPath, NewFolderButton, ROW_LEAVE_MS } from '@/components/documents/folder-browser';
 import { EmptyState } from '@/components/ui/empty-state';
 import { useCapture } from '@/components/capture/capture-context';
 import { commit as hapticCommit, warn as hapticWarn } from '@/lib/haptics';
@@ -24,6 +24,7 @@ import { FolderMoveSheet } from '@/components/documents/folder-move-sheet';
 import { DocumentCalendarFlow, type CalendarDoc } from '@/components/documents/document-calendar-flow';
 import { FolderDeleteSheet } from '@/components/documents/folder-delete-sheet';
 import { Button } from '@/components/ui/button';
+import { BottomSheet } from '@/components/ui/bottom-sheet';
 import {
   listDocumentFolders,
   createDocumentFolder,
@@ -36,6 +37,9 @@ import {
   documentLinksByDoc,
   documentReminderMap,
   groupDocumentsByCost,
+  documentExpiryCounts,
+  folderBreadcrumb,
+  quickUploadFields,
   TYPE_FILTERS,
   PRESETS,
   sameSet,
@@ -51,8 +55,10 @@ import { HeroLede } from '@/components/ui/hero-lede';
 import { SectionSearchBar } from '@/components/section-search-bar';
 import { SegmentedControl, type SegmentOption } from '@/components/ui/segmented-control';
 import type { Document, DocumentLink, CostItem } from '@homeup/core';
-import { ChevronDown, FileText, FolderInput, FolderOpen, Loader2, Plus, SearchX, Trash2, X } from 'lucide-react';
-import { DocumentCard } from './document-card';
+import { ArrowDown, ChevronDown, ChevronRight, FileText, FolderInput, FolderOpen, Loader2, MousePointerClick, Plus, SearchX, Trash2, Upload, X } from 'lucide-react';
+import { DocumentCard, DOC_TABLE_COLUMNS } from './document-card';
+import { DOC_DRAG_TYPE, FolderTableRow, FolderTree, type ExplorerView } from '@/components/documents/folder-tree';
+import { DocumentInspector } from '@/components/documents/document-inspector';
 const EXPIRY_OPTIONS: SegmentOption<'all' | 'soon' | 'expired'>[] = [
   { value: 'all', label: 'All' },
   { value: 'soon', label: 'Expiring' },
@@ -196,6 +202,11 @@ function DocumentsView() {
   // between folders, so a selection can gather files from anywhere.
   const [selecting, setSelecting] = useState(false);
   const wide = useWideLayout();
+  // The wide explorer's preview pane: the file it shows, by list key.
+  const [activeKey, setActiveKey] = useState<string | null>(null);
+  // The pane needs the wide layout at Tailwind's xl; narrower, the picked
+  // file opens in a sheet instead (the phone's file sheet).
+  const paneOpen = useMediaQuery('(min-width: 1280px)') && wide;
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   // What the bulk move sheet is filing, read when it opens so its title holds
   // while it dismisses (the selection clears the moment a folder is picked).
@@ -616,8 +627,431 @@ function DocumentsView() {
       selecting={selecting}
       selected={selectedKeys.has(doc.key)}
       onToggleSelect={() => toggleSelect(doc)}
+      // A tap picks the file: the wide explorer shows it in its preview
+      // pane, anywhere narrower in the file sheet. A double-click opens it.
+      onActivate={() => setActiveKey(doc.key)}
+      active={paneOpen && activeKey === doc.key}
+      {...(wide && {
+        layout: 'table' as const,
+        onDragStart: (e: React.DragEvent) => {
+          e.dataTransfer.setData(DOC_DRAG_TYPE, doc.key);
+          e.dataTransfer.effectAllowed = 'move';
+        },
+      })}
     />
   );
+
+  // ── The wide explorer (Hearth §13.7 "Desktop shell"): folder tree, file
+  // table and preview pane. Phones and the classic layout keep the list.
+  const activeDoc = activeKey ? (docs.find((d) => d.key === activeKey) ?? null) : null;
+  const explorerView: ExplorerView =
+    expiryFilter !== 'all' && search.trim() === '' && categoryFilters.size === 0 && tagFilters.length === 0
+      ? expiryFilter
+      : 'folder';
+  const allExpiry = useMemo(() => documentExpiryCounts(docs), [docs]);
+
+  const openInTree = (id: string | null) => {
+    clearAllFilters();
+    setFolderId(id);
+  };
+  const showView = (view: 'soon' | 'expired') => {
+    clearAllFilters();
+    setExpiryFilter(view);
+  };
+
+  // A document dragged onto a folder in the tree or the table is filed
+  // there, the same as Move to folder.
+  const dropDocument = (docKey: string, destination: string | null) => {
+    const doc = docs.find((d) => d.key === docKey);
+    if (!doc || (doc.folderId ?? null) === destination) return;
+    const name = destination ? (folders.find((f) => f.id === destination)?.name ?? 'folder') : 'All documents';
+    void fileDocuments([doc], destination, name);
+  };
+
+  // Files picked or dropped from the computer go straight into the open
+  // folder, filed by kind (quickUploadFields); Edit details refines them.
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(0);
+  const [fileDragOver, setFileDragOver] = useState(false);
+  const uploadFiles = async (files: File[]) => {
+    if (!groupId || files.length === 0) return;
+    const into = explorerView === 'folder' && !search.trim() ? folderId : null;
+    setUploading((n) => n + files.length);
+    const supabase = createClient();
+    let failed = 0;
+    for (const file of files) {
+      try {
+        await uploadDocument({ supabase, groupId, file, source: 'capture', folderId: into, ...quickUploadFields(file.name, file.type || null) });
+      } catch (e) {
+        failed += 1;
+        toast.error(e instanceof Error ? e.message : "Couldn't add that file");
+      } finally {
+        setUploading((n) => n - 1);
+      }
+    }
+    const added = files.length - failed;
+    if (added > 0) {
+      hapticCommit();
+      const where = into ? (folders.find((f) => f.id === into)?.name ?? 'the folder') : 'Documents';
+      toast.success(added === 1 ? `Added to ${where}` : `Added ${added} files to ${where}`);
+    }
+    await load();
+  };
+  const fileDrop = {
+    onDragOver: (e: React.DragEvent) => {
+      if (!e.dataTransfer.types.includes('Files')) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+      setFileDragOver(true);
+    },
+    onDragLeave: (e: React.DragEvent) => {
+      if (!e.currentTarget.contains(e.relatedTarget as Node)) setFileDragOver(false);
+    },
+    onDrop: (e: React.DragEvent) => {
+      setFileDragOver(false);
+      if (e.dataTransfer.files.length === 0) return;
+      e.preventDefault();
+      void uploadFiles([...e.dataTransfer.files]);
+    },
+  };
+
+  // The column headers sort the table: name A to Z, soonest expiry, newest.
+  const sortHeader = (by: typeof sort, label: string, className?: string) => (
+    <button
+      type="button"
+      onClick={() => setSort(by)}
+      aria-sort={sort === by ? (by === 'recent' ? 'descending' : 'ascending') : undefined}
+      className={cn('flex items-center gap-1 text-left transition-colors hover:text-foreground', sort === by && 'text-foreground', className)}
+    >
+      {label}
+      {sort === by && <ArrowDown className="h-3 w-3" />}
+    </button>
+  );
+
+  const inspector = (activeDoc: UnifiedDocument) => (
+    <DocumentInspector
+      key={activeDoc.key}
+      doc={activeDoc}
+      docLinks={activeDoc.storeId ? (linksByDoc.get(activeDoc.storeId) ?? []) : []}
+      costItems={costItems}
+      costNames={costNames}
+      folders={folders}
+      memberProfiles={memberProfiles}
+      reminderTaskId={activeDoc.storeId ? (reminderByDoc[activeDoc.storeId] ?? null) : null}
+      onOpenReminder={reminderLinkOn ? (taskId) => router.push(`/tasks?focus=${taskId}`) : null}
+      onOpenLink={(link) => router.push(documentLinkHref(link))}
+      onToggleTag={toggleTagFilter}
+      onMoveToFolder={(storeId) => {
+        // The file sheet steps aside for the move sheet; the pane stays.
+        if (!paneOpen) setActiveKey(null);
+        startMove({ kind: 'document', id: storeId, from: activeDoc.folderId ?? null, name: activeDoc.title || activeDoc.filename });
+      }}
+      onChanged={load}
+      onClose={() => setActiveKey(null)}
+    />
+  );
+
+  const overlays = (
+    <>
+      {/* Narrower than the explorer's pane, the picked file opens in a sheet. */}
+      <BottomSheet open={!paneOpen && !!activeDoc} onOpenChange={(open) => !open && setActiveKey(null)} className="max-h-[88dvh]">
+        {activeDoc && inspector(activeDoc)}
+      </BottomSheet>
+      <FolderMoveSheet
+        open={moveOpen}
+        onOpenChange={setMoveOpen}
+        folders={folders}
+        // Moving a folder must not offer its own subtree as a destination.
+        movingFolderId={moving?.kind === 'folder' ? moving.id : null}
+        currentFolderId={moving?.from ?? null}
+        title={moving?.kind === 'folder' ? 'Move folder to' : 'Move document to'}
+        itemName={moving?.name ?? null}
+        onSelect={handleMoveSelection}
+        onCreateAndMove={handleCreateAndMove}
+      />
+
+      <FolderMoveSheet
+        open={bulkMoveOpen}
+        onOpenChange={setBulkMoveOpen}
+        folders={folders}
+        movingFolderId={null}
+        currentFolderId={bulkMove.from}
+        title={`Move ${countLabel(bulkMove.count)} to`}
+        itemName={null}
+        onSelect={moveSelected}
+        onCreateAndMove={createAndMoveSelected}
+      />
+
+      {calendarOn && <DocumentCalendarFlow doc={calendarDoc} onClose={() => setCalendarDoc(null)} onLinked={() => void load()} />}
+
+      <FolderDeleteSheet
+        open={deleteFolderOpen}
+        onOpenChange={setDeleteFolderOpen}
+        folderName={deleting?.name ?? 'this folder'}
+        documentCount={deleting?.count ?? 0}
+        onDelete={deleteFolder}
+      />
+
+      {selecting && (
+        <div
+          role="toolbar"
+          aria-label="Selected documents"
+          className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 z-40 flex w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 items-center gap-2 rounded-2xl border border-border bg-popover py-2 pl-4 pr-2 shadow-xl shadow-black/40"
+        >
+          <span className="min-w-0 flex-1 truncate text-sm font-medium tabular-nums text-foreground" aria-live="polite">
+            {selectedKeys.size === 0 ? 'Tap documents to select' : `${selectedKeys.size} selected`}
+          </span>
+          <Button size="sm" variant="outline" disabled={selectedKeys.size === 0} onClick={openBulkMove}>
+            <FolderInput className="h-3.5 w-3.5" />
+            Move
+          </Button>
+          {/* E4: destructive is danger text, never a fill. */}
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={selectedKeys.size === 0}
+            onClick={deleteSelected}
+            className="text-destructive hover:text-destructive"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Delete
+          </Button>
+          <button
+            type="button"
+            onClick={exitSelect}
+            aria-label="Stop selecting"
+            className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+    </>
+  );
+
+  // The type filter as one select: every type, the presets first.
+  const typeValue =
+    categoryFilters.size === 0
+      ? ''
+      : (PRESETS.find((p) => sameSet(categoryFilters, p.types))?.label ?? (categoryFilters.size === 1 ? [...categoryFilters][0] : 'custom'));
+  const pickType = (value: string) => {
+    if (!value) return setCategoryFilters(new Set());
+    const preset = PRESETS.find((p) => p.label === value);
+    setCategoryFilters(new Set(preset ? preset.types : [value as (typeof TYPE_FILTERS)[number]]));
+  };
+  const crumbs = explorerView === 'folder' && browsing ? folderBreadcrumb(folders, folderId) : [];
+  const tableDocs = groupDocumentsByCost(sortedDocs, costIdByKey);
+  const filtered = !browsing;
+  const heroValue = explorerView === 'folder' && browsing ? ledeDocs.length : sortedDocs.length;
+  const heroLabel =
+    explorerView === 'soon'
+      ? 'expiring soon'
+      : explorerView === 'expired'
+        ? 'expired'
+        : filtered
+          ? heroValue === 1 ? 'match' : 'matches'
+          : openFolder
+            ? `in ${openFolder.name}`
+            : heroValue === 1 ? 'file' : 'files';
+
+  const explorer = (
+    <div className={cn('mx-auto grid max-w-[1680px] grid-cols-[15.5rem_minmax(0,1fr)] items-start xl:grid-cols-[15.5rem_minmax(0,1fr)_23rem]', selecting && 'pb-28')}>
+      <div className="sticky top-0 flex h-[calc(100dvh-4rem)] min-h-0 flex-col border-r border-border/60">
+        <FolderTree
+          folders={folders}
+          documents={docs}
+          folderId={browsing ? folderId : null}
+          view={explorerView}
+          totalCount={docs.length}
+          soonCount={allExpiry.soon}
+          expiredCount={allExpiry.expired}
+          receivingFolderId={receivingFolderId}
+          onOpenFolder={openInTree}
+          onView={showView}
+          onCreateFolder={handleCreateFolder}
+          onRenameFolder={renameFolder}
+          onMoveFolder={(f) => startMove({ kind: 'folder', id: f.id, from: f.parent_id ?? null, name: f.name })}
+          onDeleteFolder={handleDeleteFolder}
+          onDropDocument={dropDocument}
+        />
+      </div>
+
+      <main {...fileDrop} className="relative flex min-h-[calc(100dvh-4rem)] min-w-0 flex-col gap-4 px-7 py-6">
+        <div className="flex items-end gap-3">
+          <div className="min-w-0 flex-1">
+            {crumbs.length > 0 && (
+              <nav aria-label="Folder path" className="mb-1 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+                <button type="button" onClick={() => openInTree(null)} className="rounded-md px-0.5 transition-colors hover:text-foreground">
+                  All files
+                </button>
+                {crumbs.map((f, i) => (
+                  <span key={f.id} className="flex min-w-0 items-center gap-1">
+                    <ChevronRight className="h-3 w-3 shrink-0 opacity-60" />
+                    {i === crumbs.length - 1 ? (
+                      <span aria-current="location" className="truncate text-foreground">{f.name}</span>
+                    ) : (
+                      <button type="button" onClick={() => openInTree(f.id)} className="truncate rounded-md px-0.5 transition-colors hover:text-foreground">
+                        {f.name}
+                      </button>
+                    )}
+                  </span>
+                ))}
+              </nav>
+            )}
+            {!listLoading && (
+              <HeroLede
+                className="min-w-0"
+                value={heroValue}
+                label={heroLabel}
+                caption={
+                  explorerView === 'folder' && (expiryCounts.soon > 0 || expiryCounts.expired > 0) ? (
+                    <>
+                      {expiryCounts.soon > 0 && <span className="font-medium text-warning">{expiryCounts.soon} expiring soon</span>}
+                      {expiryCounts.soon > 0 && expiryCounts.expired > 0 && ' · '}
+                      {expiryCounts.expired > 0 && <span className="font-medium text-destructive">{expiryCounts.expired} expired</span>}
+                    </>
+                  ) : undefined
+                }
+              />
+            )}
+          </div>
+          {browsing && explorerView === 'folder' && <NewFolderButton onCreate={handleCreateFolder} />}
+          <Button className="h-9" disabled={uploading > 0} onClick={() => fileInputRef.current?.click()}>
+            {uploading > 0 ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+            {uploading > 0 ? `Adding ${uploading}` : 'Add files'}
+          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept={DOCUMENT_ACCEPT_ATTR}
+            className="hidden"
+            onChange={(e) => {
+              const files = [...(e.target.files ?? [])];
+              e.target.value = '';
+              void uploadFiles(files);
+            }}
+          />
+        </div>
+
+        {/* Filters (H5), directly above the table they scope. */}
+        {(listLoading || docs.length > 0) && (
+          <div className="flex flex-wrap items-center gap-2">
+            <SectionSearchBar value={search} onChange={setSearch} placeholder="Search all files…" className="w-72 max-w-none" />
+            <select
+              value={typeValue}
+              onChange={(e) => pickType(e.target.value)}
+              aria-label="Filter by type"
+              className="h-9 shrink-0 rounded-lg border border-input bg-input px-3 text-xs font-medium text-foreground outline-none focus:border-ring"
+            >
+              <option value="">Any type</option>
+              {PRESETS.map((p) => (
+                <option key={p.label} value={p.label}>{p.label}</option>
+              ))}
+              {TYPE_FILTERS.map((t) => (
+                <option key={t} value={t}>{docTypeLabel(t)}</option>
+              ))}
+              {typeValue === 'custom' && <option value="custom">Several types</option>}
+            </select>
+            {tagFilters.map((t) => (
+              <FilterChip key={t} active onClick={() => toggleTagFilter(t)} aria-label={`Remove tag filter ${t}`}>
+                #{t} <X className="h-3 w-3" />
+              </FilterChip>
+            ))}
+            {filtered && (
+              <button type="button" onClick={clearAllFilters} className="h-9 px-2 text-xs font-medium text-primary hover:underline">
+                Clear
+              </button>
+            )}
+          </div>
+        )}
+
+        {listLoading ? (
+          <div className="flex justify-center py-12">
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : tableDocs.length === 0 && childFolders.length === 0 ? (
+          docs.length === 0 ? (
+            <EmptyState
+              icon={FileText}
+              title="No documents yet"
+              description="Keep receipts, warranties, IDs and leases in one place. Drop files here to add them."
+              action={{ label: 'Add files', icon: <Plus className="h-4 w-4" />, onClick: () => fileInputRef.current?.click() }}
+            />
+          ) : filtered ? (
+            <EmptyState
+              icon={SearchX}
+              title="Nothing matches"
+              description="Try another search, or clear the filters."
+              secondaryAction={{ label: 'Clear filters', onClick: clearAllFilters }}
+            />
+          ) : (
+            <EmptyState
+              icon={FolderOpen}
+              title="This folder is empty"
+              description="Drop files here, or drag a file onto this folder in the list on the left."
+            />
+          )
+        ) : (
+          <div>
+            <div className="flex h-9 items-center gap-3 px-3 text-xs text-muted-foreground">
+              <span className="w-9 shrink-0" />
+              {sortHeader('name', 'Name', 'min-w-0 flex-1')}
+              <span className={DOC_TABLE_COLUMNS.type}>Type</span>
+              {sortHeader('expiry', 'Expires', DOC_TABLE_COLUMNS.expires)}
+              {sortHeader('recent', 'Added', DOC_TABLE_COLUMNS.added)}
+              <span className={DOC_TABLE_COLUMNS.menu} />
+            </div>
+            <ListGroup>
+              {childFolders.map((f) => (
+                <FolderTableRow
+                  key={f.id}
+                  folder={f}
+                  folders={folders}
+                  documents={docs}
+                  motion={leavingKey === `folder:${f.id}` ? 'leaving' : receivingFolderId === f.id ? 'receiving' : 'idle'}
+                  onOpen={() => openInTree(f.id)}
+                  onRename={(name) => renameFolder(f.id, name)}
+                  onMove={() => startMove({ kind: 'folder', id: f.id, from: f.parent_id ?? null, name: f.name })}
+                  onDelete={() => handleDeleteFolder(f.id)}
+                  onDropDocument={dropDocument}
+                />
+              ))}
+              {tableDocs.map((d) => renderCard(d))}
+            </ListGroup>
+            <p className="px-3 pt-3 text-xs text-muted-foreground">
+              Drop files here to add them{openFolder && explorerView === 'folder' ? ` to ${openFolder.name}` : ''}. Drag a file onto a folder to move it.
+            </p>
+          </div>
+        )}
+
+        {fileDragOver && (
+          <div className="pointer-events-none absolute inset-3 z-20 flex items-center justify-center rounded-3xl border-2 border-dashed border-primary/60 bg-background/70 backdrop-blur-sm">
+            <p className="flex items-center gap-2 text-sm font-medium text-foreground">
+              <Upload className="h-4 w-4 text-primary" />
+              Drop to add {openFolder && explorerView === 'folder' ? `to ${openFolder.name}` : 'to Documents'}
+            </p>
+          </div>
+        )}
+      </main>
+
+      <div className="sticky top-0 hidden h-[calc(100dvh-4rem)] min-h-0 flex-col border-l border-border/60 xl:flex">
+        {activeDoc ? (
+          inspector(activeDoc)
+        ) : (
+          <div className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
+            <MousePointerClick className="h-6 w-6 text-muted-foreground" />
+            <p className="text-sm font-medium text-foreground">Pick a file to preview it</p>
+            <p className="text-xs text-muted-foreground">Double-click a file to open it full size.</p>
+          </div>
+        )}
+      </div>
+
+      {overlays}
+    </div>
+  );
+
+  if (wide) return explorer;
 
   return (
     // Select mode's bar floats over the foot of the page; the last row must
@@ -786,23 +1220,24 @@ function DocumentsView() {
           {childFolders.length > 0 && (
             <section>
               <DocumentsSectionLabel label="Folders" count={childFolders.length} />
-              <div className={cn('grid grid-cols-2 gap-3 sm:grid-cols-3', wide && 'lg:grid-cols-4 xl:grid-cols-6')}>
+              {/* Folders as rows, one card above the files (the phone's grammar). */}
+              <ListGroup>
                 {childFolders.map((f) => (
-                  <FolderTile
+                  <FolderTableRow
                     key={f.id}
+                    layout="list"
                     folder={f}
                     folders={folders}
                     documents={docs}
+                    motion={leavingKey === `folder:${f.id}` ? 'leaving' : receivingFolderId === f.id ? 'receiving' : 'idle'}
                     onOpen={() => setFolderId(f.id)}
                     onRename={(name) => renameFolder(f.id, name)}
                     onMove={() => startMove({ kind: 'folder', id: f.id, from: f.parent_id ?? null, name: f.name })}
                     onDelete={() => handleDeleteFolder(f.id)}
-                    motion={
-                      leavingKey === `folder:${f.id}` ? 'leaving' : receivingFolderId === f.id ? 'receiving' : 'idle'
-                    }
+                    onDropDocument={dropDocument}
                   />
                 ))}
-              </div>
+              </ListGroup>
             </section>
           )}
           {/* Group headers are micro labels with a count (§6). The rows
@@ -821,75 +1256,7 @@ function DocumentsView() {
         </div>
       )}
 
-      <FolderMoveSheet
-        open={moveOpen}
-        onOpenChange={setMoveOpen}
-        folders={folders}
-        // Moving a folder must not offer its own subtree as a destination.
-        movingFolderId={moving?.kind === 'folder' ? moving.id : null}
-        currentFolderId={moving?.from ?? null}
-        title={moving?.kind === 'folder' ? 'Move folder to' : 'Move document to'}
-        itemName={moving?.name ?? null}
-        onSelect={handleMoveSelection}
-        onCreateAndMove={handleCreateAndMove}
-      />
-
-      <FolderMoveSheet
-        open={bulkMoveOpen}
-        onOpenChange={setBulkMoveOpen}
-        folders={folders}
-        movingFolderId={null}
-        currentFolderId={bulkMove.from}
-        title={`Move ${countLabel(bulkMove.count)} to`}
-        itemName={null}
-        onSelect={moveSelected}
-        onCreateAndMove={createAndMoveSelected}
-      />
-
-      {calendarOn && <DocumentCalendarFlow doc={calendarDoc} onClose={() => setCalendarDoc(null)} onLinked={() => void load()} />}
-
-      <FolderDeleteSheet
-        open={deleteFolderOpen}
-        onOpenChange={setDeleteFolderOpen}
-        folderName={deleting?.name ?? 'this folder'}
-        documentCount={deleting?.count ?? 0}
-        onDelete={deleteFolder}
-      />
-
-      {selecting && (
-        <div
-          role="toolbar"
-          aria-label="Selected documents"
-          className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 z-40 flex w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 items-center gap-2 rounded-2xl border border-border bg-popover py-2 pl-4 pr-2 shadow-xl shadow-black/40"
-        >
-          <span className="min-w-0 flex-1 truncate text-sm font-medium tabular-nums text-foreground" aria-live="polite">
-            {selectedKeys.size === 0 ? 'Tap documents to select' : `${selectedKeys.size} selected`}
-          </span>
-          <Button size="sm" variant="outline" disabled={selectedKeys.size === 0} onClick={openBulkMove}>
-            <FolderInput className="h-3.5 w-3.5" />
-            Move
-          </Button>
-          {/* E4: destructive is danger text, never a fill. */}
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={selectedKeys.size === 0}
-            onClick={deleteSelected}
-            className="text-destructive hover:text-destructive"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            Delete
-          </Button>
-          <button
-            type="button"
-            onClick={exitSelect}
-            aria-label="Stop selecting"
-            className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-      )}
+      {overlays}
     </div>
   );
 }

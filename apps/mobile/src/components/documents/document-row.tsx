@@ -65,7 +65,7 @@ import {
   type UnifiedDocument,
 } from '@homeup/core';
 
-function memberLabel(
+export function memberLabel(
   userId: string | null,
   profiles: Record<string, { email: string; name: string | null; avatar: string | null }>
 ): string {
@@ -78,7 +78,7 @@ function memberLabel(
 // Hearth §6 Document row: the leading chip is the doc type, a glyph on a
 // neutral inset tile. Type is identity, not state, and v2 retired per-type
 // tint rings, so it takes no hue (H2). Same glyphs as web's page.tsx.
-const DOC_TYPE_GLYPH: Record<string, LucideIcon> = {
+export const DOC_TYPE_GLYPH: Record<string, LucideIcon> = {
   invoice: FileText,
   receipt: Receipt,
   warranty: ShieldCheck,
@@ -115,6 +115,8 @@ interface DocumentRowProps {
   memberProfiles: Record<string, { email: string; name: string | null; avatar: string | null }>;
   reminderTaskId: string | null;
   onPreview: (doc: UnifiedDocument) => void;
+  /** A tap on the row shows the file sheet; the eye button and the menu still open the file. */
+  onDetails?: (doc: UnifiedDocument) => void;
   onEdit: (doc: UnifiedDocument) => void;
   onDelete: (doc: UnifiedDocument) => void;
   onDeleteLegacy: (doc: UnifiedDocument) => void;
@@ -145,6 +147,7 @@ export function DocumentRow({
   memberProfiles,
   reminderTaskId,
   onPreview,
+  onDetails,
   onEdit,
   onDelete,
   onDeleteLegacy,
@@ -219,7 +222,7 @@ export function DocumentRow({
       onPress={() => {
         if (heldRef.current) return;
         if (selecting) onToggleSelect?.(doc);
-        else if (Date.now() - pressedAtRef.current <= TAP_MAX_MS) onPreview(doc);
+        else if (Date.now() - pressedAtRef.current <= TAP_MAX_MS) (onDetails ?? onPreview)(doc);
       }}
       // Legacy files get the same hold-to-edit menu: the screen adopts one into
       // the store the first time an action needs a store row.

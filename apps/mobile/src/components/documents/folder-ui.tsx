@@ -1,10 +1,10 @@
 // Folder chrome for the native Documents screen: the folder path that heads
-// the screen, folder tiles, a name prompt, and the move sheet.
+// the screen, folder rows, a name prompt, and the move sheet.
 //
 // Web asks for a folder name through the themed dialog.prompt; here the name
-// prompt is a real sheet (Hearth M4: contextual input arrives as a sheet). Folders are tiles in a two-column grid
-// under their own "Folders" label, and documents stay line items in one card
-// under "Files", so a folder never reads as just another row. The move sheet
+// prompt is a real sheet (Hearth M4: contextual input arrives as a sheet).
+// Folders are rows in their own card under a "Folders" label, and documents
+// follow in one card under "Files", the way the web explorer lists them. The move sheet
 // lists destinations as rows to tap (Hearth M4). Web twin:
 // apps/web/src/components/documents/folder-browser.tsx.
 
@@ -48,7 +48,6 @@ import {
   cn,
   haptics,
   useHoldFill,
-  useThemeMaterial,
 } from '@homeup/ui';
 import {
   folderBreadcrumb,
@@ -76,7 +75,8 @@ export function FolderPath({
   onNavigate: (id: string | null) => void;
 }) {
   const path = folderBreadcrumb(folders, folderId);
-  const label = 'text-micro-label uppercase';
+  // Sentence case, not uppercase eyebrows (Guy, 2026-10-25).
+  const label = 'text-caption font-medium';
 
   if (path.length === 0) {
     return (
@@ -90,7 +90,7 @@ export function FolderPath({
     <View className="min-w-0 flex-1 flex-row flex-wrap items-center gap-x-1 gap-y-1" accessibilityLabel="Folder path">
       <Pressable
         onPress={() => onNavigate(null)}
-        // The crumbs are micro labels to the eye; the slop takes each to 44px (M2).
+        // The crumbs are small labels to the eye; the slop takes each to 44px (M2).
         hitSlop={{ top: 15, bottom: 15, left: 8, right: 4 }}
         accessibilityRole="button"
         accessibilityLabel="Back to all documents"
@@ -131,12 +131,12 @@ export function NewFolderButton({ onPress }: { onPress: () => void }) {
   );
 }
 
-/** A section label over the folder grid or a files card: micro label + count (Hearth §6 group header). */
+/** A section label over the folders card or a files card: label + count (Hearth §6 group header). */
 export function DocumentsSectionLabel({ label, count, first }: { label: string; count: number; first: boolean }) {
   return (
     <View accessibilityRole="header" className={cn('flex-row items-baseline gap-2 px-1 pb-2', first ? 'pt-4' : 'pt-7')}>
-      <Text className="text-micro-label uppercase text-muted-foreground">{label}</Text>
-      <Text className="text-micro-label text-muted-foreground/60" style={{ fontVariant: ['tabular-nums'] }}>
+      <Text className="text-caption font-medium text-muted-foreground">{label}</Text>
+      <Text className="text-caption text-muted-foreground/60" style={{ fontVariant: ['tabular-nums'] }}>
         {count}
       </Text>
     </View>
@@ -147,14 +147,15 @@ export function DocumentsSectionLabel({ label, count, first }: { label: string; 
 const LONG_PRESS_MS = 500;
 
 /**
- * One folder as a tile in the two-column grid: its own card (H4: sibling
- * cards, never a card in a card), a folder glyph on a neutral inset tile (a
- * container is not state or identity, so no hue, H2), the name, and one line
- * of what it holds. Tap opens it; hold, or the trailing "more" button as the
- * visible path (M3), opens its actions. The tile owns its MoveMotion so a
- * folder filed away leaves, and one receiving an item swells, card and all.
+ * One folder as a row in the folders card, above the files (the web explorer
+ * and the narrow web list show folders the same way): a folder glyph on a
+ * neutral inset tile (a container is not state or identity, so no hue, H2),
+ * the name, one line of what it holds, and a chevron. Tap opens it; hold, or
+ * the "more" button as the visible path (M3), opens its actions. The row owns
+ * its MoveMotion, drawn with the card slice the screen passes as className,
+ * so a folder filed away leaves and one receiving an item swells.
  */
-export function FolderTile({
+export function FolderRow({
   folder,
   folders,
   documents,
@@ -162,6 +163,7 @@ export function FolderTile({
   onRename,
   onMove,
   onDelete,
+  className,
   leaving = false,
   receiving = false,
 }: {
@@ -172,22 +174,18 @@ export function FolderTile({
   onRename: () => void;
   onMove: () => void;
   onDelete: () => void;
+  /** This row's slice of the folders card. */
+  className?: string;
   leaving?: boolean;
   receiving?: boolean;
 }) {
   const [menuOpen, setMenuOpen] = React.useState(false);
-  const material = useThemeMaterial();
   const holdFill = useHoldFill(LONG_PRESS_MS);
   const contents = folderContentsLabel(folders, documents, folder.id);
 
   return (
     <>
-      <MoveMotion
-        leaving={leaving}
-        receiving={receiving}
-        className="flex-1 rounded-3xl border border-border/60 bg-card"
-        style={{ boxShadow: material.cardShadow }}
-      >
+      <MoveMotion leaving={leaving} receiving={receiving} className={className}>
         <Pressable
           onPress={onOpen}
           onLongPress={() => {
@@ -200,31 +198,30 @@ export function FolderTile({
           accessibilityRole="button"
           accessibilityLabel={`${folder.name}, folder, ${contents}`}
           accessibilityHint="Opens the folder. Hold for folder actions."
-          className="min-h-[112px] flex-1 p-3.5 active:bg-accent/30"
+          className="min-h-[60px] flex-row items-center gap-3 px-3.5 py-2.5 active:bg-accent/30"
         >
           <HoldFillOverlay progress={holdFill.progress} />
-          <View className="flex-row items-start justify-between">
-            <View className="h-10 w-10 items-center justify-center rounded-2xl bg-muted">
-              <Folder size={20} className="text-muted-foreground" />
-            </View>
-            <Pressable
-              onPress={() => setMenuOpen(true)}
-              hitSlop={4}
-              accessibilityLabel={`${folder.name} actions`}
-              accessibilityRole="button"
-              className="-mr-2 -mt-2 h-11 w-11 items-center justify-center rounded-full"
-            >
-              <MoreHorizontal size={16} className="text-muted-foreground" />
-            </Pressable>
+          <View className="h-9 w-9 items-center justify-center rounded-xl bg-muted">
+            <Folder size={18} className="text-muted-foreground" />
           </View>
-          <View className="mt-auto gap-0.5 pt-3">
-            <Text numberOfLines={2} className="font-medium text-foreground">
+          <View className="min-w-0 flex-1 gap-0.5">
+            <Text numberOfLines={1} className="font-medium text-foreground">
               {folder.name}
             </Text>
             <Text numberOfLines={1} className="text-caption text-muted-foreground" style={{ fontVariant: ['tabular-nums'] }}>
               {contents}
             </Text>
           </View>
+          <Pressable
+            onPress={() => setMenuOpen(true)}
+            hitSlop={4}
+            accessibilityLabel={`${folder.name} actions`}
+            accessibilityRole="button"
+            className="h-9 w-9 items-center justify-center rounded-full"
+          >
+            <MoreHorizontal size={16} className="text-muted-foreground" />
+          </Pressable>
+          <ChevronRight size={16} className="-ml-1 text-muted-foreground" />
         </Pressable>
       </MoveMotion>
 

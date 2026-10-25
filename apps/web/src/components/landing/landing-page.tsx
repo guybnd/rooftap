@@ -114,7 +114,7 @@ export function LandingPage({
                 <p className={styles.sectionLede}>
                   One shared app for the tasks, groceries, costs, calendar, recipes, documents, checklists and shopping of a household. It also plans meals, gifts, bin nights and home upkeep. Everyone in the house sees each change as it happens.
                 </p>
-                <p className={styles.sectionLede}>
+                <p className={cn(styles.sectionLede, styles.heroMore)}>
                   Run it on a machine you own with one script. The web app and the Android app point at your server. A household assistant runs there too, with your model and your Telegram bot.
                 </p>
                 {/* Two labelled pairs of equal buttons: host it, or try it first. */}
@@ -135,7 +135,7 @@ export function LandingPage({
                     Android APK
                   </a>
                 </div>
-                <p className={styles.heroFacts}>
+                <p className={cn(styles.heroFacts, styles.heroMore)}>
                   {HERO_FACTS.map((line) => (
                     <span key={line.join()} className={styles.heroFactsLine}>
                       {line.map((fact, i) => (

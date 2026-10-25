@@ -1,25 +1,36 @@
 'use client';
 
 import { useState } from 'react';
-import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
-import { adoptLegacyDocument, signedDocumentUrl, docTypeLabel, SIGNED_URL_TTL_SECONDS, type UnifiedDocument } from '@/lib/documents';
+import { docTypeLabel, type UnifiedDocument } from '@/lib/documents';
 import { PopMenu, MenuItem, MenuDivider } from '@/app/setup/pop-menu';
 import { useRowContextMenu, withRowMenu } from '@/components/ui/row-context-menu';
-import { reminderKey, createManualReminder, syncDocumentReminder, documentMetadataValue, documentExpiryLabel, expiryDaysOf } from '@homeup/core';
+import { documentMetadataValue, documentExpiryLabel, expiryDaysOf } from '@homeup/core';
 import { dialog } from '@homeup/core';
 import { memberLabel } from '@/app/setup/member-label';
 import { rowMotionClass, type RowMotion } from '@/components/documents/folder-browser';
 import { stopRow, useRowLongPress } from '@/components/documents/use-row-long-press';
-import { metadataSummary, documents$, useStoreHelpers, serviceLabel } from '@homeup/core';
+import { metadataSummary, serviceLabel } from '@homeup/core';
+import { useDocumentActions } from '@/components/documents/use-document-actions';
 import { timeAgo } from '@homeup/core';
-import { toast } from 'sonner';
 import { ListItem, ListItemLeading, ListItemContent, ListItemTitle, ListItemMeta, ListItemTrailing } from '@/components/ui/list-item';
 import { PortalChipRow, type PortalChipDef } from '@/components/ui/portal-chip';
 import { DocumentPreview } from '@/components/documents/document-preview';
 import { DocumentEditModal } from '@/components/documents/document-edit-modal';
 import type { DocumentLink, DocumentSource, CostItem } from '@homeup/core';
 import { BookOpen, CalendarClock, CalendarPlus, Car, Check, Eye, FileText, FolderInput, HeartPulse, IdCard, Image as ImageIcon, Key, Landmark, ListChecks, MoreHorizontal, Pencil, Receipt, Share2, Shield, ShieldCheck, Signature, Trash2, Wrench, type LucideIcon } from 'lucide-react';
+
+/**
+ * The explorer table's column widths, shared by its header row and each
+ * document and folder row so they line up. Hidden below xl, where the
+ * preview pane needs the room, except the expiry column.
+ */
+export const DOC_TABLE_COLUMNS = {
+  type: 'hidden w-28 shrink-0 xl:block',
+  expires: 'w-28 shrink-0',
+  added: 'hidden w-24 shrink-0 2xl:block',
+  menu: 'w-9 shrink-0 justify-end',
+};
 
 // Only expired and soon take a status hue, as a word (H2).
 const EXPIRY_TONE_CLASS = { expired: 'text-destructive', soon: 'text-warning', later: undefined };
@@ -51,7 +62,7 @@ export const DOC_TYPE_GLYPH: Record<string, LucideIcon> = {
 
 export function DocumentCard({
   doc, docLinks, costItems, costNames, memberProfiles, reminderTaskId, onOpenReminder, onOpenLink, onToggleTag, onMoveToFolder, onAddToCalendar, onChanged, onDelete, motion,
-  onSelect, selecting, selected, onToggleSelect,
+  onSelect, selecting, selected, onToggleSelect, layout = 'list', active = false, onActivate, onDragStart,
 }: {
   doc: UnifiedDocument;
   docLinks: DocumentLink[];
@@ -77,10 +88,17 @@ export function DocumentCard({
   selecting: boolean;
   selected: boolean;
   onToggleSelect: () => void;
+  /** 'table': the wide explorer's one-line row, with type, expiry and added columns (DOC_TABLE_COLUMNS). */
+  layout?: 'list' | 'table';
+  /** The file the explorer's preview pane shows. */
+  active?: boolean;
+  /** Set by the explorer: a click picks the file for the preview pane and a double-click opens it. */
+  onActivate?: () => void;
+  /** Set by the explorer: dragging the row onto a folder files it there. */
+  onDragStart?: (e: React.DragEvent) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [previewing, setPreviewing] = useState(false);
-  const [busy, setBusy] = useState(false);
   const [holdMenuOpen, setHoldMenuOpen] = useState(false);
 
   const longPress = useRowLongPress(() => (selecting ? onToggleSelect() : setHoldMenuOpen(true)));
@@ -144,29 +162,7 @@ export function DocumentCard({
     onDelete();
   };
 
-  // Legacy files (bill attachments, grocery receipts) have no store row to
-  // edit, file or remind on. The first such action adopts the file into the
-  // store, which the old Adopt button did as a separate step, and seeds the
-  // store with the new row so the action lands on it at once.
-  const { seedRow } = useStoreHelpers(documents$(doc.groupId), null);
-  const [adoptedId, setAdoptedId] = useState<string | null>(null);
-  const storeId = doc.storeId ?? adoptedId;
-  const ensureStored = async (): Promise<string | null> => {
-    if (storeId) return storeId;
-    setBusy(true);
-    try {
-      const row = await adoptLegacyDocument(createClient(), doc);
-      seedRow(row);
-      setAdoptedId(row.id);
-      return row.id;
-    } catch (e) {
-      console.error('Adopting a legacy file failed:', e);
-      toast.error("Couldn't open that file for editing");
-      return null;
-    } finally {
-      setBusy(false);
-    }
-  };
+  const { busy, storeId, ensureStored, share, createReminder } = useDocumentActions(doc, onChanged);
 
   const removeLegacy = async () => {
     const confirmed = await dialog.confirm({
@@ -176,52 +172,6 @@ export function DocumentCard({
     });
     if (!confirmed) return;
     onDelete();
-  };
-
-  // FLUX-234: Web Share API when available (with the file itself, so the OS
-  // share sheet can hand it to another app), falling back to sharing just the
-  // signed link, then to opening it in a new tab if navigator.share is absent.
-  const share = async () => {
-    const url = await signedDocumentUrl(createClient(), doc.storagePath, SIGNED_URL_TTL_SECONDS, doc.bucket);
-    if (!url) return;
-    const label = doc.title || doc.filename;
-    try {
-      const res = await fetch(url);
-      const blob = await res.blob();
-      const file = new File([blob], doc.filename, { type: blob.type || 'application/octet-stream' });
-      if (navigator.canShare?.({ files: [file] })) {
-        await navigator.share({ files: [file], title: label });
-        return;
-      }
-    } catch (err) {
-      // A deliberate cancel of the file-share sheet should not re-pop a second
-      // (link-based) share sheet — only genuine failures fall through below.
-      if (err instanceof Error && err.name === 'AbortError') return;
-    }
-    if (navigator.share) {
-      try {
-        await navigator.share({ url, title: label });
-        return;
-      } catch {
-        // user cancelled or share failed — fall back to opening the file
-      }
-    }
-    window.open(url, '_blank', 'noopener,noreferrer');
-  };
-
-  const createReminder = async () => {
-    const id = await ensureStored();
-    if (!id) return;
-    const supabase = createClient();
-    const name = doc.title || doc.filename;
-    if (doc.expiryDate) {
-      await syncDocumentReminder(supabase, { id, groupId: doc.groupId, name, expiryDate: doc.expiryDate });
-    } else {
-      await createManualReminder(supabase, {
-        groupId: doc.groupId, templateKey: reminderKey('document', id, 'expiry'), title: `Renew ${name}`,
-      });
-    }
-    await onChanged();
   };
 
   // FLUX-271 (Hearth §6 portal contract): tags, reminder, and cost-item links
@@ -260,7 +210,9 @@ export function DocumentCard({
   return (
     <ListItem
       className={cn(
-        'items-start px-3.5 py-3 cursor-pointer select-none [-webkit-touch-callout:none]',
+        'cursor-pointer select-none [-webkit-touch-callout:none]',
+        layout === 'table' ? 'items-center gap-3 px-3 py-2.5' : 'items-start px-3.5 py-3',
+        active && !selecting && 'bg-primary/10 hover:bg-primary/15',
         rowMotionClass(motion)
       )}
       // M3: tapping the row opens the file. Clicks from the portalled menu
@@ -269,9 +221,16 @@ export function DocumentCard({
       onClick={(e) => {
         if (!e.currentTarget.contains(e.target as Node)) return;
         if (selecting) onToggleSelect();
+        else if (onActivate) onActivate();
         else setPreviewing(true);
       }}
-      aria-selected={selecting ? selected : undefined}
+      onDoubleClick={(e) => {
+        if (!onActivate || selecting || !e.currentTarget.contains(e.target as Node)) return;
+        setPreviewing(true);
+      }}
+      draggable={!!onDragStart && !selecting}
+      onDragStart={onDragStart}
+      aria-selected={selecting ? selected : onActivate ? active : undefined}
       // Legacy files get the same hold-to-edit menu; ensureStored adopts one
       // the first time an action needs a store row.
       holdProgress={longPress.progress}
@@ -307,6 +266,7 @@ export function DocumentCard({
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();
               if (selecting) onToggleSelect();
+              else if (onActivate) onActivate();
               else setPreviewing(true);
             }
           }}
@@ -314,46 +274,74 @@ export function DocumentCard({
         >
           <ListItemTitle>{doc.title || doc.filename}</ListItemTitle>
         </span>
-        {/* Meta grammar (§6 Document row, H6): type, one dot, one fact.
-            HOUP-253: no flex-nowrap, so a long fragment wraps on a phone. */}
-        <ListItemMeta>
-          <span>
-            {docTypeLabel(doc.docType)}
-            {' · '}
-            {expiry ? (
-              <span className={EXPIRY_TONE_CLASS[expiry.tone]}>{expiry.text}</span>
-            ) : (
-              (added ? added.replace(/^Just now$/, 'just now') : 'just now')
-            )}
-          </span>
-        </ListItemMeta>
-
-        {/* Per-category sub-fields, read-only (FLUX-133), as one quiet line. */}
-        {metaFields.length > 0 && (
+        {layout === 'table' ? (
+          // The explorer's row: one quiet line under the name, the category
+          // fields when it has them, else what it belongs to or who filed it.
+          // Type, expiry and added date sit in their own columns.
           <p className="truncate text-xs text-muted-foreground">
-            {metaFields.map((f) => `${f.label} ${documentMetadataValue(f.value)}`).join(', ')}
+            {metaFields.length > 0
+              ? metaFields.map((f) => `${f.label} ${documentMetadataValue(f.value)}`).join(', ')
+              : footer || doc.filename}
           </p>
-        )}
+        ) : (
+          <>
+          {/* Meta grammar (§6 Document row, H6): type, one dot, one fact.
+              HOUP-253: no flex-nowrap, so a long fragment wraps on a phone. */}
+          <ListItemMeta>
+            <span>
+              {docTypeLabel(doc.docType)}
+              {' · '}
+              {expiry ? (
+                <span className={EXPIRY_TONE_CLASS[expiry.tone]}>{expiry.text}</span>
+              ) : (
+                (added ? added.replace(/^Just now$/, 'just now') : 'just now')
+              )}
+            </span>
+          </ListItemMeta>
 
-        {/* Portal line (FLUX-271, Hearth §6 PC): tags filter in place, the
-            reminder and cost links leave the section. Legacy files have no
-            portals; what they belong to reads in the footer instead. */}
-        {!selecting && doc.storeId && portalChips.length > 0 && (
-          // FLUX-1554: no fixed overflowTitle — the overflow can mix tags
-          // and links, so the component's default "More" fits both.
-          <PortalChipRow chips={portalChips} className="mt-1" />
-        )}
+          {/* Per-category sub-fields, read-only (FLUX-133), as one quiet line. */}
+          {metaFields.length > 0 && (
+            <p className="truncate text-xs text-muted-foreground">
+              {metaFields.map((f) => `${f.label} ${documentMetadataValue(f.value)}`).join(', ')}
+            </p>
+          )}
 
-        {footer && <p className="mt-0.5 truncate text-xs text-muted-foreground/80">{footer}</p>}
+          {/* Portal line (FLUX-271, Hearth §6 PC): tags filter in place, the
+              reminder and cost links leave the section. Legacy files have no
+              portals; what they belong to reads in the footer instead. */}
+          {!selecting && doc.storeId && portalChips.length > 0 && (
+            // FLUX-1554: no fixed overflowTitle — the overflow can mix tags
+            // and links, so the component's default "More" fits both.
+            <PortalChipRow chips={portalChips} className="mt-1" />
+          )}
+
+          {footer && <p className="mt-0.5 truncate text-xs text-muted-foreground/80">{footer}</p>}
+          </>
+        )}
       </ListItemContent>
 
+      {layout === 'table' && (
+        <>
+          <span className={cn(DOC_TABLE_COLUMNS.type, 'truncate text-xs text-muted-foreground')}>{docTypeLabel(doc.docType)}</span>
+          <span className={cn(DOC_TABLE_COLUMNS.expires, 'truncate text-xs text-muted-foreground', expiry && EXPIRY_TONE_CLASS[expiry.tone])}>
+            {expiry ? expiry.text.replace(/^expires /, '') : 'None'}
+          </span>
+          <span className={cn(DOC_TABLE_COLUMNS.added, 'truncate text-xs tabular-nums text-muted-foreground')}>
+            {added ? added.replace(/^Just now$/, 'just now') : 'just now'}
+          </span>
+        </>
+      )}
+      {selecting && layout === 'table' && <span className={DOC_TABLE_COLUMNS.menu} />}
       {!selecting && (
-      <ListItemTrailing {...stopRow}>
+      <ListItemTrailing {...stopRow} className={layout === 'table' ? DOC_TABLE_COLUMNS.menu : undefined}>
         {/* FLUX-234: hold anywhere on the row opens this same menu as a bottom
             sheet (see longPress above); the trigger covers non-touch users. */}
           <PopMenu
             align="right"
-            triggerClassName="-mr-1.5 -mt-1 flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            triggerClassName={cn(
+              layout !== 'table' && '-mr-1.5 -mt-1',
+              'flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground'
+            )}
             triggerLabel="More actions"
             trigger={<MoreHorizontal className="h-4 w-4" />}
             open={holdMenuOpen}

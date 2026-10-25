@@ -68,8 +68,15 @@ export function HeroPhone({ demoHref = null }: { demoHref?: string | null }) {
             Try it yourself
           </button>
         )}
-        <button type="button" className={styles.fullButton} onClick={fullScreen} aria-label="Open the demo full screen" title="Full screen">
+        <button
+          type="button"
+          className={cn(styles.fullButton, desk && styles.fullLabel)}
+          onClick={fullScreen}
+          aria-label={desk ? undefined : "Open the demo full screen"}
+          title="Full screen"
+        >
           <Maximize2 className="size-4" aria-hidden="true" />
+          {desk && "Full screen"}
         </button>
       </div>
     );

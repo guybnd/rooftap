@@ -1,24 +1,21 @@
 'use client';
 
 // Folder chrome for the Documents section: the folder path over the lede,
-// section labels, and folder tiles. Folders are tiles in a grid under their
-// own "Folders" label and documents stay line items in one card under
-// "Files", so a folder never reads as just another row. Native twin:
+// section labels and the filing choreography. Folders are rows in their own
+// card under a "Folders" label (FolderTableRow in folder-tree.tsx) and
+// documents follow in one card under "Files". Native twin:
 // apps/mobile/src/components/documents/folder-ui.tsx.
 
-import { useState } from 'react';
-import { ChevronLeft, ChevronRight, Folder, FolderInput, FolderPlus, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
-import { PopMenu, MenuItem, MenuDivider } from '@/app/setup/pop-menu';
-import { HoldFillOverlay } from '@/components/ui/hold-fill-overlay';
-import { folderBreadcrumb, folderContentsLabel, type DocumentFolder } from '@homeup/core';
+import { ChevronLeft, ChevronRight, FolderPlus } from 'lucide-react';
+import { folderBreadcrumb, type DocumentFolder } from '@homeup/core';
 import { dialog } from '@homeup/core';
 import { cn } from '@/lib/utils';
-import { stopRow, useRowLongPress } from './use-row-long-press';
 
-const MICRO_LABEL = 'text-[10.5px] font-semibold uppercase tracking-[0.1em]';
+// Sentence case, not uppercase eyebrows (Guy, 2026-10-25).
+const LABEL = 'text-xs font-medium';
 
 /**
- * The path to the open folder, as micro labels over the lede ("‹ Documents ›
+ * The path to the open folder, as small labels over the lede ("‹ Documents ›
  * Home"). Every crumb but the last climbs back up; the chevron in front says
  * the first one is a way back. Renders nothing at the top level, where the
  * top nav already names the section.
@@ -36,11 +33,11 @@ export function FolderPath({
   if (path.length === 0) return null;
 
   return (
-    <nav aria-label="Folder path" className={cn('-ml-1.5 flex flex-wrap items-center gap-x-1', MICRO_LABEL)}>
+    <nav aria-label="Folder path" className={cn('-ml-1.5 flex flex-wrap items-center gap-x-1', LABEL)}>
       <button
         type="button"
         onClick={() => onNavigate(null)}
-        className="flex min-h-11 items-center gap-0.5 rounded-lg px-1 uppercase text-muted-foreground transition-colors hover:text-foreground sm:min-h-8"
+        className="flex min-h-11 items-center gap-0.5 rounded-lg px-1 text-muted-foreground transition-colors hover:text-foreground sm:min-h-8"
       >
         <ChevronLeft className="h-3.5 w-3.5" />
         Documents
@@ -56,7 +53,7 @@ export function FolderPath({
               disabled={last}
               aria-current={last ? 'location' : undefined}
               className={cn(
-                'flex min-h-11 min-w-0 items-center rounded-lg px-1 uppercase transition-colors sm:min-h-8',
+                'flex min-h-11 min-w-0 items-center rounded-lg px-1 transition-colors sm:min-h-8',
                 last ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
               )}
             >
@@ -84,136 +81,13 @@ export function NewFolderButton({ onCreate }: { onCreate: (name: string) => void
   );
 }
 
-/** A section label over the folder grid or a files card: micro label + count (Hearth §6 group header). */
+/** A section label over the folder grid or a files card: label + count (Hearth §6 group header). */
 export function DocumentsSectionLabel({ label, count }: { label: string; count: number }) {
   return (
-    <h2 className={cn('mb-2 flex items-baseline gap-2 px-1 text-muted-foreground', MICRO_LABEL)}>
+    <h2 className={cn('mb-2 flex items-baseline gap-2 px-1 text-muted-foreground', LABEL)}>
       {label}
       <span className="tabular-nums text-muted-foreground/60">{count}</span>
     </h2>
-  );
-}
-
-/**
- * One folder as a tile in the grid: its own card (H4: sibling cards, never a
- * card in a card), a folder glyph on a neutral inset tile (a container is not
- * state or identity, so no hue, H2), the name, and one line of what it holds.
- * Click opens it; hold (touch), right-click, or the "more" button opens its
- * actions, the same paths a document row has.
- */
-export function FolderTile({
-  folder,
-  folders,
-  documents,
-  onOpen,
-  onRename,
-  onMove,
-  onDelete,
-  motion = 'idle',
-}: {
-  folder: DocumentFolder;
-  folders: DocumentFolder[];
-  documents: Array<{ folderId?: string | null }>;
-  onOpen: () => void;
-  onRename: (name: string) => void;
-  onMove: () => void;
-  onDelete: () => void;
-  motion?: RowMotion;
-}) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const longPress = useRowLongPress(() => setMenuOpen(true));
-  const contents = folderContentsLabel(folders, documents, folder.id);
-
-  return (
-    <div
-      // Clicks from the portalled menu bubble here through React's tree;
-      // only a click on the tile itself opens the folder.
-      onClick={(e) => {
-        if (e.currentTarget.contains(e.target as Node)) onOpen();
-      }}
-      {...longPress.handlers}
-      className={cn(
-        'group relative flex min-h-[112px] cursor-pointer select-none flex-col overflow-hidden rounded-3xl border border-border/60 bg-card p-3.5 shadow-[var(--card-shadow)] hover:border-border [-webkit-touch-callout:none]',
-        rowMotionClass(motion)
-      )}
-    >
-      <HoldFillOverlay progress={longPress.progress} />
-      <div className="relative z-10 flex items-start justify-between">
-        <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
-          <Folder className="h-5 w-5" />
-        </span>
-        <span {...stopRow}>
-          <PopMenu
-            align="right"
-            triggerClassName="-mr-2 -mt-2 flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:h-9 sm:w-9 sm:-mr-1.5 sm:-mt-1.5"
-            triggerLabel={`${folder.name} actions`}
-            trigger={<MoreHorizontal className="h-4 w-4" />}
-            open={menuOpen}
-            onOpenChange={setMenuOpen}
-            mobileSheet
-            previewContent={
-              <>
-                <Folder className="h-5 w-5 shrink-0 text-muted-foreground" />
-                <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{folder.name}</span>
-              </>
-            }
-          >
-            {(close) => (
-              <>
-                <MenuItem
-                  icon={<Pencil className="h-3.5 w-3.5" />}
-                  onClick={async () => {
-                    close();
-                    const name = await dialog.prompt({ title: 'Rename folder', defaultValue: folder.name, confirmLabel: 'Rename' });
-                    if (name?.trim() && name.trim() !== folder.name) onRename(name.trim());
-                  }}
-                >
-                  Rename
-                </MenuItem>
-                <MenuItem
-                  icon={<FolderInput className="h-3.5 w-3.5" />}
-                  onClick={() => {
-                    close();
-                    onMove();
-                  }}
-                >
-                  Move to folder
-                </MenuItem>
-                <MenuDivider />
-                <MenuItem
-                  danger
-                  icon={<Trash2 className="h-3.5 w-3.5" />}
-                  onClick={() => {
-                    close();
-                    onDelete();
-                  }}
-                >
-                  Delete folder
-                </MenuItem>
-              </>
-            )}
-          </PopMenu>
-        </span>
-      </div>
-      {/* The keyboard path into the folder (a pointer clicks the tile). Not a
-          <button>: a hold that starts on the name must still open the menu,
-          and the long-press skips buttons. */}
-      <span
-        role="button"
-        tabIndex={0}
-        aria-label={`${folder.name}, folder, ${contents}`}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            onOpen();
-          }
-        }}
-        className="relative z-10 mt-auto block min-w-0 rounded-sm pt-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-      >
-        <span className="line-clamp-2 text-sm font-medium text-foreground">{folder.name}</span>
-        <span className="mt-0.5 block truncate text-xs tabular-nums text-muted-foreground">{contents}</span>
-      </span>
-    </div>
   );
 }
 

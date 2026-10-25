@@ -2009,6 +2009,19 @@
   cursor: pointer;
   transition: background-color var(--motion-fast, 150ms) ease;
 }
+/* With the desktop layout the button says what it does: the frame shows the
+   app smaller than it is, so full screen is the way to use it. */
+.fullLabel {
+  width: auto;
+  gap: 8px;
+  padding-inline: 14px;
+  border-color: color-mix(in oklab, var(--primary) 45%, transparent);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+}
 .fullButton:hover {
   background: var(--secondary);
 }
@@ -2092,12 +2105,37 @@ button.liveHint:focus-visible {
   background: color-mix(in oklab, var(--primary) 22%, transparent);
   color: var(--foreground);
 }
-/* The desktop layout needs the hero's width: the text goes above it. */
+/* The desktop layout needs room. On a wide screen the hero takes the
+   screen's width: a short text column on the left and the browser frame
+   fills the rest. Narrower, the text goes above it. */
 .heroInner:has(.heroDesktop) {
   grid-template-columns: minmax(0, 1fr);
 }
 .heroDesktop {
   width: 100%;
+}
+@media (min-width: 1100px) {
+  .heroDesktop {
+    justify-items: start;
+  }
+  .heroInner:has(.heroDesktop) {
+    max-width: min(1720px, 92vw);
+    grid-template-columns: minmax(320px, 0.5fr) minmax(0, 1.5fr);
+  }
+  .heroInner:has(.heroDesktop) .heroTitle {
+    font-size: clamp(40px, 3.4vw, 56px);
+  }
+  /* The short version of the text, so it fits beside the frame. */
+  .heroInner:has(.heroDesktop) .heroMore {
+    display: none;
+  }
+  .heroInner:has(.heroDesktop) .sectionLede {
+    font-size: 16px;
+  }
+  .heroDesktop .browser {
+    width: 100%;
+    min-width: 0;
+  }
 }
 .browser {
   width: min(100%, 1180px, calc((100svh - 230px) * 1.6 + 0px));

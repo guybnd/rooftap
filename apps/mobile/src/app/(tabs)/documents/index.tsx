@@ -22,7 +22,8 @@ import * as Sharing from 'expo-sharing';
 import { FlashList, type FlashListRef, type ListRenderItem } from '@shopify/flash-list';
 import { Check, FileText, FolderInput, FolderOpen, SearchX, Trash2, X } from 'lucide-react-native';
 import { Text, BottomSheet, Button, EmptyState, ListGroup, ListItem, ListItemContent, ListItemTitle, ListItemTrailing, ScreenBackground, cn, haptics, toast, type RowPos } from '@homeup/ui';
-import { DocumentsSectionLabel, FolderDeleteSheet, FolderNameSheet, FolderMoveSheet, FolderTile, MoveMotion, ROW_LEAVE_MS } from '@/components/documents/folder-ui';
+import { DocumentsSectionLabel, FolderDeleteSheet, FolderNameSheet, FolderMoveSheet, FolderRow, MoveMotion, ROW_LEAVE_MS } from '@/components/documents/folder-ui';
+import { DocumentFileSheet } from '@/components/documents/file-sheet';
 import { adoptLegacyDocument, createManualReminder, deleteDocument, deleteDocumentReminder, deleteLegacyDocument, documents$, useStoreHelpers, listCostItems, listDocumentTags, listLinksForGroup, listUnifiedDocuments, listDocumentFolders, createDocumentFolder, draftDocumentFolder, renameDocumentFolder, moveDocumentFolder, deleteDocumentFolder, folderDescendantIds, documentCostIds, documentLinksByDoc, documentReminderMap, groupDocumentsByCost, useDocumentListView, isFilable, type DocumentFolder, type DocumentSort, reminderKey, signedDocumentUrl, SIGNED_URL_TTL_SECONDS, syncDocumentReminder, useReconnectSync, useStoreLoaded, useModules, visibleDocumentLinks, documentLinkHref, type CostItem, type Document, type DocumentLink, type UnifiedDocument, dialog } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
 import { NoGroupScreen } from '@/components/no-group-screen';
@@ -46,15 +47,12 @@ const SORT_LABEL: Record<DocumentSort, string> = { recent: 'Newest', expiry: 'So
 
 // Folders and documents share one FlashList, so the row type is a union
 // rather than a second list stacked above the first. Each section opens with
-// its own label row; folders render two tiles to a row (the grid), and each
-// document row draws its slice of its section's card.
+// its own label row, and each folder or document row draws its slice of its
+// section's card.
 type DocRow =
   | { kind: 'label'; id: string; label: string; count: number; first: boolean }
-  | { kind: 'folders'; id: string; folders: DocumentFolder[] }
+  | { kind: 'folder'; id: string; folder: DocumentFolder; pos: RowPos }
   | { kind: 'doc'; id: string; doc: UnifiedDocument; pos: RowPos };
-
-/** Folder tiles per grid row on a phone. */
-const FOLDER_COLUMNS = 2;
 
 function rowPos(index: number, length: number): RowPos {
   if (length === 1) return 'only';
@@ -163,6 +161,9 @@ export default function DocumentsSectionScreen() {
   const [captureOpen, setCaptureOpen] = React.useState(false);
   const [editingDoc, setEditingDoc] = React.useState<Document | null>(null);
   const [previewingDoc, setPreviewingDoc] = React.useState<UnifiedDocument | null>(null);
+  // The file sheet: a tap on a file shows it there before anything opens.
+  const [sheetKey, setSheetKey] = React.useState<string | null>(null);
+  const sheetDoc = sheetKey ? (docs.find((d) => d.key === sheetKey) ?? null) : null;
   // The row a PDF is opening from: fetching its link takes a moment, so the
   // row shows a spinner until the viewer is up.
   const [openingKey, setOpeningKey] = React.useState<string | null>(null);
@@ -695,18 +696,17 @@ export default function DocumentsSectionScreen() {
   };
 
   // HOUP-205: one flat FlashList data array. Every section opens with its own
-  // label row (micro label + count), so a folder never reads as another file:
-  // "Folders" is a two-column grid of tiles, then "Expiring soon" and "Files"
+  // label row (label + count), so a folder never reads as another file:
+  // "Folders" is one card of folder rows, then "Expiring soon" and "Files"
   // are each one card of document rows. Inside a section docs sharing a cost
   // sit next to each other; the order is the pairing (no rail, §3).
   const flatData = React.useMemo<DocRow[]>(() => {
     const rows: DocRow[] = [];
     if (childFolders.length > 0) {
       rows.push({ kind: 'label', id: 'label:folders', label: 'Folders', count: childFolders.length, first: true });
-      for (let i = 0; i < childFolders.length; i += FOLDER_COLUMNS) {
-        const tiles = childFolders.slice(i, i + FOLDER_COLUMNS);
-        rows.push({ kind: 'folders', id: `folders:${tiles.map((f) => f.id).join(':')}`, folders: tiles });
-      }
+      childFolders.forEach((folder, i) =>
+        rows.push({ kind: 'folder', id: `folder:${folder.id}`, folder, pos: rowPos(i, childFolders.length) })
+      );
     }
     for (const section of sections) {
       const ordered = groupDocumentsByCost(section.docs, costIdByKey);
@@ -721,27 +721,21 @@ export default function DocumentsSectionScreen() {
       if (item.kind === 'label') {
         return <DocumentsSectionLabel label={item.label} count={item.count} first={item.first} />;
       }
-      if (item.kind === 'folders') {
-        const prev = index > 0 ? flatData[index - 1] : undefined;
+      if (item.kind === 'folder') {
+        const f = item.folder;
         return (
-          <View className={cn('flex-row gap-3', prev?.kind === 'folders' && 'mt-3')}>
-            {item.folders.map((f) => (
-              <FolderTile
-                key={f.id}
-                folder={f}
-                folders={folders}
-                documents={docs}
-                onOpen={() => setFolderId(f.id)}
-                onRename={() => setNaming({ id: f.id, current: f.name })}
-                onMove={() => startMove({ kind: 'folder', id: f.id, from: f.parent_id ?? null, name: f.name })}
-                onDelete={() => confirmDeleteFolder(f.id)}
-                leaving={leavingKey === `folder:${f.id}`}
-                receiving={receivingFolderId === f.id}
-              />
-            ))}
-            {/* An odd last tile keeps its column's width. */}
-            {item.folders.length < FOLDER_COLUMNS && <View className="flex-1" />}
-          </View>
+          <FolderRow
+            folder={f}
+            folders={folders}
+            documents={docs}
+            className={docFrameClass(item.pos)}
+            onOpen={() => setFolderId(f.id)}
+            onRename={() => setNaming({ id: f.id, current: f.name })}
+            onMove={() => startMove({ kind: 'folder', id: f.id, from: f.parent_id ?? null, name: f.name })}
+            onDelete={() => confirmDeleteFolder(f.id)}
+            leaving={leavingKey === `folder:${f.id}`}
+            receiving={receivingFolderId === f.id}
+          />
         );
       }
       const { doc: d } = item;
@@ -754,6 +748,7 @@ export default function DocumentsSectionScreen() {
             memberProfiles={memberProfiles}
             reminderTaskId={d.storeId ? (reminderByDoc[d.storeId] ?? null) : null}
             onPreview={preview}
+            onDetails={(doc) => setSheetKey(doc.key)}
             opening={openingKey === d.key}
             onEdit={openEdit}
             onDelete={remove}
@@ -1001,6 +996,24 @@ export default function DocumentsSectionScreen() {
         folderName={deleting?.name ?? 'this folder'}
         documentCount={deleting?.count ?? 0}
         onDelete={deleteFolder}
+      />
+
+      <DocumentFileSheet
+        doc={sheetDoc}
+        onClose={() => setSheetKey(null)}
+        folders={folders}
+        docLinks={sheetDoc?.storeId ? (linksByDoc.get(sheetDoc.storeId) ?? []) : []}
+        costNames={costNames}
+        memberProfiles={memberProfiles}
+        reminderTaskId={sheetDoc?.storeId ? (reminderByDoc[sheetDoc.storeId] ?? null) : null}
+        opening={!!sheetDoc && openingKey === sheetDoc.key}
+        onOpen={(doc) => void preview(doc)}
+        onEdit={openEdit}
+        onShare={(doc) => void share(doc)}
+        onMove={moveDoc}
+        onSetReminder={(doc) => void setReminder(doc)}
+        onOpenReminder={reminderLinkOn ? (taskId) => router.push(`/tasks?focus=${taskId}`) : null}
+        onOpenLink={openLink}
       />
 
       {previewingDoc && (

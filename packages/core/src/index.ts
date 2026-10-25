@@ -126,6 +126,7 @@ export * from './modules/costs/use-recent-spend';
 export * from './modules/documents/document-folders';
 export * from './modules/documents/document-list-view';
 export * from './modules/documents/use-document-list-view';
+export * from './modules/documents/document-explorer';
 export * from './modules/calendar/events';
 export * from './modules/calendar/event-tickets';
 export * from './modules/calendar/event-legs';
