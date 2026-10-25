@@ -187,7 +187,7 @@ export function AppSidebar({ children }: { children: React.ReactNode }) {
   // runNavTransition() call is currently pending (tab switch / descend /
   // back / portal).
   useEffect(() => {
-    notifyRouteSettled();
+    notifyRouteSettled(pathname);
     setNavTarget(null);
   }, [pathname]);
 

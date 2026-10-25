@@ -31,24 +31,24 @@ function supportsViewTransitions(): boolean {
 }
 
 /**
- * Call from a `useEffect(() => notifyRouteSettled(), [pathname])` mounted
+ * Call from a `useEffect(() => notifyRouteSettled(pathname), [pathname])` mounted
  * once near the app root (app-sidebar.tsx already re-renders on every route
  * change via `usePathname()`) so a pending view transition's promise
  * resolves right after the new route's DOM has committed, instead of
  * guessing a timeout.
  */
-export function notifyRouteSettled(): void {
+export function notifyRouteSettled(pathname?: string): void {
   if (pendingResolve) {
     const resolve = pendingResolve;
     pendingResolve = null;
     resolve();
   }
-  releaseNavHold?.();
+  releaseNavHold?.(pathname);
 }
 
 // A tab switch's page held empty while it slides (see runNavTransition's
 // `holdUntilSlid`); releases it once the new route has committed.
-let releaseNavHold: (() => void) | null = null;
+let releaseNavHold: ((pathname?: string) => void) | null = null;
 
 // Shows the held page even if its route never reports in.
 const NAV_HOLD_MAX_MS = 3000;
@@ -70,9 +70,12 @@ function holdNavContent(target: string | undefined): void {
     landed = true;
     if (routed) show();
   };
-  releaseNavHold = () => {
-    // A route from an earlier, superseded tap may commit meanwhile.
-    if (target && window.location.pathname !== target) return;
+  releaseNavHold = (pathname = window.location.pathname) => {
+    // A route from an earlier, superseded tap may commit meanwhile. The
+    // router's own path, not the URL: the landing demo moves its route
+    // without touching the URL, and checking the URL there held every
+    // page for the full NAV_HOLD_MAX_MS.
+    if (target && pathname !== target) return;
     routed = true;
     if (landed) show();
   };
