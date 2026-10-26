@@ -8,6 +8,16 @@ Each change people would notice gets a `whats-new/` entry (see `whats-new/README
 
 ## Unreleased
 
+## 1.1.3 (2026-10-26)
+
+This release ships a new APK: the home screen widget now stays in place in launchers such as Nova Launcher. It installs over 1.1.1 and 1.1.2.
+
+- Files open again on the phone. On Android, tapping Open on a file in Docs loaded for a long time and then failed. Files and their previews now open straight away.
+- The home screen widget fits in more launchers. In some launchers, such as Nova Launcher, the widget's list ran over the to-buy and budget chips at the bottom. The list and its buttons now stay in place at any widget size. This needs the new Android app.
+- Documents works like a file explorer. On a wide screen you get folders on the left, files in a table and a preview on the right. Drag files onto a folder to move them. On the phone, a tap shows a file's preview and details.
+- Home stays in place as it opens on a wide screen. On a wide screen, Home no longer stacks its spaces on top of each other while it opens. A space that grows to fit its content now moves the ones under it at the same moment.
+- No more endless "Syncing" banner. A change the server keeps refusing no longer leaves the web app stuck on "Syncing". After a few tries the app stops and tells you which change it could not save.
+
 ## 1.1.2 (2026-10-24)
 
 This release ships a new APK: the phone now finds places near you with its location. It installs over 1.1.1.
