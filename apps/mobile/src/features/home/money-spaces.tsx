@@ -72,10 +72,11 @@ export function BudgetSpace({
   const [modalOpen, setModalOpen] = React.useState(false);
   const month = useCurrentCostMonth(costItems);
   const lens = buildBudgetLens(costItems, budgetCents, now, useMonthTotals(costItems));
-  const status = goalStatus(month, budgetCents, now);
-  const tone = goalTone(month, budgetCents, now);
+  // Before the bank's payments are in (month null) no total shows: one without them jumps once they land.
+  const status = month ? goalStatus(month, budgetCents, now) : [];
+  const tone = month ? goalTone(month, budgetCents, now) : 'neutral';
   const discount = lens.endingDiscounts[0];
-  const bars = expanded ? lens.categories : [];
+  const bars = expanded && month ? lens.categories : [];
   const openCosts = () => router.push('/costs');
 
   // Worth a look keeps the marks Costs keeps (user_settings.money_insight_marks).
@@ -89,15 +90,19 @@ export function BudgetSpace({
         <View className="gap-4 px-4">
           <Pressable onPress={openCosts} accessibilityRole="button" accessibilityLabel="Budget, open Costs" className="gap-2">
             <TileHeader Icon={Wallet} sectionId="costs" title="Budget" />
-            <View className="flex-row items-baseline gap-2 pt-2">
-              <Text className="text-title font-semibold text-foreground" style={tabular}>
-                {formatMoney(month.paidCents)}
-              </Text>
-              <Text className="text-caption text-muted-foreground" style={tabular}>
-                {budgetCents != null ? `of ${formatMoney(budgetCents)}` : `spent in ${monthLongName(month.month)}`}
-              </Text>
-            </View>
-            {budgetCents != null ? (
+            {month ? (
+              <View className="flex-row items-baseline gap-2 pt-2">
+                <Text className="text-title font-semibold text-foreground" style={tabular}>
+                  {formatMoney(month.paidCents)}
+                </Text>
+                <Text className="text-caption text-muted-foreground" style={tabular}>
+                  {budgetCents != null ? `of ${formatMoney(budgetCents)}` : `spent in ${monthLongName(month.month)}`}
+                </Text>
+              </View>
+            ) : (
+              <View className="mt-2 h-7 w-32 rounded-md bg-muted" accessibilityLabel="Reading your bank payments" />
+            )}
+            {!month ? null : budgetCents != null ? (
               // Solid: paid so far. Faint: what is still to come this month.
               <ProgressBar value={month.paidCents} expected={month.expectedCents} total={budgetCents} fillClassName={TONE_FILL[tone]} className="h-[3px]" />
             ) : (

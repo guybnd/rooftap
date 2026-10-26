@@ -14,10 +14,9 @@ import {
   groceryItems$,
   groupEvents$,
   hiddenWithDisabledModules,
+  goalTone,
   householdTasks$,
-  isOneOff,
   todayISO,
-  totalForPeriod,
   upcomingWindowDays,
   useHouseholdCurrency,
   useModules,
@@ -32,14 +31,14 @@ import {
   type GroupEvent,
   type HouseholdTask,
   type WidgetSummary,
-  budgetPulseTone,
   upcomingBills,
+  useOpeningCostMonth,
   BILLS_DUE_MAX_ROWS,
 } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
 import { readHomeHiddenEventIds } from '@/lib/home-hidden-events';
 import { isWeatherStale, readWeatherCache } from './weather-cache';
-import { writeWidgetSnapshot } from './widget-snapshot';
+import { readWidgetSnapshot, writeWidgetSnapshot } from './widget-snapshot';
 import { tasksWidgetRepresentation } from './TasksWidget';
 import { useAppTheme } from '@/lib/theme-context';
 
@@ -59,7 +58,7 @@ export function useWidgetSync(): void {
   const groupId = group?.id;
   // Modules: a switched-off module leaves no trace on the widget (.docs/modules.md, section 7),
   // and its stores open with no group id so they don't sync (store-modules.ts).
-  const { enabled, feature } = useModules();
+  const { enabled, feature, server } = useModules();
   // Hearth v2: the feed is Home's Upcoming feed, gated the way Home gates it
   // (modules, and the sections this person hid).
   const hidden = hiddenWithDisabledModules(userSettings?.hidden_sections, enabled);
@@ -89,6 +88,10 @@ export function useWidgetSync(): void {
     Object.values(appts$.get() ?? {}).filter((a): a is Appointment => !!a && !a.deleted),
   );
   const apartmentsList = use$(() => Object.values(apts$.get() ?? {}).filter((a): a is Apartment => !!a && !a.deleted));
+
+  // The budget chip shows what Costs opens on (core costMonth, paid so far),
+  // from the bank read Home or Costs made; null until there is one.
+  const costMonth = useOpeningCostMonth(costItemsList, server('connectors.up-bank'));
 
   // Re-sync when the household's currency changes, so the budget chip relabels.
   const currency = useHouseholdCurrency();
@@ -126,10 +129,13 @@ export function useWidgetSync(): void {
 
       // Modules: no budget or bills without Costs.
       const budgetCents = costsOn ? (userSettings?.costs_budget_monthly ?? null) : null;
-      const monthlyTotalCents = totalForPeriod(costItemsList.filter((c) => !isOneOff(c)), 'monthly');
+      // Not read yet this app session: keep the figure the widget showed, never a total without the bank's payments.
+      const kept = costMonth ? null : (readWidgetSnapshot()?.summary?.budget ?? null);
+      const spentCents = costMonth ? costMonth.paidCents : (kept?.spentCents ?? null);
+      const tone = costMonth ? goalTone(costMonth, budgetCents, now) : (kept?.tone ?? 'success');
       const budget =
-        budgetCents != null
-          ? { spentCents: monthlyTotalCents, budgetCents, tone: budgetPulseTone(budgetCents, monthlyTotalCents), currencySymbol: currencySymbol() }
+        budgetCents != null && spentCents != null
+          ? { spentCents, budgetCents, tone: tone === 'neutral' ? 'success' : tone, currencySymbol: currencySymbol() }
           : null;
       const bills = costsOn
         ? upcomingBills(costItemsList, now)
@@ -178,6 +184,7 @@ export function useWidgetSync(): void {
     tasks,
     groceries,
     costItemsList,
+    costMonth,
     eventsList,
     appointmentsList,
     apartmentsList,

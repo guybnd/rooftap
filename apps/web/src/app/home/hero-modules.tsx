@@ -18,7 +18,6 @@ import type { HeroTipGlyph, HeroModuleMeta, HomeLensKey, HouseholdTask, CostItem
 import {
   HERO_MODULES as CORE_HERO_MODULES,
   availableHeroModules as availableCoreHeroModules,
-  budgetPulseTone,
   goalTone,
   type CostMonth,
   computeAllClearStreak,
@@ -26,8 +25,6 @@ import {
   daysUntilLabel,
   formatMoney,
   heroTip,
-  isOneOff,
-  totalForPeriod,
   upcomingBills,
   BILLS_DUE_MAX_ROWS,
 } from '@homeup/core';
@@ -49,7 +46,7 @@ export interface HeroModuleContext {
   tasks: HouseholdTask[];
   budgetCents: number | null;
   costItems: CostItem[];
-  /** This month as the Costs hero shows it (core useCurrentCostMonth); null in tests. */
+  /** This month as the Costs hero shows it (core useCurrentCostMonth); null until the bank's payments are in. */
   costMonth: CostMonth | null;
   groceryToBuyCount: number;
   setup: { done: number; total: number };
@@ -212,8 +209,20 @@ const RENDERS: Partial<Record<string, NonNullable<HeroModule['render']>>> = {
     // Like the Costs hero: paid so far out of the goal, amber while the month
     // is heading over, red once paid passes it (core goalTone), never the
     // month-end forecast as if already spent.
-    const spend = ctx.costMonth?.paidCents ?? totalForPeriod(ctx.costItems.filter((i) => !isOneOff(i)), 'monthly');
-    const tone = ctx.costMonth ? goalTone(ctx.costMonth, ctx.budgetCents, ctx.now) : budgetPulseTone(ctx.budgetCents, spend);
+    // Before the bank's payments are in (costMonth null) no figure shows: one without them jumps once they land.
+    if (!ctx.costMonth) {
+      return (
+        <PulseTile
+          {...lensTap(ctx, 'budgetPulse', '/costs')}
+          ariaLabel="Budget, reading your bank payments"
+          label="Budget"
+          value={<span className="inline-block h-3.5 w-14 animate-pulse rounded bg-muted align-middle" />}
+          meter={{ value: 0, total: ctx.budgetCents }}
+        />
+      );
+    }
+    const spend = ctx.costMonth.paidCents;
+    const tone = goalTone(ctx.costMonth, ctx.budgetCents, ctx.now);
     return (
       <PulseTile
         {...lensTap(ctx, 'budgetPulse', '/costs')}

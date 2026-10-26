@@ -11,11 +11,13 @@
 // 'connectors.up-bank-sharing' only. The last read of each month and scope
 // stays in memory for the app session, so coming back to Costs or Home shows
 // it straight away (the read still runs and replaces it); sign-out clears it
-// (clearUpOverviewCache).
+// (clearUpOverviewCache). The opening read of this month also goes to readers
+// outside a provider (useOpeningCostMonth: the phone's widget), so they show
+// the figure Costs opens on.
 
 export type UpViewScope = Exclude<BankScope, 'all'>;
 
-import { createContext, createElement, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, createElement, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { costTargets, type BankActuals } from './costs';
 import { bankActualsOf, monthTotals, type MonthTotals } from './money-insights';
 import { costMonths, type CostMonth } from './cost-month';
@@ -49,11 +51,21 @@ export interface UpOverviewState {
 let lastStatus: UpBankStatus | null = null;
 const lastReads = new Map<string, UpOverviewState['data']>();
 const readKey = (month: string, scope: UpViewScope | null) => `${month}|${scope ?? ''}`;
+// This month as Costs opens on it, for useOpeningCostMonth.
+let openingRead: { month: string; data: UpOverviewState['data'] } | null = null;
+let openingVersion = 0;
+const openingListeners = new Set<() => void>();
+function openingChanged() {
+  openingVersion += 1;
+  for (const listener of openingListeners) listener();
+}
 
 /** Forget the last bank reads (on sign-out, so the next person never sees them). */
 export function clearUpOverviewCache(): void {
   lastStatus = null;
   lastReads.clear();
+  openingRead = null;
+  openingChanged();
 }
 
 /** The scope Costs opens on: Mine for someone who shares nothing, else Household. */
@@ -107,6 +119,11 @@ export function UpOverviewProvider({
   const keepStatus = (s: UpBankStatus) => {
     lastStatus = s;
     setStatus(s);
+    openingChanged();
+  };
+  const keepOpening = (m: string, next: UpOverviewState['data']) => {
+    openingRead = { month: m, data: next };
+    openingChanged();
   };
   const opened = status?.connection != null;
 
@@ -130,6 +147,7 @@ export function UpOverviewProvider({
         }
         const opening = openingScope(s, sharing);
         const first = early && opening === guess ? await early : await read(month, opening);
+        keepOpening(month, first);
         if (live) setData(first);
         const synced = await api.sync().catch((err: unknown) => {
           if (live) setError(err instanceof Error ? err.message : "Couldn't reach Up.");
@@ -139,6 +157,7 @@ export function UpOverviewProvider({
           keepStatus(synced.status);
           if (synced.saved > 0) {
             const next = await read(month, opening);
+            keepOpening(month, next);
             if (live) setData(next);
           }
         }
@@ -169,6 +188,8 @@ export function UpOverviewProvider({
     let live = true;
     read(month, scope)
       .then((next) => {
+        // A reload of the opening month and scope (after a payment moved) is the new opening figure.
+        if (month === monthStartOf(new Date()) && scope === openingScope(lastStatus, sharing)) keepOpening(month, next);
         if (live) {
           setData(next);
           setShown(key);
@@ -235,7 +256,7 @@ export function useBankActuals(): BankActuals | undefined {
 export function useMonthTotals(items: readonly CostItem[]): MonthTotals | null {
   const { data, month, scope } = useUpOverview();
   const bank = useBankActuals();
-  const current = useCurrentCostMonth(items);
+  const [current] = useCostMonths(items, useMemo(() => [monthKeyOf(new Date())], []));
   return useMemo(() => {
     const now = new Date();
     if (scope === 'mine' || month !== monthStartOf(now)) return null;
@@ -251,10 +272,49 @@ export function useMonthTotals(items: readonly CostItem[]): MonthTotals | null {
   }, [data, bank, scope, month, items, current]);
 }
 
-/** This month from costMonth, as the Costs hero shows it (Home's Budget space and shortcut). */
-export function useCurrentCostMonth(items: readonly CostItem[]): CostMonth {
+/**
+ * This month from costMonth, as the Costs hero shows it (Home's Budget space
+ * and shortcut). Null until the bank's payments are in (ready), so Home never
+ * shows a total without them that then jumps.
+ */
+export function useCurrentCostMonth(items: readonly CostItem[]): CostMonth | null {
+  const { ready } = useUpOverview();
   const [current] = useCostMonths(items, useMemo(() => [monthKeyOf(new Date())], []));
-  return current;
+  return ready ? current : null;
+}
+
+/**
+ * This month as Costs opens on it, for a reader outside a provider (the
+ * phone's widget): from the latest opening read of Home or Costs. `bankOn`:
+ * the server has the Up connector. Null while that's not known yet (no status
+ * this app session, or connected and not read yet), so the reader keeps what
+ * it showed before rather than a total without the bank's payments.
+ */
+export function useOpeningCostMonth(items: readonly CostItem[], bankOn: boolean): CostMonth | null {
+  const version = useSyncExternalStore(
+    (listener) => {
+      openingListeners.add(listener);
+      return () => openingListeners.delete(listener);
+    },
+    () => openingVersion,
+    () => openingVersion,
+  );
+  return useMemo(() => {
+    const now = new Date();
+    const key = monthKeyOf(now);
+    const month = (data: UpOverviewState['data']) => monthsOf(items, data, now, [key])[0];
+    if (!bankOn) return month(null);
+    if (!lastStatus) return null;
+    if (!lastStatus.allowed || !lastStatus.connection) return month(null);
+    if (!openingRead?.data || openingRead.month !== monthStartOf(now)) return null;
+    return month(openingRead.data);
+    // version: a new read or status.
+  }, [items, bankOn, version]);
+}
+
+function monthsOf(items: readonly CostItem[], data: UpOverviewState['data'], now: Date, keys: readonly string[]): CostMonth[] {
+  const linked = new Set((data?.links ?? []).map((l) => l.costItemId));
+  return costMonths({ items, ledger: data?.ledger ?? [], now, linked, since: data?.actualsSince ?? null }, keys);
 }
 
 /**
@@ -264,11 +324,7 @@ export function useCurrentCostMonth(items: readonly CostItem[]): CostMonth {
  */
 export function useCostMonths(items: readonly CostItem[], keys: readonly string[]): CostMonth[] {
   const { data } = useUpOverview();
-  return useMemo(() => {
-    const now = new Date();
-    const linked = new Set((data?.links ?? []).map((l) => l.costItemId));
-    return costMonths({ items, ledger: data?.ledger ?? [], now, linked, since: data?.actualsSince ?? null }, keys);
-  }, [data, items, keys]);
+  return useMemo(() => monthsOf(items, data, new Date(), keys), [data, items, keys]);
 }
 
 function monthKeyOf(d: Date): string {

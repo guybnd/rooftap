@@ -69,10 +69,11 @@ export function BudgetSpace({
   const [modalOpen, setModalOpen] = useState(false);
   const month = useCurrentCostMonth(costItems);
   const lens = buildBudgetLens(costItems, budgetCents, now, useMonthTotals(costItems));
-  const status = goalStatus(month, budgetCents, now);
-  const tone = goalTone(month, budgetCents, now);
+  // Before the bank's payments are in (month null) no total shows: one without them jumps once they land.
+  const status = month ? goalStatus(month, budgetCents, now) : [];
+  const tone = month ? goalTone(month, budgetCents, now) : 'neutral';
   const discount = lens.endingDiscounts[0];
-  const bars = expanded ? lens.categories : [];
+  const bars = expanded && month ? lens.categories : [];
   const openCosts = () => router.push('/costs');
 
   // Worth a look keeps the marks Costs keeps (user_settings.money_insight_marks).
@@ -92,13 +93,17 @@ export function BudgetSpace({
       <TileHeader sectionId="costs" Icon={Wallet} title="Budget" />
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-2">
-          <p className="tabular-nums">
-            <span className="font-heading text-2xl font-bold tracking-tight text-foreground">{formatMoney(month.paidCents)}</span>{' '}
-            <span className="text-xs text-muted-foreground">
-              {budgetCents != null ? `of ${formatMoney(budgetCents)}` : `spent in ${monthLongName(month.month)}`}
-            </span>
-          </p>
-          {budgetCents != null ? (
+          {month ? (
+            <p className="tabular-nums">
+              <span className="font-heading text-2xl font-bold tracking-tight text-foreground">{formatMoney(month.paidCents)}</span>{' '}
+              <span className="text-xs text-muted-foreground">
+                {budgetCents != null ? `of ${formatMoney(budgetCents)}` : `spent in ${monthLongName(month.month)}`}
+              </span>
+            </p>
+          ) : (
+            <span className="block h-8 w-36 animate-pulse rounded-md bg-muted" aria-label="Reading your bank payments" />
+          )}
+          {!month ? null : budgetCents != null ? (
             // Solid: paid so far. Faint: what is still to come this month.
             <ProgressBar value={month.paidCents} expected={month.expectedCents} total={budgetCents} fillClassName={TONE_FILL[tone]} className="h-[3px]" />
           ) : (

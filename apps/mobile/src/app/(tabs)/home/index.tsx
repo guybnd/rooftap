@@ -590,7 +590,7 @@ function HomeSectionBody() {
   );
 
   const showBudgetPulseTile = heroOn('budgetPulse') && budgetCents != null;
-  const budgetPulseTone = goalTone(costMonth, budgetCents, now);
+  const budgetPulseTone = costMonth ? goalTone(costMonth, budgetCents, now) : 'neutral';
 
   // HOUP-172: pulse tiles (item 2) — same qualification rules as web's
   // billsDue/shoppingList/setupProgress modules (a module renders nothing,
@@ -627,12 +627,17 @@ function HomeSectionBody() {
               label="Budget"
               tone={budgetPulseTone}
               value={
-                <Text numberOfLines={1} className={`text-sm font-semibold tabular-nums ${budgetPulseTone === 'danger' ? 'text-destructive' : 'text-foreground'}`}>
-                  {formatMoney(costMonth.paidCents)}
-                </Text>
+                // Before the bank's payments are in no figure shows: one without them jumps once they land.
+                costMonth ? (
+                  <Text numberOfLines={1} className={`text-sm font-semibold tabular-nums ${budgetPulseTone === 'danger' ? 'text-destructive' : 'text-foreground'}`}>
+                    {formatMoney(costMonth.paidCents)}
+                  </Text>
+                ) : (
+                  <View className="my-0.5 h-3.5 w-14 rounded bg-muted" />
+                )
               }
-              meter={{ value: costMonth.paidCents, total: budgetCents }}
-              accessibilityLabel={`Budget, ${formatMoney(costMonth.paidCents)} of ${formatMoney(budgetCents)} so far`}
+              meter={{ value: costMonth?.paidCents ?? 0, total: budgetCents }}
+              accessibilityLabel={costMonth ? `Budget, ${formatMoney(costMonth.paidCents)} of ${formatMoney(budgetCents)} so far` : 'Budget, reading your bank payments'}
               className={shortcutClass}
             />
           ),
