@@ -379,10 +379,11 @@ function FeedRow(props: { item: WidgetTaskSnapshotItem; today: string; first: bo
 }
 
 // The feed is a ListWidget: a native list the launcher scrolls, one picture
-// per day header and row. The library places it from the widget's size in
-// dp (0.22 plus our patch in patches/), so it fits launchers that lay the
-// widget out at another density than the app. This needs an APK from
-// runtimeVersion 57.4; older APKs keep the earlier JS, which fitted rows.
+// per day header and row. Our patch in patches/ places it, and the tap
+// areas, by fractions of the box the launcher draws, so they stay on the
+// picture when a launcher's box differs from the size it reports (Nova
+// Launcher, the phone's Display size setting). Fractions need an APK from
+// runtimeVersion 57.6; 57.4 and 57.5 place them in dp.
 function Feed(props: { items: WidgetTaskSnapshotItem[]; today: string; palette: Palette }) {
   const { items, today, palette } = props;
   const children: React.ReactElement[] = [];

@@ -1,29 +1,32 @@
 diff --git a/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidget.java b/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidget.java
-index 5650d1e..db0fccd 100644
+index 5650d1e..4299e94 100644
 --- a/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidget.java
 +++ b/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidget.java
-@@ -170,15 +170,28 @@ public class RNWidget {
+@@ -168,17 +168,29 @@ public class RNWidget {
+         Rect offsetViewBounds = new Rect();
+         clickableWidget.getDrawingRect(offsetViewBounds);
          rootWidget.offsetDescendantRectToMyCoords(clickableWidget, offsetViewBounds);
-         RemoteViews clickableRemoteView = new RemoteViews(appContext.getPackageName(), R.layout.rn_widget_clickable);
- 
+-        RemoteViews clickableRemoteView = new RemoteViews(appContext.getPackageName(), R.layout.rn_widget_clickable);
+-
 -        clickableRemoteView.setViewPadding(
 -            R.id.rn_widget_clickable_positioner,
 -            offsetViewBounds.left,
 -            offsetViewBounds.top,
 -            RNWidgetUtil.dpToPx(appContext, RNWidgetUtil.getWidgetWidth(appContext, widgetId)) - offsetViewBounds.right,
 -            0
--        );
-+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-+            // HomeUp patch: place the tap area in dp, resolved by the launcher, not in this
-+            // app's pixels. A launcher that lays the widget out at another density (the phone's
-+            // Display size setting) stretches the picture to its box (fitXY), and pixel offsets
-+            // left the tap areas short of the rows they belong to.
-+            float density = appContext.getResources().getDisplayMetrics().density;
-+            int widthPx = RNWidgetUtil.dpToPx(appContext, RNWidgetUtil.getWidgetWidth(appContext, widgetId));
-+            clickableRemoteView.setViewLayoutMargin(R.id.rn_widget_clickable_area, RemoteViews.MARGIN_LEFT, offsetViewBounds.left / density, TypedValue.COMPLEX_UNIT_DIP);
-+            clickableRemoteView.setViewLayoutMargin(R.id.rn_widget_clickable_area, RemoteViews.MARGIN_TOP, offsetViewBounds.top / density, TypedValue.COMPLEX_UNIT_DIP);
-+            clickableRemoteView.setViewLayoutMargin(R.id.rn_widget_clickable_area, RemoteViews.MARGIN_RIGHT, (widthPx - offsetViewBounds.right) / density, TypedValue.COMPLEX_UNIT_DIP);
-+            clickableRemoteView.setViewLayoutHeight(R.id.rn_widget_clickable_area, offsetViewBounds.height() / density, TypedValue.COMPLEX_UNIT_DIP);
++        boolean scaled = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S;
++        RemoteViews clickableRemoteView = new RemoteViews(
++            appContext.getPackageName(),
++            scaled ? R.layout.rn_widget_scaled_clickable : R.layout.rn_widget_clickable
+         );
+ 
+-        clickableRemoteView.setInt(R.id.rn_widget_clickable_area, "setMinimumHeight", offsetViewBounds.height());
++        if (scaled) {
++            // HomeUp patch: place the tap area by fractions of the widget's box. The picture
++            // stretches to the box the launcher really draws (fitXY), which can differ from the
++            // size it reports (Nova Launcher, the phone's Display size setting), so offsets in dp
++            // or px drift off the picture while fractions stay on it.
++            RNWidgetUtil.placeScaled(clickableRemoteView, offsetViewBounds, rootWidget.getMeasuredWidth(), rootWidget.getMeasuredHeight());
 +        } else {
 +            clickableRemoteView.setViewPadding(
 +                R.id.rn_widget_clickable_positioner,
@@ -32,36 +35,56 @@ index 5650d1e..db0fccd 100644
 +                RNWidgetUtil.dpToPx(appContext, RNWidgetUtil.getWidgetWidth(appContext, widgetId)) - offsetViewBounds.right,
 +                0
 +            );
- 
--        clickableRemoteView.setInt(R.id.rn_widget_clickable_area, "setMinimumHeight", offsetViewBounds.height());
++
 +            clickableRemoteView.setInt(R.id.rn_widget_clickable_area, "setMinimumHeight", offsetViewBounds.height());
 +        }
  
          // The clickable overlay draws its own ripple, so match it to the view's radius when supported
          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && clickableView.getBorderRadius() > 0f) {
-@@ -248,13 +261,27 @@ public class RNWidget {
+@@ -218,18 +230,9 @@ public class RNWidget {
+     private void addCollectionViews(int widgetId, RemoteViews remoteWidgetView, WidgetWithViews widgetWithViews) {
+         remoteWidgetView.removeAllViews(R.id.rn_widget_collection_container);
  
-         RemoteViews collectionRemoteView = new RemoteViews(appContext.getPackageName(), R.layout.rn_widget_list);
+-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+-            remoteWidgetView.setViewLayoutWidth(
+-                R.id.rn_widget_collection_container,
+-                RNWidgetUtil.getWidgetWidth(appContext, widgetId),
+-                TypedValue.COMPLEX_UNIT_DIP
+-            );
+-            remoteWidgetView.setViewLayoutHeight(
+-                R.id.rn_widget_collection_container,
+-                RNWidgetUtil.getWidgetHeight(appContext, widgetId),
+-                TypedValue.COMPLEX_UNIT_DIP
+-            );
+-        }
++        // HomeUp patch: the container keeps its match_parent box. The library sized it to the
++        // reported size in dp, which cut the list off or let it run past the picture when the
++        // launcher's real box differs (lists are placed by fractions of the box instead).
  
+         ViewGroup rootView = (ViewGroup) widgetWithViews.getRootView();
+         List<CollectionView> collectionViews = widgetWithViews.getCollectionViews();
+@@ -246,16 +249,26 @@ public class RNWidget {
+         collectionWidget.getDrawingRect(offsetViewBounds);
+         rootView.offsetDescendantRectToMyCoords(collectionWidget, offsetViewBounds);
+ 
+-        RemoteViews collectionRemoteView = new RemoteViews(appContext.getPackageName(), R.layout.rn_widget_list);
+-
 -        collectionRemoteView.setViewPadding(
 -            R.id.rn_widget_list_positioner,
 -            offsetViewBounds.left,
 -            offsetViewBounds.top,
 -            RNWidgetUtil.dpToPx(appContext, RNWidgetUtil.getWidgetWidth(appContext, widgetId)) - offsetViewBounds.right,
 -            RNWidgetUtil.dpToPx(appContext, RNWidgetUtil.getWidgetHeight(appContext, widgetId)) - offsetViewBounds.bottom
--        );
-+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-+            // HomeUp patch: place the list in dp, resolved by the launcher, like the tap areas.
-+            // Pixel padding put it too low and too short when the launcher lays the widget out
-+            // at another density than this app (the phone's Display size setting).
-+            float density = appContext.getResources().getDisplayMetrics().density;
-+            int widthPx = RNWidgetUtil.dpToPx(appContext, RNWidgetUtil.getWidgetWidth(appContext, widgetId));
-+            int heightPx = RNWidgetUtil.dpToPx(appContext, RNWidgetUtil.getWidgetHeight(appContext, widgetId));
-+            int wrapper = listWrappers[collectionId];
-+            collectionRemoteView.setViewLayoutMargin(wrapper, RemoteViews.MARGIN_LEFT, offsetViewBounds.left / density, TypedValue.COMPLEX_UNIT_DIP);
-+            collectionRemoteView.setViewLayoutMargin(wrapper, RemoteViews.MARGIN_TOP, offsetViewBounds.top / density, TypedValue.COMPLEX_UNIT_DIP);
-+            collectionRemoteView.setViewLayoutMargin(wrapper, RemoteViews.MARGIN_RIGHT, (widthPx - offsetViewBounds.right) / density, TypedValue.COMPLEX_UNIT_DIP);
-+            collectionRemoteView.setViewLayoutMargin(wrapper, RemoteViews.MARGIN_BOTTOM, (heightPx - offsetViewBounds.bottom) / density, TypedValue.COMPLEX_UNIT_DIP);
++        boolean scaled = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S;
++        RemoteViews collectionRemoteView = new RemoteViews(
++            appContext.getPackageName(),
++            scaled ? R.layout.rn_widget_scaled_list : R.layout.rn_widget_list
+         );
+ 
++        if (scaled) {
++            // HomeUp patch: place the list by fractions of the widget's box, like the tap areas,
++            // so it stays on the gap the picture leaves for it at any launcher size.
++            RNWidgetUtil.placeScaled(collectionRemoteView, offsetViewBounds, rootView.getMeasuredWidth(), rootView.getMeasuredHeight());
 +        } else {
 +            collectionRemoteView.setViewPadding(
 +                R.id.rn_widget_list_positioner,
@@ -71,10 +94,11 @@ index 5650d1e..db0fccd 100644
 +                RNWidgetUtil.dpToPx(appContext, RNWidgetUtil.getWidgetHeight(appContext, widgetId)) - offsetViewBounds.bottom
 +            );
 +        }
- 
++
          for (int i = 0; i < listWrappers.length; i++) {
              if (i != collectionId) {
-@@ -289,6 +316,7 @@ public class RNWidget {
+                 collectionRemoteView.removeAllViews(listWrappers[i]);
+@@ -289,6 +302,7 @@ public class RNWidget {
              bundle.putString("clickAction", collectionViewItem.getClickAction());
              bundle.putBundle("clickActionData", Arguments.toBundle(collectionViewItem.getClickActionData()));
              bundle.putInt("imageWidth", collectionViewItem.getBitmap().getWidth());
@@ -83,7 +107,7 @@ index 5650d1e..db0fccd 100644
              bundle.putString("darkImageName", RNWidgetCollectionService.getImageName(widgetId, collectionId, i, "dark"));
              
 diff --git a/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidgetCollectionService.java b/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidgetCollectionService.java
-index f818d97..5b671b5 100644
+index f818d97..ad6e20f 100644
 --- a/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidgetCollectionService.java
 +++ b/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidgetCollectionService.java
 @@ -78,6 +78,14 @@ class ListRemoteViewsFactory implements RemoteViewsService.RemoteViewsFactory {
@@ -135,22 +159,24 @@ index f818d97..5b671b5 100644
          // The clickable overlay draws its own ripple, so match it to the view's radius when supported
          float borderRadius = clickableArea.getFloat("borderRadius", 0f);
 diff --git a/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidgetUtil.java b/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidgetUtil.java
-index a057c09..667ffca 100644
+index a057c09..3bde335 100644
 --- a/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidgetUtil.java
 +++ b/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidgetUtil.java
-@@ -6,7 +6,11 @@ import android.appwidget.AppWidgetManager;
+@@ -6,18 +6,29 @@ import android.appwidget.AppWidgetManager;
  import android.appwidget.AppWidgetProviderInfo;
  import android.content.ComponentName;
  import android.content.Context;
++import android.graphics.Rect;
 +import android.os.Build;
 +import android.os.Bundle;
  import android.util.DisplayMetrics;
 +import android.util.Log;
 +import android.util.SizeF;
  import android.util.TypedValue;
++import android.widget.RemoteViews;
  
  import com.facebook.react.bridge.Arguments;
-@@ -14,10 +18,15 @@ import com.facebook.react.bridge.ReactApplicationContext;
+ import com.facebook.react.bridge.ReactApplicationContext;
  import com.facebook.react.bridge.WritableArray;
  import com.facebook.react.bridge.WritableMap;
  
@@ -166,7 +192,7 @@ index a057c09..667ffca 100644
          boolean isPortrait = context.getResources().getConfiguration().orientation == ORIENTATION_PORTRAIT;
          if (isPortrait) {
              return getWidgetSizeInDp(context, widgetId, AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH);
-@@ -27,6 +36,10 @@ public class RNWidgetUtil {
+@@ -27,6 +38,10 @@ public class RNWidgetUtil {
      }
  
      public static int getWidgetHeight(Context context, int widgetId) {
@@ -177,7 +203,7 @@ index a057c09..667ffca 100644
          boolean isPortrait = context.getResources().getConfiguration().orientation == ORIENTATION_PORTRAIT;
          if (isPortrait) {
              return getWidgetSizeInDp(context, widgetId, AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT);
-@@ -44,6 +57,39 @@ public class RNWidgetUtil {
+@@ -44,6 +59,60 @@ public class RNWidgetUtil {
          return pxValue / displayMetrics.density;
      }
  
@@ -214,11 +240,32 @@ index a057c09..667ffca 100644
 +        return best;
 +    }
 +
++    /**
++     * HomeUp patch: place a view inflated from one of the rn_widget_scaled_* layouts over
++     * `bounds`, a rect in the widget's picture (`width` x `height` px), as fractions of the
++     * box the launcher draws. Each LinearLayout's weight sum leaves its one child the share
++     * the rect takes, and its gravity pins that share to its side, so the view lands
++     * on the same spot of the picture however the launcher sizes it.
++     */
++    public static void placeScaled(RemoteViews views, Rect bounds, int width, int height) {
++        int left = Math.max(0, Math.min(bounds.left, width - 1));
++        int top = Math.max(0, Math.min(bounds.top, height - 1));
++        int right = Math.max(left + 1, Math.min(bounds.right, width));
++        int bottom = Math.max(top + 1, Math.min(bounds.bottom, height));
++        if (width <= 0 || height <= 0) {
++            return;
++        }
++        views.setFloat(R.id.rn_widget_scaled_top, "setWeightSum", (float) height / (height - top));
++        views.setFloat(R.id.rn_widget_scaled_height, "setWeightSum", (float) (height - top) / (bottom - top));
++        views.setFloat(R.id.rn_widget_scaled_left, "setWeightSum", (float) width / (width - left));
++        views.setFloat(R.id.rn_widget_scaled_width, "setWeightSum", (float) (width - left) / (right - left));
++    }
++
      private static int getWidgetSizeInDp(Context context, int widgetId, String key) {
          return AppWidgetManager.getInstance(context).getAppWidgetOptions(widgetId).getInt(key, 0);
      }
 diff --git a/node_modules/react-native-android-widget/android/src/main/res/layout-night/rn_widget.xml b/node_modules/react-native-android-widget/android/src/main/res/layout-night/rn_widget.xml
-index e00a8c1..599756e 100644
+index e00a8c1..d4ffaaf 100644
 --- a/node_modules/react-native-android-widget/android/src/main/res/layout-night/rn_widget.xml
 +++ b/node_modules/react-native-android-widget/android/src/main/res/layout-night/rn_widget.xml
 @@ -8,7 +8,7 @@
@@ -240,7 +287,7 @@ index e00a8c1..599756e 100644
  
      <FrameLayout
 diff --git a/node_modules/react-native-android-widget/android/src/main/res/layout/rn_widget.xml b/node_modules/react-native-android-widget/android/src/main/res/layout/rn_widget.xml
-index 870d18b..c2b7aea 100644
+index 870d18b..e2c0661 100644
 --- a/node_modules/react-native-android-widget/android/src/main/res/layout/rn_widget.xml
 +++ b/node_modules/react-native-android-widget/android/src/main/res/layout/rn_widget.xml
 @@ -8,7 +8,7 @@
@@ -261,3 +308,128 @@ index 870d18b..c2b7aea 100644
          android:visibility="gone" />
  
      <FrameLayout
+diff --git a/node_modules/react-native-android-widget/android/src/main/res/layout/rn_widget_scaled_clickable.xml b/node_modules/react-native-android-widget/android/src/main/res/layout/rn_widget_scaled_clickable.xml
+new file mode 100644
+index 0000000..1b22fe3
+--- /dev/null
++++ b/node_modules/react-native-android-widget/android/src/main/res/layout/rn_widget_scaled_clickable.xml
+@@ -0,0 +1,45 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- HomeUp patch: a tap area placed by fractions of the widget's box (RNWidgetUtil.placeScaled). -->
++<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
++    android:id="@+id/rn_widget_scaled_top"
++    android:layout_width="match_parent"
++    android:layout_height="match_parent"
++    android:gravity="bottom"
++    android:orientation="vertical">
++
++    <LinearLayout
++        android:id="@+id/rn_widget_scaled_height"
++        android:layout_width="match_parent"
++        android:layout_height="0dp"
++        android:layout_weight="1"
++        android:gravity="top"
++        android:orientation="vertical">
++
++        <LinearLayout
++            android:id="@+id/rn_widget_scaled_left"
++            android:layout_width="match_parent"
++            android:layout_height="0dp"
++            android:layout_weight="1"
++            android:gravity="right"
++            android:orientation="horizontal">
++
++            <LinearLayout
++                android:id="@+id/rn_widget_scaled_width"
++                android:layout_width="0dp"
++                android:layout_height="match_parent"
++                android:layout_weight="1"
++                android:gravity="left"
++                android:orientation="horizontal">
++
++                <FrameLayout
++                    android:id="@+id/rn_widget_clickable_area"
++                    android:layout_width="0dp"
++                    android:layout_height="match_parent"
++                    android:layout_weight="1"
++                    android:background="?android:attr/selectableItemBackground"
++                    android:clickable="true"
++                    android:focusable="true" />
++            </LinearLayout>
++        </LinearLayout>
++    </LinearLayout>
++</LinearLayout>
+diff --git a/node_modules/react-native-android-widget/android/src/main/res/layout/rn_widget_scaled_list.xml b/node_modules/react-native-android-widget/android/src/main/res/layout/rn_widget_scaled_list.xml
+new file mode 100644
+index 0000000..84f4a2e
+--- /dev/null
++++ b/node_modules/react-native-android-widget/android/src/main/res/layout/rn_widget_scaled_list.xml
+@@ -0,0 +1,68 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- HomeUp patch: a list placed by fractions of the widget's box (RNWidgetUtil.placeScaled). -->
++<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
++    android:id="@+id/rn_widget_scaled_top"
++    android:layout_width="match_parent"
++    android:layout_height="match_parent"
++    android:gravity="bottom"
++    android:orientation="vertical">
++
++    <LinearLayout
++        android:id="@+id/rn_widget_scaled_height"
++        android:layout_width="match_parent"
++        android:layout_height="0dp"
++        android:layout_weight="1"
++        android:gravity="top"
++        android:orientation="vertical">
++
++        <LinearLayout
++            android:id="@+id/rn_widget_scaled_left"
++            android:layout_width="match_parent"
++            android:layout_height="0dp"
++            android:layout_weight="1"
++            android:gravity="right"
++            android:orientation="horizontal">
++
++            <LinearLayout
++                android:id="@+id/rn_widget_scaled_width"
++                android:layout_width="0dp"
++                android:layout_height="match_parent"
++                android:layout_weight="1"
++                android:gravity="left"
++                android:orientation="horizontal">
++
++                <FrameLayout
++                    android:layout_width="0dp"
++                    android:layout_height="match_parent"
++                    android:layout_weight="1">
++
++                    <FrameLayout
++                        android:id="@+id/rn_widget_list_0_wrapper"
++                        android:layout_width="match_parent"
++                        android:layout_height="match_parent">
++
++                        <ListView
++                            android:id="@+id/rn_widget_list_0"
++                            android:layout_width="match_parent"
++                            android:layout_height="match_parent"
++                            android:divider="@null"
++                            android:gravity="center" />
++                    </FrameLayout>
++
++                    <FrameLayout
++                        android:id="@+id/rn_widget_list_1_wrapper"
++                        android:layout_width="match_parent"
++                        android:layout_height="match_parent">
++
++                        <ListView
++                            android:id="@+id/rn_widget_list_1"
++                            android:layout_width="match_parent"
++                            android:layout_height="match_parent"
++                            android:divider="@null"
++                            android:gravity="center" />
++                    </FrameLayout>
++                </FrameLayout>
++            </LinearLayout>
++        </LinearLayout>
++    </LinearLayout>
++</LinearLayout>
