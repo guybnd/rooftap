@@ -93,19 +93,24 @@ export function DocumentFileSheet({
   }, [doc]);
 
   // An image draws inline from a signed link, fetched again for each file.
-  const [url, setUrl] = React.useState<string | null>(null);
+  // Keyed on where the file lives, not the row object: the list reloads hand
+  // the sheet a fresh object for the same file, and each one restarted the fetch.
+  // undefined while the link is on its way, null when there is none.
+  const [url, setUrl] = React.useState<string | null | undefined>(undefined);
   const image = !!shown && isImageFilename(shown.filename);
+  const storagePath = shown?.storagePath ?? null;
+  const bucket = shown?.bucket ?? null;
   React.useEffect(() => {
-    if (!shown || !image) return;
+    if (!storagePath || !bucket || !image) return;
     let cancelled = false;
-    setUrl(null);
-    void signedDocumentUrl(getCurrentSupabaseClient(), shown.storagePath, SIGNED_URL_TTL_SECONDS, shown.bucket).then((signed) => {
+    setUrl(undefined);
+    void signedDocumentUrl(getCurrentSupabaseClient(), storagePath, SIGNED_URL_TTL_SECONDS, bucket).then((signed) => {
       if (!cancelled) setUrl(signed);
     });
     return () => {
       cancelled = true;
     };
-  }, [shown, image]);
+  }, [storagePath, bucket, image]);
 
   if (!shown) return null;
   const d = shown;
@@ -149,7 +154,7 @@ export function DocumentFileSheet({
         >
           {image && url ? (
             <Image source={{ uri: url }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
-          ) : image ? (
+          ) : image && url === undefined ? (
             <ActivityIndicator />
           ) : (
             <View className="items-center gap-2">
