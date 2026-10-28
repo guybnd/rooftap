@@ -70,7 +70,7 @@ function CaptureFab({ dock = false }: { dock?: boolean }) {
   const router = useRouter();
   const modules = useModules();
   const { isOnline } = useDataCache();
-  const canAsk = modules.isEnabled("assistant") && isOnline;
+  const canAsk = modules.feature("capture.ask") && isOnline;
   const unread = useAssistantUnread();
   // 0..1: how charged the hold is, or how far the swipe has climbed.
   const [charge, setCharge] = useState(0);

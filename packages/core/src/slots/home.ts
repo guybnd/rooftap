@@ -13,11 +13,12 @@ import { useCallback, useMemo } from 'react';
 import { useModules } from '../modules-store';
 import type { HeroItem } from '../hero';
 import { binsHomeAgendaSource } from '../modules/bins/slots';
+import { occasionsHomeAgendaSource } from '../modules/occasions/slots';
 // A module's Home agenda source is imported above this line and listed below.
 import type { HomeAgendaPart, HomeAgendaSource } from './types';
 
 /** In the order their items join the feed. Each module listing 'home-agenda' in its manifest's slots has one. */
-export const HOME_AGENDA_SOURCES: readonly HomeAgendaSource[] = [binsHomeAgendaSource];
+export const HOME_AGENDA_SOURCES: readonly HomeAgendaSource[] = [binsHomeAgendaSource, occasionsHomeAgendaSource];
 
 export interface HomeAgenda {
   /** Every shown source's items, for buildHeroItems' extraItems. */

@@ -169,7 +169,7 @@ export function CaptureSheet() {
   const { writeRow: writeGrocery, patchRow: patchGrocery } = useStoreHelpers(groceries$, currentUserId);
   const { writeRow: writeCost, patchRow: patchCost, softDeleteRow: softDeleteCost } = useStoreHelpers(costs$, currentUserId);
   const { writeRow: writeSetup, patchRow: patchSetup, softDeleteRow: softDeleteSetup } = useStoreHelpers(setup$, currentUserId);
-  const groceryAux = useGroceryAux(modules.isEnabled('groceries') ? groupId : null);
+  const groceryAux = useGroceryAux(modules.feature('capture.groceries') ? groupId : null);
 
   const tasks = use$(() => Object.values(tasks$.get() ?? {}).filter((t): t is HouseholdTask => !!t && !t.deleted));
   const groceries = use$(() => Object.values(groceries$.get() ?? {}).filter((g): g is GroceryItem => !!g && !g.deleted));
@@ -216,7 +216,7 @@ export function CaptureSheet() {
 
   // Setup stores name a setup row's store and back its editor's store picker
   // (fetched like the Setup screen does, once the sheet or editor opens).
-  const setupOn = modules.isEnabled('setup');
+  const setupOn = modules.feature('capture.setup');
   React.useEffect(() => {
     if (!groupId || !setupOn || !(open || activeModal === 'setup')) return;
     let cancelled = false;
@@ -253,7 +253,7 @@ export function CaptureSheet() {
   };
 
   // One box: what's typed can also go to Rooftap as a quick ask.
-  const canAsk = modules.isEnabled('assistant') && isOnline;
+  const canAsk = modules.feature('capture.ask') && isOnline;
   const asking = canAsk && looksLikeQuestion(q);
   const assistantUnread = useAssistantUnread();
   // Both open the pop-up chat over this screen (the chat screen if it isn't mounted).

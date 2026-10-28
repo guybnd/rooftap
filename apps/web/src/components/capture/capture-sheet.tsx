@@ -235,7 +235,7 @@ export function CaptureSheet() {
   });
 
   // Setup stores back a setup hit's card (its store chip) and its editor.
-  const setupOn = enabledSectionIds.has("setup");
+  const setupOn = modules.feature("capture.setup");
   const wantSetupStores = !!groupId && setupOn && (open || setupModalOpen);
   useEffect(() => {
     if (!wantSetupStores || !groupId) return;
@@ -365,7 +365,7 @@ export function CaptureSheet() {
   };
 
   // One box: what's typed can also go to Rooftap as a quick ask.
-  const canAsk = modules.isEnabled("assistant") && isOnline;
+  const canAsk = modules.feature("capture.ask") && isOnline;
   const asking = canAsk && looksLikeQuestion(q);
   const assistantUnread = useAssistantUnread();
   // Both open the pop-up chat over this page (the chat page if it isn't mounted).

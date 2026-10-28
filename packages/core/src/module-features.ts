@@ -97,6 +97,14 @@ export const MODULE_FEATURES = {
     modules: ['shopper'],
     what: 'Shopper good-deal count in the summary hero.',
   },
+  'hub.money-insights': {
+    modules: ['costs', 'money-insights'],
+    what: "Worth a look marks on Home's Budget Space.",
+  },
+  'hub.occasions': {
+    modules: ['occasions'],
+    what: "Birthdays and other occasions in Home's feed and Now card.",
+  },
   'hub.bins': {
     modules: ['bins'],
     what: "The bin night card on Home's Now card and feed.",
@@ -239,6 +247,18 @@ export const MODULE_FEATURES = {
   'capture.calendar-file': {
     modules: ['search'],
     what: 'Importing a shared calendar (.ics) file as a viewing.',
+  },
+  'capture.ask': {
+    modules: ['assistant'],
+    what: 'Asking Rooftap from capture, the capture button and the tab bar.',
+  },
+  'capture.setup': {
+    modules: ['setup'],
+    what: "A setup row's store name in capture search, and the store picker in its editor there.",
+  },
+  'capture.groceries': {
+    modules: ['groceries'],
+    what: 'Custom aisles and library prices in the grocery editor opened from capture.',
   },
 } as const satisfies Record<string, ModuleFeatureDef>;
 

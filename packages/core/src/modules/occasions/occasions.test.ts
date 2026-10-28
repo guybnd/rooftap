@@ -226,3 +226,22 @@ describe('links', () => {
     expect(takenBy({ id: 'w1' }, [idea({ wishlist_item_id: 'w1' })])?.id).toBe('i1');
   });
 });
+
+describe('occasions on Home', () => {
+  const base = { group_id: 'g', person_id: null, notes: null, on_calendar: true, created_by: null, created_at: '', updated_at: '', deleted: false };
+  it('lists the coming days as all-day items that open Occasions and cannot be ticked', async () => {
+    const { occasionsHomeAgendaItems } = await import('./slots');
+    const items = occasionsHomeAgendaItems(
+      [
+        { ...base, id: 'o1', title: "Mum's birthday", kind: 'birthday', date: '1960-11-02', repeats: true } as never,
+        { ...base, id: 'o2', title: 'Old party', kind: 'other', date: '2026-10-01', repeats: false } as never,
+        { ...base, id: 'o3', title: 'Hidden day', kind: 'other', date: '2026-10-30', repeats: false, on_calendar: false } as never,
+      ],
+      null,
+      '2026-10-28',
+      14,
+    );
+    expect(items.map((i) => [i.title, i.dueDate])).toEqual([["Mum's birthday", '2026-11-02']]);
+    expect(items[0]).toMatchObject({ type: 'module', dueTime: null, module: { id: 'occasions', href: '/occasions', completable: false } });
+  });
+});

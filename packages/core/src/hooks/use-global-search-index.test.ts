@@ -16,6 +16,10 @@ import { documentsSearchHits } from '../modules/documents/slots';
 import { recipesSearchHits } from '../modules/recipes/slots';
 import { shopperSearchHits } from '../modules/shopper/slots';
 import { checklistsSearchHits } from '../modules/checklists/slots';
+import { eventsSearchHits } from '../modules/calendar/slots';
+import { occasionsSearchHits } from '../modules/occasions/slots';
+import { rewardsSearchHits } from '../modules/rewards/slots';
+// new-module:search-fixture-import (a new module's search builder is imported above this line)
 import type { ShopperWant } from '../modules/shopper/shopper';
 import type {
   Appointment,
@@ -344,6 +348,14 @@ const HITS_BY_MODULE: Record<string, GlobalHit[]> = {
   recipes: recipesSearchHits([recipe()]),
   shopper: shopperSearchHits([WANT]),
   checklists: checklistsSearchHits([checklist()]),
+  calendar: eventsSearchHits([{ id: 'event-1', title: 'Dinner at Sam\'s', starts_at: '2026-06-20T08:00:00.000Z', is_all_day: false, location: 'Fitzroy', notes: null, deleted: false } as never]),
+  occasions: occasionsSearchHits([{ id: 'occasion-1', title: "Mum's birthday", kind: 'birthday', deleted: false } as never]),
+  rewards: rewardsSearchHits(
+    [{ id: 'scheme-1', name: 'Flybuys', kind: 'loyalty', notes: null, deleted: false } as never],
+    [{ id: 'partner-1', scheme_id: 'scheme-1', name: 'Coles', deleted: false } as never],
+    [],
+  ),
+  // new-module:search-fixture (a new module's fixture row goes above this line)
 };
 
 /** The registry, each source swapped for one that returns its module's fixture rows. */
@@ -399,5 +411,15 @@ describe('search with a module switched off', () => {
     expect(found.has('groceries')).toBe(false);
     expect(found.has('costs')).toBe(false);
     expect(found.has('household')).toBe(true);
+  });
+});
+
+describe('module search builders added with the slot', () => {
+  it('opens an event on its day in the Calendar', () => {
+    expect(HITS_BY_MODULE.calendar[0]).toMatchObject({ section: 'events', sectionId: 'calendar', href: '/calendar?date=2026-06-20' });
+  });
+
+  it("finds a rewards scheme by one of its partner stores", () => {
+    expect(HITS_BY_MODULE.rewards[0].keywords).toContain('Coles');
   });
 });

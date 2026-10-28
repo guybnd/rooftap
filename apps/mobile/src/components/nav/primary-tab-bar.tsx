@@ -146,7 +146,7 @@ export function PrimaryTabBar() {
   const insets = useSafeAreaInsets();
   const { group, updateUserSettings, isOnline } = useDataCache();
   // Holding + offers Ask while the assistant is on (capture-fab.tsx).
-  const canAsk = useModules().isEnabled('assistant') && isOnline;
+  const canAsk = useModules().feature('capture.ask') && isOnline;
   const assistantUnread = useAssistantUnread();
   const { openCapture } = useCapture();
   const overdueCount = useOverdueTaskCount(group?.id);

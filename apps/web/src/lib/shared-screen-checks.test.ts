@@ -4,10 +4,6 @@
 // `isEnabled("bins")`, `hidden.includes("costs")`, `isHidden("setup")`. A
 // module puts its content there through a slot, and a cross-module feature
 // is checked with `useModules().feature(...)`.
-//
-// The checks these screens had when this test arrived (2026-10-28) are
-// counted in SHARED_SCREEN_BASELINE. The baseline only shrinks: a new check
-// fails, and a file with fewer checks fails until its count is lowered.
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -27,18 +23,10 @@ const SHARED_SCREENS = [
   "apps/mobile/src/features/home",
   "apps/mobile/src/components/capture",
   "apps/mobile/src/components/search",
+  "apps/mobile/src/components/nav",
   "apps/mobile/src/widgets",
   "apps/mobile/src/lib/share-intent-routing.ts",
 ];
-
-/** Checks counted per file when this test arrived. Lower a count when you remove a check. */
-const SHARED_SCREEN_BASELINE: Record<string, number> = {
-  "apps/web/src/app/home/money-spaces.tsx": 1,
-  "apps/web/src/components/capture/capture-buttons.tsx": 1,
-  "apps/web/src/components/capture/capture-sheet.tsx": 2,
-  "apps/mobile/src/features/home/money-spaces.tsx": 1,
-  "apps/mobile/src/components/capture/capture-sheet.tsx": 3,
-};
 
 function walk(p: string): string[] {
   if (!fs.existsSync(p)) return [];
@@ -72,15 +60,7 @@ describe("shared screens", () => {
     for (const entry of SHARED_SCREENS) expect(fs.existsSync(path.join(ROOT, entry)), entry).toBe(true);
   });
 
-  it("check no module by its id beyond the baseline (use a slot or a module feature)", () => {
-    for (const [file, n] of Object.entries(found)) {
-      expect(n, `${file} checks a module by its id: add a slot source or a module feature instead`).toBeLessThanOrEqual(SHARED_SCREEN_BASELINE[file] ?? 0);
-    }
-  });
-
-  it("keep the baseline current: lower a count once its checks are gone", () => {
-    for (const [file, n] of Object.entries(SHARED_SCREEN_BASELINE)) {
-      expect(found[file] ?? 0, `${file} has fewer checks now: lower its baseline count`).toBe(n);
-    }
+  it("check no module by its id (use a slot or a module feature)", () => {
+    expect(found, "a shared screen checks a module by its id: add a slot source or a module feature instead").toEqual({});
   });
 });

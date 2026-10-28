@@ -80,7 +80,7 @@ export function BudgetSpace({
   const openCosts = () => router.push('/costs');
 
   // Worth a look keeps the marks Costs keeps (user_settings.money_insight_marks).
-  const insightsOn = modules.isEnabled('money-insights');
+  const insightsOn = modules.feature('hub.money-insights');
   const saveMarks = React.useCallback((marks: CostInsightMarks) => void saveUserSettings(getCurrentSupabaseClient(), { money_insight_marks: marks }), []);
   const [marks, onMarks] = useInsightMarks(userSettings?.money_insight_marks, modules.server('costs.insight-marks') ? saveMarks : null);
 

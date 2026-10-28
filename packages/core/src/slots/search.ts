@@ -17,7 +17,10 @@ import { documentsSearchSource } from '../modules/documents/slots';
 import { recipesSearchSource } from '../modules/recipes/slots';
 import { shopperSearchSource } from '../modules/shopper/slots';
 import { checklistsSearchSource } from '../modules/checklists/slots';
-// A module's search source is imported above this line and listed below.
+import { eventsSearchSource } from '../modules/calendar/slots';
+import { occasionsSearchSource } from '../modules/occasions/slots';
+import { rewardsSearchSource } from '../modules/rewards/slots';
+// new-module:search-source-import (a module's search source is imported above this line and listed below)
 import type { GlobalHit } from '../hooks/use-global-search-index';
 import type { SearchPart, SearchSource } from './types';
 
@@ -32,6 +35,10 @@ export const SEARCH_SOURCES: readonly SearchSource[] = [
   recipesSearchSource,
   shopperSearchSource,
   checklistsSearchSource,
+  eventsSearchSource,
+  occasionsSearchSource,
+  rewardsSearchSource,
+  // new-module:search-source (new modules' sources go above this line)
 ];
 
 export interface SearchHitsInput {

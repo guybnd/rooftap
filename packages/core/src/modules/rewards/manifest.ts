@@ -18,6 +18,7 @@ export const rewardsModule = defineModule({
     ],
     hue: 'fern',
   },
+  slots: ['search'],
   tables: {
     // Cards live in Groceries' sheet and in Rewards.
     loyalty_cards: { reach: { tools: ['get_rewards'] }, sync: ['groceries', 'rewards'] },

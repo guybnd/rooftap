@@ -188,6 +188,7 @@ function plan(n) {
   create(`packages/core/src/modules/${n.id}/manifest.ts`, T.manifest(n));
   create(`packages/core/src/modules/${n.id}/${n.id}.ts`, T.coreModule(n));
   create(`packages/core/src/modules/${n.id}/use-${n.id}.ts`, T.coreHook(n));
+  create(`packages/core/src/modules/${n.id}/slots.ts`, T.coreSlots(n));
   create(`packages/core/src/modules/${n.id}/${n.id}.test.ts`, T.coreTest(n));
   create(`packages/core/src/data/stores/${n.id}-stores.ts`, T.coreStores(n));
   create(`apps/web/src/app/${n.id}/page.tsx`, T.webPage(n));
@@ -208,12 +209,15 @@ function plan(n) {
   atMarker(core + 'schema-check.ts', 'schema-check', `export type ${n.Pascal}ItemsMatches = Expect<Equal<Matches<App.${n.Pascal}Item, '${n.table}'>, Ok>>;`);
   atMarker('supabase/functions/_shared/module-rules.ts', 'module-defaults', `{ id: "${n.id}", defaultEnabled: false, requires: [] },`);
 
-  // A new module starts out of global search; wiring it in takes it off this list.
-  edit(core + 'hooks/use-global-search-index.test.ts', (s) => {
-    const re = /(const noRows = new Set\(\[[^\]]*)\]\);/;
-    if (!re.test(s)) throw new Error('use-global-search-index.test.ts: noRows set not found');
-    return s.replace(re, `$1, '${n.id}']);`);
-  });
+  // Its search source joins the global search (core slots/search.ts).
+  atMarker(core + 'slots/search.ts', 'search-source-import', `import { ${n.camel}SearchSource } from '../modules/${n.id}/slots';`);
+  atMarker(core + 'slots/search.ts', 'search-source', `${n.camel}SearchSource,`);
+  atMarker(core + 'hooks/use-global-search-index.test.ts', 'search-fixture-import', `import { ${n.camel}SearchHits } from '../modules/${n.id}/slots';`);
+  atMarker(
+    core + 'hooks/use-global-search-index.test.ts',
+    'search-fixture',
+    `'${n.id}': ${n.camel}SearchHits([{ id: '${n.id}-1', title: ${n.sqLabel}, notes: null, deleted: false } as never]),`,
+  );
 
   // Web.
   atMarker('apps/web/src/lib/mcp/household-tools.ts', 'tool-import', `import { ${n.camel}Tools } from "./tools/${n.id}-tools";`);

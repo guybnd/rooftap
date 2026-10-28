@@ -105,6 +105,7 @@ export const ${n.camel}Module = defineModule({
     navItems: [{ href: '/${n.id}', label: ${n.sqLabel}, iconId: '${n.icon}', accent: true }],
     hue: '${n.hue}',
   },
+  slots: ['search'],
   tables: {
     ${n.table}: { reach: { tools: ['get_${n.snake}', 'add_${n.snake}_item'] }, sync: ['${n.id}'] },
   },
@@ -113,6 +114,44 @@ export const ${n.camel}Module = defineModule({
     { name: 'add_${n.snake}_item', kind: 'write' },
   ],
 });
+`;
+}
+
+export function coreSlots(n) {
+  return `'use client';
+
+// ${n.label}'s slots on shared screens (.docs/modules.md, section 17).
+// Search: every item, by title and notes. To put the module on the calendar
+// or Home's agenda, add a source here and list it in that slot's registry.
+
+import { useMemo } from 'react';
+import { ${n.camel}Items$ } from '../../data/stores';
+import type { GlobalHit } from '../../hooks/use-global-search-index';
+import { useSlotRows } from '../../slots/rows';
+import type { SearchSource } from '../../slots/types';
+import type { ${n.Pascal}Item } from './${n.id}';
+
+export function ${n.camel}SearchHits(items: readonly ${n.Pascal}Item[]): GlobalHit[] {
+  return items
+    .filter((i) => !i.deleted)
+    .map((i) => ({
+      section: '${n.id}',
+      sectionId: '${n.id}',
+      sectionLabel: ${n.sqLabel},
+      id: i.id,
+      title: i.title,
+      keywords: i.notes ?? '',
+      href: '/${n.id}',
+    }));
+}
+
+export const ${n.camel}SearchSource: SearchSource = {
+  moduleId: '${n.id}',
+  useHits({ groupId, active }) {
+    const items = useSlotRows(${n.camel}Items$, groupId, active);
+    return useMemo(() => ({ hits: ${n.camel}SearchHits(items) }), [items]);
+  },
+};
 `;
 }
 

@@ -17,6 +17,7 @@ export const calendarModule = defineModule({
     ],
     hue: 'sky',
   },
+  slots: ['search'],
   tables: {
     events: { reach: { tools: ['get_upcoming_calendar_events', 'create_event', 'update_event', 'delete_event', 'get_agenda'] }, sync: ['calendar'] },
     event_leave_notices: { reach: { none: REACH_REASONS.server } },

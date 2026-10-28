@@ -21,6 +21,7 @@ const ICONS = [
   'plus',
   'shopping-cart',
   'trash-2',
+  'gift',
   'wallet',
 ];
 

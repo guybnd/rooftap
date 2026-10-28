@@ -382,6 +382,7 @@ The generator makes these files:
 | `packages/core/src/modules/<id>/<id>.ts` | The row type and the pure view helpers: sorting, the Hero, labels and the row menu. |
 | `packages/core/src/modules/<id>/use-<id>.ts` | The hook that reads and writes the synced store. Both apps call it. |
 | `packages/core/src/modules/<id>/<id>.test.ts` | Tests for the helpers. |
+| `packages/core/src/modules/<id>/slots.ts` | The search source, so the items show in the global search (section 17). |
 | `packages/core/src/data/stores/<id>-stores.ts` | The local-first group store. |
 | `apps/web/src/app/<id>/page.tsx` | The web screen. It binds the hook and renders `ListItem` rows with `useRowContextMenu`. |
 | `apps/mobile/src/app/(tabs)/<id>/index.tsx` | The phone screen. It binds the same hook and renders `ListItem` rows with `useRowMenuSheet`. |
@@ -396,14 +397,15 @@ It then lists the manifest in `module-manifests.ts`. It also adds the entries a 
 - the edge functions' `module-rules.ts`, because Deno cannot read core
 - the tool handlers in `household-tools.ts`
 - the icon maps of both apps
-- the landing page's module map and the search index test
+- the landing page's module map
+- the search source in `slots/search.ts`, and a fixture row in the search index test
  Each of these files has a `new-module:<slot>` comment. The generator adds its lines above that comment, so do not remove the comments.
 
 After the generator runs:
 
 1. Generate the database types: `npx supabase db start`, then `npm run db:types`.
 2. Change the starter list into the real module. Keep the split. Types, helpers, row menus and hooks go in the core folder. A screen only binds them and lays them out.
-3. Decide where else the module shows: the agenda, Home, the calendar, search and features that join two modules (`module-features.ts`).
+3. Decide where else the module shows: the agenda, Home and the calendar each take a source in `slots.ts` (section 17). Also decide the features that join two modules (`module-features.ts`).
 4. Write the What's new entry for the people who use the app.
 5. If the module has settings, add its panels to `settings` in the manifest (section 16).
 6. Run `npm run check`.
@@ -465,7 +467,7 @@ Both calendar screens draw each entry with one generic row in the module's colou
 
 The items of the calendar itself (household events, Google events, to-dos and viewings) do not use the slot. A person edits, drags and books them in place, and a slot entry only opens its module.
 
-The Home agenda slot works the same way. A source (`HomeAgendaSource`) gives feed items with `module` set: the module id, the route a tap opens, and whether a slide finishes the item. `useHomeAgenda` merges the items into the feed and the Now card. It sends a finish or an undo back to the source of the item. A source shows while its `hub.*` feature is on and the person has not hidden its section. Bin night fills this slot with "Bins out tonight". To add a module, add `'home-agenda'` to the slots of its manifest and list its source in `HOME_AGENDA_SOURCES` (`slots/home.ts`). `slots/home.test.tsx` runs the same checks as the calendar test.
+The Home agenda slot works the same way. A source (`HomeAgendaSource`) gives feed items with `module` set: the module id, the route a tap opens, and whether a slide finishes the item. `useHomeAgenda` merges the items into the feed and the Now card. It sends a finish or an undo back to the source of the item. A source shows while its `hub.*` feature is on and the person has not hidden its section. Bin night fills this slot with "Bins out tonight". Occasions fills it with the birthdays and other days of the coming weeks, and Home's range picks which ones show. To add a module, add `'home-agenda'` to the slots of its manifest and list its source in `HOME_AGENDA_SOURCES` (`slots/home.ts`). `slots/home.test.tsx` runs the same checks as the calendar test.
 
 Home's Spaces, the cards and tiles under the feed, need no hook. A module lists its Spaces in `spaces` in its manifest. Each Space has a key, a label for the desktop grid, a size (`card` or `tile`), and an optional shortcut (`lens`) and Customize switch (`setting`). `homeSpaces` in `slots/home-spaces.ts` decides which Spaces show: the module is on and not hidden, and then either the shortcut picks the Space or its switch is on. Each app draws a Space with the component that `home-spaces.tsx` keeps under its key. TypeScript fails while an app has no component for a key. Add a new Space to `DEFAULT_DESK_ITEMS` too, or the desktop grid has no place for it. `desk-arrangement.test.ts` checks this.
 
@@ -473,4 +475,4 @@ The search slot fills the global search in both capture sheets. A source (`Searc
 
 The Android widget reads the Home agenda slot too. So an item that a module adds to Home also shows on the widget, with the glyph of its section.
 
-A shared screen does not check a module by its id, for example `isEnabled("bins")` or `hidden.includes("costs")`. It loops over a slot, or it checks a module feature with `useModules().feature(...)`. `apps/web/src/lib/shared-screen-checks.test.ts` counts such checks in the calendar, Home, capture, search, share and widget files. It fails on a new check. The checks that were there before the test are in its baseline, and the baseline only goes down.
+A shared screen does not check a module by its id, for example `isEnabled("bins")` or `hidden.includes("costs")`. It loops over a slot, or it checks a module feature with `useModules().feature(...)`. `apps/web/src/lib/shared-screen-checks.test.ts` counts such checks in the calendar, Home, capture, search, share and widget files. It fails on any such check.
