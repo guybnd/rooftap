@@ -62,7 +62,8 @@ const householdTasks$ = vi.fn();
 const groceryItems$ = vi.fn();
 vi.mock('@homeup/core', async () => {
   const actual = await vi.importActual<typeof import('@homeup/core')>('@homeup/core');
-  return { ...actual, householdTasks$, groceryItems$ };
+  // No Undo wait in tests: the handler's redraw that takes the line away runs straight after the tick.
+  return { ...actual, householdTasks$, groceryItems$, WIDGET_UNDO_WINDOW_MS: 0 };
 });
 
 // Bare in-memory store double: `store$.peek()` returns the whole rows map
@@ -421,10 +422,90 @@ describe('widgetTaskHandler end-to-end (mocked store + headless context)', () =>
     } as never);
 
     expect(store['task-1'].peek()!.done).toBe(true);
-    expect(writeWidgetSnapshot).toHaveBeenCalledTimes(1);
-    const [writtenItems] = writeWidgetSnapshot.mock.calls[0];
-    expect(writtenItems.find((i: WidgetTaskSnapshotItem) => i.id === 'task-1')?.done).toBe(true);
+    // First the instant tick from the snapshot, then the rebuild from the store.
+    expect(writeWidgetSnapshot).toHaveBeenCalledTimes(2);
+    for (const [writtenItems] of writeWidgetSnapshot.mock.calls) {
+      expect(writtenItems.find((i: WidgetTaskSnapshotItem) => i.id === 'task-1')?.done).toBe(true);
+    }
+    expect(renderWidget).toHaveBeenCalledTimes(2);
+  });
+
+  it('TOGGLE_TASK redraws once more after the Undo window so the line goes away', async () => {
+    const { widgetTaskHandler } = await import('./widgetTaskHandler');
+    // The stored snapshot follows what the handler writes, as the real kv-store does.
+    let stored: WidgetTodaySnapshot = snapshot();
+    readWidgetSnapshot.mockImplementation(() => stored);
+    writeWidgetSnapshot.mockImplementation((items, groceries, summary) => {
+      stored = { ...stored, items, groceries, summary };
+    });
+    householdTasks$.mockReturnValue(fakeStore<HouseholdTask>({ 'task-1': task() }));
+    const renderWidget = vi.fn();
+
+    await widgetTaskHandler({
+      widgetInfo: widgetInfo(),
+      widgetAction: 'WIDGET_CLICK',
+      clickAction: 'TOGGLE_TASK',
+      clickActionData: { id: 'task-1', snapshotVersion: 4, snapshotDone: false, snapshotSourceUpdatedAt: '2026-08-01T00:00:00.000Z' },
+      renderWidget,
+    } as never);
+
+    // Instant tick, rebuilt tick, then the redraw once the window is over.
+    expect(renderWidget).toHaveBeenCalledTimes(3);
+    expect(renderWidget.mock.calls[2][0].light.props.summary.lastTick).toMatchObject({ id: 'task-1', done: true });
+  });
+
+  it('TOGGLE_TASK draws the tick before the store has loaded', async () => {
+    const { widgetTaskHandler } = await import('./widgetTaskHandler');
+    readWidgetSnapshot.mockReturnValue(snapshot());
+    let releaseServer: (value: unknown) => void = () => {};
+    getStoredServer.mockReturnValue(new Promise((resolve) => (releaseServer = resolve)));
+    householdTasks$.mockReturnValue(fakeStore<HouseholdTask>({ 'task-1': task() }));
+    const renderWidget = vi.fn();
+
+    const run = widgetTaskHandler({
+      widgetInfo: widgetInfo(),
+      widgetAction: 'WIDGET_CLICK',
+      clickAction: 'TOGGLE_TASK',
+      clickActionData: { id: 'task-1', snapshotVersion: 4, snapshotDone: false, snapshotSourceUpdatedAt: '2026-08-01T00:00:00.000Z' },
+      renderWidget,
+    } as never);
+
     expect(renderWidget).toHaveBeenCalledTimes(1);
+    const drawn = renderWidget.mock.calls[0][0].light.props;
+    expect(drawn.items[0].done).toBe(true);
+    expect(drawn.summary).toMatchObject({ openTodoCount: 0, doneTodayCount: 1, lastTick: { id: 'task-1', done: true } });
+
+    releaseServer({ origin: 'https://example.test', isOfficial: false, config: { supabaseUrl: 'https://x.test', supabaseAnonKey: 'anon-key' } });
+    await run;
+    expect(renderWidget).toHaveBeenCalledTimes(2);
+  });
+
+  it('TOGGLE_TASK drops a second tap while the first is still syncing', async () => {
+    const { widgetTaskHandler } = await import('./widgetTaskHandler');
+    readWidgetSnapshot.mockReturnValue(snapshot());
+    let releaseServer: (value: unknown) => void = () => {};
+    getStoredServer.mockReturnValue(new Promise((resolve) => (releaseServer = resolve)));
+    const store = fakeStore<HouseholdTask>({ 'task-1': task() });
+    householdTasks$.mockReturnValue(store);
+    const tap = (renderWidget: () => void) =>
+      widgetTaskHandler({
+        widgetInfo: widgetInfo(),
+        widgetAction: 'WIDGET_CLICK',
+        clickAction: 'TOGGLE_TASK',
+        clickActionData: { id: 'task-1', snapshotVersion: 4, snapshotDone: false, snapshotSourceUpdatedAt: '2026-08-01T00:00:00.000Z' },
+        renderWidget,
+      } as never);
+
+    const first = tap(vi.fn());
+    const secondRender = vi.fn();
+    await tap(secondRender);
+    expect(getStoredServer).toHaveBeenCalledTimes(1);
+    expect(secondRender).toHaveBeenCalledTimes(1);
+
+    releaseServer({ origin: 'https://example.test', isOfficial: false, config: { supabaseUrl: 'https://x.test', supabaseAnonKey: 'anon-key' } });
+    await first;
+    expect(store['task-1'].peek()!.done).toBe(true);
+    expect(householdTasks$).toHaveBeenCalledTimes(1);
   });
 
   it('repaints in the theme picked in the app', async () => {
@@ -471,7 +552,7 @@ describe('widgetTaskHandler end-to-end (mocked store + headless context)', () =>
       renderWidget,
     } as never);
 
-    const [writtenItems] = writeWidgetSnapshot.mock.calls[0];
+    const [writtenItems] = writeWidgetSnapshot.mock.calls.at(-1)!;
     expect(writtenItems.map((i: WidgetTaskSnapshotItem) => i.id)).toEqual(['event-1', 'task-1']);
     expect(renderWidget.mock.calls[0][0].dark).toBeTruthy();
   });
@@ -512,8 +593,11 @@ describe('widgetTaskHandler end-to-end (mocked store + headless context)', () =>
     } as never);
 
     expect(store['task-1'].peek()!.done).toBe(true);
-    expect(writeWidgetSnapshot).not.toHaveBeenCalled();
-    expect(renderWidget).toHaveBeenCalledTimes(1);
+    // The instant tick is taken back: the old snapshot is written and drawn again.
+    expect(writeWidgetSnapshot).toHaveBeenCalledTimes(2);
+    expect(writeWidgetSnapshot.mock.calls[1][0]).toEqual(snapshot().items);
+    expect(renderWidget).toHaveBeenCalledTimes(2);
+    expect(renderWidget.mock.calls[1][0].light.props.items[0].done).toBe(false);
   });
 
   it('TOGGLE_TASK rejects when no headless context can be bound (no server configured), applying no mutation', async () => {
@@ -531,8 +615,8 @@ describe('widgetTaskHandler end-to-end (mocked store + headless context)', () =>
     } as never);
 
     expect(householdTasks$).not.toHaveBeenCalled();
-    expect(writeWidgetSnapshot).not.toHaveBeenCalled();
-    expect(renderWidget).toHaveBeenCalledTimes(1);
+    expect(writeWidgetSnapshot.mock.calls.at(-1)?.[0]).toEqual(snapshot().items);
+    expect(renderWidget).toHaveBeenCalledTimes(2);
   });
 
   it('TOGGLE_GROCERY happy path: flips needed->bought and repaints from the updated snapshot', async () => {
@@ -552,14 +636,17 @@ describe('widgetTaskHandler end-to-end (mocked store + headless context)', () =>
     } as never);
 
     expect(store['grocery-1'].peek()!.status).toBe('bought');
-    expect(writeWidgetSnapshot).toHaveBeenCalledTimes(1);
+    expect(writeWidgetSnapshot).toHaveBeenCalledTimes(2);
+    const [, instantGroceries, instantSummary] = writeWidgetSnapshot.mock.calls[0];
+    expect(instantGroceries).toEqual([]);
+    expect(instantSummary.toBuyCount).toBe(0);
     // buildWidgetGrocerySnapshotItems only carries `status==='needed'` rows
     // (the widget's read-mostly scope) — a bought item drops out of the
     // written snapshot entirely rather than appearing with status: 'bought'.
-    const [, writtenGroceries, writtenSummary] = writeWidgetSnapshot.mock.calls[0];
+    const [, writtenGroceries, writtenSummary] = writeWidgetSnapshot.mock.calls[1];
     expect(writtenGroceries.find((g: WidgetGrocerySnapshotItem) => g.id === 'grocery-1')).toBeUndefined();
     expect(writtenSummary.toBuyCount).toBe(0);
-    expect(renderWidget).toHaveBeenCalledTimes(1);
+    expect(renderWidget).toHaveBeenCalledTimes(2);
   });
 
   it('TOGGLE_GROCERY rejects a version mismatch without binding a headless context', async () => {
@@ -636,8 +723,8 @@ describe('widgetTaskHandler end-to-end (mocked store + headless context)', () =>
       } as never);
 
       expect(store['bill-1'].peek()!.done).toBe(true);
-      expect(writeWidgetSnapshot).toHaveBeenCalledTimes(1);
-      const [writtenItems, , writtenSummary] = writeWidgetSnapshot.mock.calls[0];
+      expect(writeWidgetSnapshot).toHaveBeenCalledTimes(2);
+      const [writtenItems, , writtenSummary] = writeWidgetSnapshot.mock.calls[1];
       expect(writtenItems.map((i: WidgetTaskSnapshotItem) => i.id)).toEqual(['bill-1']);
       expect(writtenSummary).toMatchObject({ ...flags, openTodoCount: 0, doneTodayCount: 1 });
       expect(renderWidget.mock.calls[0][0].light.props.summary).toMatchObject(flags);
@@ -662,7 +749,7 @@ describe('widgetTaskHandler end-to-end (mocked store + headless context)', () =>
         renderWidget,
       } as never);
 
-      const [writtenItems] = writeWidgetSnapshot.mock.calls[0];
+      const [writtenItems] = writeWidgetSnapshot.mock.calls.at(-1)!;
       expect(writtenItems.map((i: WidgetTaskSnapshotItem) => i.id)).toEqual(['task-1']);
     });
 
@@ -684,7 +771,7 @@ describe('widgetTaskHandler end-to-end (mocked store + headless context)', () =>
         renderWidget,
       } as never);
 
-      const [writtenItems, , writtenSummary] = writeWidgetSnapshot.mock.calls[0];
+      const [writtenItems, , writtenSummary] = writeWidgetSnapshot.mock.calls.at(-1)!;
       expect(writtenItems.map((i: WidgetTaskSnapshotItem) => i.id).sort()).toEqual(['bill-1', 'task-1']);
       expect(writtenSummary.tasksOn).toBeUndefined();
     });

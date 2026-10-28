@@ -15,6 +15,7 @@ import {
   widgetHeroVisibility,
   widgetTodayProgress,
   WIDGET_SNAPSHOT_VERSION,
+  WIDGET_UNDO_WINDOW_MS,
   type GroceryItem,
   type HouseholdTask,
   type WidgetGrocerySnapshotItem,
@@ -220,6 +221,92 @@ export function recomputeWeatherStale(
   return { ...weather, stale: isWeatherStale(weather.updatedAt, now) };
 }
 
+// The tap's answer on screen comes before the store: binding the headless
+// context and hydrating the tasks store can take seconds (a cold store waits
+// on its first pull), and a widget that sits unchanged that long reads as a
+// missed tap and gets tapped again. So the tick is drawn from the snapshot
+// alone the moment the guard passes, and the real rebuild replaces it (or the
+// old snapshot comes back) once the store has answered.
+export function optimisticTaskSnapshot(
+  snapshot: WidgetTodaySnapshot,
+  cached: WidgetTaskSnapshotItem,
+  now: Date = new Date(),
+): WidgetTodaySnapshot {
+  const done = !cached.done;
+  const items = snapshot.items.map((i) => (i.id === cached.id ? { ...i, done } : i));
+  const progress = widgetTodayProgress(items, todayISO());
+  return {
+    ...snapshot,
+    updatedAt: now.toISOString(),
+    items,
+    summary: {
+      ...snapshot.summary,
+      openTodoCount: progress.left,
+      doneTodayCount: progress.done,
+      weather: recomputeWeatherStale(snapshot.summary.weather, now),
+      lastTick: { id: cached.id, title: cached.title, done, at: now.toISOString() },
+    },
+  };
+}
+
+export function optimisticGrocerySnapshot(
+  snapshot: WidgetTodaySnapshot,
+  cached: WidgetGrocerySnapshotItem,
+  now: Date = new Date(),
+): WidgetTodaySnapshot {
+  // The widget lists needed items only, so buying one drops it from the list.
+  const bought = cached.status !== 'bought';
+  const groceries = bought
+    ? snapshot.groceries.filter((g) => g.id !== cached.id)
+    : snapshot.groceries.map((g) => (g.id === cached.id ? { ...g, status: 'needed' as const } : g));
+  return {
+    ...snapshot,
+    updatedAt: now.toISOString(),
+    groceries,
+    summary: {
+      ...snapshot.summary,
+      toBuyCount: Math.max(0, snapshot.summary.toBuyCount + (bought ? -1 : 1)),
+      weather: recomputeWeatherStale(snapshot.summary.weather, now),
+    },
+  };
+}
+
+function writeAndRender(props: WidgetTaskHandlerProps, snapshot: WidgetTodaySnapshot): void {
+  writeWidgetSnapshot(snapshot.items, snapshot.groceries, snapshot.summary);
+  renderFromSnapshot(props, snapshot);
+}
+
+// One tick at a time. A second tap that lands while the first is still
+// syncing (an impatient double tap, or Undo before the store answered) is
+// dropped, so two headless runs never race on the same snapshot.
+let toggleInFlight = false;
+
+async function runExclusive(props: WidgetTaskHandlerProps, run: () => Promise<void>): Promise<void> {
+  if (toggleInFlight) {
+    renderFromSnapshot(props, readWidgetSnapshot());
+    return;
+  }
+  toggleInFlight = true;
+  try {
+    await run();
+  } finally {
+    toggleInFlight = false;
+  }
+}
+
+// The Undo line shows for WIDGET_UNDO_WINDOW_MS after a tick, but nothing
+// else redraws the widget that soon. So the tick's headless task waits out
+// the window (well inside the task's 30s limit) and draws the latest
+// snapshot once more, which no longer has the line. A newer tick in the
+// meantime keeps its own line, since its window has not run out yet.
+const UNDO_DISMISS_SLACK_MS = 250;
+
+async function dismissUndoLater(props: WidgetTaskHandlerProps): Promise<void> {
+  if (!readWidgetSnapshot()?.summary.lastTick) return;
+  await new Promise((resolve) => setTimeout(resolve, WIDGET_UNDO_WINDOW_MS + UNDO_DISMISS_SLACK_MS));
+  renderFromSnapshot(props, readWidgetSnapshot());
+}
+
 async function handleToggleTask(payload: ToggleTaskPayload, props: WidgetTaskHandlerProps): Promise<void> {
   const snapshot = readWidgetSnapshot();
   const guard = checkTaskSnapshotGuard(snapshot, payload);
@@ -228,26 +315,49 @@ async function handleToggleTask(payload: ToggleTaskPayload, props: WidgetTaskHan
     return;
   }
 
-  const ctx = await bindHeadlessContext();
-  if (!ctx) {
-    renderFromSnapshot(props, snapshot);
-    return;
-  }
+  // Draw the tick now. The stored snapshot moves with it, so a repeat tap on
+  // the old render no longer matches and is rejected by the guard above.
+  writeAndRender(props, optimisticTaskSnapshot(guard.snapshot, guard.cached));
+  const revert = () => writeAndRender(props, guard.snapshot);
 
-  const tasksStore$ = householdTasks$(ctx.groupId);
-  if (!(await pollUntilLoaded(tasksStore$))) {
-    renderFromSnapshot(props, snapshot);
-    return;
-  }
+  try {
+    const ctx = await bindHeadlessContext();
+    if (!ctx) {
+      revert();
+      return;
+    }
 
+    const tasksStore$ = householdTasks$(ctx.groupId);
+    if (!(await pollUntilLoaded(tasksStore$))) {
+      revert();
+      return;
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rowObs = (tasksStore$ as any)[payload.id];
+    const row = checkTaskHydratedGuard(rowObs.peek(), ctx.groupId, payload);
+    if (!row) {
+      revert();
+      return;
+    }
+
+    commitTaskToggle(props, payload, guard, ctx, tasksStore$, rowObs, row);
+  } catch (error) {
+    revert();
+    throw error;
+  }
+}
+
+function commitTaskToggle(
+  props: WidgetTaskHandlerProps,
+  payload: ToggleTaskPayload,
+  guard: { snapshot: WidgetTodaySnapshot },
+  ctx: HeadlessContext,
+  tasksStore$: ReturnType<typeof householdTasks$>,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rowObs = (tasksStore$ as any)[payload.id];
-  const row = checkTaskHydratedGuard(rowObs.peek(), ctx.groupId, payload);
-  if (!row) {
-    renderFromSnapshot(props, snapshot);
-    return;
-  }
-
+  rowObs: any,
+  row: HouseholdTask,
+): void {
   const targetDone = !payload.snapshotDone;
   const { update, createNextOccurrence } = applyTaskCompletion(row, targetDone, { nextId: randomUUID() });
   rowObs.assign(update);
@@ -291,8 +401,7 @@ async function handleToggleTask(payload: ToggleTaskPayload, props: WidgetTaskHan
       lastTick: { id: row.id, title: row.title, done: targetDone, at: new Date().toISOString() },
     },
   };
-  writeWidgetSnapshot(nextSnapshot.items, nextSnapshot.groceries, nextSnapshot.summary);
-  renderFromSnapshot(props, nextSnapshot);
+  writeAndRender(props, nextSnapshot);
 }
 
 async function handleToggleGrocery(payload: ToggleGroceryPayload, props: WidgetTaskHandlerProps): Promise<void> {
@@ -303,26 +412,46 @@ async function handleToggleGrocery(payload: ToggleGroceryPayload, props: WidgetT
     return;
   }
 
-  const ctx = await bindHeadlessContext();
-  if (!ctx) {
-    renderFromSnapshot(props, snapshot);
-    return;
-  }
+  writeAndRender(props, optimisticGrocerySnapshot(guard.snapshot, guard.cached));
+  const revert = () => writeAndRender(props, guard.snapshot);
 
-  const groceriesStore$ = groceryItems$(ctx.groupId);
-  if (!(await pollUntilLoaded(groceriesStore$))) {
-    renderFromSnapshot(props, snapshot);
-    return;
-  }
+  try {
+    const ctx = await bindHeadlessContext();
+    if (!ctx) {
+      revert();
+      return;
+    }
 
+    const groceriesStore$ = groceryItems$(ctx.groupId);
+    if (!(await pollUntilLoaded(groceriesStore$))) {
+      revert();
+      return;
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rowObs = (groceriesStore$ as any)[payload.id];
+    const row = checkGroceryHydratedGuard(rowObs.peek(), ctx.groupId, payload);
+    if (!row) {
+      revert();
+      return;
+    }
+
+    commitGroceryToggle(props, payload, guard, groceriesStore$, rowObs, row);
+  } catch (error) {
+    revert();
+    throw error;
+  }
+}
+
+function commitGroceryToggle(
+  props: WidgetTaskHandlerProps,
+  payload: ToggleGroceryPayload,
+  guard: { snapshot: WidgetTodaySnapshot },
+  groceriesStore$: ReturnType<typeof groceryItems$>,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rowObs = (groceriesStore$ as any)[payload.id];
-  const row = checkGroceryHydratedGuard(rowObs.peek(), ctx.groupId, payload);
-  if (!row) {
-    renderFromSnapshot(props, snapshot);
-    return;
-  }
-
+  rowObs: any,
+  row: GroceryItem,
+): void {
   // HOUP-110: widget write-back is needed<->bought only (never `have` — that
   // is a deliberate in-app "already stocked" state, and un-checking a
   // widget-bought item only reverses the widget's own action).
@@ -346,8 +475,7 @@ async function handleToggleGrocery(payload: ToggleGroceryPayload, props: WidgetT
       weather: recomputeWeatherStale(guard.snapshot.summary.weather),
     },
   };
-  writeWidgetSnapshot(nextSnapshot.items, nextSnapshot.groceries, nextSnapshot.summary);
-  renderFromSnapshot(props, nextSnapshot);
+  writeAndRender(props, nextSnapshot);
 }
 
 // HOUP-106/HOUP-110: invoked by react-native-android-widget's own headless JS
@@ -365,11 +493,14 @@ export async function widgetTaskHandler(props: WidgetTaskHandlerProps): Promise<
   switch (props.widgetAction) {
     case 'WIDGET_CLICK': {
       if (props.clickAction === 'TOGGLE_TASK' && isToggleTaskPayload(props.clickActionData)) {
-        await handleToggleTask(props.clickActionData, props);
+        const payload = props.clickActionData;
+        await runExclusive(props, () => handleToggleTask(payload, props));
+        await dismissUndoLater(props);
         break;
       }
       if (props.clickAction === 'TOGGLE_GROCERY' && isToggleGroceryPayload(props.clickActionData)) {
-        await handleToggleGrocery(props.clickActionData, props);
+        const payload = props.clickActionData;
+        await runExclusive(props, () => handleToggleGrocery(payload, props));
         break;
       }
       renderFromSnapshot(props, readWidgetSnapshot());

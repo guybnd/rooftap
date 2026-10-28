@@ -430,7 +430,7 @@ describe('widgetUndoTarget', () => {
   );
 
   it('offers the task the widget just ticked', () => {
-    expect(widgetUndoTarget(ticked('2026-07-31T08:59:00.000Z'), rows(true), now)?.id).toBe('t1');
+    expect(widgetUndoTarget(ticked('2026-07-31T08:59:55.000Z'), rows(true), now)?.id).toBe('t1');
   });
 
   it('drops it once the window has passed', () => {
@@ -439,7 +439,7 @@ describe('widgetUndoTarget', () => {
   });
 
   it('drops it when the task has changed since, or there was no tick', () => {
-    expect(widgetUndoTarget(ticked('2026-07-31T08:59:00.000Z'), rows(false), now)).toBeNull();
+    expect(widgetUndoTarget(ticked('2026-07-31T08:59:55.000Z'), rows(false), now)).toBeNull();
     expect(widgetUndoTarget(base, rows(true), now)).toBeNull();
   });
 });

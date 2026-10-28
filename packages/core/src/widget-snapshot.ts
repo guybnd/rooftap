@@ -117,8 +117,14 @@ export interface WidgetLastTick {
   at: string;
 }
 
-/** How long the widget offers Undo for its own last tick. */
-export const WIDGET_UNDO_WINDOW_MS = 10 * 60 * 1000;
+/**
+ * How long the widget offers Undo for its own last tick. Short, like a toast:
+ * the widget is a picture that only changes when something redraws it, so
+ * the tick's own headless task stays up this long and redraws once more to
+ * take the line away (widgetTaskHandler.ts). A long window left the line up
+ * until the next 30 minute update or app open.
+ */
+export const WIDGET_UNDO_WINDOW_MS = 15 * 1000;
 
 /**
  * The row the widget's Undo line reverses: the task its last tick changed,
