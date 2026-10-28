@@ -802,7 +802,8 @@ function HeroRow({
           </button>
         )}
         {item.module && <ModuleRowTrailing moduleId={item.module.id} detail={item.module.detail} />}
-        <AvatarBubble userId={item.assignedTo} profiles={profiles} size={22} />
+        {/* Nobody to show (an occasion, an unattributed event): no avatar, rather than a "U" for unknown. */}
+        {item.assignedTo && <AvatarBubble userId={item.assignedTo} profiles={profiles} size={22} />}
       </ListItemTrailing>
     </ListItem>
   );

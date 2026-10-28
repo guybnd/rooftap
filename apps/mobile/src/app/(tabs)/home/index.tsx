@@ -889,7 +889,8 @@ function HomeSectionBody() {
               <ChevronRight size={12} className="text-foreground/80" />
             </Pressable>
           )}
-          <PersonAvatar userId={item.assignedTo} profiles={memberProfiles} size={22} />
+          {/* Nobody to show (an occasion, an unattributed event): no avatar, rather than a "U" for unknown. */}
+          {item.assignedTo && <PersonAvatar userId={item.assignedTo} profiles={memberProfiles} size={22} />}
         </ListItemTrailing>
       </ListItem>
     );
