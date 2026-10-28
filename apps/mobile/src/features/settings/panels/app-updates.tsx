@@ -21,6 +21,7 @@ import {
 } from '@homeup/core';
 import { WhatsNewGroups } from '@/components/whats-new/whats-new-list';
 import { useDataCache } from '@/lib/data-cache';
+import { ServerUpdatePanel } from './server-update';
 import { SettingsInset, SettingsPanel } from './settings-panel';
 
 /** A read-only label/value line (T3: ids and versions in tabular type). */
@@ -131,6 +132,7 @@ export function AppUpdates() {
   return (
     <>
       <NewAppVersion />
+      <ServerUpdatePanel />
       <SettingsPanel icon={Info} title="Version">
         <SettingsInset>
           <InfoRow label="App version" value={`${version} (${build})`} />

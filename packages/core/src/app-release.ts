@@ -146,3 +146,76 @@ export function serverVersionLabel(server: ServerRelease | undefined, schema: st
   if (version && date) return `${version} · ${date}`;
   return version ?? date ?? 'Older version';
 }
+
+// ── Server updates, for the people who run a self-hosted server ──
+//
+// A self-hosted server stays on the release it was built from until its
+// admin pulls a new one. GET /api/server-update tells the server's admins
+// (its operators, or the household owners on a server that names none) when
+// a newer Rooftap release is out. The server asks GitHub only for them, and
+// never when ROOFTAP_SERVER_UPDATES is "off".
+
+export interface ServerUpdate {
+  /** The release this server runs, e.g. "1.1.3". */
+  current: string;
+  /** The newest release, e.g. "1.2.0". */
+  latest: string;
+  /** The newest release's page, with what changed. */
+  url: string;
+}
+
+/** The device-local key that remembers which server release the admin already heard about. */
+export const SEEN_SERVER_UPDATE_KEY = 'homeup.server-update.seen';
+
+/** Where the upgrade steps live in the public docs. */
+export const SERVER_UPGRADE_DOCS_URL = 'https://github.com/guybnd/rooftap/blob/main/.docs/self-hosting.md#upgrading-rooftap';
+
+/** What the admin runs in the server's Rooftap folder (.docs/self-hosting.md, "Upgrading Rooftap"). */
+export const SERVER_UPGRADE_COMMANDS: readonly string[] = ['git pull', './scripts/self-host-init.sh -d --build'];
+
+/**
+ * Orders two release versions ("1.1.3" < "1.2.0" < "1.10.0"); a pre-release
+ * ("1.2.0-rc.1") sorts before its release. 0 when either does not parse.
+ */
+export function compareVersion(a: string, b: string): number {
+  if (!VERSION.test(a) || !VERSION.test(b)) return 0;
+  const [coreA, preA] = a.split('-', 2) as [string, string | undefined];
+  const [coreB, preB] = b.split('-', 2) as [string, string | undefined];
+  const d = compareRuntime(coreA, coreB);
+  if (d !== 0) return d;
+  if (preA === preB) return 0;
+  if (preA === undefined) return 1;
+  if (preB === undefined) return -1;
+  return preA < preB ? -1 : 1;
+}
+
+/** A release version from a tag name ("v1.2.0" or "1.2.0"), or null. */
+export function versionFromTag(tag: unknown): string | null {
+  if (typeof tag !== 'string') return null;
+  const version = tag.replace(/^v/, '');
+  return VERSION.test(version) ? version : null;
+}
+
+/** An update from /api/server-update, or null for anything malformed or not newer. */
+export function cleanServerUpdate(value: unknown): ServerUpdate | null {
+  const v = value as Partial<Record<keyof ServerUpdate, unknown>> | null;
+  if (!v || typeof v !== 'object') return null;
+  if (typeof v.current !== 'string' || !VERSION.test(v.current)) return null;
+  if (typeof v.latest !== 'string' || !VERSION.test(v.latest)) return null;
+  if (typeof v.url !== 'string' || !/^https?:\/\//.test(v.url)) return null;
+  if (compareVersion(v.latest, v.current) <= 0) return null;
+  return { current: v.current, latest: v.latest, url: v.url };
+}
+
+/** Whether to announce `update` now, given the release the admin last heard about. */
+export function shouldAnnounceServerUpdate(update: ServerUpdate | null | undefined, seen: string | null): boolean {
+  return !!update && update.latest !== seen;
+}
+
+/** The notice for an admin whose server is behind; same copy wherever it shows. */
+export function serverUpdateNotice(update: ServerUpdate): { title: string; description: string } {
+  return {
+    title: `Server update: Rooftap ${update.latest}`,
+    description: `Your server runs ${update.current}. Update it to get the new features and fixes.`,
+  };
+}

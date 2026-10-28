@@ -68,6 +68,7 @@ export * from './module-features';
 export * from './server-features';
 export * from './app-release';
 export * from './app-release-store';
+export * from './server-update-store';
 export * from './task-modules';
 export * from './mcp-tools';
 export * from './assistant-reach';

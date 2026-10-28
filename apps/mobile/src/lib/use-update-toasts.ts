@@ -21,12 +21,30 @@
 //   toast is the only sign. A phone too old for its server hears it on every
 //   launch.
 //
+// - "Server update: Rooftap 1.2.0": once per release for the people who run
+//   a self-hosted server that is behind (GET /api/server-update), with a How
+//   to update action that opens About & updates. Web has the same toast
+//   (components/server-update.tsx).
+//
 // Mobile only: web is served fresh per deploy and has no pending-bundle state.
 import * as React from 'react';
 import { AppState, Linking } from 'react-native';
 import * as Updates from 'expo-updates';
+import { useRouter } from 'expo-router';
 import { toast } from '@homeup/ui';
-import { SEEN_APP_RELEASE_KEY, appStanding, appUpdateNotice, shouldAnnounceRelease, useServerRelease } from '@homeup/core';
+import {
+  SEEN_APP_RELEASE_KEY,
+  SEEN_SERVER_UPDATE_KEY,
+  appStanding,
+  appUpdateNotice,
+  serverUpdateNotice,
+  shouldAnnounceRelease,
+  shouldAnnounceServerUpdate,
+  useServerRelease,
+  useServerUpdate,
+} from '@homeup/core';
+import { fetchServerUpdate } from '@/features/settings/server-update-api';
+import { useDataCache } from './data-cache';
 import { nativeStoreEnvironment } from './legend/environment';
 import {
   LAST_SEEN_UPDATE_KEY,
@@ -43,6 +61,8 @@ export function useUpdateToasts(): void {
   const announcedReady = React.useRef<string | null>(null);
   const release = useServerRelease();
   const announcedRelease = React.useRef(false);
+  const router = useRouter();
+  const serverUpdate = useServerUpdate(fetchServerUpdate, useDataCache().currentUserId);
 
   React.useEffect(() => {
     if (!Updates.isEnabled) return;
@@ -143,4 +163,27 @@ export function useUpdateToasts(): void {
       ...(url ? { action: { label: 'Get it', onPress: () => void Linking.openURL(url).catch(() => {}) } } : {}),
     });
   }, [release]);
+
+  React.useEffect(() => {
+    if (!serverUpdate) return;
+    let seen: string | null = null;
+    try {
+      seen = nativeStoreEnvironment.keyValue.getItem(SEEN_SERVER_UPDATE_KEY);
+    } catch {
+      // Storage unavailable: announce, and maybe again next launch.
+    }
+    if (!shouldAnnounceServerUpdate(serverUpdate, seen)) return;
+    try {
+      nativeStoreEnvironment.keyValue.setItem(SEEN_SERVER_UPDATE_KEY, serverUpdate.latest);
+    } catch {
+      // Worst case the toast repeats next launch.
+    }
+    const notice = serverUpdateNotice(serverUpdate);
+    toast.message(notice.title, {
+      description: notice.description,
+      duration: RELEASE_TOAST_MS,
+      placement: 'top',
+      action: { label: 'How to update', onPress: () => router.push('/settings/about') },
+    });
+  }, [serverUpdate, router]);
 }

@@ -31,6 +31,7 @@ import { DataCacheProvider } from "@/lib/data-cache";
 import { LegendSyncBootstrap } from "@/lib/legend/sync-status";
 import { ModulePicker } from "@/components/module-picker";
 import { WhatsNewDialog } from "@/components/whats-new";
+import { ServerUpdateToast } from "@/components/server-update";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { OfflineIndicator } from "@/components/offline-indicator";
 import { RevalidatingIndicator } from "@/components/revalidating-indicator";
@@ -633,6 +634,8 @@ export function AppSidebar({ children }: { children: React.ReactNode }) {
               <ModulePicker />
               {/* What's new since this browser last looked (whats-new/README.md). */}
               <WhatsNewDialog />
+              {/* A newer server release, for the people who run the server. */}
+              <ServerUpdateToast />
             </DataCacheProvider>
           </div>
         </div>

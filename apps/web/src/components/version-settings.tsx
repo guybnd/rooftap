@@ -4,10 +4,12 @@
 // phone app is (core app-release.ts). The web app is served by the server it
 // talks to, so it is always that server's version; the phone twin is
 // apps/mobile's AppUpdates panel, which also compares the phone's own build.
+// Above it, the people who run the server see a newer server release.
 import { Info } from "lucide-react";
 import { serverVersionLabel, useModules, useServerRelease } from "@homeup/core";
 import { ListGroup, ListItem, ListItemContent, ListItemTitle, ListItemTrailing } from "@/components/ui/list-item";
 import { SettingsPanel } from "@/components/settings-panel";
+import { ServerUpdatePanel } from "@/components/server-update";
 
 function InfoRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -25,19 +27,22 @@ export function VersionSettings() {
   const { schema } = useModules();
   const latest = release?.latestApp ?? null;
   return (
-    <SettingsPanel icon={Info} title="Version">
-      <ListGroup className="rounded-xl border-0 bg-muted/30 shadow-none divide-border/60">
-        <InfoRow label="Rooftap">{serverVersionLabel(release, schema)}</InfoRow>
-        <InfoRow label="Android app">
-          {latest ? (
-            <a href={latest.url} target="_blank" rel="noreferrer" className="font-medium text-primary hover:underline">
-              Get {latest.version}
-            </a>
-          ) : (
-            "Not offered here"
-          )}
-        </InfoRow>
-      </ListGroup>
-    </SettingsPanel>
+    <>
+      <ServerUpdatePanel />
+      <SettingsPanel icon={Info} title="Version">
+        <ListGroup className="rounded-xl border-0 bg-muted/30 shadow-none divide-border/60">
+          <InfoRow label="Rooftap">{serverVersionLabel(release, schema)}</InfoRow>
+          <InfoRow label="Android app">
+            {latest ? (
+              <a href={latest.url} target="_blank" rel="noreferrer" className="font-medium text-primary hover:underline">
+                Get {latest.version}
+              </a>
+            ) : (
+              "Not offered here"
+            )}
+          </InfoRow>
+        </ListGroup>
+      </SettingsPanel>
+    </>
   );
 }

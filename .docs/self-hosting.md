@@ -331,6 +331,12 @@ Rooftap does not encrypt your data or your uploaded files itself. Postgres and t
 
 ## Upgrading Rooftap
 
+When a newer Rooftap release is out, the app tells the people who run your server. These are the operators in `SERVER_OPERATOR_EMAILS`. If you name no operators, it tells the household owners. They see a note once for each release, and **Settings → About & updates** shows the release, a link to what changed and the commands below. Other people see nothing.
+
+To find the newest release, the server asks GitHub about the public repo's releases. It asks only when one of those people opens the app, and at most every few hours. It sends no data about your server or your households. To turn the check off, set `ROOFTAP_SERVER_UPDATES=off` in `.env`. To follow the releases of your own fork, set it to `owner/repo`.
+
+To upgrade:
+
 ```bash
 git pull
 ./scripts/self-host-init.sh -d --build
