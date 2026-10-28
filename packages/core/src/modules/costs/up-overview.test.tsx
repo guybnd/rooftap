@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CostItem } from '../../types';
-import { clearUpOverviewCache, UpOverviewProvider, useCurrentCostMonth, useOpeningCostMonth } from './up-overview';
+import { clearUpOverviewCache, initUpOverviewMemory, UpOverviewProvider, useCurrentCostMonth, useOpeningCostMonth } from './up-overview';
 import type { LedgerRow } from './cost-month';
 import { monthStartOf, type UpBankApi } from './up-bank';
 
@@ -26,7 +26,10 @@ function fakeApi(connected = true) {
   return { api, land };
 }
 
-afterEach(() => clearUpOverviewCache());
+afterEach(() => {
+  cleanup();
+  clearUpOverviewCache();
+});
 
 describe('this month before and after the bank payments land', () => {
   it('Home gets no total until the bank read is in, then the same one Costs shows', async () => {
@@ -61,5 +64,24 @@ describe('this month before and after the bank payments land', () => {
     const wrapper = ({ children }: { children: ReactNode }) => createElement(UpOverviewProvider, { api, enabled: true, linking: true, sharing: true, children });
     renderHook(() => useCurrentCostMonth([rent]), { wrapper });
     await waitFor(() => expect(widget.result.current?.paidCents).toBe(400_000));
+  });
+
+  it('opens on the totals kept from last time, then keeps the new ones', async () => {
+    const kv = new Map<string, string>();
+    kv.set('homeup:costs-kept-month', JSON.stringify({ connected: true, shareMode: 'all', month: { month: monthKey, paidCents: 650_000, toComeCents: 0, expectedCents: 650_000, incomeCents: 0, incomeExpectedCents: null } }));
+    initUpOverviewMemory({ getItem: (k) => kv.get(k) ?? null, setItem: (k, v) => void kv.set(k, v) });
+    const { api, land } = fakeApi();
+    const wrapper = ({ children }: { children: ReactNode }) => createElement(UpOverviewProvider, { api, enabled: true, linking: true, sharing: true, children });
+    const { result } = renderHook(() => ({ home: useCurrentCostMonth([rent]), widget: useOpeningCostMonth([rent], true) }), { wrapper });
+    expect(result.current.home?.paidCents).toBe(650_000);
+    expect(result.current.widget?.paidCents).toBe(650_000);
+    // Seen connected last time: the payments are read alongside the status call.
+    await waitFor(() => expect(api.overview).toHaveBeenCalledWith(monthStartOf(now), 'household'));
+    await act(async () => land());
+    await waitFor(() => expect(result.current.home?.paidCents).toBe(700_000));
+    await waitFor(() => expect(JSON.parse(kv.get('homeup:costs-kept-month')!).month.paidCents).toBe(700_000));
+    // Sign-out forgets them.
+    clearUpOverviewCache();
+    expect(JSON.parse(kv.get('homeup:costs-kept-month')!)).toBeNull();
   });
 });

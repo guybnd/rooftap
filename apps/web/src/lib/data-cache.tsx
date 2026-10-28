@@ -4,7 +4,7 @@ import { createContext, useContext, useCallback, useEffect, useLayoutEffect, use
 import { createClient } from "@/lib/supabase/client";
 import { putAll, getAll, setMeta, getMeta, STORES } from "@/lib/offline-store";
 import { readDataCacheSnapshot, writeDataCacheSnapshot } from "@/lib/legend/data-cache-snapshot";
-import { fetchGroupData, getModulesSnapshot, householdCurrency, isPublicConfig, setAvailableModules, setHouseholdCurrency, setModuleRows, setServerRelease, setServerSchema, serverReleaseFromConfig } from "@homeup/core";
+import { fetchGroupData, getModulesSnapshot, householdCurrency, initUpOverviewMemory, isPublicConfig, setAvailableModules, setHouseholdCurrency, setModuleRows, setServerRelease, setServerSchema, serverReleaseFromConfig } from "@homeup/core";
 import type { ApartmentPreliminaryScore, UserSettings, Group, GroupMember, GroupInvitation } from '@homeup/core';
 
 // FLUX-150 slice 8: DataCacheProvider is now a slim group/identity provider.
@@ -43,6 +43,12 @@ if (typeof window !== "undefined") {
   setAvailableModules(snap?.availableModules ?? null);
   setServerSchema(snap?.serverSchema);
   setHouseholdCurrency(householdCurrency(snap?.group));
+  // This month's last totals (core up-overview.ts), so Home's Budget opens on them.
+  try {
+    initUpOverviewMemory(window.localStorage);
+  } catch {
+    // Storage blocked: Home waits for the bank read instead.
+  }
 }
 
 // The modules this server offers come from the same endpoint the native app's

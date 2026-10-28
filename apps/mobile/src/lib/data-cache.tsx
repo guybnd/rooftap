@@ -111,8 +111,9 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
   const [currentUserId, setCurrentUserId] = React.useState<string | null>(snapshot?.currentUserId ?? null);
   const [userSettings, setUserSettings] = React.useState<UserSettings | null>(snapshot?.userSettings ?? null);
   const [preliminaryScores, setPreliminaryScores] = React.useState<ApartmentPreliminaryScore[]>([]);
-  const [memberProfiles, setMemberProfiles] = React.useState<DataCache['memberProfiles']>({});
-  const [groupMembers, setGroupMembers] = React.useState<GroupMember[]>([]);
+  // Kept in the snapshot like web's, so names show on a cold start instead of "Former member".
+  const [memberProfiles, setMemberProfiles] = React.useState<DataCache['memberProfiles']>(snapshot?.memberProfiles ?? {});
+  const [groupMembers, setGroupMembers] = React.useState<GroupMember[]>(snapshot?.groupMembers ?? []);
   const [isGroupOwner, setIsGroupOwner] = React.useState(false);
   const [pendingInvitations, setPendingInvitations] = React.useState<GroupInvitation[]>([]);
   const [sentInvitations, setSentInvitations] = React.useState<GroupInvitation[]>([]);
@@ -241,6 +242,8 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
       group: nextGroup,
       userSettings: result.userSettings,
       currentUserId: result.currentUserId,
+      memberProfiles: result.hasMembership ? result.memberProfiles : {},
+      groupMembers: result.hasMembership ? result.groupMembers : [],
       groupModules: getModulesSnapshot().rows,
       availableModules: getModulesSnapshot().available,
       serverSchema: getModulesSnapshot().schema,

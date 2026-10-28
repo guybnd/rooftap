@@ -160,7 +160,8 @@ type MemberProfiles = Record<string, { email: string; name: string | null; avata
 function memberLabel(userId: string | null, profiles: MemberProfiles): string {
   if (!userId) return 'Unassigned';
   const profile = profiles[userId];
-  if (!profile) return 'Former member';
+  // No names at all yet (the first fetch is still out): not a former member.
+  if (!profile) return Object.keys(profiles).length ? 'Former member' : 'Member';
   return profile.name || profile.email || 'Member';
 }
 

@@ -36,6 +36,7 @@ import {
   MOTION_DURATIONS_MS,
   assignTabSlot,
   initRecentSections,
+  initUpOverviewMemory,
   openAssistantPopup,
   pickRecentSections,
   recordRecentSection,
@@ -65,6 +66,8 @@ const SWIFT_OUT = Easing.bezier(0.16, 1, 0.3, 1);
 // The More sheet's Recent strip reads this device's list from the
 // synchronous kv-store, so it's there on the sheet's first frame.
 initRecentSections(nativeStoreEnvironment.keyValue);
+// This month's last budget totals (core up-overview.ts), so Home and the widget open on them.
+initUpOverviewMemory(nativeStoreEnvironment.keyValue);
 
 // A tap's onPress follows its onPressIn well within this; a screen-reader
 // activation has no onPressIn at all.

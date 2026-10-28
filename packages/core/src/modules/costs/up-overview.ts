@@ -13,7 +13,9 @@
 // it straight away (the read still runs and replaces it); sign-out clears it
 // (clearUpOverviewCache). The opening read of this month also goes to readers
 // outside a provider (useOpeningCostMonth: the phone's widget), so they show
-// the figure Costs opens on.
+// the figure Costs opens on. With initUpOverviewMemory, the last totals of
+// this month and whether Up is connected outlive the app session (never a
+// payment), so Home and the widget open on them instead of waiting.
 
 export type UpViewScope = Exclude<BankScope, 'all'>;
 
@@ -22,7 +24,7 @@ import { costTargets, type BankActuals } from './costs';
 import { bankActualsOf, monthTotals, type MonthTotals } from './money-insights';
 import { costMonths, type CostMonth } from './cost-month';
 import type { CostItem } from '../../types';
-import { monthStartOf, type BankScope, type CostBankLink, type UpBankApi, type UpBankStatus, type UpOverview, type UpSpending } from './up-bank';
+import { monthStartOf, type BankScope, type BankShareMode, type CostBankLink, type UpBankApi, type UpBankStatus, type UpOverview, type UpSpending } from './up-bank';
 
 export interface UpOverviewState {
   status: UpBankStatus | null;
@@ -51,6 +53,60 @@ export interface UpOverviewState {
 let lastStatus: UpBankStatus | null = null;
 const lastReads = new Map<string, UpOverviewState['data']>();
 const readKey = (month: string, scope: UpViewScope | null) => `${month}|${scope ?? ''}`;
+
+/** Where the last totals are kept between launches (localStorage, the phone's key-value store). */
+export interface UpOverviewStorage {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+}
+const KEPT_KEY = 'homeup:costs-kept-month';
+/** Totals only: whether Up is connected and this month as Costs last opened on it. */
+interface Kept {
+  connected: boolean;
+  shareMode: BankShareMode | null;
+  month: Pick<CostMonth, 'month' | 'paidCents' | 'toComeCents' | 'expectedCents' | 'incomeCents' | 'incomeExpectedCents'> | null;
+}
+let storage: UpOverviewStorage | null = null;
+let kept: Kept | null = null;
+
+/** Load the kept totals (once at start; safe to call again). */
+export function initUpOverviewMemory(kv: UpOverviewStorage): void {
+  storage = kv;
+  try {
+    const raw = kv.getItem(KEPT_KEY);
+    kept = raw ? (JSON.parse(raw) as Kept) : null;
+  } catch {
+    kept = null;
+  }
+  openingChanged();
+}
+
+function keep(next: Kept) {
+  kept = next;
+  try {
+    storage?.setItem(KEPT_KEY, JSON.stringify(next));
+  } catch {
+    // Storage full or blocked: the totals still hold for this session.
+  }
+}
+
+function keepMonth(month: CostMonth) {
+  const k = kept ?? { connected: false, shareMode: null, month: null };
+  const { paidCents, toComeCents, expectedCents, incomeCents, incomeExpectedCents } = month;
+  const m = k.month;
+  if (m && m.month === month.month && m.paidCents === paidCents && m.expectedCents === expectedCents && m.toComeCents === toComeCents) return;
+  keep({ ...k, month: { month: month.month, paidCents, toComeCents, expectedCents, incomeCents, incomeExpectedCents } });
+}
+
+/** The kept totals of this month, as a CostMonth with no categories; null when there are none. */
+let keptShown: { from: Kept['month']; month: CostMonth } | null = null;
+function keptMonth(now: Date): CostMonth | null {
+  const m = kept?.month;
+  if (!m || m.month !== monthKeyOf(now)) return null;
+  // The same object while the totals stay, so readers don't redraw for nothing.
+  if (keptShown?.from !== m) keptShown = { from: m, month: { ...m, when: 'current', categories: [], income: null } };
+  return keptShown.month;
+}
 // This month as Costs opens on it, for useOpeningCostMonth.
 let openingRead: { month: string; data: UpOverviewState['data'] } | null = null;
 let openingVersion = 0;
@@ -65,6 +121,12 @@ export function clearUpOverviewCache(): void {
   lastStatus = null;
   lastReads.clear();
   openingRead = null;
+  kept = null;
+  try {
+    storage?.setItem(KEPT_KEY, 'null');
+  } catch {
+    // Nothing kept, or storage blocked.
+  }
   openingChanged();
 }
 
@@ -118,6 +180,9 @@ export function UpOverviewProvider({
   };
   const keepStatus = (s: UpBankStatus) => {
     lastStatus = s;
+    const connected = s.allowed && !!s.connection;
+    const shareMode = s.connection?.shareMode ?? null;
+    if (kept?.connected !== connected || kept.shareMode !== shareMode) keep({ month: kept?.month ?? null, connected, shareMode });
     setStatus(s);
     openingChanged();
   };
@@ -133,9 +198,15 @@ export function UpOverviewProvider({
     const month = monthStartOf(new Date());
     void (async () => {
       try {
-        // Seen connected before: read the stored payments while the status
-        // call is out, instead of one after the other.
-        const guess = lastStatus?.allowed && lastStatus.connection ? openingScope(lastStatus, sharing) : undefined;
+        // Seen connected before (this session, or kept from the last one):
+        // read the stored payments while the status call is out, instead of
+        // one after the other.
+        const guess =
+          lastStatus?.allowed && lastStatus.connection
+            ? openingScope(lastStatus, sharing)
+            : !lastStatus && kept?.connected
+              ? (sharing ? (kept.shareMode === 'none' ? 'mine' : 'household') : null)
+              : undefined;
         const early = guess === undefined ? null : read(month, guess);
         early?.catch(() => {});
         const s = await api.status();
@@ -274,21 +345,26 @@ export function useMonthTotals(items: readonly CostItem[]): MonthTotals | null {
 
 /**
  * This month from costMonth, as the Costs hero shows it (Home's Budget space
- * and shortcut). Null until the bank's payments are in (ready), so Home never
- * shows a total without them that then jumps.
+ * and shortcut, whose provider stays on the opening scope). Until the bank's
+ * payments are in (ready) it is the totals kept from the last time, so Home
+ * opens on them; null when there are none, so Home never shows a total
+ * without the payments that then jumps.
  */
 export function useCurrentCostMonth(items: readonly CostItem[]): CostMonth | null {
   const { ready } = useUpOverview();
   const [current] = useCostMonths(items, useMemo(() => [monthKeyOf(new Date())], []));
-  return ready ? current : null;
+  useEffect(() => {
+    if (ready) keepMonth(current);
+  }, [ready, current]);
+  return ready ? current : keptMonth(new Date());
 }
 
 /**
  * This month as Costs opens on it, for a reader outside a provider (the
  * phone's widget): from the latest opening read of Home or Costs. `bankOn`:
- * the server has the Up connector. Null while that's not known yet (no status
- * this app session, or connected and not read yet), so the reader keeps what
- * it showed before rather than a total without the bank's payments.
+ * the server has the Up connector. Before that read it is the kept totals;
+ * null when there are none, so the reader keeps what it showed before rather
+ * than a total without the bank's payments.
  */
 export function useOpeningCostMonth(items: readonly CostItem[], bankOn: boolean): CostMonth | null {
   const version = useSyncExternalStore(
@@ -304,9 +380,9 @@ export function useOpeningCostMonth(items: readonly CostItem[], bankOn: boolean)
     const key = monthKeyOf(now);
     const month = (data: UpOverviewState['data']) => monthsOf(items, data, now, [key])[0];
     if (!bankOn) return month(null);
-    if (!lastStatus) return null;
+    if (!lastStatus) return keptMonth(now);
     if (!lastStatus.allowed || !lastStatus.connection) return month(null);
-    if (!openingRead?.data || openingRead.month !== monthStartOf(now)) return null;
+    if (!openingRead?.data || openingRead.month !== monthStartOf(now)) return keptMonth(now);
     return month(openingRead.data);
     // version: a new read or status.
   }, [items, bankOn, version]);

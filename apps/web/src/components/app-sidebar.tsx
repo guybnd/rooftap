@@ -34,7 +34,7 @@ import { WhatsNewDialog } from "@/components/whats-new";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { OfflineIndicator } from "@/components/offline-indicator";
 import { RevalidatingIndicator } from "@/components/revalidating-indicator";
-import { clearThreadCache, sections, assignTabSlot, reorderVisibleSections, getSectionByPath, getEnabledSections, getModuleIdForPath, orderSections, settingsMenuHue, tabTravelDirection, glowDriftX, useModules, hasModuleSettings } from "@homeup/core";
+import { clearThreadCache, clearUpOverviewCache, sections, assignTabSlot, reorderVisibleSections, getSectionByPath, getEnabledSections, getModuleIdForPath, orderSections, settingsMenuHue, tabTravelDirection, glowDriftX, useModules, hasModuleSettings } from "@homeup/core";
 import { sectionIcons } from "@/lib/section-icons";
 import { globalMenus, visiblePanels } from "@/app/settings/settings-registry";
 import { SectionSwitcherGrid, SectionTabBar } from "@/components/section-switcher";
@@ -437,7 +437,7 @@ export function AppSidebar({ children }: { children: React.ReactNode }) {
               <span className="text-[13px] font-medium text-sidebar-foreground/80 truncate">{user.name}</span>
             </div>
           )}
-          <form action="/logout" method="POST" onSubmit={clearThreadCache}>
+          <form action="/logout" method="POST" onSubmit={() => { clearThreadCache(); clearUpOverviewCache(); }}>
             <button
               type="submit"
               className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium text-sidebar-foreground/40 hover:text-sidebar-foreground hover:bg-sidebar-accent/40 transition-all duration-150"
@@ -559,7 +559,7 @@ export function AppSidebar({ children }: { children: React.ReactNode }) {
               <span className="text-[13px] font-medium text-sidebar-foreground/80 truncate">{user.name}</span>
             </div>
           )}
-          <form action="/logout" method="POST" onSubmit={clearThreadCache}>
+          <form action="/logout" method="POST" onSubmit={() => { clearThreadCache(); clearUpOverviewCache(); }}>
             <button
               type="submit"
               className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium text-sidebar-foreground/40 hover:text-sidebar-foreground hover:bg-sidebar-accent/40 transition-all duration-150"

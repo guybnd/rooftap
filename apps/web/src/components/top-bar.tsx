@@ -16,7 +16,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import Image from "next/image";
 import Link from "next/link";
 import { LogOut, Settings, User } from "lucide-react";
-import { clearThreadCache, openAssistantPopup, sectionHue, setAssistantCounts, useAssistantPending, type Section } from "@homeup/core";
+import { clearThreadCache, clearUpOverviewCache, openAssistantPopup, sectionHue, setAssistantCounts, useAssistantPending, type Section } from "@homeup/core";
 import { assistantApi } from "@/lib/assistant-client";
 import { PromptBadge } from "@/components/ui/prompt-badge";
 import { cn } from "@/lib/utils";
@@ -223,7 +223,7 @@ export function TopBar({
               )}
               <ThemeSwitcher compact />
               <div className="my-1 h-px bg-border/60" />
-              <form action="/logout" method="POST" onSubmit={clearThreadCache}>
+              <form action="/logout" method="POST" onSubmit={() => { clearThreadCache(); clearUpOverviewCache(); }}>
                 <button
                   type="submit"
                   role="menuitem"

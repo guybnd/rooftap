@@ -221,6 +221,8 @@ describe('DataCacheProvider', () => {
       group: remoteGroup,
       userSettings: null,
       currentUserId: 'user-1',
+      memberProfiles: {},
+      groupMembers: [],
       groupModules: null,
       availableModules: null,
     });
