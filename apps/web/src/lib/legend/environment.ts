@@ -54,9 +54,15 @@ const INDEXEDDB_TABLES = [
   'meal_plan_entries',          // Meal plan (Recipes' This week)
   'recipe_staples',             // Recipes scan match
   'ingredient_aliases',         // Recipes scan match
+  'cook_sessions',              // Recipes cook mode
+  'shopper_wants',              // Shopper module
+  'shopper_price_snapshots',    // Shopper module
+  'shopper_searches',           // Shopper Scout
+  'shopper_offers',             // Shopper Scout
+  'shopper_picks',              // Shopper Scout
   // new-module:indexeddb-table (scripts/new-module.mjs adds above this line)
 ];
-const INDEXEDDB_VERSION = 12; // bumped for the scan match tables (non-destructive upgrade)
+const INDEXEDDB_VERSION = 13; // bumped for the cook session and Shopper tables (non-destructive upgrade)
 
 let indexedDBPlugin: ReturnType<typeof observablePersistIndexedDB> | undefined;
 

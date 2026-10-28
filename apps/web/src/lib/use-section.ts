@@ -154,7 +154,7 @@ export function useSectionSettings() {
         .from("user_settings")
         .select("default_section, last_used_section, hidden_sections, section_order")
         .eq("user_id", user.id)
-        .single();
+        .maybeSingle();
 
       if (error && (error.code === "PGRST200" || error.message?.includes("400"))) {
         // Columns don't exist yet, fall back to localStorage
