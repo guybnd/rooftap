@@ -155,7 +155,8 @@ export function ChecklistItemList({
               onCommit={(v) => onRename(item, v)}
               hasChanged={(next, prev) => next.trim() !== prev}
               triggerClassName={cn(
-                'min-w-0 truncate text-sm transition-colors',
+                // Items wrap: a long item reads in full, also in a narrow week board column.
+                'min-w-0 text-sm [overflow-wrap:anywhere] transition-colors',
                 item.is_done ? 'text-muted-foreground line-through' : 'text-foreground hover:text-primary',
               )}
               inputClassName="min-w-0 flex-1 rounded border border-input bg-muted px-1.5 py-0.5 text-sm text-foreground"

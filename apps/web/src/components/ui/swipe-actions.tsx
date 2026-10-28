@@ -56,13 +56,25 @@ export function SwipeActions({ children, onSwipeRight, onSwipeLeft, right, left,
     isSwiping.current = false;
     didSwipe.current = false;
     crossedTrigger.current = false;
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
     if (startX.current === null) return;
+    // Without a capture yet, a mouse released off the row never sent its
+    // pointerup here: a move with no button down ends that press.
+    if (e.pointerType === 'mouse' && e.buttons === 0) {
+      startX.current = null;
+      return;
+    }
     const dx = e.clientX - startX.current;
-    if (!isSwiping.current && Math.abs(dx) > START) isSwiping.current = true;
+    if (!isSwiping.current && Math.abs(dx) > START) {
+      isSwiping.current = true;
+      // Capture only once it is a swipe. A capture from the press itself
+      // sends the release to this wrapper, so the browser fires the click
+      // on the wrapper instead of the row, and a plain mouse click on a
+      // row (open its checklist, open an event) did nothing.
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    }
     if (!isSwiping.current) return;
     e.preventDefault();
     // Only allow directions that have a handler.
