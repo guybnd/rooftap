@@ -27,7 +27,7 @@
 // visibility detection, the Supabase client) goes through getStoreEnvironment()
 // instead of a browser/RN global — see store-environment.ts.
 
-import { observable, syncState, type Observable } from '@legendapp/state';
+import { observable, syncState, when, type Observable } from '@legendapp/state';
 import { onChangeRemote } from '@legendapp/state/sync';
 import { syncedSupabase, configureSyncedSupabase } from '@legendapp/state/sync-plugins/supabase';
 import { useCallback, useEffect } from 'react';
@@ -106,6 +106,18 @@ function dueForResetSync(collection: string, groupId: string): boolean {
   } catch {
     return true;
   }
+}
+
+/**
+ * Runs `run` once the store has loaded and no pull is in flight. Legend applies
+ * only the latest pull to finish (sync.js: a get that resolves after a later
+ * one is dropped), so the daily full re-pull started next to the opening delta
+ * pull lost to it every time: the delta answers first, the full pull's rows
+ * (tombstones included) are thrown away, and a row deleted while this device
+ * wasn't listening stayed on screen for days (rent counted twice in Costs).
+ */
+export function whenPullsSettled(state$: Observable<{ isLoaded?: boolean; isGetting?: boolean }>, run: () => void): void {
+  void when(() => !!state$.isLoaded.get() && !state$.isGetting.get(), run);
 }
 
 function markResetSyncDone(collection: string, groupId: string): void {
@@ -457,13 +469,22 @@ function acquireSyncCoordinator(
     const runResetIfDue = () => {
       if (!dueForResetSync(collection, groupId)) return;
       markResetSyncDone(collection, groupId);
-      void syncState(store$ as Observable).sync({ resetLastSync: true });
+      const state$ = syncState(store$ as Observable);
+      whenPullsSettled(state$, () => void state$.sync({ resetLastSync: true }));
     };
 
     const scheduler = createFallbackScheduler(sync);
+    // A delete this device missed would otherwise stay on screen until the
+    // first fallback tick (5 minutes while realtime is healthy), so check for
+    // one as soon as the store is first used in this app session.
+    let reconciledOnStart = false;
     const startTimer = () => {
       scheduler.start();
       runResetIfDue();
+      if (!reconciledOnStart) {
+        reconciledOnStart = true;
+        void reconcileDeletedRows(env, collection, groupId, store$);
+      }
     };
     const stopTimer = () => scheduler.stop();
 

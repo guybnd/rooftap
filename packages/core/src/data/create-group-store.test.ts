@@ -4,6 +4,7 @@ import {
   createFallbackScheduler,
   MAX_SERVER_ERROR_ATTEMPTS,
   reconcileDeletedRows,
+  whenPullsSettled,
   writeErrorAction,
   type GroupRecord,
   type SyncedRow,
@@ -170,5 +171,27 @@ describe('createFallbackScheduler', () => {
     scheduler.start();
     vi.advanceTimersByTime(300_000);
     expect(sync).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('whenPullsSettled', () => {
+  it('waits for the store to load and for every pull in flight to finish', () => {
+    const state$ = observable({ isLoaded: false, isGetting: true });
+    const run = vi.fn();
+    whenPullsSettled(state$, run);
+    expect(run).not.toHaveBeenCalled();
+    state$.isLoaded.set(true);
+    expect(run).not.toHaveBeenCalled();
+    state$.isGetting.set(false);
+    expect(run).toHaveBeenCalledTimes(1);
+    state$.isGetting.set(true);
+    state$.isGetting.set(false);
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it('runs at once when nothing is in flight', () => {
+    const run = vi.fn();
+    whenPullsSettled(observable({ isLoaded: true, isGetting: false }), run);
+    expect(run).toHaveBeenCalledTimes(1);
   });
 });
