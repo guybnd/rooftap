@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readRecentSpendPrefs, recentBars, recentSpend, toggleRecentWindow, DEFAULT_RECENT_SPEND, type DaySpend } from './recent-spend';
+import { readRecentSpendPrefs, recentBars, recentBillsNote, recentSpend, toggleRecentWindow, DEFAULT_RECENT_SPEND, type DaySpend } from './recent-spend';
 import { dayRows, type BankTransaction } from './up-bank';
 
 const now = new Date(2026, 9, 24, 15, 0);
@@ -49,6 +49,15 @@ describe('recentSpend', () => {
     const more = [...history, { day: day(1), costItemId: 'aia', outCents: 21600 }, { day: day(1), costItemId: null, sourceCategory: 'utilities', outCents: 9000 }];
     const [three] = recentSpend(more, items, { windows: [3], skipBills: true }, now);
     expect(three.cents).toBe(15000);
+  });
+
+  it('says how much in bills it left out', () => {
+    const insured = [...history, { day: day(0), costItemId: 'aia', outCents: 21632 }];
+    const windows = recentSpend(insured, items, { windows: [1, 3, 7], skipBills: true }, now);
+    expect(windows.map((w) => w.billCents)).toEqual([21632, 471632, 471632]);
+    expect(recentBillsNote(windows)).toBe('Bills not counted: $216 today');
+    expect(recentBillsNote(recentSpend(history, items, { windows: [1, 3], skipBills: true }, now))).toBe('Bills not counted: $4,500 in 3 days');
+    expect(recentBillsNote(recentSpend(insured, items, { windows: [1, 3], skipBills: false }, now))).toBeNull();
   });
 
   it('calls a quiet stretch under usual', () => {

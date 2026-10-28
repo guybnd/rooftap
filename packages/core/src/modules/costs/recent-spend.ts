@@ -108,6 +108,8 @@ export interface RecentSpendWindow {
   /** cents minus usual; null without a usual. */
   diffCents: number | null;
   verdict: RecentVerdict | null;
+  /** Bills left out of cents (0 when bills count). */
+  billCents: number;
 }
 
 /** Within this share of usual (or this many cents) counts as about usual. */
@@ -132,16 +134,21 @@ function daysBefore(now: Date, n: number): string {
 }
 
 /** Money out per local day, bills left out when asked, and the first day the data has. */
-function spendByDay(days: readonly DaySpend[], items: readonly BillItem[], skipBills: boolean): { byDay: Map<string, number>; first: string | null } {
+function spendByDay(
+  days: readonly DaySpend[],
+  items: readonly BillItem[],
+  skipBills: boolean,
+): { byDay: Map<string, number>; billsByDay: Map<string, number>; first: string | null } {
   const itemById = new Map(items.map((i) => [i.id, i]));
   const byDay = new Map<string, number>();
+  const billsByDay = new Map<string, number>();
   let first: string | null = null;
   for (const d of days) {
     if (!first || d.day < first) first = d.day;
-    if (skipBills && isBillSpend(d, itemById)) continue;
-    byDay.set(d.day, (byDay.get(d.day) ?? 0) + d.outCents);
+    const into = skipBills && isBillSpend(d, itemById) ? billsByDay : byDay;
+    into.set(d.day, (into.get(d.day) ?? 0) + d.outCents);
   }
-  return { byDay, first };
+  return { byDay, billsByDay, first };
 }
 
 /** Where a window starts: local midnight of its first day. */
@@ -216,10 +223,10 @@ export function recentSpend(
   prefs: Pick<RecentSpendPrefs, 'windows' | 'skipBills'>,
   now: Date = new Date(),
 ): RecentSpendWindow[] {
-  const { byDay, first } = spendByDay(days, items, prefs.skipBills);
-  const sumBack = (from: number, to: number) => {
+  const { byDay, billsByDay, first } = spendByDay(days, items, prefs.skipBills);
+  const sumBack = (from: number, to: number, from_ = byDay) => {
     let s = 0;
-    for (let n = from; n < to; n++) s += byDay.get(daysBefore(now, n)) ?? 0;
+    for (let n = from; n < to; n++) s += from_.get(daysBefore(now, n)) ?? 0;
     return s;
   };
   // Full days before today that the data covers (the first day may be partial, so it's left out).
@@ -243,7 +250,7 @@ export function recentSpend(
     if (usualCents != null && diffCents != null) {
       verdict = Math.abs(diffCents) <= Math.max(USUAL_CENTS, usualCents * USUAL_SHARE) ? 'usual' : diffCents > 0 ? 'over' : 'under';
     }
-    return { days: w, label: recentWindowLabel(w), cents, usualCents, diffCents, verdict };
+    return { days: w, label: recentWindowLabel(w), cents, usualCents, diffCents, verdict, billCents: sumBack(0, w, billsByDay) };
   });
 }
 
@@ -252,6 +259,17 @@ export function recentVerdictText(w: Pick<RecentSpendWindow, 'verdict' | 'diffCe
   if (!w.verdict || w.diffCents == null) return null;
   if (w.verdict === 'usual') return 'About usual';
   return `${formatMoney(Math.abs(w.diffCents))} ${w.verdict} usual`;
+}
+
+/**
+ * The line under the strip when bills were left out: a bill paid today
+ * otherwise reads as "Today $0" right above it in the Latest list.
+ * "Bills not counted: $676 today", from the shortest window that left any out.
+ */
+export function recentBillsNote(windows: readonly Pick<RecentSpendWindow, 'days' | 'billCents'>[]): string | null {
+  const w = windows.find((x) => x.billCents > 0);
+  if (!w) return null;
+  return `Bills not counted: ${formatMoney(w.billCents)} ${w.days === 1 ? 'today' : `in ${w.days} days`}`;
 }
 
 /** A YYYY-MM-DD day as a short local date, "11 Oct". */

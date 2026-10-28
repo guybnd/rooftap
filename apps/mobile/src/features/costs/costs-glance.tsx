@@ -16,6 +16,7 @@ import {
   hasUnseenInsights,
   markInsightsSeen,
   recentDayLabel,
+  recentBillsNote,
   recentVerdictText,
   timeAgo,
   useCostInsights,
@@ -315,6 +316,11 @@ export function LatestPage({
             );
           })}
         </View>
+      ) : null}
+      {open == null && recentBillsNote(windows) ? (
+        <Text className="border-b border-border/60 px-4 py-2 text-xs text-muted-foreground" style={TABULAR}>
+          {recentBillsNote(windows)}
+        </Text>
       ) : null}
       {open != null && bars ? (
         <View>

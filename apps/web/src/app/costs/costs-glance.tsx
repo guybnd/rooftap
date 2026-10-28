@@ -17,6 +17,7 @@ import {
   formatMoney,
   hasUnseenInsights,
   markInsightsSeen,
+  recentBillsNote,
   recentDayLabel,
   recentVerdictText,
   timeAgo,
@@ -314,6 +315,9 @@ export function LatestPage({
             );
           })}
         </div>
+      ) : null}
+      {open == null && recentBillsNote(windows) ? (
+        <p className="border-b border-border/60 px-4 py-2 text-xs tabular-nums text-muted-foreground">{recentBillsNote(windows)}</p>
       ) : null}
       {open != null && bars ? (
         <div>
