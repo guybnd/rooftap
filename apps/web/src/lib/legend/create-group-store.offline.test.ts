@@ -30,6 +30,10 @@ const rowsByTable = new Map<string, Row[]>();
 // tests can assert on OUTBOUND writes — not just the resulting row state —
 // e.g. proving a local-only removal never echoes a redundant push.
 const upsertCalls: { table: string; payload: Row }[] = [];
+// Optional server-side check run before an upsert lands, e.g. a foreign key
+// that refuses a child row whose parent is not there yet.
+type ServerError = { error: { message: string; code?: string }; status: number };
+let beforeUpsert: ((table: string, item: Row) => Promise<ServerError | void>) | null = null;
 
 function table(name: string): Row[] {
   if (!rowsByTable.has(name)) rowsByTable.set(name, []);
@@ -39,7 +43,9 @@ function table(name: string): Row[] {
 // Minimal fake matching exactly the surface syncedSupabase + create-group-store.ts
 // touch: from().select/.eq/.gt (read+filter), from().upsert().select() (our
 // idempotent create/update override), and channel().on().subscribe() (realtime).
-class FakeBuilder implements PromiseLike<{ data: Row[] | null; error: { message: string } | null }> {
+type FakeResult = { data: Row[] | null; error: { message: string; code?: string } | null; status?: number };
+
+class FakeBuilder implements PromiseLike<FakeResult> {
   private filters: Array<(r: Row) => boolean> = [];
   constructor(
     private tableName: string,
@@ -59,13 +65,13 @@ class FakeBuilder implements PromiseLike<{ data: Row[] | null; error: { message:
     return this;
   }
   then<TResult1, TResult2 = never>(
-    onfulfilled?: ((value: { data: Row[] | null; error: { message: string } | null }) => TResult1 | PromiseLike<TResult1>) | null,
+    onfulfilled?: ((value: FakeResult) => TResult1 | PromiseLike<TResult1>) | null,
     onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
   ) {
     return this.run().then(onfulfilled, onrejected);
   }
 
-  private async run(): Promise<{ data: Row[] | null; error: { message: string } | null }> {
+  private async run(): Promise<FakeResult> {
     if (!online) {
       // Real supabase-js swallows the network TypeError and returns it as
       // `error`, not a thrown rejection — matches create-group-store.ts's
@@ -78,6 +84,8 @@ class FakeBuilder implements PromiseLike<{ data: Row[] | null; error: { message:
     }
     // upsert(onConflict: 'id') — the idempotent create/update path (FLUX-263/265).
     const item = this.payload!;
+    const refused = await beforeUpsert?.(this.tableName, item);
+    if (refused) return { data: null, ...refused };
     upsertCalls.push({ table: this.tableName, payload: item });
     const existing = rows.find((r) => r.id === item.id);
     if (existing) {
@@ -147,6 +155,7 @@ describe("createGroupStore — offline write / reconnect / group isolation (HOUP
     online = true;
     rowsByTable.clear();
     upsertCalls.length = 0;
+    beforeUpsert = null;
     // HOUP-293: fresh IndexedDB per test. "fake-indexeddb/auto" installs ONE
     // global factory for the whole file, and vi.resetModules() below drops the
     // app module graph but NOT that global — without this, a later test's
@@ -268,6 +277,7 @@ describe("reconcileDeletedRows — synced-observable push path (HOUP-267)", () =
     online = true;
     rowsByTable.clear();
     upsertCalls.length = 0;
+    beforeUpsert = null;
     // HOUP-293: fresh IndexedDB per test. "fake-indexeddb/auto" installs ONE
     // global factory for the whole file, and vi.resetModules() below drops the
     // app module graph but NOT that global — without this, a later test's
@@ -333,4 +343,47 @@ describe("reconcileDeletedRows — synced-observable push path (HOUP-267)", () =
       .filter((call) => call.table === "grocery_items" && call.payload.id === itemId);
     expect(redundantWrites).toEqual([]);
   }, 15000);
+  it("saves a checklist's items when they reach the server before the checklist does", async () => {
+    // A checklist made from a template writes the checklist and its items to
+    // two stores, which push on their own. The server refuses an item whose
+    // checklist is not there yet (foreign key), so a slow checklist push used
+    // to lose every item: "insert or update on table checklist_task_items
+    // violates foreign key constraint".
+    const { checklists$, checklistItems$ } = await importStores();
+    const groupId = "group-template";
+    const lists$ = checklists$(groupId) as unknown as Record<string, { set: (v: unknown) => void; assign: (v: unknown) => void; peek: () => unknown }>;
+    const items$ = checklistItems$(groupId) as unknown as Record<string, { set: (v: unknown) => void; peek: () => unknown }>;
+    await waitForInitialLoad(lists$);
+    await waitForInitialLoad(items$);
+
+    beforeUpsert = async (tableName, item) => {
+      if (tableName === "checklists") await new Promise((r) => setTimeout(r, 400));
+      if (tableName === "checklist_task_items" && !table("checklists").some((r) => r.id === item.checklist_id)) {
+        return {
+          error: {
+            code: "23503",
+            message: 'insert or update on table "checklist_task_items" violates foreign key constraint "checklist_task_items_checklist_id_fkey"',
+          },
+          status: 409,
+        };
+      }
+    };
+
+    lists$["list-1"].set({ id: "list-1", group_id: groupId, deleted: false, title: "Pre-Flight", scheduled_date: null, created_at: null, updated_at: null });
+    for (const n of [1, 2, 3]) {
+      items$[`li-${n}`].set({ id: `li-${n}`, group_id: groupId, checklist_id: "list-1", deleted: false, label: `Item ${n}`, order: n, created_at: null, updated_at: null });
+    }
+
+    await pollUntil(() => table("checklist_task_items").length === 3, 15000);
+    expect(table("checklists")).toHaveLength(1);
+
+    // The new list's date still saves after the create settles.
+    await pollUntil(() => Boolean((lists$["list-1"].peek() as Row | undefined)?.created_at));
+    lists$["list-1"].assign({ scheduled_date: "2026-10-29" });
+    lists$["list-1"].assign({ scheduled_date: "2026-10-30" });
+    expect((lists$["list-1"].peek() as Row).scheduled_date).toBe("2026-10-30");
+    await pollUntil(() => table("checklists")[0]?.scheduled_date === "2026-10-30", 15000);
+    await new Promise((r) => setTimeout(r, 900));
+    expect((lists$["list-1"].peek() as Row).scheduled_date).toBe("2026-10-30");
+  }, 30000);
 });

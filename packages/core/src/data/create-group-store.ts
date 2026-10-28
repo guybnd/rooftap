@@ -185,6 +185,7 @@ export async function reconcileDeletedRows<T extends SyncedRow>(
 // permanently drops the row server-side while it stays visible in the local
 // cache (the "recipe shows 2 of 12 ingredients on every other device" bug).
 // Only genuinely permanent errors (RLS, constraint, schema) may be dropped.
+const FOREIGN_KEY_VIOLATION = '23503';
 const TRANSIENT_HTTP_STATUS = new Set([401, 408, 425, 429]);
 const TRANSIENT_MESSAGE =
   /failed to fetch|fetch failed|networkerror|network request failed|load failed|timed? ?out|aborted/i;
@@ -195,8 +196,15 @@ function isTransientWriteError(
 ): boolean {
   if (typeof status === 'number' && (status >= 500 || TRANSIENT_HTTP_STATUS.has(status))) return true;
   if (TRANSIENT_MESSAGE.test(String(error.message ?? ''))) return true;
+  const code = String(error.code ?? '');
   // PGRST301 = JWT expired/invalid — succeeds once the auth client refreshes.
-  return String(error.code ?? '') === 'PGRST301';
+  if (code === 'PGRST301') return true;
+  // 23503 = foreign key violation. Each table's store pushes on its own, so a
+  // child row (a checklist's items, a recipe's ingredients) can reach the
+  // server before the parent written in the same tap. The parent lands a
+  // moment later, so this is retried like a server error (capped by
+  // writeErrorAction) instead of dropping every child at once.
+  return code === FOREIGN_KEY_VIOLATION;
 }
 
 // Stuck-sync fix: a server that answers with a "transient" error (5xx, 401,

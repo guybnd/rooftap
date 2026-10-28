@@ -106,6 +106,12 @@ describe('writeErrorAction', () => {
     expect(writeErrorAction({ message: 'server error' }, 503, { online: false, attempts: 500 })).toBe('retry');
   });
 
+  it('retries a child row refused for a missing parent, then drops it', () => {
+    const error = { message: 'violates foreign key constraint', code: '23503' };
+    expect(writeErrorAction(error, 409, { online: true, attempts: 1 })).toBe('retry');
+    expect(writeErrorAction(error, 409, { online: true, attempts: MAX_SERVER_ERROR_ATTEMPTS })).toBe('drop');
+  });
+
   it('retries a server error a few times, then drops it', () => {
     const error = { message: 'canceling statement due to statement timeout', code: '57014' };
     expect(writeErrorAction(error, 500, { online: true, attempts: MAX_SERVER_ERROR_ATTEMPTS - 1 })).toBe('retry');

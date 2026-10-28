@@ -112,7 +112,10 @@ export default function ChecklistDetailPage() {
   const checklist = use$(() => {
     const rec = lists$.get() ?? {};
     const c = (rec as Record<string, Checklist>)[checklistId];
-    return c && !c.deleted ? c : null;
+    // A copy: Legend changes the row object in place, so returning it as is
+    // hands use$ the same object after an edit and the screen does not draw
+    // again (the date spinner did nothing until the picker closed).
+    return c && !c.deleted ? { ...c } : null;
   });
 
   // D7: the flat, order-ascending, unpartitioned array. `move()` and every
