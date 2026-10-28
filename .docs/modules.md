@@ -159,7 +159,7 @@ When a module is off, all of these must hide it. Each is one of the gating PRs i
 | Notifications | edge functions `notify-*` send only while the task's owning module is on (`_shared/modules.ts`) | same |
 | Android widget | | `widgets/` drops the sections of switched-off modules; with Tasks off it shows bill and document reminders only |
 | MCP | `/api/mcp` returns 404 when `mcp` is off; tools register only for enabled modules (`MCP_TOOLS` in core's `mcp-tools.ts`), and bill and document reminders follow their owner in the task tools; the panel hides with `mcp` off and its tools list follows | same panel and list |
-| Google Calendar | `/api/calendar/*` return 404 when `google-calendar` is off, and an import also needs its target (Tasks or Home Search); the calendar overlay, viewing suggestions, the setup panel and the "pulled events in to-do list" toggle hide (`calendar.google-events`, `search.google-suggestions`, `hub.calendar-events`). `calendar-push` sends only items whose module is on, and its reconcile pass removes the rest from Google; `calendar-sync` pulls only for members with Google Calendar on in one of their households | same |
+| Google Calendar | `/api/calendar/*` return 404 when `google-calendar` is off. An import also needs its target (Tasks or Home Search). The calendar overlay, viewing suggestions, the setup panel and the "pulled events in to-do list" toggle hide (`calendar.google-events`, `search.google-suggestions`, `hub.calendar-events`). `calendar-push` sends only items whose module is on, and its reconcile pass removes the rest from Google; `calendar-sync` pulls only for members with Google Calendar on in one of their households | same |
 | Module API routes | `parse-listing` (Home Search), `parse-receipt` (Groceries) and `parse-recipe` (Recipes) return 404 when their module is off (`apps/web/src/lib/server-modules.ts`) | same routes |
 | Data sync | `LegendSyncBootstrap` activates only the stores of modules that are on and starts a module's stores when it is switched on; the hub, capture, the offline page, share target and the overdue badge open a switched-off module's stores with no group id (`syncedGroupId`, `store-modules.ts`) | the hub, capture, the widget sync and the overdue badge do the same (mobile has no bootstrap; stores start where they are read) |
 | Offline page | `app/~offline` | |
@@ -183,7 +183,12 @@ The tricky cases are features that **write into another module's tables**, becau
 | Calendar → Tasks, Search | the calendar creates tasks and viewings; Google import writes either | the add chooser, Google import buttons and viewing suggestions offer only what is on (`calendar.tasks`, `calendar.viewings`) |
 | Capture and share | categories on mobile share and web capture | each category needs the features it writes through (`CAPTURE_CATEGORY_FEATURES` in documents.ts; an invoice needs Costs and Documents). A share nothing can take says so instead of landing on Home |
 
-Places that **read or link** across modules are gated the same way: calendar aggregation, hub agenda sources and summary-hero modules (`hub.*`, `HERO_MODULE_FEATURES` in hero.ts; a saved hero toggle is kept, so it returns with the module), the hero checklist meter, portal chips, document link chips (`visibleDocumentLinks`), the legacy bill and receipt files in the documents list, hub tile and search (`listUnifiedDocuments`' `legacy` flags), and the Costs suggestions from the chosen apartment and Home Setup.
+Places that **read or link** across modules are gated the same way:
+
+- calendar aggregation, hub agenda sources and summary-hero modules (`hub.*`, `HERO_MODULE_FEATURES` in hero.ts). A saved hero toggle is kept, so it returns with the module.
+- the hero checklist meter, portal chips and document link chips (`visibleDocumentLinks`)
+- the legacy bill and receipt files in the documents list, hub tile and search (`listUnifiedDocuments`' `legacy` flags)
+- the Costs suggestions from the chosen apartment and Home Setup
 
 Some things stay because they belong to the module that is on:
 - A scanned recipe's "View original photo". The scan stores it in the documents table even with Documents off, but it is the recipe's own photo. With Documents on, its chip on the document opens the recipe.
@@ -305,35 +310,93 @@ So a feature that adds a module or a table must decide how the Assistant reaches
 
 When you add a tool:
 
-1. Add it to `MCP_TOOLS` with its module and kind. The module gate, the MCP settings list and the Assistant trust setting all follow from that entry.
+1. Add it to `tools` in the module's manifest, with its kind. `MCP_TOOLS` is built from the manifests. The module gate, the MCP settings list and the Assistant trust setting all follow from that entry.
 2. Repeat the module's privacy rule in the handler. The handlers use the admin client, so row level security does not apply. Examples: private tasks and Setup items, "Just me" loyalty cards, and watches kept from a member.
 3. Give a write tool a line in `describeProposal` (`packages/core/src/modules/assistant/assistant-api.ts`) if the generic line does not say clearly what it changes.
-4. Update `TABLE_REACH`.
+4. Update the table's `reach` in the manifest.
 
 ## 15. Adding a module
+
+### The manifest
+
+Each module declares itself once, in `packages/core/src/modules/<id>/manifest.ts`:
+
+```ts
+export const binsModule = defineModule({
+  id: 'bins',
+  label: 'Bin night',
+  description: 'Which bins go out tonight, whose turn it is, and a reminder before bed.',
+  iconId: 'trash-2',
+  defaultEnabled: false,
+  enhances: ['calendar', 'assistant'],
+  minSchema: '20261023110000_bins',
+  section: {
+    label: 'Bin night',
+    shortLabel: 'Bins',
+    basePath: '/bins',
+    acceptsShares: false,
+    navItems: [{ href: '/bins', label: 'Bin night', iconId: 'trash-2', accent: true }],
+    hue: 'olive',
+  },
+  tables: {
+    bin_streams: { reach: { tools: ['get_bin_night', 'change_bin_collection'] }, sync: ['bins'] },
+    bin_night_pushes: { reach: { none: REACH_REASONS.server } },
+  },
+  tools: [
+    { name: 'get_bin_night', kind: 'read' },
+    { name: 'mark_bins_out', kind: 'write' },
+  ],
+});
+```
+
+| Field | What reads it |
+|---|---|
+| `id`, `label`, `description`, `iconId`, `defaultEnabled`, `requires`, `enhances`, `minSchema` | `MODULES` and `ModuleId` in `modules.ts`, so Settings > Modules, the first-run picker and every module gate. |
+| `section` | `sections` and `getSectionByPath` in `sections.ts`, the section's colour, the phone tab routes (`tabRoutes` adds nav items that are tabs) and both apps' route tests. A module with no screen of its own leaves it out. |
+| `tables` | `TABLE_REACH`. A table with `sync` is a synced group store: `STORE_MODULES` syncs it while one of the listed modules is on, and the web app caches it in IndexedDB. |
+| `tools` | `MCP_TOOLS`. The handlers live in `apps/web/src/lib/mcp/`. |
+| `noTools` | `MODULES_WITHOUT_TOOLS`, for a module with no tool. |
+| `settings` | `MODULE_SETTINGS` (section 16). |
+
+`packages/core/src/module-manifests.ts` lists every manifest. Its order is the registry order. Sections keep their switcher order from `SECTION_ORDER` in `sections.ts`. A section that is not on that list goes after the others, so a new module needs no edit there.
+
+A section's `hue` is a curated hue such as `'mint'`, or any colour as `'#rrggbb'`. For a colour, `customHueSwatch` works out the tile, icon and glow shades for each theme. It keeps the colour's hue and uses the usual lightness of the curated hues.
+
+The module-boundary lint fails a module folder that `module-manifests.ts` does not list. `module-manifests.test.ts` fails two sections with the same hue or base path, and a table that two manifests claim.
+
+### The generator
 
 Start every new module with the generator. It writes the module in the shape the rest of the app expects, so the module does not need a refactor later.
 
 ```sh
 npm run new-module -- plant-care --label "Plant care" --short Plants \
-  --icon sprout --hue <free hue> --description "Which plants need water, and when."
+  --icon sprout --hue "#3A8F5C" --description "Which plants need water, and when."
 ```
 
 The generator makes these files:
 
 | File | What it holds |
 |---|---|
+| `packages/core/src/modules/<id>/manifest.ts` | The manifest: the section, its hue, the table, the two tools and how the Assistant reaches the table. |
 | `packages/core/src/modules/<id>/<id>.ts` | The row type and the pure view helpers: sorting, the Hero, labels and the row menu. |
 | `packages/core/src/modules/<id>/use-<id>.ts` | The hook that reads and writes the synced store. Both apps call it. |
 | `packages/core/src/modules/<id>/<id>.test.ts` | Tests for the helpers. |
 | `packages/core/src/data/stores/<id>-stores.ts` | The local-first group store. |
 | `apps/web/src/app/<id>/page.tsx` | The web screen. It binds the hook and renders `ListItem` rows with `useRowContextMenu`. |
 | `apps/mobile/src/app/(tabs)/<id>/index.tsx` | The phone screen. It binds the same hook and renders `ListItem` rows with `useRowMenuSheet`. |
-| `apps/web/src/lib/mcp/tools/<id>-tools.ts` | A read tool and a write tool for the Assistant. |
+| `apps/web/src/lib/mcp/tools/<id>-tools.ts` | The handlers for the read tool and the write tool. |
 | `supabase/migrations/<version>_<id>.sql` | The table, its grants, row level security, sync triggers and realtime. |
 | `whats-new/<date>-<id>.md` | The What's new entry. |
 
-It also adds the module to each registry: `modules.ts` (with `minSchema`), `sections.ts`, `store-modules.ts`, the section hue, both icon maps, both route tests, the web offline cache, `MCP_TOOLS`, `TABLE_REACH`, `schema-check.ts` and the edge functions' `module-rules.ts`. Each registry has a `new-module:<slot>` comment. The generator adds its lines above that comment, so do not remove the comments.
+It then lists the manifest in `module-manifests.ts`. It also adds the entries a manifest cannot hold:
+
+- the core exports in `index.ts` and `data/stores/index.ts`
+- the type check in `schema-check.ts`
+- the edge functions' `module-rules.ts`, because Deno cannot read core
+- the tool handlers in `household-tools.ts`
+- the icon maps of both apps
+- the landing page's module map and the search index test
+ Each of these files has a `new-module:<slot>` comment. The generator adds its lines above that comment, so do not remove the comments.
 
 After the generator runs:
 
@@ -341,7 +404,7 @@ After the generator runs:
 2. Change the starter list into the real module. Keep the split. Types, helpers, row menus and hooks go in the core folder. A screen only binds them and lays them out.
 3. Decide where else the module shows: the agenda, Home, the calendar, search and features that join two modules (`module-features.ts`).
 4. Write the What's new entry for the people who use the app.
-5. If the module has settings, add its panels to `MODULE_SETTINGS` (section 16).
+5. If the module has settings, add its panels to `settings` in the manifest (section 16).
 6. Run `npm run check`.
 
 `apps/web/src/lib/module-conformance.test.ts` runs in `npm run check` and checks every module in the registry. It fails when:
@@ -358,7 +421,7 @@ Modules that are older than these rules have their gaps in `module-conformance-b
 
 ## 16. Module settings
 
-Each module defines its settings one time, in `packages/core/src/module-settings.ts`. `MODULE_SETTINGS` lists the panels of each module by id. Two places show the same panels:
+Each module defines its settings one time, in `settings` in its manifest. `MODULE_SETTINGS` (`packages/core/src/module-settings.ts`) lists the panels of each module by id. Two places show the same panels:
 
 - Settings, then the module, shows them as a page.
 - The module screen shows them as a sheet. The last row of its More menu is "<Module> settings".
@@ -367,7 +430,7 @@ A screen does not edit a setting itself. A switch, a choice or a number that cha
 
 To add a setting:
 
-1. Add a panel id to `SettingsPanelId` and to the module in `MODULE_SETTINGS`.
+1. Add a panel id to `SettingsPanelId` and to `settings` in the module's manifest. `MODULE_SETTINGS` is built from the manifests.
 2. Write the panel for each app: `apps/web/src/components/` and `apps/mobile/src/features/settings/panels/`. Map the id in `SETTINGS_PANELS` in each app's `settings-registry.ts`. TypeScript fails when an app has no panel for an id.
 3. Read and save the value with `useUserSetting` from core. The panel shows the change at once, saves it and reloads the settings cache, so the screen gets the new value from the same row.
 4. In the screen, call `useModuleSettingsSheet(<id>)`. Put its row last in the More menu and render its `sheet` one time.

@@ -9,6 +9,8 @@
 // section-hue-css.ts), so there is no second copy to keep in step.
 import type { ThemeId } from './theme-colors';
 import { isLightTheme, isStillTheme, type ColorScheme } from './theme-preference';
+import { ALL_MANIFESTS } from './module-manifests';
+import { clampChroma, formatHex, oklch as toOklch } from 'culori';
 
 /**
  * A theme with its own section hue set instead of the Hearth light/dark
@@ -45,7 +47,8 @@ export function hueSchemeTone(scheme: HueScheme): ColorScheme | 'ink' {
 /** The one grey swatch every section wears under the e-paper theme. */
 export const INK_HUE_SWATCH: SectionHueSwatch = { tile: '#DCDCDC', glyph: '#1A1A1A', glow: '#1A1A1A' };
 
-export type SectionHue =
+/** One of the curated hues, each with hand-tuned swatches for every scheme. */
+export type NamedHue =
   | 'coral'
   | 'lilac'
   | 'mint'
@@ -62,6 +65,17 @@ export type SectionHue =
   | 'cherry'
   | 'slate';
 
+/** Any colour a module picks for its section, as `#rrggbb`. Its swatches are worked out per scheme (customHueSwatch). */
+export type CustomHue = `#${string}`;
+
+/** A section's hue: a curated one, or any colour its module picks. */
+export type SectionHue = NamedHue | CustomHue;
+
+/** Whether a hue is a module's own `#rrggbb` colour rather than a curated one. */
+export function isCustomHue(hue: string): hue is CustomHue {
+  return /^#[0-9a-f]{6}$/i.test(hue);
+}
+
 export interface SectionHueSwatch {
   /** Leading tile fill. */
   tile: string;
@@ -71,7 +85,7 @@ export interface SectionHueSwatch {
   glow: string;
 }
 
-export const SECTION_HUE_IDS: readonly SectionHue[] = [
+export const SECTION_HUE_IDS: readonly NamedHue[] = [
   'coral',
   'lilac',
   'mint',
@@ -91,7 +105,7 @@ export const SECTION_HUE_IDS: readonly SectionHue[] = [
 
 // Night tiles are a dark tint with a light glyph; day tiles flip to a pale
 // tint with a deep glyph. The glow keeps one mid hue on both.
-export const SECTION_HUES: Record<SectionHue, Record<ColorScheme, SectionHueSwatch>> = {
+export const SECTION_HUES: Record<NamedHue, Record<ColorScheme, SectionHueSwatch>> = {
   coral: {
     dark: { tile: '#4A1F17', glyph: '#FF9A80', glow: '#FF7A5C' },
     light: { tile: '#FFE3DA', glyph: '#B23A1F', glow: '#FF7A5C' },
@@ -159,7 +173,7 @@ export const SECTION_HUES: Record<SectionHue, Record<ColorScheme, SectionHueSwat
 
 // Themes with their own hue set. Sorbet: the same fourteen hues pushed to gummy-sweet chroma. Day tiles are
 // candy pastels with a saturated glyph; night tiles glow like jelly.
-export const HUE_SETS: Record<HueSetId, Record<SectionHue, SectionHueSwatch>> = {
+export const HUE_SETS: Record<HueSetId, Record<NamedHue, SectionHueSwatch>> = {
   'sorbet-day': {
     coral: { tile: '#FFC7B6', glyph: '#CD2900', glow: '#FF8F70' },
     lilac: { tile: '#DFD3FF', glyph: '#794FDB', glow: '#C8AAFF' },
@@ -285,24 +299,14 @@ export const GLOW_AURA: Partial<Record<HueScheme, readonly GlowAuraLayer[]>> = {
   ],
 };
 
-/** Which hue each section (sections.ts id) wears. Home is the hub and wears coral. */
+/**
+ * Which hue each section (sections.ts id) wears. Home is the hub and wears
+ * coral; a module's section names its hue in its manifest; Settings wears
+ * slate, the quiet one.
+ */
 export const SECTION_HUE_BY_SECTION: Readonly<Record<string, SectionHue>> = {
   home: 'coral',
-  household: 'lilac',
-  groceries: 'mint',
-  costs: 'sun',
-  calendar: 'sky',
-  recipes: 'peach',
-  setup: 'rose',
-  search: 'teal',
-  checklists: 'lime',
-  shopper: 'orchid',
-  rewards: 'fern',
-  bins: 'olive',
-  // new-module:section-hue (scripts/new-module.mjs adds above this line)
-  assistant: 'indigo',
-  occasions: 'cherry',
-  documents: 'slate',
+  ...Object.fromEntries(ALL_MANIFESTS.flatMap((m) => (m.section ? [[m.id, m.section.hue]] : []))),
   profile: 'slate',
 };
 
@@ -317,7 +321,7 @@ export function sectionHue(sectionId: string): SectionHue {
  * wear their section's own hue (sectionHue); these cover the rows that are
  * not sections. Keys are the settings-registry menu keys of both apps.
  */
-export const SETTINGS_MENU_HUES: Readonly<Record<string, SectionHue>> = {
+export const SETTINGS_MENU_HUES: Readonly<Record<string, NamedHue>> = {
   global: 'indigo',
   modules: 'orchid',
   users: 'lilac',
@@ -331,7 +335,7 @@ export const SETTINGS_MENU_HUES: Readonly<Record<string, SectionHue>> = {
 };
 
 /** A Settings menu row's hue; anything unknown wears slate. */
-export function settingsMenuHue(key: string): SectionHue {
+export function settingsMenuHue(key: string): NamedHue {
   return SETTINGS_MENU_HUES[key] ?? 'slate';
 }
 
@@ -343,5 +347,41 @@ export function sectionHueSwatch(sectionId: string, scheme: HueScheme): SectionH
 /** One hue's swatch for a scheme (the e-paper scheme wears the shared grey, Sorbet its own set). */
 export function hueSwatch(hue: SectionHue, scheme: HueScheme): SectionHueSwatch {
   if (scheme === 'ink') return INK_HUE_SWATCH;
+  if (isCustomHue(hue)) return customHueSwatch(hue, scheme);
   return isHueSetId(scheme) ? HUE_SETS[scheme][hue] : SECTION_HUES[hue][scheme];
+}
+
+type Tone = { l: number; c: number };
+
+/**
+ * Lightness and chroma (OKLCH) of each part of a swatch, per scheme: the
+ * averages of the curated hues (slate aside), so a custom colour sits at the
+ * same depth as its neighbours and only its hue angle is its own.
+ */
+const CUSTOM_HUE_TONES: Record<ColorScheme | HueSetId, { tile: Tone; glyph: Tone; glow: Tone }> = {
+  light: { tile: { l: 0.944, c: 0.037 }, glyph: { l: 0.503, c: 0.143 }, glow: { l: 0.77, c: 0.16 } },
+  dark: { tile: { l: 0.309, c: 0.069 }, glyph: { l: 0.845, c: 0.12 }, glow: { l: 0.77, c: 0.16 } },
+  'sorbet-day': { tile: { l: 0.892, c: 0.082 }, glyph: { l: 0.542, c: 0.169 }, glow: { l: 0.802, c: 0.159 } },
+  'sorbet-night': { tile: { l: 0.383, c: 0.108 }, glyph: { l: 0.859, c: 0.13 }, glow: { l: 0.747, c: 0.179 } },
+  'lavender-day': { tile: { l: 0.928, c: 0.047 }, glyph: { l: 0.527, c: 0.126 }, glow: { l: 0.816, c: 0.116 } },
+  'lavender-night': { tile: { l: 0.359, c: 0.074 }, glyph: { l: 0.877, c: 0.085 }, glow: { l: 0.738, c: 0.139 } },
+};
+
+/**
+ * The swatch for a module's own colour: its hue angle at the scheme's usual
+ * lightness and chroma. A greyish colour stays greyish (its chroma scales the
+ * targets down), and every shade is pulled into the sRGB gamut.
+ */
+export function customHueSwatch(hex: CustomHue, scheme: ColorScheme | HueSetId): SectionHueSwatch {
+  const base = toOklch(hex);
+  const h = base?.h ?? 0;
+  const scale = Math.min(1, (base?.c ?? 0) / 0.12);
+  const tones = CUSTOM_HUE_TONES[scheme];
+  const shade = (t: Tone) => (formatHex(clampChroma({ mode: 'oklch', l: t.l, c: t.c * scale, h }, 'oklch')) ?? hex).toUpperCase();
+  return { tile: shade(tones.tile), glyph: shade(tones.glyph), glow: shade(tones.glow) };
+}
+
+/** Every custom colour a module manifest picks, for surfaces that list the hues up front (the web's hue CSS). */
+export function customSectionHues(): CustomHue[] {
+  return [...new Set(Object.values(SECTION_HUE_BY_SECTION).filter(isCustomHue))];
 }

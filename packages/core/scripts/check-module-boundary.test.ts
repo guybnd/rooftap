@@ -2,34 +2,33 @@ import { describe, expect, it, afterEach } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { moduleRules, scanModules } from "./check-module-boundary.mjs";
+import { moduleRules, readManifests, scanModules } from "./check-module-boundary.mjs";
 
 // The module-boundary lint, against throwaway fixture dirs and a small
-// registry, plus one run against the real packages/core/src.
+// set of manifests, plus one run against the real packages/core/src.
 
-const MODULES_SRC = `
-export const MODULES: ModuleDef[] = [
-  {
-    id: 'groceries',
-    label: 'Groceries',
-    enhances: ['recipes'],
-  },
-  {
-    id: 'recipes',
-    label: 'Recipes',
-  },
-  {
-    id: 'costs',
-    label: 'Costs',
-  },
-  {
-    id: 'google-calendar',
-    requires: ['calendar'],
-  },
-  {
-    id: 'calendar',
-  },
-];
+const MANIFESTS_SRC = `
+export const groceriesModule = defineModule({
+  id: 'groceries',
+  label: 'Groceries',
+  enhances: ['recipes'],
+  section: { navItems: [{ href: '/groceries', label: 'Shopping List' }] },
+});
+export const recipesModule = defineModule({
+  id: 'recipes',
+  label: 'Recipes',
+});
+export const costsModule = defineModule({
+  id: 'costs',
+  label: 'Costs',
+});
+export const googleCalendarModule = defineModule({
+  id: 'google-calendar',
+  requires: ['calendar'],
+});
+export const calendarModule = defineModule({
+  id: 'calendar',
+});
 `;
 const FEATURES_SRC = `
   'costs.groceries': {
@@ -55,7 +54,7 @@ function fixture(files: Record<string, string>): string {
 
 describe("moduleRules", () => {
   it("reads ids, requires/enhances and the features' module pairs", () => {
-    const r = moduleRules(MODULES_SRC, FEATURES_SRC);
+    const r = moduleRules(MANIFESTS_SRC, FEATURES_SRC);
     expect([...r.ids]).toEqual(["groceries", "recipes", "costs", "google-calendar", "calendar"]);
     expect([...(r.allowed.get("groceries") ?? [])].sort()).toEqual(["costs", "recipes"]);
     expect([...(r.allowed.get("costs") ?? [])]).toEqual(["groceries"]);
@@ -65,7 +64,7 @@ describe("moduleRules", () => {
 });
 
 describe("scanModules", () => {
-  const rules = moduleRules(MODULES_SRC, FEATURES_SRC);
+  const rules = moduleRules(MANIFESTS_SRC, FEATURES_SRC);
 
   it("passes own-folder, shared and allowed imports", () => {
     const dir = fixture({
@@ -98,13 +97,13 @@ describe("scanModules", () => {
 
   it("flags a folder that is not a registered module", () => {
     const dir = fixture({ "modules/widgets/w.ts": "export const w = 1;\n" });
-    expect(scanModules(dir, rules).map((v) => v.reason)).toEqual(['"widgets" is not a module id in modules.ts']);
+    expect(scanModules(dir, rules).map((v) => v.reason)).toEqual(['"widgets" is not a module listed in module-manifests.ts']);
   });
 
   it("passes on the real packages/core/src", () => {
     const src = path.resolve(__dirname, "..", "src");
     const real = moduleRules(
-      fs.readFileSync(path.join(src, "modules.ts"), "utf8"),
+      readManifests(src),
       fs.readFileSync(path.join(src, "module-features.ts"), "utf8"),
     );
     expect(real.ids.size).toBeGreaterThan(10);

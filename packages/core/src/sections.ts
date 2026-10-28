@@ -7,6 +7,7 @@
 // via its own `section-icons.ts` (see apps/web and apps/mobile).
 
 import { isModuleId, isSectionEnabled } from './modules';
+import { ALL_MANIFESTS } from './module-manifests';
 
 export interface NavItem {
   href: string;
@@ -33,70 +34,51 @@ const hubNavItems: NavItem[] = [
   { href: "/home", label: "Overview", iconId: "layout-grid", accent: true },
 ];
 
-const homeSearchNavItems: NavItem[] = [
-  { href: "/apartment/new", label: "Add Listing", iconId: "plus-circle", accent: true },
-  { href: "/apartment/bulk", label: "Bulk Upload", iconId: "list-plus" },
-  { href: "/homesearch", label: "Overview", iconId: "layout-dashboard" },
-  { href: "/map", label: "Map View", iconId: "map" },
-  { href: "/appointments", label: "Appointments", iconId: "clipboard-list" },
-  { href: "/checklist", label: "Apartment Checklist", iconId: "clipboard-check" },
+/**
+ * Where the existing sections sit in the switcher, after Home. A module's
+ * section comes from its manifest (modules/<id>/manifest.ts); one missing
+ * from this list goes after these, in manifest order, so a new module needs
+ * no edit here.
+ */
+const SECTION_ORDER: readonly string[] = [
+  "calendar",
+  "setup",
+  "household",
+  "costs",
+  "search",
+  "groceries",
+  "checklists",
+  "recipes",
+  "shopper",
+  "rewards",
+  "occasions",
+  "bins",
+  "assistant",
+  "documents",
 ];
 
-const calendarNavItems: NavItem[] = [
-  { href: "/calendar", label: "Calendar", iconId: "calendar-days", accent: true },
-];
+function rankSection(id: string): number {
+  const i = SECTION_ORDER.indexOf(id);
+  return i === -1 ? SECTION_ORDER.length : i;
+}
 
-const homeSetupNavItems: NavItem[] = [
-  { href: "/setup", label: "Rooms & Checklist", iconId: "hammer", accent: true },
-];
+const moduleSections: Section[] = ALL_MANIFESTS.flatMap((m): Section[] => {
+  const s = m.section;
+  if (!s) return [];
+  return [
+    {
+      id: m.id,
+      label: s.label,
+      shortLabel: s.shortLabel,
+      iconId: s.iconId ?? m.iconId,
+      basePath: s.basePath,
+      enabled: true,
+      acceptsShares: s.acceptsShares,
+      navItems: s.navItems.map((n) => ({ ...n })),
+    },
+  ];
+}).sort((x, y) => rankSection(x.id) - rankSection(y.id));
 
-const householdNavItems: NavItem[] = [
-  { href: "/tasks", label: "Tasks & Reminders", iconId: "list-checks", accent: true, badge: "overdueTasks" },
-];
-
-const costsNavItems: NavItem[] = [
-  { href: "/costs", label: "Overview", iconId: "wallet", accent: true },
-];
-
-const groceriesNavItems: NavItem[] = [
-  { href: "/groceries", label: "Shopping List", iconId: "shopping-cart", accent: true },
-  { href: "/groceries/shelf-life", label: "Item Library", iconId: "book-open" },
-];
-
-const checklistsNavItems: NavItem[] = [
-  { href: "/checklists", label: "All checklists", iconId: "list-todo", accent: true },
-  { href: "/checklists/templates", label: "Templates", iconId: "layout-template" },
-];
-
-const recipesNavItems: NavItem[] = [
-  { href: "/recipes", label: "All recipes", iconId: "chef-hat", accent: true },
-];
-
-const shopperNavItems: NavItem[] = [
-  { href: "/shopper", label: "Watching", iconId: "shopping-bag", accent: true },
-];
-
-const rewardsNavItems: NavItem[] = [
-  { href: "/rewards", label: "Cards", iconId: "wallet-cards", accent: true },
-];
-
-const occasionsNavItems: NavItem[] = [
-  { href: "/occasions", label: "Occasions", iconId: "gift", accent: true },
-];
-
-const binsNavItems: NavItem[] = [
-  { href: "/bins", label: "Bin night", iconId: "trash-2", accent: true },
-];
-
-const assistantNavItems: NavItem[] = [
-  { href: "/assistant", label: "Chats", iconId: "sparkles", accent: true },
-];
-
-const documentsNavItems: NavItem[] = [
-  { href: "/documents", label: "All Documents", iconId: "folder-open", accent: true },
-];
-
-// new-module:nav-items (scripts/new-module.mjs adds above this line)
 export const sections: Section[] = [
   {
     id: "home",
@@ -109,147 +91,17 @@ export const sections: Section[] = [
     acceptsShares: false,
     navItems: hubNavItems,
   },
-  {
-    id: "calendar",
-    label: "Calendar",
-    shortLabel: "Calendar",
-    iconId: "calendar-days",
-    basePath: "/calendar",
-    enabled: true,
-    acceptsShares: true,
-    navItems: calendarNavItems,
-  },
-  {
-    id: "setup",
-    label: "Home Setup",
-    shortLabel: "Setup",
-    iconId: "home",
-    basePath: "/setup",
-    enabled: true,
-    acceptsShares: true,
-    navItems: homeSetupNavItems,
-  },
-  {
-    id: "household",
-    label: "Tasks",
-    shortLabel: "Tasks",
-    iconId: "list-checks",
-    basePath: "/tasks",
-    enabled: true,
-    acceptsShares: true,
-    navItems: householdNavItems,
-  },
-  {
-    id: "costs",
-    label: "Costs & Budget",
-    shortLabel: "Costs",
-    iconId: "wallet",
-    basePath: "/costs",
-    enabled: true,
-    acceptsShares: false,
-    navItems: costsNavItems,
-  },
-  {
-    id: "search",
-    label: "Home Search",
-    shortLabel: "Search",
-    iconId: "layout-dashboard",
-    basePath: "/homesearch",
-    enabled: true,
-    acceptsShares: true,
-    navItems: homeSearchNavItems,
-  },
-  {
-    id: "groceries",
-    label: "Groceries",
-    shortLabel: "Groceries",
-    iconId: "shopping-cart",
-    basePath: "/groceries",
-    enabled: true,
-    acceptsShares: true,
-    navItems: groceriesNavItems,
-  },
-  {
-    id: "checklists",
-    label: "Checklists",
-    shortLabel: "Lists",
-    iconId: "list-todo",
-    basePath: "/checklists",
-    enabled: true,
-    acceptsShares: false,
-    navItems: checklistsNavItems,
-  },
-  {
-    id: "recipes",
-    label: "Recipes",
-    shortLabel: "Recipes",
-    iconId: "chef-hat",
-    basePath: "/recipes",
-    enabled: true,
-    acceptsShares: false,
-    navItems: recipesNavItems,
-  },
-  {
-    id: "shopper",
-    label: "Shopper",
-    shortLabel: "Shopper",
-    iconId: "shopping-bag",
-    basePath: "/shopper",
-    enabled: true,
-    acceptsShares: false,
-    navItems: shopperNavItems,
-  },
-  {
-    id: "rewards",
-    label: "Rewards",
-    shortLabel: "Rewards",
-    iconId: "wallet-cards",
-    basePath: "/rewards",
-    enabled: true,
-    acceptsShares: false,
-    navItems: rewardsNavItems,
-  },
-  {
-    id: "occasions",
-    label: "Occasions",
-    shortLabel: "Occasions",
-    iconId: "gift",
-    basePath: "/occasions",
-    enabled: true,
-    acceptsShares: false,
-    navItems: occasionsNavItems,
-  },
-  {
-    id: "bins",
-    label: "Bin night",
-    shortLabel: "Bins",
-    iconId: "trash-2",
-    basePath: "/bins",
-    enabled: true,
-    acceptsShares: false,
-    navItems: binsNavItems,
-  },
-  {
-    id: "assistant",
-    label: "Assistant",
-    shortLabel: "Assistant",
-    iconId: "sparkles",
-    basePath: "/assistant",
-    enabled: true,
-    acceptsShares: false,
-    navItems: assistantNavItems,
-  },
-  {
-    id: "documents",
-    label: "Documents",
-    shortLabel: "Docs",
-    iconId: "folder-open",
-    basePath: "/documents",
-    enabled: true,
-    acceptsShares: false,
-    navItems: documentsNavItems,
-  },
-  // new-module:section (scripts/new-module.mjs adds above this line)
+  ...moduleSections,
+];
+
+/**
+ * The phone's tab routes: every section's base path, then the nav items that
+ * are tabs of their own (a manifest's `section.tabRoutes`). The phone's
+ * src/app/(tabs) folder holds exactly these (tab-routes.test.ts).
+ */
+export const SECTION_TAB_ROUTES: readonly string[] = [
+  ...sections.map((s) => s.basePath),
+  ...ALL_MANIFESTS.flatMap((m) => m.section?.tabRoutes ?? []),
 ];
 
 /**
@@ -299,66 +151,11 @@ export function getSectionByPath(pathname: string): Section {
   if (matchesBase(pathname, "/settings")) {
     return profileSection;
   }
-  if (matchesBase(pathname, "/home")) {
-    const hubSection = getSection("home");
-    if (hubSection) return hubSection;
+  // Each section owns its base path. Home Search's listing routes (/apartment,
+  // /map, /checklist...) have no base of their own and land on the default.
+  for (const section of sections) {
+    if (matchesBase(pathname, section.basePath)) return section;
   }
-  if (matchesBase(pathname, "/calendar")) {
-    const calendarSection = getSection("calendar");
-    if (calendarSection) return calendarSection;
-  }
-  if (matchesBase(pathname, "/setup")) {
-    const setupSection = getSection("setup");
-    if (setupSection) return setupSection;
-  }
-  if (matchesBase(pathname, "/tasks")) {
-    const householdSection = getSection("household");
-    if (householdSection) return householdSection;
-  }
-  if (matchesBase(pathname, "/costs")) {
-    const costsSection = getSection("costs");
-    if (costsSection) return costsSection;
-  }
-  if (matchesBase(pathname, "/groceries")) {
-    const groceriesSection = getSection("groceries");
-    if (groceriesSection) return groceriesSection;
-  }
-  // "/checklist" (singular, apartment scoring) does NOT start with "/checklists"
-  // (it's the shorter string), so it correctly falls through to the Home Search
-  // default below regardless of branch order.
-  if (matchesBase(pathname, "/checklists")) {
-    const checklistsSection = getSection("checklists");
-    if (checklistsSection) return checklistsSection;
-  }
-  if (matchesBase(pathname, "/recipes")) {
-    const recipesSection = getSection("recipes");
-    if (recipesSection) return recipesSection;
-  }
-  if (matchesBase(pathname, "/shopper")) {
-    const shopperSection = getSection("shopper");
-    if (shopperSection) return shopperSection;
-  }
-  if (matchesBase(pathname, "/rewards")) {
-    const rewardsSection = getSection("rewards");
-    if (rewardsSection) return rewardsSection;
-  }
-  if (matchesBase(pathname, "/occasions")) {
-    const occasionsSection = getSection("occasions");
-    if (occasionsSection) return occasionsSection;
-  }
-  if (matchesBase(pathname, "/bins")) {
-    const binsSection = getSection("bins");
-    if (binsSection) return binsSection;
-  }
-  if (matchesBase(pathname, "/assistant")) {
-    const assistantSection = getSection("assistant");
-    if (assistantSection) return assistantSection;
-  }
-  if (matchesBase(pathname, "/documents")) {
-    const documentsSection = getSection("documents");
-    if (documentsSection) return documentsSection;
-  }
-  // new-module:section-path (scripts/new-module.mjs adds above this line)
   // Default to Home Search
   return getSection("search") || sections[0];
 }
@@ -431,12 +228,25 @@ export function assignTabSlot(
  * items live under count, so a route guard can't bounce someone off /admin.
  */
 export function getModuleIdForPath(pathname: string): string | null {
-  for (const section of sections) {
-    if (!isModuleId(section.id)) continue;
-    const bases = [section.basePath, ...section.navItems.map((n) => n.href)].map(
-      (href) => `/${href.split('/').filter(Boolean)[0] ?? ''}`
-    );
-    if (bases.some((base) => base !== '/' && matchesBase(pathname, base))) return section.id;
+  for (const [segment, id] of Object.entries(moduleRouteSegments())) {
+    if (matchesBase(pathname, `/${segment}`)) return id;
   }
   return null;
+}
+
+/**
+ * Top-level route segment -> the module that owns it: each module section's
+ * base path and nav items ("apartment" -> "search"). The apps' route tests
+ * check every top-level route folder is one of these or a platform route.
+ */
+export function moduleRouteSegments(): Record<string, string> {
+  const owners: Record<string, string> = {};
+  for (const section of sections) {
+    if (!isModuleId(section.id)) continue;
+    for (const href of [section.basePath, ...section.navItems.map((n) => n.href)]) {
+      const segment = href.split('/').filter(Boolean)[0];
+      if (segment && !(segment in owners)) owners[segment] = section.id;
+    }
+  }
+  return owners;
 }

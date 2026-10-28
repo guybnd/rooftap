@@ -10,60 +10,20 @@
 // lands; the store then syncs for the rest of that session.
 
 import type { ModuleId } from './modules';
+import { ALL_MANIFESTS } from './module-manifests';
 
-export const STORE_MODULES = {
-  // Bill and document reminders are household tasks that belong to Costs and
-  // Documents (task-modules.ts), so the table syncs while any of the three is on.
-  household_tasks: ['household', 'costs', 'documents'],
-  grocery_items: ['groceries'],
-  // Cards live in Groceries' sheet and in Rewards.
-  loyalty_cards: ['groceries', 'rewards'],
-  cost_items: ['costs'],
-  setup_items: ['setup'],
-  care_jobs: ['home-care'],
-  checklists: ['checklists'],
-  checklist_task_items: ['checklists'],
-  checklist_templates: ['checklists'],
-  checklist_template_items: ['checklists'],
-  recipes: ['recipes'],
-  recipe_ingredients: ['recipes'],
-  recipe_staples: ['recipes'],
-  ingredient_aliases: ['recipes'],
-  meal_plan_entries: ['meals'],
-  cook_sessions: ['recipes'],
-  events: ['calendar'],
-  documents: ['documents'],
-  shopper_wants: ['shopper'],
-  shopper_offers: ['shopper'],
-  shopper_price_snapshots: ['shopper'],
-  shopper_searches: ['shopper'],
-  shopper_picks: ['shopper'],
-  reward_schemes: ['rewards'],
-  reward_partners: ['rewards'],
-  reward_perks: ['rewards'],
-  occasions: ['occasions'],
-  gift_ideas: ['occasions'],
-  wishlist_items: ['occasions'],
-  bin_streams: ['bins'],
-  bin_changes: ['bins'],
-  bin_plans: ['bins'],
-  // new-module:store-modules (scripts/new-module.mjs adds above this line)
-  // Home Search: listings, agents, viewings and the listing checklist.
-  apartments: ['search'],
-  agents: ['search'],
-  apartment_agents: ['search'],
-  apartment_comments: ['search'],
-  saved_searches: ['search'],
-  appointments: ['search'],
-  checklist_items: ['search'],
-  checklist_responses: ['search'],
-} as const satisfies Record<string, readonly ModuleId[]>;
+/** Synced table -> the modules whose being on syncs it, from each manifest's `sync` tables. */
+export const STORE_MODULES: Readonly<Record<string, readonly ModuleId[]>> = Object.fromEntries(
+  ALL_MANIFESTS.flatMap((m) =>
+    Object.entries(m.tables ?? {}).flatMap(([table, t]) => (t.sync ? [[table, t.sync as readonly ModuleId[]]] : [])),
+  ),
+);
 
-export type StoreCollection = keyof typeof STORE_MODULES;
+export type StoreCollection = string;
 
 /** Whether a household with these modules on syncs this table. A table no module claims always syncs. */
 export function isStoreSynced(collection: string, enabled: ReadonlySet<string>): boolean {
-  const modules = (STORE_MODULES as Record<string, readonly ModuleId[]>)[collection];
+  const modules = STORE_MODULES[collection];
   return !modules || modules.some((m) => enabled.has(m));
 }
 

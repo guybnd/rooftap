@@ -35,7 +35,7 @@ function buildServer(
   // (mcp-settings.ts's toolAllowed).
   for (const t of tools) {
     const meta = MCP_TOOL_BY_NAME[t.name];
-    if (!meta) throw new Error(`Unknown MCP tool "${t.name}" — add it to MCP_TOOLS in packages/core/src/mcp-tools.ts`);
+    if (!meta) throw new Error(`Unknown MCP tool "${t.name}" — add it to its module manifest's tools (packages/core/src/modules/<id>/manifest.ts)`);
     if (!enabled.has(meta.module)) continue;
     if (!toolAllowed(settings, meta)) continue;
     server.registerTool(t.name, { description: t.description, inputSchema: t.inputSchema } as never, t.handler as never);
@@ -52,7 +52,7 @@ function buildServer(
     const extra = [...registeredNames].filter((n) => !expected.has(n));
     if (missing.length > 0 || extra.length > 0) {
       throw new Error(
-        `MCP_TOOLS drift: missing ${JSON.stringify(missing)}, extra ${JSON.stringify(extra)} — keep packages/core/src/mcp-tools.ts in sync with householdTools() in lib/mcp/household-tools.ts.`
+        `MCP_TOOLS drift: missing ${JSON.stringify(missing)}, extra ${JSON.stringify(extra)} — keep the module manifests' tools in sync with householdTools() in lib/mcp/household-tools.ts.`
       );
     }
   }

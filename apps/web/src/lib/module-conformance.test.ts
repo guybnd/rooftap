@@ -192,21 +192,12 @@ describe("module conformance", () => {
 
   it("scaffolded registries keep their new-module markers", () => {
     const markers: Record<string, string[]> = {
-      "packages/core/src/modules.ts": ["module-id", "module-def"],
+      "packages/core/src/module-manifests.ts": ["manifest-import", "manifest"],
       "packages/core/src/index.ts": ["module-exports", "module-hooks"],
       "packages/core/src/data/stores/index.ts": ["module-stores"],
-      "packages/core/src/sections.ts": ["nav-items", "section", "section-path"],
-      "packages/core/src/store-modules.ts": ["store-modules"],
-      "packages/core/src/section-hues.ts": ["section-hue"],
-      "packages/core/src/mcp-tools.ts": ["mcp-tool"],
-      "packages/core/src/assistant-reach.ts": ["table-reach"],
       "packages/core/src/schema-check.ts": ["schema-check"],
       "supabase/functions/_shared/module-rules.ts": ["module-defaults"],
-      "apps/web/src/lib/module-routes.test.ts": ["module-route"],
-      "apps/web/src/lib/legend/environment.ts": ["indexeddb-table"],
       "apps/web/src/lib/mcp/household-tools.ts": ["tool-import", "tool-push"],
-      "apps/mobile/src/lib/tab-routes.ts": ["tab-route"],
-      "apps/mobile/src/lib/module-routes.test.ts": ["module-route"],
     };
     const missing = Object.entries(markers).flatMap(([file, slots]) =>
       slots.filter((slot) => !fs.readFileSync(path.join(ROOT, file), "utf8").includes(`new-module:${slot} `)).map((slot) => `${file}: ${slot}`),

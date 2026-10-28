@@ -47,7 +47,7 @@ const toolNames = new Set([...MCP_TOOLS.map((t) => t.name), SEND_FEEDBACK_TOOL])
 describe("assistant reach", () => {
   it("covers every table the migrations create", () => {
     const missing = [...liveTables(files)].filter((t) => !(t in TABLE_REACH)).sort();
-    expect(missing, "Add each table to TABLE_REACH in packages/core/src/assistant-reach.ts: its tools, or why it has none").toEqual([]);
+    expect(missing, "Add each table to its module manifest's tables (or the platform list in packages/core/src/assistant-reach.ts): its tools, or why it has none").toEqual([]);
   });
 
   it("lists no table the migrations don't have", () => {
@@ -69,7 +69,7 @@ describe("assistant reach", () => {
   it("gives every module a tool, or a reason it has none", () => {
     const withTools = new Set(MCP_TOOLS.map((t) => t.module));
     const missing = MODULES.filter((m) => !withTools.has(m.id) && !MODULES_WITHOUT_TOOLS[m.id]).map((m) => m.id);
-    expect(missing, "Add household tools for the module (core mcp-tools.ts), or a reason to MODULES_WITHOUT_TOOLS").toEqual([]);
+    expect(missing, "Add tools to the module manifest, or a `noTools` reason").toEqual([]);
   });
 
   it("drops a module's reason once it has tools", () => {

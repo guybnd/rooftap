@@ -2,7 +2,7 @@ import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { getModuleIdForPath } from '@homeup/core';
+import { getModuleIdForPath, moduleRouteSegments } from '@homeup/core';
 
 // Modules (.docs/modules.md): the root layout's route guard
 // (use-module-route-guard.ts) sends anyone on a switched-off module's route
@@ -12,25 +12,8 @@ import { getModuleIdForPath } from '@homeup/core';
 // module off). Lives in src/lib, not src/app: Expo Router bundles any file
 // under src/app (see scripts/check-router-dir.mjs).
 const EXPECTED: Record<string, string | null> = {
-  // Modules
-  tasks: 'household',
-  calendar: 'calendar',
-  checklists: 'checklists',
-  documents: 'documents',
-  groceries: 'groceries',
-  recipes: 'recipes',
-  shopper: 'shopper',
-  rewards: 'rewards',
-  occasions: 'occasions',
-  bins: 'bins',
-  // new-module:module-route (scripts/new-module.mjs adds above this line)
-  assistant: 'assistant',
-  costs: 'costs',
-  setup: 'setup',
-  homesearch: 'search',
-  apartment: 'search',
-  appointments: 'search',
-  checklist: 'search',
+  // Modules: every section's base path and nav items, from the manifests.
+  ...moduleRouteSegments(),
   // Platform
   home: null,
   settings: null,

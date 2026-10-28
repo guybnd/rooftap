@@ -84,6 +84,38 @@ export function ${n.camel}RowMenu(item: ${n.Pascal}Item, h: ${n.Pascal}RowHandle
 `;
 }
 
+export function manifest(n) {
+  return `import { defineModule } from '../../module-manifest';
+
+// Everything the shared registries know about ${n.label}: Settings > Modules,
+// the section switcher, sync, the Assistant's tools and table reach
+// (.docs/modules.md, section 15).
+export const ${n.camel}Module = defineModule({
+  id: '${n.id}',
+  label: ${n.sqLabel},
+  description: ${n.sqDescription},
+  iconId: '${n.icon}',
+  defaultEnabled: false,
+  minSchema: '${n.migrationName}',
+  section: {
+    label: ${n.sqLabel},
+    shortLabel: ${n.sqShortLabel},
+    basePath: '/${n.id}',
+    acceptsShares: false,
+    navItems: [{ href: '/${n.id}', label: ${n.sqLabel}, iconId: '${n.icon}', accent: true }],
+    hue: '${n.hue}',
+  },
+  tables: {
+    ${n.table}: { reach: { tools: ['get_${n.snake}', 'add_${n.snake}_item'] }, sync: ['${n.id}'] },
+  },
+  tools: [
+    { name: 'get_${n.snake}', kind: 'read' },
+    { name: 'add_${n.snake}_item', kind: 'write' },
+  ],
+});
+`;
+}
+
 export function coreHook(n) {
   return `'use client';
 

@@ -2,17 +2,22 @@
 // Scaffolds a new module the way every module should start (.docs/modules.md
 // section 15):
 //
-//   npm run new-module -- <id> --label "Plant care" --icon sprout --hue fern \
+//   npm run new-module -- <id> --label "Plant care" --icon sprout --hue "#3A8F5C" \
 //     --description "Which plants need water, and when." [--short Plants] [--dry-run]
 //
 // It writes the module's core folder (view helpers, a view-model hook, a
 // test), its synced store, thin web and phone screens that only bind core and
 // render the shared line item with the shared row menu, the Assistant's
-// tools, a migration with grants and RLS, and a What's new entry. Then it
-// registers the module in every registry: modules.ts, sections.ts, the store
-// and module-rules maps, nav icons and hue, route tests, the web offline
-// cache, MCP_TOOLS and TABLE_REACH. Each registry carries a
-// "new-module:<slot>" marker comment; new lines go above it.
+// tools, a migration with grants and RLS, and a What's new entry. The module's
+// manifest (packages/core/src/modules/<id>/manifest.ts) declares its section,
+// hue, synced table, tools and table reach, so the registries built from it
+// (modules.ts, sections.ts, section hues, store-modules, MCP_TOOLS,
+// TABLE_REACH, the web offline cache, the phone tab routes and both route
+// tests) need no edit. It then lists the manifest in module-manifests.ts and
+// adds the few entries that can't come from a manifest: core exports, the
+// type check, the edge functions' module rules, the tool handlers and both
+// icon maps. Each carries a "new-module:<slot>" marker comment; new lines go
+// above it.
 //
 // The starter is a plain list. Reshape it into the module, keeping the split:
 // apps/web/src/lib/module-conformance.test.ts fails on logic in a screen,
@@ -28,7 +33,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 function usage(message) {
   if (message) console.error(`new-module: ${message}\n`);
-  console.error('Usage: npm run new-module -- <id> --label "Plant care" --icon sprout --hue fern --description "One line." [--short Plants] [--dry-run]');
+  console.error('Usage: npm run new-module -- <id> --label "Plant care" --icon sprout --hue <#rrggbb or free hue> --description "One line." [--short Plants] [--dry-run]');
   process.exit(1);
 }
 
@@ -48,6 +53,14 @@ function parseArgs(argv) {
 }
 
 const read = (path) => readFileSync(join(ROOT, path), 'utf8');
+
+/** The source of every module manifest. */
+function manifestSources() {
+  const dir = join(ROOT, 'packages/core/src/modules');
+  return readdirSync(dir)
+    .filter((id) => existsSync(join(dir, id, 'manifest.ts')))
+    .map((id) => readFileSync(join(dir, id, 'manifest.ts'), 'utf8'));
+}
 
 /** A single-quoted TypeScript string. */
 const sq = (text) => `'${text.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
@@ -74,15 +87,15 @@ function names(args) {
   if (/\p{Extended_Pictographic}/u.test(label + description)) usage('no emoji in UI copy (Hearth copy rules)');
   const hueBlock = read('packages/core/src/section-hues.ts').match(/SECTION_HUE_IDS[^=]*= \[([^\]]*)\]/);
   const hues = hueBlock ? [...hueBlock[1].matchAll(/'([a-z]+)'/g)].map((m) => m[1]) : [];
-  // Spaces show sections side by side, so every section wears its own hue (section-hues.test.ts).
-  const byBlock = read('packages/core/src/section-hues.ts').match(/SECTION_HUE_BY_SECTION[^=]*= \{([^}]*)\}/);
-  const taken = new Set(byBlock ? [...byBlock[1].matchAll(/: '([a-z]+)'/g)].map((m) => m[1]) : []);
+  // Spaces show sections side by side, so every section wears its own hue
+  // (module-manifests.test.ts). Home wears coral; the rest name theirs in
+  // their manifest.
+  const taken = new Set(['coral', ...manifestSources().flatMap((src) => [...src.matchAll(/^\s+hue: '(#?[0-9a-zA-Z]+)'/gm)].map((m) => m[1]))]);
   const free = hues.filter((h) => !taken.has(h));
-  if (!hue || !free.includes(hue)) {
+  const hex = /^#[0-9a-f]{6}$/i.test(hue ?? '');
+  if (!hue || (hex ? taken.has(hue.toUpperCase()) || taken.has(hue.toLowerCase()) : !free.includes(hue))) {
     usage(
-      free.length
-        ? `--hue must be a hue no section wears yet: ${free.join(', ')}`
-        : 'every section hue is taken. Add one to packages/core/src/section-hues.ts (SectionHue, SECTION_HUE_IDS, SECTION_HUES and each HUE_SETS palette), then pass it as --hue',
+      `--hue must be any colour as #rrggbb (its shades for each theme are worked out for you), or a curated hue no section wears yet${free.length ? `: ${free.join(', ')}` : ' (all are taken)'}`,
     );
   }
   const snake = id.replace(/-/g, '_');
@@ -93,8 +106,11 @@ function names(args) {
     Pascal: pascal(id),
     camel: camel(id),
     label,
+    sqLabel: sq(label),
     shortLabel: args.flags.short ?? label,
+    sqShortLabel: sq(args.flags.short ?? label),
     description: /[.!?]$/.test(description) ? description : `${description}.`,
+    sqDescription: sq(/[.!?]$/.test(description) ? description : `${description}.`),
     icon,
     Icon: iconComponent(icon),
     hue,
@@ -157,15 +173,19 @@ function sectionIcon(path, n, quote) {
 }
 
 function plan(n) {
-  const known = read('packages/core/src/modules.ts');
-  if (new RegExp(`id: '${n.id}'`).test(known)) throw new Error(`module "${n.id}" already exists`);
-  if (new RegExp(`\\b${n.table}\\b`).test(read('packages/core/src/assistant-reach.ts'))) throw new Error(`table ${n.table} already exists`);
+  if (existsSync(join(ROOT, `packages/core/src/modules/${n.id}`))) throw new Error(`module "${n.id}" already exists`);
+  const tableRe = new RegExp(`\\b${n.table}\\b`);
+  if (tableRe.test(read('packages/core/src/assistant-reach.ts')) || manifestSources().some((src) => tableRe.test(src))) {
+    throw new Error(`table ${n.table} already exists`);
+  }
 
   const version = migrationVersion();
   const migrationName = `${version}_${n.snake}`;
+  n.migrationName = migrationName;
   const today = new Date().toISOString().slice(0, 10);
 
   // New files.
+  create(`packages/core/src/modules/${n.id}/manifest.ts`, T.manifest(n));
   create(`packages/core/src/modules/${n.id}/${n.id}.ts`, T.coreModule(n));
   create(`packages/core/src/modules/${n.id}/use-${n.id}.ts`, T.coreHook(n));
   create(`packages/core/src/modules/${n.id}/${n.id}.test.ts`, T.coreTest(n));
@@ -178,57 +198,13 @@ function plan(n) {
   create(`supabase/migrations/${migrationName}.sql`, T.migration(n));
   create(`whats-new/${today}-${n.id}.md`, T.whatsNew(n));
 
-  // Core registries.
+  // The manifest list, and what a manifest can't declare.
   const core = 'packages/core/src/';
-  atMarker(core + 'modules.ts', 'module-id', `| '${n.id}'`);
-  atMarker(core + 'modules.ts', 'module-def', [
-    '{',
-    `  id: '${n.id}',`,
-    `  label: ${sq(n.label)},`,
-    `  description: ${sq(n.description)},`,
-    `  iconId: '${n.icon}',`,
-    '  defaultEnabled: false,',
-    `  minSchema: '${migrationName}',`,
-    '},',
-  ]);
+  atMarker(core + 'module-manifests.ts', 'manifest-import', `import { ${n.camel}Module } from './modules/${n.id}/manifest';`);
+  atMarker(core + 'module-manifests.ts', 'manifest', `${n.camel}Module,`);
   atMarker(core + 'index.ts', 'module-exports', `export * from './modules/${n.id}/${n.id}';`);
   atMarker(core + 'index.ts', 'module-hooks', `export * from './modules/${n.id}/use-${n.id}';`);
   atMarker(core + 'data/stores/index.ts', 'module-stores', `export * from './${n.id}-stores';`);
-  atMarker(core + 'sections.ts', 'nav-items', [
-    `const ${n.camel}NavItems: NavItem[] = [`,
-    `  { href: "/${n.id}", label: ${JSON.stringify(n.label)}, iconId: "${n.icon}", accent: true },`,
-    '];',
-    '',
-  ]);
-  atMarker(core + 'sections.ts', 'section', [
-    '{',
-    `  id: "${n.id}",`,
-    `  label: ${JSON.stringify(n.label)},`,
-    `  shortLabel: ${JSON.stringify(n.shortLabel)},`,
-    `  iconId: "${n.icon}",`,
-    `  basePath: "/${n.id}",`,
-    '  enabled: true,',
-    '  acceptsShares: false,',
-    `  navItems: ${n.camel}NavItems,`,
-    '},',
-  ]);
-  atMarker(core + 'sections.ts', 'section-path', [
-    `if (matchesBase(pathname, "/${n.id}")) {`,
-    `  const ${n.camel}Section = getSection("${n.id}");`,
-    `  if (${n.camel}Section) return ${n.camel}Section;`,
-    '}',
-  ]);
-  atMarker(core + 'store-modules.ts', 'store-modules', `${n.table}: ['${n.id}'],`);
-  atMarker(core + 'section-hues.ts', 'section-hue', `${key(n.id, "'")}: '${n.hue}',`);
-  atMarker(core + 'mcp-tools.ts', 'mcp-tool', [
-    `{ name: 'get_${n.snake}', kind: 'read', module: '${n.id}' },`,
-    `{ name: 'add_${n.snake}_item', kind: 'write', module: '${n.id}' },`,
-  ]);
-  atMarker(core + 'assistant-reach.ts', 'table-reach', [
-    `// ${n.label}`,
-    `${n.table}: { tools: ['get_${n.snake}', 'add_${n.snake}_item'] },`,
-    '',
-  ]);
   atMarker(core + 'schema-check.ts', 'schema-check', `export type ${n.Pascal}ItemsMatches = Expect<Equal<Matches<App.${n.Pascal}Item, '${n.table}'>, Ok>>;`);
   atMarker('supabase/functions/_shared/module-rules.ts', 'module-defaults', `{ id: "${n.id}", defaultEnabled: false, requires: [] },`);
 
@@ -240,11 +216,6 @@ function plan(n) {
   });
 
   // Web.
-  atMarker('apps/web/src/lib/module-routes.test.ts', 'module-route', `${key(n.id, '"')}: "${n.id}",`);
-  atMarker('apps/web/src/lib/legend/environment.ts', 'indexeddb-table', `'${n.table}',${' '.repeat(Math.max(1, 27 - n.table.length))}// ${n.label} module`);
-  edit('apps/web/src/lib/legend/environment.ts', (s) =>
-    s.replace(/const INDEXEDDB_VERSION = (\d+);[^\n]*/, (_m, v) => `const INDEXEDDB_VERSION = ${Number(v) + 1}; // bumped for the ${n.label} table (non-destructive upgrade)`),
-  );
   atMarker('apps/web/src/lib/mcp/household-tools.ts', 'tool-import', `import { ${n.camel}Tools } from "./tools/${n.id}-tools";`);
   atMarker('apps/web/src/lib/mcp/household-tools.ts', 'tool-push', `tools.push(...${n.camel}Tools({ admin, userId, groupId, enabled, shared }));`);
   sectionIcon('apps/web/src/lib/section-icons.ts', n, '"');
@@ -256,8 +227,6 @@ function plan(n) {
   });
 
   // Phone.
-  atMarker('apps/mobile/src/lib/tab-routes.ts', 'tab-route', `'/${n.id}',`);
-  atMarker('apps/mobile/src/lib/module-routes.test.ts', 'module-route', `${key(n.id, "'")}: '${n.id}',`);
   sectionIcon('apps/mobile/src/lib/section-icons.ts', n, "'");
 
   return { migrationName };

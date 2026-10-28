@@ -13,27 +13,10 @@
 
 import { schemaAtLeast, type ServerSchema } from './server-features';
 
-export type ModuleId =
-  | 'household'
-  | 'calendar'
-  | 'checklists'
-  | 'documents'
-  | 'groceries'
-  | 'recipes'
-  | 'meals'
-  | 'costs'
-  | 'setup'
-  | 'search'
-  | 'shopper'
-  | 'rewards'
-  | 'occasions'
-  | 'bins'
-  // new-module:module-id (scripts/new-module.mjs adds above this line)
-  | 'assistant'
-  | 'money-insights'
-  | 'home-care'
-  | 'google-calendar'
-  | 'mcp';
+import { MODULE_MANIFESTS } from './module-manifests';
+
+/** Every module's id, from the manifests (module-manifests.ts). */
+export type ModuleId = (typeof MODULE_MANIFESTS)[number]['id'];
 
 export interface ModuleDef {
   id: ModuleId;
@@ -55,178 +38,28 @@ export interface ModuleDef {
   minSchema?: string;
 }
 
-export const MODULES: ModuleDef[] = [
-  {
-    id: 'household',
-    label: 'Tasks & Reminders',
-    description: 'Shared to-dos, chores and reminders with due dates.',
-    iconId: 'list-checks',
-    defaultEnabled: true,
-    enhances: ['checklists', 'calendar'],
-  },
-  {
-    id: 'calendar',
-    label: 'Calendar',
-    description: 'Household events and everything with a date, in one view.',
-    iconId: 'calendar-days',
-    defaultEnabled: true,
-    enhances: ['household', 'search'],
-  },
-  {
-    id: 'checklists',
-    label: 'Checklists',
-    description: 'Reusable lists and templates, from packing to cleaning.',
-    iconId: 'list-todo',
-    defaultEnabled: true,
-    enhances: ['household'],
-  },
-  {
-    id: 'documents',
-    label: 'Documents',
-    description: 'Warranties, receipts and paperwork, filed in folders.',
-    iconId: 'folder-open',
-    defaultEnabled: true,
-    enhances: ['costs', 'setup', 'groceries'],
-  },
-  {
-    id: 'groceries',
-    label: 'Groceries',
-    description: 'A shared shopping list with aisles and an item library.',
-    iconId: 'shopping-cart',
-    defaultEnabled: false,
-    enhances: ['costs', 'recipes'],
-  },
-  {
-    id: 'recipes',
-    label: 'Recipes',
-    description: 'Your household recipes, with a cooking view.',
-    iconId: 'chef-hat',
-    defaultEnabled: false,
-    enhances: ['groceries'],
-  },
-  // A tab inside Recipes ("This week"), not a section of its own. Like
-  // Money insights it needs no switch of its own to lock Recipes on: with
-  // Recipes off there is nowhere to show it, so every gate names both
-  // (module-features.ts), and it is on for any household that has Recipes.
-  {
-    id: 'meals',
-    label: 'Meal plan',
-    description: "Plan the week's dinners from your recipes, and add what's missing to Groceries.",
-    iconId: 'utensils',
-    defaultEnabled: true,
-    enhances: ['recipes', 'groceries', 'calendar', 'assistant'],
-    minSchema: '20261023130000_meal_plan',
-  },
-  {
-    id: 'costs',
-    label: 'Costs & Budget',
-    description: 'Bills, recurring costs and a monthly budget.',
-    iconId: 'wallet',
-    defaultEnabled: false,
-    enhances: ['setup', 'groceries', 'search'],
-  },
-  {
-    id: 'setup',
-    label: 'Home Setup',
-    description: 'Rooms, purchases and the moving checklist for a new home.',
-    iconId: 'home',
-    defaultEnabled: false,
-    enhances: ['search', 'costs'],
-  },
-  {
-    id: 'search',
-    label: 'Home Search',
-    description: 'Listings, viewings, agents and a map while you look for a place.',
-    iconId: 'layout-dashboard',
-    defaultEnabled: false,
-    enhances: ['calendar', 'setup'],
-  },
-  {
-    id: 'shopper',
-    label: 'Shopper',
-    description: 'Things you want to buy, with price tracking and a deal rating.',
-    iconId: 'shopping-bag',
-    defaultEnabled: false,
-    enhances: ['household', 'costs'],
-    minSchema: '20261021010000_shopper',
-  },
-  {
-    id: 'rewards',
-    label: 'Rewards',
-    description: 'Loyalty cards and memberships, the stores they work at, and what they get you there.',
-    iconId: 'wallet-cards',
-    defaultEnabled: false,
-    enhances: ['groceries'],
-    minSchema: '20261021130000_rewards',
-  },
-  {
-    id: 'occasions',
-    label: 'Occasions',
-    description: 'Birthdays and other days, gift ideas and wishlists, with surprises kept from the person they are for.',
-    iconId: 'gift',
-    defaultEnabled: false,
-    enhances: ['shopper', 'costs'],
-    minSchema: '20261023100000_occasions',
-  },
-  {
-    id: 'bins',
-    label: 'Bin night',
-    description: 'Which bins go out tonight, whose turn it is, and a reminder before bed.',
-    iconId: 'trash-2',
-    defaultEnabled: false,
-    enhances: ['calendar', 'assistant'],
-    minSchema: '20261023110000_bins',
-  },
-  {
-    id: 'assistant',
-    label: 'Assistant',
-    description: 'A household agent you can ask or talk to, with your OK before it changes anything.',
-    iconId: 'sparkles',
-    defaultEnabled: false,
-    enhances: ['household', 'calendar', 'costs', 'groceries'],
-    minSchema: '20261021020000_assistant',
-  },
-  // new-module:module-def (scripts/new-module.mjs adds above this line)
-  // Integrations: modules with no section of their own (.docs/modules.md, section 3).
-  {
-    id: 'money-insights',
-    label: 'Money insights',
-    description: 'Price rises, subscriptions to rethink and ways to save, on the Costs page.',
-    iconId: 'lightbulb',
-    // Lives on the Costs page, so it needs no switch of its own to lock
-    // Costs on: with Costs off there is nowhere to show it.
-    defaultEnabled: true,
-    enhances: ['costs', 'shopper', 'household'],
-  },
-  {
-    id: 'home-care',
-    label: 'Home care',
-    description: 'Upkeep on a schedule you choose, from smoke alarms to gutters, in Home Setup.',
-    iconId: 'wrench',
-    // Lives in Home Setup as its Care view, so it needs Setup on.
-    defaultEnabled: false,
-    requires: ['setup'],
-    enhances: ['household', 'calendar'],
-    minSchema: '20261023120000_home_care',
-  },
-  {
-    id: 'google-calendar',
-    label: 'Google Calendar',
-    description: 'Sends tasks and viewings to Google Calendar and shows your Google events.',
-    iconId: 'calendar-sync',
-    defaultEnabled: false,
-    requires: ['calendar'],
-    enhances: ['household', 'search'],
-  },
-  {
-    id: 'mcp',
-    label: 'AI assistants (MCP)',
-    description: 'Lets an AI assistant read and update your household through MCP.',
-    iconId: 'bot',
-    defaultEnabled: false,
-    enhances: ['household', 'calendar', 'costs', 'groceries'],
-  },
-];
+// A manifest may only name real modules in requires, enhances and a table's sync list.
+const manifestLinks: readonly {
+  requires?: readonly ModuleId[];
+  enhances?: readonly ModuleId[];
+  tables?: Readonly<Record<string, { reach: unknown; sync?: readonly ModuleId[] }>>;
+}[] = MODULE_MANIFESTS;
+void manifestLinks;
+
+/** The registry, in manifest order. Each module is declared in its own packages/core/src/modules/<id>/manifest.ts. */
+export const MODULES: ModuleDef[] = MODULE_MANIFESTS.map((m) => {
+  const def: ModuleDef = {
+    id: m.id,
+    label: m.label,
+    description: m.description,
+    iconId: m.iconId,
+    defaultEnabled: m.defaultEnabled,
+  };
+  if ('requires' in m) def.requires = [...m.requires];
+  if ('enhances' in m) def.enhances = [...m.enhances];
+  if ('minSchema' in m) def.minSchema = m.minSchema;
+  return def;
+});
 
 const MODULE_BY_ID = new Map<string, ModuleDef>(MODULES.map((m) => [m.id, m]));
 

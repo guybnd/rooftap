@@ -14,55 +14,19 @@ import type { Change } from '@legendapp/state';
 import type { PersistMetadata } from '@legendapp/state/sync';
 import { observablePersistIndexedDB } from '@legendapp/state/persist-plugins/indexeddb';
 import { createClient } from '@/lib/supabase/client';
-import { configureStoreEnvironment, stripSymbolKeys, type StoreEnvironment } from '@homeup/core';
+import { STORE_MODULES, configureStoreEnvironment, stripSymbolKeys, type StoreEnvironment } from '@homeup/core';
 
-// Every IndexedDB-backed store's persist `name` must be declared up front — the
+// Every IndexedDB-backed store's persist `name` must be declared up front: the
 // plugin opens the database once and can't add object stores without a version
-// bump. Add the table name here BEFORE creating the store, then bump the version.
-const INDEXEDDB_TABLES = [
-  'grocery_items',    // FLUX-149 (live)
-  'household_tasks',  // FLUX-150 slice 1
-  'cost_items',       // FLUX-150 slice 2
-  'setup_items',      // FLUX-150 slice 3
-  'checklists',                 // FLUX-156
-  'checklist_task_items',       // FLUX-156
-  'checklist_templates',        // FLUX-156
-  'checklist_template_items',   // FLUX-156
-  'recipes',                    // FLUX-189
-  'recipe_ingredients',         // FLUX-189
-  'events',                     // FLUX-249
-  'apartments',                 // FLUX-150 slice 4
-  'agents',                     // FLUX-150 slice 4
-  'apartment_agents',           // FLUX-150 slice 4
-  'apartment_comments',         // FLUX-150 slice 4/5
-  'saved_searches',             // FLUX-150 slice 4
-  'appointments',               // FLUX-150 slice 5
-  'checklist_items',            // FLUX-150 slice 6 (legacy apartment-scoring checklist — distinct from checklist_task_items)
-  'checklist_responses',        // FLUX-150 slice 6
-  'documents',                  // FLUX-150 slice 7
-  'loyalty_cards',              // Rewards cards (Groceries, Rewards)
-  'reward_schemes',             // Rewards module
-  'reward_partners',            // Rewards module
-  'reward_perks',               // Rewards module
-  'occasions',                  // Occasions module
-  'gift_ideas',                 // Occasions module
-  'wishlist_items',             // Occasions module
-  'bin_streams',                // Bin night module
-  'bin_changes',                // Bin night module
-  'bin_plans',                  // Bin night module
-  'care_jobs',                  // Home care module
-  'meal_plan_entries',          // Meal plan (Recipes' This week)
-  'recipe_staples',             // Recipes scan match
-  'ingredient_aliases',         // Recipes scan match
-  'cook_sessions',              // Recipes cook mode
-  'shopper_wants',              // Shopper module
-  'shopper_price_snapshots',    // Shopper module
-  'shopper_searches',           // Shopper Scout
-  'shopper_offers',             // Shopper Scout
-  'shopper_picks',              // Shopper Scout
-  // new-module:indexeddb-table (scripts/new-module.mjs adds above this line)
-];
-const INDEXEDDB_VERSION = 13; // bumped for the cook session and Shopper tables (non-destructive upgrade)
+// bump. The list is every synced table in the module manifests (STORE_MODULES),
+// and the version grows by one for each table added since version 13, so a new
+// module's tables get their object stores with no edit here.
+// environment.tables.test.ts fails if a table at version 13 ever leaves the
+// list, which would let the count, and so the version, stand still.
+export const INDEXEDDB_TABLES: string[] = Object.keys(STORE_MODULES);
+/** The 40 tables at version 13 (Oct 28, 2026). Tables only join after these. */
+export const INDEXEDDB_BASE = { version: 13, tables: 40 } as const;
+export const INDEXEDDB_VERSION = INDEXEDDB_BASE.version + Math.max(0, INDEXEDDB_TABLES.length - INDEXEDDB_BASE.tables);
 
 let indexedDBPlugin: ReturnType<typeof observablePersistIndexedDB> | undefined;
 

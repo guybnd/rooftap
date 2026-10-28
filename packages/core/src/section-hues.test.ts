@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { sections, profileSection } from "./sections";
-import { GLOW_AURA, HUE_SET_IDS, HUE_SETS, INK_HUE_SWATCH, SECTION_GLOW_OPACITY, SECTION_HUE_BY_SECTION, SECTION_HUE_IDS, SECTION_HUES, hueSchemeTone, hueSwatch, sectionHue, sectionHueSwatch } from "./section-hues";
+import { GLOW_AURA, HUE_SET_IDS, HUE_SETS, INK_HUE_SWATCH, SECTION_GLOW_OPACITY, SECTION_HUE_BY_SECTION, SECTION_HUE_IDS, SECTION_HUES, customHueSwatch, hueSchemeTone, hueSwatch, isCustomHue, sectionHue, sectionHueSwatch } from "./section-hues";
 
 const HEX = /^#[0-9A-F]{6}$/;
 
@@ -8,7 +8,8 @@ describe("section hues", () => {
   it("gives every registered section its own hue", () => {
     const ids = [...sections.map((s) => s.id)];
     for (const id of ids) expect(SECTION_HUE_BY_SECTION[id], id).toBeDefined();
-    // Spaces show sections side by side, so no two sections share a hue.
+    // Spaces show sections side by side, so no two sections share a hue. A
+    // module may pick any colour (#rrggbb), just not one another section wears.
     const hues = ids.map((id) => SECTION_HUE_BY_SECTION[id]);
     expect(new Set(hues).size).toBe(hues.length);
     expect(sectionHue(profileSection.id)).toBe("slate");
@@ -52,6 +53,25 @@ describe("section hues", () => {
     }
     expect(sectionHueSwatch("groceries", "sorbet-day")).toEqual(HUE_SETS["sorbet-day"].mint);
     expect(hueSwatch("sky", "sorbet-night")).toEqual(HUE_SETS["sorbet-night"].sky);
+  });
+
+  it("works out a full swatch for any colour a module picks", () => {
+    for (const scheme of ["light", "dark", ...HUE_SET_IDS] as const) {
+      const swatch = customHueSwatch("#3a8f5c", scheme);
+      expect(swatch.tile, scheme).toMatch(HEX);
+      expect(swatch.glyph, scheme).toMatch(HEX);
+      expect(swatch.glow, scheme).toMatch(HEX);
+      expect(hueSwatch("#3a8f5c", scheme)).toEqual(swatch);
+    }
+    expect(hueSwatch("#3a8f5c", "ink")).toEqual(INK_HUE_SWATCH);
+    // Light tiles stay pale and dark tiles deep, like the curated hues.
+    expect(customHueSwatch("#3a8f5c", "light").tile).not.toBe(customHueSwatch("#3a8f5c", "dark").tile);
+    // A grey stays grey: no hue is invented for it.
+    const grey = customHueSwatch("#808080", "light").glyph;
+    expect(grey.slice(1, 3)).toBe(grey.slice(3, 5));
+    expect(isCustomHue("#3A8F5C")).toBe(true);
+    expect(isCustomHue("mint")).toBe(false);
+    expect(isCustomHue("#3a8f5")).toBe(false);
   });
 
   it("maps every hue scheme to its ground", () => {

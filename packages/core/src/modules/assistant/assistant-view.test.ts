@@ -81,8 +81,8 @@ describe('parseReply', () => {
 });
 
 describe('assistantModules', () => {
-  it('lists switched-on modules that have tools', () => {
-    expect(assistantModules(new Set(['costs', 'household', 'recipes', 'mcp'])).map((m) => m.id)).toEqual(['costs', 'household', 'recipes']);
+  it('lists switched-on modules that have tools, in registry order', () => {
+    expect(assistantModules(new Set(['costs', 'household', 'recipes', 'mcp'])).map((m) => m.id)).toEqual(['household', 'recipes', 'costs']);
   });
 });
 

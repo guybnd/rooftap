@@ -34,10 +34,15 @@ function read(path) {
   return readFileSync(join(ROOT, path), 'utf8');
 }
 
-/** Section and module ids, read from core's registries (this script can't import TypeScript). */
+/** Section and module ids, read from core's registries and module manifests (this script can't import TypeScript). */
 function knownModules() {
   const ids = new Set(['app']);
-  for (const file of ['packages/core/src/sections.ts', 'packages/core/src/modules.ts']) {
+  const files = ['packages/core/src/sections.ts'];
+  const modulesDir = join(ROOT, 'packages/core/src/modules');
+  for (const id of readdirSync(modulesDir)) {
+    if (existsSync(join(modulesDir, id, 'manifest.ts'))) files.push(`packages/core/src/modules/${id}/manifest.ts`);
+  }
+  for (const file of files) {
     for (const m of read(file).matchAll(/^\s+id:\s*["']([a-z0-9-]+)["']/gm)) ids.add(m[1]);
   }
   return ids;

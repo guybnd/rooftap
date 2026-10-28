@@ -12,34 +12,16 @@
 // the whole tabs group, so `openRoute` pops back to the existing one instead.
 import * as React from 'react';
 import { useNavigationContainerRef, useRouter, type Href } from 'expo-router';
-import type { Section } from '@homeup/core';
+import { SECTION_TAB_ROUTES, type Section } from '@homeup/core';
 
-// Mirrors the route files under src/app/(tabs). Guarded by
+// Mirrors the route files under src/app/(tabs): each section's root plus the
+// nav items that are tabs of their own, from the module manifests. Guarded by
 // tab-routes.test.ts so the two can't drift.
-export const TAB_ROUTES = [
-  '/home',
-  '/calendar',
-  '/setup',
-  '/tasks',
-  '/costs',
-  '/homesearch',
-  '/groceries',
-  '/checklists',
-  '/recipes',
-  '/shopper',
-  '/rewards',
-  '/occasions',
-  '/bins',
-  '/assistant',
-  '/documents',
-  // new-module:tab-route (scripts/new-module.mjs adds above this line)
-  '/appointments',
-  '/checklist',
-] as const;
+export const TAB_ROUTES: readonly string[] = SECTION_TAB_ROUTES;
 
 export function isTabRoute(href: string): boolean {
   const path = href.split(/[?#]/)[0];
-  return (TAB_ROUTES as readonly string[]).includes(path);
+  return TAB_ROUTES.includes(path);
 }
 
 /**

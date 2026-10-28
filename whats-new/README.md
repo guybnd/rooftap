@@ -27,7 +27,7 @@ Add things you want to buy and Shopper keeps the cheapest price across shops, wi
 | Field | | |
 | --- | --- | --- |
 | `title` | required | At most 60 characters. Sentence case, says what you can do now. |
-| `module` | required | A section or module id from `packages/core/src/sections.ts` / `modules.ts` (`groceries`, `shopper`, `household`), or `app` for app-wide changes. An entry for a module that's off never shows. |
+| `module` | required | A section or module id: `home`, or the `id` in a module manifest under `packages/core/src/modules/` (`groceries`, `shopper`, `household`), or `app` for app-wide changes. An entry for a module that's off never shows. |
 | `kind` | required | `feature` (something new), `improvement` (something better), `fix` (something that was broken). Fixes fold into one "And 4 smaller fixes" row. |
 | body | required | One or two sentences, at most 220 characters. |
 | `link` | optional | An app route (`/shopper`) the row's "Show me" opens. Must exist on web or mobile. |

@@ -3,22 +3,22 @@
 //
 // A household can switch any module off (modules.ts), so a module's code may
 // only lean on another module when the two are meant to work together:
-//   - the importer `requires` or `enhances` the other module (modules.ts), or
+//   - the importer `requires` or `enhances` the other module (its manifest), or
 //   - a cross-module feature in module-features.ts names both modules.
 // Shared code outside modules/ (types, the data layer, Home, search) may import
 // any module: it is what puts the modules together. Every folder under
-// modules/ must be a registered module id.
+// modules/ must be a module listed in module-manifests.ts.
 // Run via `npm run lint` in this package, after check-import-boundary.mjs.
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 /**
- * Which modules each module may import, read from the source text of
- * modules.ts and module-features.ts.
+ * Which modules each module may import, read from the source text of the
+ * module manifests (all of them, one after another) and module-features.ts.
  * @returns {{ ids: Set<string>, allowed: Map<string, Set<string>> }}
  */
-export function moduleRules(modulesSrc, featuresSrc) {
+export function moduleRules(manifestsSrc, featuresSrc) {
   const ids = new Set();
   const allowed = new Map();
   const allow = (a, b) => {
@@ -26,8 +26,7 @@ export function moduleRules(modulesSrc, featuresSrc) {
     allowed.get(a).add(b);
   };
   const list = (s) => [...(s ?? "").matchAll(/'([\w-]+)'/g)].map((m) => m[1]);
-  const registry = modulesSrc.slice(modulesSrc.indexOf("export const MODULES"));
-  for (const block of registry.split(/\n\s*\{\s*\n\s*id: /).slice(1)) {
+  for (const block of manifestsSrc.split(/\{\s*\n\s*id: /).slice(1)) {
     const id = block.match(/^'([\w-]+)'/)?.[1];
     if (!id) continue;
     ids.add(id);
@@ -63,7 +62,7 @@ export function scanModules(srcDir, rules) {
     const id = entry.name;
     const dir = path.join(modulesDir, id);
     if (!rules.ids.has(id)) {
-      violations.push({ file: dir, line: 0, text: id, reason: `"${id}" is not a module id in modules.ts` });
+      violations.push({ file: dir, line: 0, text: id, reason: `"${id}" is not a module listed in module-manifests.ts` });
     }
     for (const file of walk(dir)) {
       const lines = fs.readFileSync(file, "utf8").split("\n");
@@ -75,13 +74,21 @@ export function scanModules(srcDir, rules) {
             file,
             line: i + 1,
             text: text.trim(),
-            reason: `module "${id}" imports module "${target}", but neither modules.ts (requires/enhances) nor a module-features.ts feature links them`,
+            reason: `module "${id}" imports module "${target}", but neither its manifest (requires/enhances) nor a module-features.ts feature links them`,
           });
         }
       });
     }
   }
   return violations;
+}
+
+/** The source of every manifest module-manifests.ts lists, one after another. */
+export function readManifests(srcDir) {
+  const list = fs.readFileSync(path.join(srcDir, "module-manifests.ts"), "utf8");
+  return [...list.matchAll(/from '\.\/modules\/([\w-]+)\/manifest'/g)]
+    .map((m) => fs.readFileSync(path.join(srcDir, "modules", m[1], "manifest.ts"), "utf8"))
+    .join("\n");
 }
 
 function* walk(dir) {
@@ -95,11 +102,11 @@ function* walk(dir) {
 if (process.argv[1]?.endsWith("check-module-boundary.mjs")) {
   const SRC_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "src");
   const rules = moduleRules(
-    fs.readFileSync(path.join(SRC_DIR, "modules.ts"), "utf8"),
+    readManifests(SRC_DIR),
     fs.readFileSync(path.join(SRC_DIR, "module-features.ts"), "utf8"),
   );
   if (rules.ids.size === 0) {
-    console.error("module-boundary check failed: no module ids found in modules.ts.");
+    console.error("module-boundary check failed: no module manifests found in module-manifests.ts.");
     process.exit(1);
   }
   const violations = scanModules(SRC_DIR, rules);

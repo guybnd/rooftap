@@ -42,6 +42,29 @@ A new migration must also:
 - grant each new public table to the Data API roles: `grant select, insert, update, delete on public.<table> to anon, authenticated, service_role;` (`apps/web/src/lib/migration-grants.test.ts` checks this)
 - not manage its own transaction (no `BEGIN` or `COMMIT`)
 
+## Adding a module
+
+A module is a part of the app that a household can switch on or off, such as Bin night or Rewards. Open an issue first, so that we can agree on these points before you write the code:
+
+- its privacy rule: private rows, "Just me" items, or items kept from a member
+- whether the Assistant can read it and change it
+- whether it shows on Home, the calendar, the agenda or search
+- its section colour: any colour that no other section wears
+
+Then start from the generator. Do not copy an old module:
+
+```bash
+npm run new-module -- plant-care --label "Plant care" --icon sprout --hue "#3A8F5C" --description "Which plants need water."
+```
+
+The module declares itself in one file, `packages/core/src/modules/<id>/manifest.ts`. The manifest holds its section, hue, tables, Assistant tools and settings, and the shared lists read it. Section 15 of [.docs/modules.md](.docs/modules.md) explains each field and what the generator writes. `npm run check` then tells you about a missing platform, logic in a screen, or a table that the Assistant cannot reach.
+
+A new migration also needs new database types. That step needs Docker (`npx supabase db start`, then `npm run db:types`). If you cannot run Docker, say so in the PR and we generate the types when we apply it.
+
+## Adding a price source
+
+Shopper gets prices, stores and deals from sources. A source for your region is one file and one test, as [.docs/shopper-sources.md](.docs/shopper-sources.md) describes. A source can also run as your own small web service, with no pull request.
+
 ## License
 
 Rooftap uses the [Elastic License 2.0](LICENSE). When you submit a contribution, you agree that it uses the same license, and you confirm that you have the right to submit it.

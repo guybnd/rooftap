@@ -9,6 +9,7 @@
 // be missing on one platform).
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ModuleId } from './modules';
+import { ALL_MANIFESTS } from './module-manifests';
 import type { UserSettings } from './types';
 
 export type SettingsPanelId =
@@ -31,18 +32,10 @@ export type SettingsPanelId =
   | 'assistant-home-assistant'
   | 'shopper-sources';
 
-/** Each module's settings panels, in the order both doors show them. Keyed by module (section) id. */
-export const MODULE_SETTINGS: Partial<Record<ModuleId, readonly SettingsPanelId[]>> = {
-  search: ['search-budget', 'search-appointments', 'search-saved', 'search-agents'],
-  setup: ['setup-stores'],
-  household: ['task-defaults'],
-  costs: ['costs-goal', 'costs-recent', 'costs-subscriptions', 'costs-summaries'],
-  groceries: ['groceries'],
-  checklists: ['checklists'],
-  calendar: ['google-calendar'],
-  assistant: ['assistant', 'assistant-spending', 'assistant-telegram', 'assistant-home-assistant'],
-  shopper: ['shopper-sources'],
-};
+/** Each module's settings panels, in the order both doors show them, from each manifest's `settings`. Keyed by module (section) id. */
+export const MODULE_SETTINGS: Partial<Record<ModuleId, readonly SettingsPanelId[]>> = Object.fromEntries(
+  ALL_MANIFESTS.flatMap((m) => (m.settings ? [[m.id, m.settings]] : [])),
+);
 
 /** A panel that belongs to another module shows only while that module is on. */
 const PANEL_MODULE: Partial<Record<SettingsPanelId, ModuleId>> = {

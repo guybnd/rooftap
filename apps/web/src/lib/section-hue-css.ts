@@ -7,11 +7,11 @@
 import {
   GLOW_AURA,
   HUE_SET_IDS,
-  HUE_SETS,
   INK_HUE_SWATCH,
   SECTION_GLOW_OPACITY,
   SECTION_HUE_IDS,
-  SECTION_HUES,
+  customSectionHues,
+  hueSwatch,
   STILL_THEME_IDS,
   type GlowAuraLayer,
   type SectionHueSwatch,
@@ -33,9 +33,11 @@ const WASH_WIDE = "radial-gradient(ellipse 55% 85% at var(--glow-x) -10%,var(--g
 
 export function sectionHueCss(): string {
   const rules = [`:root{--glow-opacity:${SECTION_GLOW_OPACITY.light}}`, `.dark{--glow-opacity:${SECTION_GLOW_OPACITY.dark}}`];
-  for (const hue of SECTION_HUE_IDS) {
-    rules.push(`[data-hue="${hue}"]{${declarations(SECTION_HUES[hue].light)}}`);
-    rules.push(`.dark [data-hue="${hue}"]{${declarations(SECTION_HUES[hue].dark)}}`);
+  // The curated hues, then any colour a module manifest picks.
+  const hues = [...SECTION_HUE_IDS, ...customSectionHues()];
+  for (const hue of hues) {
+    rules.push(`[data-hue="${hue}"]{${declarations(hueSwatch(hue, "light"))}}`);
+    rules.push(`.dark [data-hue="${hue}"]{${declarations(hueSwatch(hue, "dark"))}}`);
   }
   // The e-paper theme: every section wears the one grey tile and no glow.
   for (const theme of STILL_THEME_IDS) {
@@ -46,8 +48,8 @@ export function sectionHueCss(): string {
   // the fixed aura painted under the section's wash.
   for (const theme of HUE_SET_IDS) {
     rules.push(`[data-theme="${theme}"]{--glow-opacity:${SECTION_GLOW_OPACITY[theme]}}`);
-    for (const hue of SECTION_HUE_IDS) {
-      rules.push(`[data-theme="${theme}"] [data-hue="${hue}"],[data-theme="${theme}"][data-hue="${hue}"]{${declarations(HUE_SETS[theme][hue])}}`);
+    for (const hue of hues) {
+      rules.push(`[data-theme="${theme}"] [data-hue="${hue}"],[data-theme="${theme}"][data-hue="${hue}"]{${declarations(hueSwatch(hue, theme))}}`);
     }
     const aura = GLOW_AURA[theme];
     if (aura?.length) {
