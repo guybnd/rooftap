@@ -181,14 +181,14 @@ describe('bin night', () => {
     const p = plan({ rotation: ['guy', 'tegan'], rotation_anchor: tuesday });
     const item = binNightHeroItem(binNightState([red, yellow], [], p, tuesday), p, tuesday);
     expect(item).toMatchObject({
-      type: 'bins',
+      type: 'module',
       title: 'Bins out tonight',
       dueDate: tuesday,
       dueTime: '19:00',
       done: false,
       assignedTo: 'guy',
       sourceLabel: 'Red and yellow',
-      binNight: { collectionDate: WED, lids: ['red', 'yellow'] },
+      module: { id: 'bins', href: '/bins', completable: true, doneLabel: 'Bins out', detail: { collectionDate: WED, lids: ['red', 'yellow'] } },
     });
     const out = plan({ out_for: WED });
     expect(binNightHeroItem(binNightState([red], [], out, tuesday), out, tuesday)?.done).toBe(true);

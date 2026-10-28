@@ -199,10 +199,11 @@ export * from './modules/occasions/occasions-view';
 export * from './modules/occasions/use-occasions-view';
 export * from './modules/bins/use-bins';
 export * from './modules/bins/use-bins-view';
-export * from './modules/bins/calendar-source';
-export * from './modules/occasions/calendar-source';
+export * from './modules/bins/slots';
+export * from './modules/occasions/slots';
 export * from './slots/types';
 export * from './slots/calendar';
+export * from './slots/home';
 export * from './use-user-setting';
 // new-module:module-hooks (scripts/new-module.mjs adds above this line)
 export * from './modules/recipes/use-recipe-match';

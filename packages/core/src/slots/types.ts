@@ -8,6 +8,7 @@
 // slot registries that list the sources.
 
 import type { ModuleFeatureId } from '../module-features';
+import type { HeroItem } from '../hero';
 
 /** The days a calendar screen has on view, as YYYY-MM-DD, both ends included. */
 export interface CalendarRange {
@@ -47,11 +48,38 @@ export interface CalendarSourceContext {
   range: CalendarRange;
 }
 
-/** A module's calendar source, kept in its folder as calendar-source.ts. */
+/** A module's calendar source, kept in its folder's slots.ts. */
 export interface CalendarSource {
   moduleId: string;
   /** The module feature that gates it, naming calendar and the module (module-features.ts). */
   feature: ModuleFeatureId;
   /** A React hook, called on every render in a fixed order. */
   useEntries(ctx: CalendarSourceContext): CalendarEntry[];
+}
+
+// ── Home agenda ─────────────────────────────────────────────────────────────
+
+export interface HomeAgendaContext {
+  /** undefined while the source's feature is off or its section is hidden: open the inert stores. */
+  groupId: string | undefined;
+  currentUserId: string | null | undefined;
+}
+
+/** What a module adds to Home's feed and Now card, and how its items finish. */
+export interface HomeAgendaPart {
+  /** Feed items with `module` set (hero.ts ModuleHeroItem), dated so the range can pick them. */
+  items: HeroItem[];
+  /** Finish a completable item (bin night: mark the bins out). */
+  complete?: (item: HeroItem) => void;
+  /** Take a finish back (the undo toast, or sliding a done item again). */
+  undo?: (item: HeroItem) => void;
+}
+
+/** A module's Home agenda source, kept in its folder's slots.ts. */
+export interface HomeAgendaSource {
+  moduleId: string;
+  /** The hub feature that gates it (module-features.ts). */
+  feature: ModuleFeatureId;
+  /** A React hook, called on every render in a fixed order. */
+  useAgenda(ctx: HomeAgendaContext): HomeAgendaPart;
 }

@@ -12,8 +12,8 @@
 import { useMemo } from 'react';
 import { useModules } from '../modules-store';
 import { toISODate } from '../date-utils';
-import { binsCalendarSource } from '../modules/bins/calendar-source';
-import { occasionsCalendarSource } from '../modules/occasions/calendar-source';
+import { binsCalendarSource } from '../modules/bins/slots';
+import { occasionsCalendarSource } from '../modules/occasions/slots';
 // A module's calendar source is imported above this line and listed below.
 import type { CalendarEntry, CalendarRange, CalendarSource } from './types';
 

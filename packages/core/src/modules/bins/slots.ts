@@ -1,15 +1,17 @@
 'use client';
 
-// Bin night's calendar slot: each collection day in range, as an all-day
-// entry that opens Bins. Its rows carry the lid colours (`binLidsOf`), which
-// each app's bins row draws.
+// Bin night's slots (.docs/modules.md, section 17). The calendar: each
+// collection day in range, as an all-day entry that opens Bins. Home: "Bins
+// out tonight" on bin night, which sliding marks out. Both carry the lid
+// colours (`binLidsOf`), which each app's bins row part draws.
 
 import { useMemo } from 'react';
 import { use$ } from '@legendapp/state/react';
 import { binChanges$, binStreams$ } from '../../data/stores';
 import { useReconnectSync } from '../../data/create-group-store';
-import type { CalendarEntry, CalendarRange, CalendarSource } from '../../slots/types';
+import type { CalendarEntry, CalendarRange, CalendarSource, HomeAgendaSource } from '../../slots/types';
 import { binCollections, binNamesPhrase, type BinChange, type BinStream } from './bins';
+import { useBins } from './use-bins';
 
 function live<T extends { deleted: boolean }>(record: Record<string, T | undefined> | undefined): T[] {
   return Object.values(record ?? {}).filter((r): r is T => !!r && !r.deleted);
@@ -38,10 +40,15 @@ export function binsCalendarEntries(
   });
 }
 
-/** The lid colours a bins entry carries, for the bins row. */
-export function binLidsOf(entry: CalendarEntry): string[] {
-  const lids = entry.detail?.lids;
+/** The lid colours a bins entry or feed item carries in its detail, for the bins row part. */
+export function binLidsOf(detail: Readonly<Record<string, unknown>> | undefined): string[] {
+  const lids = detail?.lids;
   return Array.isArray(lids) ? lids.filter((l): l is string => typeof l === 'string') : [];
+}
+
+/** The collection a bin night feed item marks out. */
+function collectionDateOf(detail: Readonly<Record<string, unknown>> | undefined): string | null {
+  return typeof detail?.collectionDate === 'string' ? detail.collectionDate : null;
 }
 
 export const binsCalendarSource: CalendarSource = {
@@ -55,5 +62,25 @@ export const binsCalendarSource: CalendarSource = {
     const streams = use$(() => live(streams$.get()));
     const changes = use$(() => live(changes$.get()));
     return useMemo(() => binsCalendarEntries(streams, changes, range), [streams, changes, range]);
+  },
+};
+
+export const binsHomeAgendaSource: HomeAgendaSource = {
+  moduleId: 'bins',
+  feature: 'hub.bins',
+  useAgenda({ groupId, currentUserId }) {
+    const bins = useBins(groupId, currentUserId);
+    const { heroItem, markOut, undoOut } = bins;
+    return useMemo(
+      () => ({
+        items: heroItem ? [heroItem] : [],
+        complete: (item) => {
+          const date = collectionDateOf(item.module?.detail);
+          if (date) markOut(date);
+        },
+        undo: () => undoOut(),
+      }),
+      [heroItem, markOut, undoOut],
+    );
   },
 };

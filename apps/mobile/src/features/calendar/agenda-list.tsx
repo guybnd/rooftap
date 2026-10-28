@@ -20,7 +20,7 @@ import {
 import { sectionIconFor } from '@/lib/section-icons';
 import { useEventForecast } from './use-event-forecast';
 import { useLegTravel } from './use-event-travel';
-import { CalendarEntryTrailing } from './entry-rows';
+import { ModuleRowTrailing } from '@/components/module-row-parts';
 
 type MemberProfiles = Record<string, { email: string; name: string | null; avatar: string | null }>;
 
@@ -193,7 +193,7 @@ export function AgendaList({
                 <ListItemTitle>{entry.title}</ListItemTitle>
                 <AgendaMeta timeLabel={item.timeLabel} subtitle={entry.subtitle} />
               </ListItemContent>
-              <CalendarEntryTrailing entry={entry} />
+              <ModuleRowTrailing moduleId={entry.moduleId} detail={entry.detail} />
             </ListItem>
           );
         }

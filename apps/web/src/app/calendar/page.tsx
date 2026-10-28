@@ -44,7 +44,7 @@ import { memberLabel } from "@/app/setup/member-label";
 import { useLongPress } from "@/hooks/use-long-press";
 import { HouseholdTaskModal } from "@/app/tasks/household-task-modal";
 import { EventModal } from "@/app/calendar/event-modal";
-import { CalendarEntryTrailing } from "@/components/calendar-entry-rows";
+import { ModuleRowTrailing } from "@/components/module-row-parts";
 import { useRowContextMenu } from "@/components/ui/row-context-menu";
 import {
   eventCategoryClasses,
@@ -1417,7 +1417,7 @@ const filteredApartments = useMemo(() => filterApartments(apartments, searchQuer
                           </span>
                           {item.event && legOf(item.event.id) ? <LegLine leg={legOf(item.event.id)!} /> : null}
                         </span>
-                        {item.entry ? <CalendarEntryTrailing entry={item.entry} className="ml-2" /> : null}
+                        {item.entry ? <ModuleRowTrailing moduleId={item.entry.moduleId} detail={item.entry.detail} className="ml-2" /> : null}
                       </button>
                     </div>
                   ))}

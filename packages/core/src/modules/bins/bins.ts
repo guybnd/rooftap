@@ -282,7 +282,7 @@ export function binNightHeroItem(state: BinNightState, plan: BinPlan | null | un
   const { collection } = state;
   return {
     id: `bins-${collection.date}`,
-    type: 'bins',
+    type: 'module',
     ownerSection: 'bins',
     title: 'Bins out tonight',
     dueDate: todayISO,
@@ -291,7 +291,13 @@ export function binNightHeroItem(state: BinNightState, plan: BinPlan | null | un
     done: state.out,
     assignedTo: state.turn,
     sourceLabel: binNamesPhrase(collection.streams),
-    binNight: { collectionDate: collection.date, lids: collection.streams.map((s) => s.lid) },
+    module: {
+      id: 'bins',
+      href: '/bins',
+      completable: true,
+      doneLabel: 'Bins out',
+      detail: { collectionDate: collection.date, lids: collection.streams.map((s) => s.lid) },
+    },
   };
 }
 

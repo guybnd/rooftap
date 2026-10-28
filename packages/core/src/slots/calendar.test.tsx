@@ -7,8 +7,8 @@ import { MODULE_FEATURES } from '../module-features';
 import { resetModulesStore, setModuleRows } from '../modules-store';
 import { ALL_MODULE_IDS, type GroupModuleRow } from '../modules';
 import { buildOccasion } from '../modules/occasions/occasions';
-import { occasionsCalendarEntries } from '../modules/occasions/calendar-source';
-import { binLidsOf, binsCalendarEntries } from '../modules/bins/calendar-source';
+import { occasionsCalendarEntries } from '../modules/occasions/slots';
+import { binLidsOf, binsCalendarEntries } from '../modules/bins/slots';
 import type { BinLid, BinStream } from '../modules/bins/bins';
 import { CALENDAR_SOURCES, calendarEntriesOn, calendarRangeOf, useCalendarEntries } from './calendar';
 import type { CalendarEntry, CalendarSource } from './types';
@@ -119,7 +119,7 @@ describe('bins calendar source', () => {
         href: '/bins',
       }),
     ]);
-    expect(binLidsOf(entries[0])).toEqual(['yellow', 'red']);
+    expect(binLidsOf(entries[0].detail)).toEqual(['yellow', 'red']);
   });
 
   it('has nothing without bins', () => {

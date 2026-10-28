@@ -49,13 +49,13 @@ export function heroRangeWindow(
   return { from: localDateISO(start), to: localDateISO(end) };
 }
 
-export type HeroItemType = 'task' | 'reminder' | 'appointment' | 'event' | 'calendar' | 'bins';
+export type HeroItemType = 'task' | 'reminder' | 'appointment' | 'event' | 'calendar' | 'module';
 
 export interface HeroItem {
   id: string;
   type: HeroItemType;
-  /** Which section owns this item — used for hiddenSections gating. */
-  ownerSection: 'household' | 'search' | 'bins';
+  /** Which section owns this item — used for hiddenSections gating. A module item names its module. */
+  ownerSection: string;
   title: string;
   dueDate: string | null; // YYYY-MM-DD
   dueTime: string | null; // HH:MM wall-clock
@@ -79,8 +79,26 @@ export interface HeroItem {
   appointment?: Appointment; // present for appointments (inert)
   googleEvent?: GoogleCalendarEventWithAttribution; // present for pulled calendar events (inert)
   groupEvent?: GroupEvent; // present for the household's own calendar events (inert, opens the calendar)
-  /** Bin night (bins.ts): the collection whose bins go out tonight. Finishing it marks them out. */
-  binNight?: { collectionDate: string; lids: string[] };
+  /**
+   * Another module's item, from the Home agenda slot (slots/home.ts): bin
+   * night's "Bins out tonight". It opens `href`; when `completable`, sliding
+   * it finishes it through the module's own source.
+   */
+  module?: ModuleHeroItem;
+}
+
+/** What makes a feed item another module's (HeroItem.module). */
+export interface ModuleHeroItem {
+  /** The module it comes from: its tile, glyph and hue. */
+  id: string;
+  /** Where a tap goes. */
+  href: string;
+  /** Sliding it finishes it (the module's source does the write). */
+  completable: boolean;
+  /** The undo toast's words after finishing it ("Bins out"); "Done" when unset. */
+  doneLabel?: string;
+  /** Data the module's own row part reads (bin lid colours). */
+  detail?: Readonly<Record<string, unknown>>;
 }
 
 /**
@@ -127,8 +145,8 @@ export function buildHeroItems(opts: {
    */
   reminderOwnersVisible?: Partial<Record<ReminderOwner, boolean>>;
   /**
-   * Items other modules build for today (bin night, bins.ts binNightHeroItem),
-   * already gated on their hub feature. Added as they are.
+   * Items other modules build (the Home agenda slot, useHomeAgenda), already
+   * gated on their hub feature. Added as they are, when inside the range.
    */
   extraItems?: HeroItem[];
 }): HeroItem[] {

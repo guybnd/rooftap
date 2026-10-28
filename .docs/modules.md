@@ -455,11 +455,13 @@ The calendar slot is the first one. Bin night and Occasions fill it.
 To put a module on the calendar:
 
 1. Add a feature `calendar.<id>` that names `calendar` and the module (`module-features.ts`).
-2. Write `calendar-source.ts` in the module's folder. Its `useEntries` hook returns a `CalendarEntry` for each date in the range: a title, a subtitle, a time (or none for all day) and the route a tap opens. Keep the logic in a pure function next to it, and test that function.
+2. Write the source in `slots.ts` in the module's folder. Its `useEntries` hook returns a `CalendarEntry` for each date in the range: a title, a subtitle, a time (or none for all day) and the route a tap opens. Keep the logic in a pure function next to it, and test that function.
 3. Add `slots: ['calendar']` to the manifest, and list the source in `CALENDAR_SOURCES` (`slots/calendar.ts`).
 
-Both calendar screens draw each entry with one generic row in the module's colour and glyph. All-day entries also show in the week grid's all-day band. A module that needs a special look adds a trailing part in `calendar-entry-rows.tsx` (web) and `entry-rows.tsx` (phone). Bin night does this for its lid colours.
+Both calendar screens draw each entry with one generic row in the module's colour and glyph. All-day entries also show in the week grid's all-day band. A module that needs a special look adds a trailing part in `module-row-parts.tsx` in each app. Bin night does this for its lid colours. Every slot row shows that part.
 
 `slots/calendar.test.tsx` fails when a manifest lists the slot with no source, when a source has no manifest entry, or when the feature of a source does not name the calendar and the module. It also switches each module off and checks that only the entries of that module go away.
 
 The items of the calendar itself (household events, Google events, to-dos and viewings) do not use the slot. A person edits, drags and books them in place, and a slot entry only opens its module.
+
+The Home agenda slot works the same way. A source (`HomeAgendaSource`) gives feed items with `module` set: the module id, the route a tap opens, and whether a slide finishes the item. `useHomeAgenda` merges the items into the feed and the Now card. It sends a finish or an undo back to the source of the item. A source shows while its `hub.*` feature is on and the person has not hidden its section. Bin night fills this slot with "Bins out tonight". To add a module, add `'home-agenda'` to the slots of its manifest and list its source in `HOME_AGENDA_SOURCES` (`slots/home.ts`). `slots/home.test.tsx` runs the same checks as the calendar test.

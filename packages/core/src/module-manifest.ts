@@ -49,7 +49,7 @@ export interface ManifestSection {
  * source in its own folder; packages/core/src/slots/ lists the sources and the
  * shared screen loops over them.
  */
-export type SlotId = 'calendar';
+export type SlotId = 'calendar' | 'home-agenda';
 
 /** A database table the module owns. Every table in supabase/migrations belongs to a module or to the platform list in assistant-reach.ts. */
 export interface ManifestTable {

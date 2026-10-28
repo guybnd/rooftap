@@ -27,7 +27,7 @@ import type {
   GoogleCalendarEventWithAttribution,
   GroupEvent,
 } from '@homeup/core';
-import { useBins } from '@homeup/core';
+import { useHomeAgenda } from '@homeup/core';
 import { upcomingWindowDays, hasVisibleReminders, hiddenWithDisabledModules, useModules, type TaskSnooze } from '@homeup/core';
 import { ALL_CLEAR_MOMENT_STORAGE_KEY, HOME_LENS_META, earnedAllClear, heroItemOpenTarget, type HomeLensKey } from '@homeup/core';
 import { setGlowOverride } from '@/lib/glow-override';
@@ -118,10 +118,8 @@ function HomeHub() {
   const documentsVisible = !isHidden('documents');
   // Home care reminders show with Home Setup and the home-care module on.
   const careVisible = !isHidden('setup') && modules.isEnabled('home-care');
-  // Modules: bin night's card needs the Bin night module (module-features.ts).
-  const binsVisible = !isHidden('bins') && modules.feature('hub.bins');
-  const bins = useBins(binsVisible ? group?.id : undefined, currentUserId);
-  const binExtraItems = useMemo(() => (binsVisible && bins.heroItem ? [bins.heroItem] : []), [binsVisible, bins.heroItem]);
+  // Other modules' feed items (bin night): the Home agenda slot, each on its hub feature and section.
+  const moduleAgenda = useHomeAgenda(group?.id, currentUserId, hidden);
 
   // ── FLUX-236: Today hero range picker (Today / This Week / This Month / Upcoming) ───────
   // Session-only, resets to Upcoming (the user's look-ahead window) on a fresh
@@ -314,7 +312,7 @@ function HomeHub() {
         dismissedCalendarEventIds,
         range,
         upcomingDays,
-        extraItems: binExtraItems,
+        extraItems: moduleAgenda.items,
       }),
     [
       tasks,
@@ -336,7 +334,7 @@ function HomeHub() {
       showCalendarEventsInTodo,
       dismissedCalendarEventIds,
       upcomingDays,
-      binExtraItems,
+      moduleAgenda.items,
     ]
   );
   const heroItems = useMemo(() => heroItemsFor(heroRange), [heroItemsFor, heroRange]);
@@ -364,7 +362,7 @@ function HomeHub() {
         showCalendarEventsInTodo,
         dismissedCalendarEventIds,
         range: 'today',
-        extraItems: binExtraItems,
+        extraItems: moduleAgenda.items,
       }),
     [
       tasks,
@@ -385,7 +383,7 @@ function HomeHub() {
       calendarEvents,
       showCalendarEventsInTodo,
       dismissedCalendarEventIds,
-      binExtraItems,
+      moduleAgenda.items,
     ]
   );
   const todayCount = useMemo(() => todayHeroItems.filter((i) => !i.done).length, [todayHeroItems]);
@@ -479,17 +477,16 @@ function HomeHub() {
   // ── Hero callbacks ────────────────────────────────────────────────────────
   const onHeroToggle = (item: HeroItem) => {
     if (item.task) toggleTask(item.task);
-    else if (item.binNight) toggleBinsOut(item);
+    else if (moduleAgenda.canComplete(item)) toggleModuleItem(item);
   };
-  // Bin night: finishing its item marks the bins out, and Undo puts it back.
-  const toggleBinsOut = (item: HeroItem) => {
-    if (!item.binNight) return;
+  // Another module's item (bin night): finishing it goes through its source, and Undo takes it back.
+  const toggleModuleItem = (item: HeroItem) => {
     if (item.done) {
-      bins.undoOut();
+      moduleAgenda.undo(item);
       return;
     }
-    bins.markOut(item.binNight.collectionDate);
-    toastUndoAction('Bins out', () => bins.undoOut());
+    moduleAgenda.complete(item);
+    toastUndoAction(item.module?.doneLabel ?? 'Done', () => moduleAgenda.undo(item));
   };
   const onHeroSnooze = (item: HeroItem, dur: TaskSnooze) => {
     if (item.task) snoozeTask(item.task, dur);
@@ -515,8 +512,8 @@ function HomeHub() {
   };
   // The slide is deliberate, but a slip is still one click from undone.
   const onNowComplete = (item: HeroItem) => {
-    if (item.binNight) {
-      toggleBinsOut(item);
+    if (moduleAgenda.canComplete(item)) {
+      toggleModuleItem(item);
       return;
     }
     if (!item.task) return;

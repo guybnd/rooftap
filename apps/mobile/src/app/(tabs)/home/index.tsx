@@ -94,7 +94,7 @@ import {
   MOTION_DURATIONS_MS,
   hiddenWithDisabledModules,
   useModules,
-  useBins,
+  useHomeAgenda,
   UpOverviewProvider,
   useEventSave,
   useStoreHelpers,
@@ -133,7 +133,7 @@ import { useTaskSnoozeUndo } from '@/features/tasks/use-task-snooze-undo';
 import { useWeather } from '@/features/home/use-weather';
 import { DayRibbon, SkyBlock, SkyNote, useSkyRibbonOpen } from '@/features/home/sky';
 import { EventCardFooter } from '@/features/home/event-card-footer';
-import { BinLids } from '@/features/bins/bin-lids';
+import { ModuleRowTrailing } from '@/components/module-row-parts';
 import { useHeroModuleConfig } from '@/features/home/use-hero-module-config';
 import { HeroCustomizeSheet } from '@/features/home/hero-customize-sheet';
 import { GroceriesWidget } from '@/features/home/groceries-widget';
@@ -336,10 +336,8 @@ function HomeSectionBody() {
   const eventsVisible = !hidden.includes('calendar') && modules.feature('hub.events');
   // Holding an event's row edits it here, Budget line and all (use-event-save.ts).
   const { linkedCostOf, saveEvent, deleteEvent } = useEventSave(eventsVisible ? group?.id : undefined, currentUserId, modules.feature('calendar.budget'));
-  // Modules: bin night's card needs the Bin night module (module-features.ts).
-  const binsVisible = !hidden.includes('bins') && modules.feature('hub.bins');
-  const bins = useBins(binsVisible ? group?.id : undefined, currentUserId);
-  const binExtraItems = React.useMemo(() => (binsVisible && bins.heroItem ? [bins.heroItem] : []), [binsVisible, bins.heroItem]);
+  // Other modules' feed items (bin night): the Home agenda slot, each on its hub feature and section.
+  const moduleAgenda = useHomeAgenda(group?.id, currentUserId, hidden);
   const [eventModalOpen, setEventModalOpen] = React.useState(false);
   const [editingEvent, setEditingEvent] = React.useState<GroupEvent | null>(null);
   const unhideEventRef = React.useRef(unhideEvent);
@@ -406,9 +404,9 @@ function HomeSectionBody() {
         reminderOwnersVisible: { costs: costsVisible, documents: documentsVisible, 'home-care': careVisible },
         taskChecklistsVisible,
         checklistByTaskId,
-        extraItems: binExtraItems,
+        extraItems: moduleAgenda.items,
       }),
-    [tasks, appointmentsList, apartmentsList, homeEvents, eventsVisible, currentUserId, todayISOStr, householdVisible, viewingsVisible, costsVisible, documentsVisible, careVisible, taskChecklistsVisible, checklistByTaskId, binExtraItems]
+    [tasks, appointmentsList, apartmentsList, homeEvents, eventsVisible, currentUserId, todayISOStr, householdVisible, viewingsVisible, costsVisible, documentsVisible, careVisible, taskChecklistsVisible, checklistByTaskId, moduleAgenda.items]
   );
 
   const todayLabel = now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
@@ -527,9 +525,9 @@ function HomeSectionBody() {
         // The Upcoming range reaches the user's window (Settings, default 90 days).
         upcomingDays: upcomingWindowDays(userSettings),
         checklistByTaskId,
-        extraItems: binExtraItems,
+        extraItems: moduleAgenda.items,
       }),
-    [tasks, appointmentsList, apartmentsList, homeEvents, eventsVisible, currentUserId, todayISOStr, householdVisible, viewingsVisible, costsVisible, documentsVisible, careVisible, taskChecklistsVisible, userSettings, checklistByTaskId, binExtraItems]
+    [tasks, appointmentsList, apartmentsList, homeEvents, eventsVisible, currentUserId, todayISOStr, householdVisible, viewingsVisible, costsVisible, documentsVisible, careVisible, taskChecklistsVisible, userSettings, checklistByTaskId, moduleAgenda.items]
   );
   const heroItems = React.useMemo(() => heroItemsFor(heroRange), [heroItemsFor, heroRange]);
 
@@ -543,8 +541,8 @@ function HomeSectionBody() {
     appointment: viewingsVisible,
     event: eventsVisible,
     calendar: false,
-    // Bin night shows under All only.
-    bins: false,
+    // Other modules' items (bin night) show under All only.
+    module: false,
   };
   const activeType: TypeFilter = typeTabShown[typeFilter] ? typeFilter : 'all';
   const typeOptions: FeedTypeOption[] = [
@@ -737,13 +735,13 @@ function HomeSectionBody() {
     });
   };
 
-  // Bin night: finishing its item marks the bins out, and Undo puts it back.
-  const finishBinsOut = (item: HeroItem) => {
-    if (!item.binNight || item.done) return;
-    bins.markOut(item.binNight.collectionDate);
-    toast.message('Bins out', {
+  // Another module's item (bin night): finishing it goes through its source, and Undo takes it back.
+  const finishModuleItem = (item: HeroItem) => {
+    if (item.done || !moduleAgenda.canComplete(item)) return;
+    moduleAgenda.complete(item);
+    toast.message(item.module?.doneLabel ?? 'Done', {
       duration: 4000,
-      action: { label: 'Undo', onPress: () => bins.undoOut() },
+      action: { label: 'Undo', onPress: () => moduleAgenda.undo(item) },
     });
   };
 
@@ -763,7 +761,7 @@ function HomeSectionBody() {
       router.push(`/apartment/${item.appointment.apartment_id}` as Href);
       return;
     }
-    // Anything else with a screen of its own (bin night opens Bins).
+    // Anything else with a screen of its own (another module's item opens its screen).
     const target = heroItemOpenTarget(item);
     if (target?.kind === 'route') openRoute(target.href);
   };
@@ -872,7 +870,7 @@ function HomeSectionBody() {
               </Text>
             )}
             <Text className="text-caption text-muted-foreground">{item.sourceLabel}</Text>
-            {item.binNight && <BinLids lids={item.binNight.lids} size="sm" />}
+            {item.module && <ModuleRowTrailing moduleId={item.module.id} detail={item.module.detail} />}
           </ListItemMeta>
         </ListItemContent>
         <ListItemTrailing>
@@ -962,7 +960,7 @@ function HomeSectionBody() {
             </Text>
           )}
           <Text className="text-caption text-muted-foreground">{item.sourceLabel}</Text>
-          {item.binNight && <BinLids lids={item.binNight.lids} size="sm" />}
+          {item.module && <ModuleRowTrailing moduleId={item.module.id} detail={item.module.detail} />}
         </>
       ),
       progress: checklist ? completion(checklistItems) : null,
@@ -977,8 +975,8 @@ function HomeSectionBody() {
       onOpen: heroItemOpenTarget(item) ? () => openNowItem(item) : undefined,
       onComplete: item.task && !item.task.done
         ? () => finishFromNowCard(item.task!)
-        : item.binNight && !item.done
-          ? () => finishBinsOut(item)
+        : item.module?.completable && !item.done
+          ? () => finishModuleItem(item)
           : undefined,
       footer: item.task ? undefined : (
         <EventCardFooter item={item} onOpen={heroItemOpenTarget(item) ? () => openNowItem(item) : undefined} />
