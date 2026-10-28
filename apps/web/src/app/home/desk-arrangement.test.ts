@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { HOME_SPACES } from "@homeup/core";
 import {
   DEFAULT_DESK_ITEMS,
   DESK_COLS,
@@ -76,5 +77,12 @@ describe("mergeLayout", () => {
   it("keeps a fitting module's measured height", () => {
     const items = [{ i: "a", x: 0, y: 0, w: 4, h: 40, fit: true }];
     expect(mergeLayout(items, [{ i: "a", x: 4, y: 8, w: 6, h: 50 }])).toEqual([{ i: "a", x: 4, y: 8, w: 6, h: 40, fit: true }]);
+  });
+});
+
+describe("desk defaults", () => {
+  it("place every Home Space, so a new module's Space shows on the desktop grid", () => {
+    const placed = new Set(DEFAULT_DESK_ITEMS.map((d) => d.i));
+    for (const space of HOME_SPACES) expect(placed, space.key).toContain(space.key);
   });
 });

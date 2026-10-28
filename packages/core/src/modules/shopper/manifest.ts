@@ -35,4 +35,5 @@ export const shopperModule = defineModule({
     { name: 'update_watch_item', kind: 'write' },
   ],
   settings: ['shopper-sources'],
+  spaces: [{ key: 'shopper', label: 'Shopper', size: 'tile', lens: 'shopperWatch' }],
 });

@@ -210,6 +210,7 @@ export * from './modules/occasions/slots';
 export * from './slots/types';
 export * from './slots/calendar';
 export * from './slots/home';
+export * from './slots/home-spaces';
 export * from './use-user-setting';
 // new-module:module-hooks (scripts/new-module.mjs adds above this line)
 export * from './modules/recipes/use-recipe-match';

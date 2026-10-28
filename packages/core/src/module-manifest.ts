@@ -11,6 +11,7 @@
 import type { NavItem } from './sections';
 import type { SectionHue } from './section-hues';
 import type { SettingsPanelId } from './module-settings';
+import type { HomeLensKey } from './home-lens';
 import type { ConnectorManifest } from './connector';
 
 /** How the Assistant reaches a table: the household tools that read or change it, or why none do. */
@@ -51,6 +52,24 @@ export interface ManifestSection {
  * shared screen loops over them.
  */
 export type SlotId = 'calendar' | 'home-agenda';
+
+/**
+ * A Space the module puts on Home, under the feed (slots/home-spaces.ts).
+ * Each app draws it with its own component, listed by key in its
+ * home-spaces registry; the module hides it with its section.
+ */
+export interface ManifestSpace {
+  /** Wire id: the desk layout's module id and each app's component key. */
+  key: string;
+  /** The desktop grid's name for it. */
+  label: string;
+  /** A card spans the column; a tile sits with the other tiles (a row of them on the phone). */
+  size: 'card' | 'tile';
+  /** The shortcut that filters Home down to this Space, expanded. */
+  lens?: HomeLensKey;
+  /** The Customize sheet switch (hero-modules.ts) each person turns it off with. */
+  setting?: string;
+}
 
 /** A database table the module owns. Every table in supabase/migrations belongs to a module or to the platform list in assistant-reach.ts. */
 export interface ManifestTable {
@@ -98,6 +117,8 @@ export interface ModuleManifest {
   connectors?: readonly ConnectorManifest[];
   /** The shared screens it puts content on, each with a source in its folder (slots/). */
   slots?: readonly SlotId[];
+  /** Its Spaces on Home, in the order they show. */
+  spaces?: readonly ManifestSpace[];
 }
 
 /** Declares a module. The `const` type parameter keeps the id a literal, which is how ModuleId is built. */

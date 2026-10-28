@@ -13,7 +13,7 @@
 // card, TodayHero is the feed, the tiles below are Spaces, and finishing the
 // day's last item shows the All clear moment once a day.
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useDataCache } from '@/lib/data-cache';
 import { cn } from '@/lib/utils';
@@ -43,12 +43,10 @@ import { CostModal } from '@/app/costs/cost-modal';
 import { SummaryHero } from './summary-hero';
 import { useWeather } from './use-weather';
 import { useWideLayout } from '@/lib/desktop-layout';
-import { BudgetSpace, BillsSpace } from './money-spaces';
-import { GroceriesWidget } from './groceries-widget';
+import { HOME_SPACE_VIEWS, type HomeSpaceProps } from './home-spaces';
 import { TonightMeal } from './tonight-meal';
-import { SetupTile, HomeSearchTile, ShopperTile, AssistantTile } from './section-tiles';
 import { DeskHome } from './desk-home';
-import { UpOverviewProvider, isModuleShown } from '@homeup/core';
+import { UpOverviewProvider, homeSpaces, isModuleShown } from '@homeup/core';
 import { upBankApi } from '@/lib/up-bank-client';
 
 // The bank overview wraps Home so the Budget figures follow real payments and
@@ -557,6 +555,17 @@ function HomeHub() {
     return <div className="p-6 text-muted-foreground">No group selected</div>;
   }
 
+  // What every Space gets (home-spaces.tsx); `expanded` is set per Space.
+  const spaceProps: Omit<HomeSpaceProps, 'expanded'> = {
+    group,
+    currentUserId,
+    costItems: costItemsList,
+    budgetCents: userSettings?.costs_budget_monthly ?? null,
+    apartments,
+    appointments,
+    now: new Date(),
+  };
+
   // FLUX-190: the top row (tagline + global search) was removed — search now lives
   // in the "+" capture menu, and the top bar already names the section.
   return (
@@ -628,16 +637,13 @@ function HomeHub() {
                 weatherDays={weather?.days}
               />
             ) : null },
-            // The desk has room for the whole list, not just the essentials (Guy, 2026-10-22).
-            groceries: { label: 'Groceries', node: !isHidden('groceries') ? <GroceriesWidget group={group} currentUserId={currentUserId} expanded /> : null },
-            budget: { label: 'Budget', node: costsVisible && spaceOn('spaceBudget') ? (
-              <BudgetSpace group={group} currentUserId={currentUserId} costItems={costItemsList} budgetCents={userSettings?.costs_budget_monthly ?? null} expanded={false} now={new Date()} />
-            ) : null },
-            bills: { label: 'Bills', node: costsVisible && spaceOn('spaceBills') ? <BillsSpace costItems={costItemsList} expanded={false} now={new Date()} /> : null },
-            setup: { label: 'Home Setup', node: !isHidden('setup') ? <SetupTile group={group} /> : null },
-            search: { label: 'Home Search', node: searchVisible ? <HomeSearchTile apartments={apartments} appointments={appointments} /> : null },
-            shopper: { label: 'Shopper', node: !isHidden('shopper') ? <ShopperTile group={group} expanded={false} /> : null },
-            assistant: { label: 'Assistant', node: !isHidden('assistant') ? <AssistantTile /> : null },
+            // Every module's Spaces (core slots/home-spaces.ts), each drawn by HOME_SPACE_VIEWS.
+            ...Object.fromEntries(
+              homeSpaces({ hidden, settingOn: spaceOn, lens: null }).map(({ space, shown }) => {
+                const view = HOME_SPACE_VIEWS[space.key];
+                return [space.key, { label: space.label, node: shown ? view.render({ ...spaceProps, expanded: !!view.deskExpanded }) : null }];
+              }),
+            ),
           }}
         />
       ) : (
@@ -707,28 +713,9 @@ function HomeHub() {
             Spaces
           </h2>
         )}
-        {!isHidden('groceries') && (!lens || lens === 'shoppingList') && (
-          <GroceriesWidget group={group} currentUserId={currentUserId} expanded={lens === 'shoppingList'} />
+        {homeSpaces({ hidden, settingOn: spaceOn, lens }).map(({ space, shown, expanded }) =>
+          shown ? <Fragment key={space.key}>{HOME_SPACE_VIEWS[space.key].render({ ...spaceProps, expanded })}</Fragment> : null,
         )}
-        {costsVisible && (lens === 'budgetPulse' || (!lens && spaceOn('spaceBudget'))) && (
-          <BudgetSpace
-            group={group}
-            currentUserId={currentUserId}
-            costItems={costItemsList}
-            budgetCents={userSettings?.costs_budget_monthly ?? null}
-            expanded={lens === 'budgetPulse'}
-            now={new Date()}
-          />
-        )}
-        {costsVisible && (lens === 'billsDue' || (!lens && spaceOn('spaceBills'))) && (
-          <BillsSpace costItems={costItemsList} expanded={lens === 'billsDue'} now={new Date()} />
-        )}
-        {!lens && !isHidden('setup') && <SetupTile group={group} />}
-        {!lens && searchVisible && <HomeSearchTile apartments={apartments} appointments={appointments} />}
-        {!isHidden('shopper') && (!lens || lens === 'shopperWatch') && (
-          <ShopperTile group={group} expanded={lens === 'shopperWatch'} />
-        )}
-        {!lens && !isHidden('assistant') && <AssistantTile />}
       </div>
       )}
 

@@ -31,4 +31,5 @@ export const groceriesModule = defineModule({
     { name: 'delete_grocery_item', kind: 'write' },
   ],
   settings: ['groceries'],
+  spaces: [{ key: 'groceries', label: 'Groceries', size: 'card', lens: 'shoppingList' }],
 });

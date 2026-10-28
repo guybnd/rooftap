@@ -95,6 +95,7 @@ import {
   hiddenWithDisabledModules,
   useModules,
   useHomeAgenda,
+  homeSpaces,
   UpOverviewProvider,
   useEventSave,
   useStoreHelpers,
@@ -136,11 +137,9 @@ import { EventCardFooter } from '@/features/home/event-card-footer';
 import { ModuleRowTrailing } from '@/components/module-row-parts';
 import { useHeroModuleConfig } from '@/features/home/use-hero-module-config';
 import { HeroCustomizeSheet } from '@/features/home/hero-customize-sheet';
-import { GroceriesWidget } from '@/features/home/groceries-widget';
 import { FeedControls, type FeedTypeOption } from '@/features/home/feed-heading';
 import { TonightMeal } from '@/features/home/tonight-meal';
-import { BudgetSpace, BillsSpace } from '@/features/home/money-spaces';
-import { SetupTile, HomeSearchTile, ShopperTile, AssistantTile } from '@/features/home/section-tiles';
+import { HOME_SPACE_VIEWS, type HomeSpaceProps } from '@/features/home/home-spaces';
 import { formatTime12h, localDateISO } from '@homeup/core';
 import { HeroTaskRow } from '@/features/tasks/task-row';
 import { HouseholdTaskModal } from '@/features/tasks/household-task-modal';
@@ -934,6 +933,18 @@ function HomeSectionBody() {
     return <NoGroupScreen />;
   }
 
+  // Home's Spaces (core slots/home-spaces.ts) and what each one gets.
+  const spaces = homeSpaces({ hidden, settingOn: heroOn, lens: shownLens });
+  const spaceProps: Omit<HomeSpaceProps, 'expanded'> = {
+    group,
+    currentUserId,
+    costItems: costItemsList,
+    budgetCents,
+    apartments: apartmentsWithScore,
+    appointments: appointmentsList,
+    now,
+  };
+
   // One page per queued item. HOUP-172 (item 6): a coarse countdown on a
   // timed item, warning-tinted when due within the hour; only for today's
   // timed items (an overdue item's time is a past day's). A dated
@@ -1173,34 +1184,28 @@ function HomeSectionBody() {
         <Text className="-mb-1 px-1 pt-2 text-micro-label uppercase text-muted-foreground" style={showIf(!shownLens)}>
           Spaces
         </Text>
-        {!hidden.includes('groceries') && (
-          <View style={showIf(!shownLens || shownLens === 'shoppingList')}>
-            <GroceriesWidget group={group} currentUserId={currentUserId} expanded={shownLens === 'shoppingList'} />
-          </View>
-        )}
-        {costsVisible && (
-          <View style={showIf(shownLens === 'budgetPulse' || (!shownLens && heroOn('spaceBudget')))}>
-            <BudgetSpace
-              group={group}
-              currentUserId={currentUserId}
-              costItems={costItemsList}
-              budgetCents={budgetCents}
-              expanded={shownLens === 'budgetPulse'}
-              now={now}
-            />
-          </View>
-        )}
-        {costsVisible && (
-          <View style={showIf(shownLens === 'billsDue' || (!shownLens && heroOn('spaceBills')))}>
-            <BillsSpace costItems={costItemsList} expanded={shownLens === 'billsDue'} now={now} />
-          </View>
-        )}
-        {shownLens === 'shopperWatch' && <ShopperTile group={group} expanded />}
+        {/* Every module's Spaces (core slots/home-spaces.ts), drawn by HOME_SPACE_VIEWS.
+            Cards stay mounted while a shortcut hides them, so turning it
+            off doesn't rebuild them; tiles sit in one row, and a tile's
+            shortcut shows it alone, expanded. */}
+        {spaces
+          .filter(({ space }) => space.size === 'card')
+          .map(({ space, shown, expanded }) => (
+            <View key={space.key} style={showIf(shown)}>
+              {HOME_SPACE_VIEWS[space.key]({ ...spaceProps, expanded })}
+            </View>
+          ))}
+        {spaces
+          .filter(({ space, expanded }) => space.size === 'tile' && expanded)
+          .map(({ space }) => (
+            <React.Fragment key={space.key}>{HOME_SPACE_VIEWS[space.key]({ ...spaceProps, expanded: true })}</React.Fragment>
+          ))}
         <View className="flex-row flex-wrap gap-3" style={showIf(!shownLens)}>
-          {!hidden.includes('setup') && <SetupTile group={group} />}
-          {searchVisible && <HomeSearchTile apartments={apartmentsWithScore} appointments={appointmentsList} />}
-          {!hidden.includes('shopper') && <ShopperTile group={group} />}
-          {!hidden.includes('assistant') && <AssistantTile />}
+          {spaces
+            .filter(({ space }) => space.size === 'tile')
+            .map(({ space }) => (
+              <React.Fragment key={space.key}>{HOME_SPACE_VIEWS[space.key]({ ...spaceProps, expanded: false })}</React.Fragment>
+            ))}
         </View>
 
         <Moment

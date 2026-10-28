@@ -41,4 +41,8 @@ export const costsModule = defineModule({
   ],
   connectors: [upBankConnector, csvBankConnector],
   settings: ['costs-goal', 'costs-recent', 'costs-subscriptions', 'costs-summaries'],
+  spaces: [
+    { key: 'budget', label: 'Budget', size: 'card', lens: 'budgetPulse', setting: 'spaceBudget' },
+    { key: 'bills', label: 'Bills', size: 'card', lens: 'billsDue', setting: 'spaceBills' },
+  ],
 });

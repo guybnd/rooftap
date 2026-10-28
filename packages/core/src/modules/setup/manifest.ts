@@ -28,4 +28,5 @@ export const setupModule = defineModule({
     { name: 'update_setup_item', kind: 'write' },
   ],
   settings: ['setup-stores'],
+  spaces: [{ key: 'setup', label: 'Home Setup', size: 'tile' }],
 });

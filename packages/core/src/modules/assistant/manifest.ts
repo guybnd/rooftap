@@ -35,4 +35,5 @@ export const assistantModule = defineModule({
   },
   noTools: 'The Assistant itself. Its settings stay in Settings, where an owner decides what it may do.',
   settings: ['assistant', 'assistant-spending', 'assistant-telegram', 'assistant-home-assistant'],
+  spaces: [{ key: 'assistant', label: 'Assistant', size: 'tile' }],
 });
