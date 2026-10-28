@@ -20,8 +20,10 @@ import {
   upcomingWindowDays,
   useHouseholdCurrency,
   useModules,
+  useHomeAgenda,
   widgetHeroVisibility,
   widgetModuleFlags,
+  homeFeedGates,
   widgetTodayProgress,
   syncedGroupId,
   type Apartment,
@@ -58,14 +60,14 @@ export function useWidgetSync(): void {
   const groupId = group?.id;
   // Modules: a switched-off module leaves no trace on the widget (.docs/modules.md, section 7),
   // and its stores open with no group id so they don't sync (store-modules.ts).
-  const { enabled, feature, server } = useModules();
+  const modules = useModules();
+  const { enabled, feature, server } = modules;
   // Hearth v2: the feed is Home's Upcoming feed, gated the way Home gates it
   // (modules, and the sections this person hid).
   const hidden = hiddenWithDisabledModules(userSettings?.hidden_sections, enabled);
   const { tasksOn: tasksModuleOn, groceriesOn, costsOn, documentsOn } = widgetModuleFlags(enabled, hidden);
   const tasksOn = tasksModuleOn && feature('hub.tasks');
-  const eventsOn = !hidden.includes('calendar') && feature('hub.events');
-  const viewingsOn = !hidden.includes('search') && feature('hub.viewings');
+  const { events: eventsOn, viewings: viewingsOn } = homeFeedGates(hidden, modules);
   const upcomingDays = upcomingWindowDays(userSettings);
   const tasks$ = householdTasks$(syncedGroupId(householdTasks$, groupId, enabled));
   const groceriesStore$ = groceryItems$(syncedGroupId(groceryItems$, groupId, enabled));
@@ -88,6 +90,8 @@ export function useWidgetSync(): void {
     Object.values(appts$.get() ?? {}).filter((a): a is Appointment => !!a && !a.deleted),
   );
   const apartmentsList = use$(() => Object.values(apts$.get() ?? {}).filter((a): a is Apartment => !!a && !a.deleted));
+  // Other modules' feed items (bin night), as Home's feed shows them (core slots/home.ts).
+  const moduleAgenda = useHomeAgenda(groupId, currentUserId, hidden);
 
   // The budget chip shows what Costs opens on (core costMonth, paid so far),
   // from the bank read Home or Costs made; null until there is one.
@@ -121,6 +125,7 @@ export function useWidgetSync(): void {
         calendarEvents: [],
         range: 'upcoming',
         upcomingDays,
+        extraItems: moduleAgenda.items,
       });
       const items = buildWidgetSnapshotItems(heroItems, currentUserId);
       const progress = widgetTodayProgress(items, todayISO());
@@ -188,6 +193,7 @@ export function useWidgetSync(): void {
     eventsList,
     appointmentsList,
     apartmentsList,
+    moduleAgenda.items,
     userSettings,
     tasksOn,
     groceriesOn,

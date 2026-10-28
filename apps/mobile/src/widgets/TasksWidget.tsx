@@ -14,6 +14,7 @@ import {
   WIDGET_SNAPSHOT_VERSION,
   DEFAULT_THEME_PREFERENCE,
   formatTime12h,
+  getSection,
   meterSegments,
   oklchToHex,
   resolveThemePreference,
@@ -113,8 +114,11 @@ function rowGlyph(item: WidgetTaskSnapshotItem): WidgetGlyph {
       return 'folder-open';
     case 'checklists':
       return 'list-todo';
-    default:
-      return 'layout-grid';
+    default: {
+      // Another module's row (bin night): its section's own glyph, when the widget carries it.
+      const iconId = getSection(item.section)?.iconId;
+      return iconId && iconId in WIDGET_GLYPHS ? (iconId as WidgetGlyph) : 'layout-grid';
+    }
   }
 }
 

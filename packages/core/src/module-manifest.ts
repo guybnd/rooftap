@@ -51,7 +51,7 @@ export interface ManifestSection {
  * source in its own folder; packages/core/src/slots/ lists the sources and the
  * shared screen loops over them.
  */
-export type SlotId = 'calendar' | 'home-agenda';
+export type SlotId = 'calendar' | 'home-agenda' | 'search';
 
 /**
  * A Space the module puts on Home, under the feed (slots/home-spaces.ts).

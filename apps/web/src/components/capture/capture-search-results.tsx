@@ -41,7 +41,7 @@ import {
   type TaskSnooze,
 } from "@homeup/core";
 import { dialog } from "@homeup/core";
-import { GLOBAL_HIT_SECTION_ID, resolveGlobalHitAction, type GlobalHit } from "@/hooks/use-global-search-index";
+import { resolveGlobalHitAction, type GlobalHit } from "@/hooks/use-global-search-index";
 import { useFuzzySearch } from "@/hooks/use-fuzzy-search";
 import { HOUSEHOLD_TASKS_CHANGED_EVENT } from "@/hooks/use-overdue-task-count";
 import { createClient } from "@/lib/supabase/client";
@@ -108,7 +108,7 @@ export interface CaptureSearchResultsProps {
 
 /** A hit with no row of its own: section tile, title, one meta line, chevron. */
 function PlainHitRow({ hit, onClick }: { hit: GlobalHit; onClick: () => void }) {
-  const sectionId = GLOBAL_HIT_SECTION_ID[hit.section];
+  const sectionId = hit.sectionId;
   const action = resolveGlobalHitAction(hit);
   return (
     <ListItem asChild>

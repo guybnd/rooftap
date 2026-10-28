@@ -5,6 +5,7 @@
 
 import type { HouseholdTask, Appointment, GoogleCalendarEventWithAttribution, GroupEvent } from './types';
 import type { ModuleFeatureId } from './module-features';
+import type { ModuleId } from './modules';
 import { taskOwnerModule, ownerScreenHref, isReminderOwner, type ReminderOwner } from './task-modules';
 import { parseReminderKey } from './reminders';
 import { addDaysISO, daysBetweenISO, pad2 } from './date-utils';
@@ -327,6 +328,56 @@ export const HERO_MODULE_FEATURES: Readonly<Partial<Record<string, ModuleFeature
 export function isHeroModuleAvailable(key: string, feature: (id: ModuleFeatureId) => boolean): boolean {
   const id = HERO_MODULE_FEATURES[key];
   return id === undefined || feature(id);
+}
+
+/** Which of Home's own feed sources show, for both Home screens and the widget. */
+export interface HomeFeedGates {
+  /** Agenda tasks, quick add and the Tasks link. */
+  tasks: boolean;
+  /** The Home search section (its Space and the search rows). */
+  search: boolean;
+  /** Viewings in the agenda. */
+  viewings: boolean;
+  /** The household's own events. */
+  events: boolean;
+  /** Pulled Google Calendar events. */
+  calendarEvents: boolean;
+  /** A task's checklist link, meter and panel. */
+  taskChecklists: boolean;
+  /** Bill reminders, with or without Tasks (task-modules.ts). */
+  costs: boolean;
+  /** Document reminders, with or without Tasks (task-modules.ts). */
+  documents: boolean;
+  /** Home care reminders: Home Setup and the home-care module. */
+  care: boolean;
+  /** Checklists, for the quick add's Checklist tab. */
+  checklists: boolean;
+}
+
+/**
+ * Home's own feed sources (buildHeroItems), each on its module feature and
+ * its section not hidden. `hidden` is hiddenWithDisabledModules, so a
+ * switched-off module counts as hidden. Kept here so the shared screens
+ * check no module by its id (.docs/modules.md, section 17).
+ */
+export function homeFeedGates(
+  hidden: readonly string[],
+  modules: { feature: (id: ModuleFeatureId) => boolean; isEnabled: (id: ModuleId) => boolean },
+): HomeFeedGates {
+  const shown = (id: string) => !hidden.includes(id);
+  const search = shown('search');
+  return {
+    tasks: shown('household') && modules.feature('hub.tasks'),
+    search,
+    viewings: search && modules.feature('hub.viewings'),
+    events: shown('calendar') && modules.feature('hub.events'),
+    calendarEvents: modules.feature('hub.calendar-events'),
+    taskChecklists: modules.feature('hub.task-checklists'),
+    costs: shown('costs'),
+    documents: shown('documents'),
+    care: shown('setup') && modules.isEnabled('home-care'),
+    checklists: shown('checklists'),
+  };
 }
 
 const STREAK_LOOKBACK_DAYS = 60;

@@ -32,4 +32,5 @@ export const checklistsModule = defineModule({
     { name: 'create_checklist', kind: 'write' },
   ],
   settings: ['checklists'],
+  slots: ['search'],
 });

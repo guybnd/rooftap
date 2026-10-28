@@ -32,4 +32,5 @@ export const groceriesModule = defineModule({
   ],
   settings: ['groceries'],
   spaces: [{ key: 'groceries', label: 'Groceries', size: 'card', lens: 'shoppingList' }],
+  slots: ['search'],
 });

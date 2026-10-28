@@ -25,7 +25,7 @@ import { useDataCache } from "@/lib/data-cache";
 import { useCapture } from "@/components/capture/capture-context";
 import { getCaptureLauncherCurrentKey } from "@/components/capture/launcher-current";
 import { useSectionSettings } from "@/lib/use-section";
-import { getEnabledModules, getEnabledSections, getSectionByPath, hiddenWithDisabledModules, isCaptureCategoryEnabled, isFeatureEnabled, looksLikeQuestion, listSetupStores, openAssistantPopup, useAssistantUnread, sectionHue, syncedGroupId, useModules, useReconnectSync, useStoreHelpers, householdTasks$, groceryItems$, costItems$, setupItems$, recipes$ as recipesStore$, checklists$ as checklistsStore$, shopperWants$, apartments$, appointments$, apartmentChecklistItems$ } from "@homeup/core";
+import { getEnabledModules, getEnabledSections, getSectionByPath, hiddenWithDisabledModules, isCaptureCategoryEnabled, isFeatureEnabled, looksLikeQuestion, listSetupStores, openAssistantPopup, useAssistantUnread, sectionHue, syncedGroupId, useModules, useReconnectSync, useStoreHelpers, householdTasks$, groceryItems$, costItems$, setupItems$, recipes$ as recipesStore$, checklists$ as checklistsStore$, shopperWants$ } from "@homeup/core";
 import { dialog } from "@homeup/core";
 import { useGlobalSearchIndex, resolveGlobalHitAction, type GlobalHit } from "@/hooks/use-global-search-index";
 import { useKeyboardInset } from "@/hooks/use-keyboard-inset";
@@ -65,7 +65,7 @@ import {
 } from '@homeup/core';
 import { uploadReceipt } from '@/lib/grocery-sessions';
 import { parseReceiptFile } from '@/lib/grocery-receipt-parse';
-import type { Apartment, Appointment, ChecklistItem, CostItem, DocType, GroceryItem, HouseholdTask, SetupItem, SetupStore, Recipe, Checklist, ShopperWant } from '@homeup/core';
+import type { CostItem, DocType, GroceryItem, HouseholdTask, SetupItem, SetupStore, Recipe, Checklist, ShopperWant } from '@homeup/core';
 
 type Step = "launcher" | "source" | "category" | "invoice" | "details" | "multi";
 
@@ -177,7 +177,7 @@ export function CaptureSheet() {
   const captureCategories = CATEGORIES.filter((c) => isCaptureCategoryEnabled(c.id, modules.feature));
   const docCostLinkOn = modules.feature("documents.costs");
 
-  // Legend stores backing the modal-based quick-adds + the search index.
+  // Legend stores backing the modal-based quick-adds and their editors.
   // Modules (store-modules.ts): a switched-off module's stores open with no
   // group id, so they don't sync; nothing here writes to one, because every
   // quick-add and search hit for it is gone too.
@@ -186,22 +186,17 @@ export function CaptureSheet() {
   const groceries$ = groceryItems$(syncedGroup(groceryItems$));
   const costs$ = costItems$(syncedGroup(costItems$));
   const setup$ = setupItems$(syncedGroup(setupItems$));
-  const recipes$ = recipesStore$(syncedGroup(recipesStore$));
-  const checklists$ = checklistsStore$(syncedGroup(checklistsStore$));
-  const shopper$ = shopperWants$(syncedGroup(shopperWants$));
-  const apartments$store = apartments$(syncedGroup(apartments$));
-  const appointments$store = appointments$(syncedGroup(appointments$));
-  const apartmentChecklistItems$store = apartmentChecklistItems$(syncedGroup(apartmentChecklistItems$));
   useReconnectSync(tasks$);
   useReconnectSync(groceries$);
   useReconnectSync(costs$);
   useReconnectSync(setup$);
+  // Recipes, checklists and wants back their result rows' bodies.
+  const recipes$ = recipesStore$(syncedGroup(recipesStore$));
+  const checklists$ = checklistsStore$(syncedGroup(checklistsStore$));
+  const shopper$ = shopperWants$(syncedGroup(shopperWants$));
   useReconnectSync(recipes$);
   useReconnectSync(checklists$);
   useReconnectSync(shopper$);
-  useReconnectSync(apartments$store);
-  useReconnectSync(appointments$store);
-  useReconnectSync(apartmentChecklistItems$store);
   const { writeRow: writeTask, patchRow: patchTask, softDeleteRow: softDeleteTask } = useStoreHelpers(tasks$, currentUserId);
   const { writeRow: writeGrocery, softDeleteRow: softDeleteGrocery } = useStoreHelpers(groceries$, currentUserId);
   const { writeRow: writeCost, patchRow: patchCost, softDeleteRow: softDeleteCost } = useStoreHelpers(costs$, currentUserId);
@@ -230,30 +225,13 @@ export function CaptureSheet() {
   const shopperList = use$(() =>
     active ? Object.values(shopper$.get() ?? {}).filter((w): w is ShopperWant => !!w && !w.deleted) : []
   );
-  const apartments = use$(() =>
-    active ? Object.values(apartments$store.get() ?? {}).filter((a): a is Apartment => !!a && !a.deleted) : []
-  );
-  const appointments = use$(() =>
-    active ? Object.values(appointments$store.get() ?? {}).filter((a): a is Appointment => !!a && !a.deleted) : []
-  );
-  const checklistItems = use$(() =>
-    active ? Object.values(apartmentChecklistItems$store.get() ?? {}).filter((c): c is ChecklistItem => !!c && !c.deleted) : []
-  );
 
+  // Each module's rows come from its search source (core slots/search.ts).
   const { index: searchIndex, docsLoading } = useGlobalSearchIndex({
     // Empty groupId while closed skips the documents fetch entirely.
     groupId: open ? (groupId ?? "") : "",
     hiddenSections: hiddenOrOff,
-    tasks,
-    groceries,
-    costItems: costItemsList,
-    setupItems: setupItemsList,
-    appointments: appointments ?? [],
-    apartments: apartments ?? [],
-    checklistItems: checklistItems ?? [],
-    recipes: recipesList,
-    checklists: checklistsList,
-    shopperWants: shopperList,
+    active,
   });
 
   // Setup stores back a setup hit's card (its store chip) and its editor.

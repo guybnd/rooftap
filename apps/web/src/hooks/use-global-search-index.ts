@@ -11,24 +11,15 @@ import {
   type GlobalHitAction,
   type SectionKey,
 } from '@homeup/core/src/hooks/use-global-search-index';
-import type { HouseholdTask, GroceryItem, CostItem, SetupItem, Appointment, ChecklistItem, Recipe, Checklist, ShopperWant } from '@homeup/core';
 
-export { SECTION_LABELS, GLOBAL_HIT_SECTION_ID, resolveGlobalHitAction } from '@homeup/core/src/hooks/use-global-search-index';
+export { resolveGlobalHitAction } from '@homeup/core/src/hooks/use-global-search-index';
 export type { GlobalHit, GlobalHitAction, SectionKey };
 
 interface UseGlobalSearchIndexArgs {
   groupId: string;
   hiddenSections: string[];
-  tasks: HouseholdTask[];
-  groceries: GroceryItem[];
-  costItems: CostItem[];
-  setupItems: SetupItem[];
-  appointments: Appointment[];
-  apartments: { id: string; address: string; suburb?: string | null; main_location?: string | null; notes?: string | null }[];
-  checklistItems: ChecklistItem[];
-  recipes: Recipe[];
-  checklists: Checklist[];
-  shopperWants?: ShopperWant[];
+  /** The search is open; closed, no module's stores are read. */
+  active?: boolean;
 }
 
 export function useGlobalSearchIndex(args: UseGlobalSearchIndexArgs): { index: GlobalHit[]; docsLoading: boolean } {

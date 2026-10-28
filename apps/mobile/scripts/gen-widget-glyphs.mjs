@@ -20,6 +20,7 @@ const ICONS = [
   'list-todo',
   'plus',
   'shopping-cart',
+  'trash-2',
   'wallet',
 ];
 

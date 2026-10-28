@@ -26,4 +26,5 @@ export const documentsModule = defineModule({
   tools: [
     { name: 'find_documents', kind: 'read' },
   ],
+  slots: ['search'],
 });

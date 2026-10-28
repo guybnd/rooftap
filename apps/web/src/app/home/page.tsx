@@ -27,7 +27,7 @@ import type {
   GoogleCalendarEventWithAttribution,
   GroupEvent,
 } from '@homeup/core';
-import { useHomeAgenda } from '@homeup/core';
+import { homeFeedGates, useHomeAgenda } from '@homeup/core';
 import { upcomingWindowDays, hasVisibleReminders, hiddenWithDisabledModules, useModules, type TaskSnooze } from '@homeup/core';
 import { ALL_CLEAR_MOMENT_STORAGE_KEY, HOME_LENS_META, earnedAllClear, heroItemOpenTarget, type HomeLensKey } from '@homeup/core';
 import { setGlowOverride } from '@/lib/glow-override';
@@ -96,26 +96,19 @@ function HomeHub() {
   // ── Section visibility ────────────────────────────────────────────────────
   // A switched-off module counts as hidden for everyone (.docs/modules.md).
   const hidden = hiddenWithDisabledModules(settings.hiddenSections, modules.enabled);
-  const isHidden = (id: string) => hidden.includes(id);
-  // Modules: agenda tasks, quick add and the Tasks link need household (module-features.ts).
-  const householdVisible = !isHidden('household') && modules.feature('hub.tasks');
-  const searchVisible = !isHidden('search');
-  // Modules: viewings in the agenda need search (module-features.ts).
-  const viewingsVisible = searchVisible && modules.feature('hub.viewings');
-  // Modules: pulled Google Calendar events need Calendar and Google Calendar (module-features.ts).
-  const calendarEventsVisible = modules.feature('hub.calendar-events');
-  // Modules: the household's own events need calendar (module-features.ts).
-  const eventsVisible = !isHidden('calendar') && modules.feature('hub.events');
-  // Modules: a task's checklist link, meter and panel need household and checklists (module-features.ts).
-  const taskChecklistsVisible = modules.feature('hub.task-checklists');
-  // Modules: bill and document reminders show with Costs and Documents, whether
-  // or not Tasks is (task-modules.ts).
-  const costsVisible = !isHidden('costs');
+  // Home's own feed sources, each on its module feature and section (core homeFeedGates).
+  const gates = homeFeedGates(hidden, modules);
+  const householdVisible = gates.tasks;
+  const searchVisible = gates.search;
+  const viewingsVisible = gates.viewings;
+  const calendarEventsVisible = gates.calendarEvents;
+  const eventsVisible = gates.events;
+  const taskChecklistsVisible = gates.taskChecklists;
+  const costsVisible = gates.costs;
   // Each person picks which Spaces Home shows (Customize your summary > Spaces).
   const spaceOn = (key: string) => isModuleShown(key, userSettings?.home_hero_modules, modules.feature);
-  const documentsVisible = !isHidden('documents');
-  // Home care reminders show with Home Setup and the home-care module on.
-  const careVisible = !isHidden('setup') && modules.isEnabled('home-care');
+  const documentsVisible = gates.documents;
+  const careVisible = gates.care;
   // Other modules' feed items (bin night): the Home agenda slot, each on its hub feature and section.
   const moduleAgenda = useHomeAgenda(group?.id, currentUserId, hidden);
 
@@ -280,7 +273,7 @@ function HomeHub() {
   const addOnDayKinds: AddOnDayKind[] = [
     ...(householdVisible ? [{ id: 'todo' as const, label: 'To-do' }] : []),
     ...(eventsVisible ? [{ id: 'event' as const, label: 'Calendar event' }] : []),
-    ...(!isHidden('checklists') ? [{ id: 'checklist' as const, label: 'Checklist' }] : []),
+    ...(gates.checklists ? [{ id: 'checklist' as const, label: 'Checklist' }] : []),
     ...(costsVisible ? [{ id: 'cost' as const, label: 'Cost' }] : []),
   ];
 

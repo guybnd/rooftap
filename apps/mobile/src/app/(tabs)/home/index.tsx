@@ -140,7 +140,7 @@ import { HeroCustomizeSheet } from '@/features/home/hero-customize-sheet';
 import { FeedControls, type FeedTypeOption } from '@/features/home/feed-heading';
 import { TonightMeal } from '@/features/home/tonight-meal';
 import { HOME_SPACE_VIEWS, type HomeSpaceProps } from '@/features/home/home-spaces';
-import { formatTime12h, localDateISO } from '@homeup/core';
+import { formatTime12h, homeFeedGates, localDateISO } from '@homeup/core';
 import { HeroTaskRow } from '@/features/tasks/task-row';
 import { HouseholdTaskModal } from '@/features/tasks/household-task-modal';
 import { CostModal } from '@/features/costs/cost-modal';
@@ -318,21 +318,16 @@ function HomeSectionBody() {
   // section-id map, applied everywhere a section can appear on the hub. ──────
   // Modules (.docs/modules.md): a switched-off module counts as hidden here.
   const hidden = hiddenWithDisabledModules(userSettings?.hidden_sections, modules.enabled);
-  // Modules: agenda tasks and quick add need household (module-features.ts).
-  const householdVisible = !hidden.includes('household') && modules.feature('hub.tasks');
-  const searchVisible = apartmentsList.length > 0 && !hidden.includes('search');
-  // Modules: viewings in the agenda need search (module-features.ts).
-  const viewingsVisible = searchVisible && modules.feature('hub.viewings');
-  // Modules: a task's checklist link, meter and panel need household and checklists (module-features.ts).
-  const taskChecklistsVisible = modules.feature('hub.task-checklists');
-  // Modules: bill and document reminders show with Costs and Documents, whether
-  // or not Tasks is (task-modules.ts).
-  const costsVisible = !hidden.includes('costs');
-  const documentsVisible = !hidden.includes('documents');
-  // Home care reminders show with Home Setup and the home-care module on.
-  const careVisible = !hidden.includes('setup') && modules.isEnabled('home-care');
-  // Modules: the household's own events need calendar (module-features.ts).
-  const eventsVisible = !hidden.includes('calendar') && modules.feature('hub.events');
+  // Home's own feed sources, each on its module feature and section (core homeFeedGates).
+  const gates = homeFeedGates(hidden, modules);
+  const householdVisible = gates.tasks;
+  const searchVisible = apartmentsList.length > 0 && gates.search;
+  const viewingsVisible = searchVisible && gates.viewings;
+  const taskChecklistsVisible = gates.taskChecklists;
+  const costsVisible = gates.costs;
+  const documentsVisible = gates.documents;
+  const careVisible = gates.care;
+  const eventsVisible = gates.events;
   // Holding an event's row edits it here, Budget line and all (use-event-save.ts).
   const { linkedCostOf, saveEvent, deleteEvent } = useEventSave(eventsVisible ? group?.id : undefined, currentUserId, modules.feature('calendar.budget'));
   // Other modules' feed items (bin night): the Home agenda slot, each on its hub feature and section.
@@ -496,7 +491,7 @@ function HomeSectionBody() {
     ...(eventsVisible
       ? [{ key: 'event', label: 'Calendar event', Icon: CalendarDays, onPress: () => { setEditingEvent(null); setNewEventOn(date); setEventModalOpen(true); } }]
       : []),
-    ...(!hidden.includes('checklists')
+    ...(gates.checklists
       ? [{ key: 'checklist', label: 'Checklist', Icon: ListTodo, onPress: () => router.push(`/checklists/new?date=${date}` as Href) }]
       : []),
     ...(costsVisible ? [{ key: 'cost', label: 'Cost', Icon: Wallet, onPress: () => setNewCostOn(date) }] : []),

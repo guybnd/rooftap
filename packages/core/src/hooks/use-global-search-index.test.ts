@@ -1,5 +1,22 @@
+// @vitest-environment jsdom
+
+import { renderHook } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { buildGlobalHits, resolveGlobalHitAction, type GlobalHit } from './use-global-search-index';
+import { resolveGlobalHitAction, type GlobalHit } from './use-global-search-index';
+import { SEARCH_SOURCES, useSearchHits } from '../slots/search';
+import type { SearchSource } from '../slots/types';
+import { ALL_MANIFESTS } from '../module-manifests';
+import { getSection } from '../sections';
+import { tasksSearchHits } from '../modules/household/slots';
+import { groceriesSearchHits } from '../modules/groceries/slots';
+import { costsSearchHits } from '../modules/costs/slots';
+import { setupSearchHits } from '../modules/setup/slots';
+import { homeSearchHits } from '../modules/search/slots';
+import { documentsSearchHits } from '../modules/documents/slots';
+import { recipesSearchHits } from '../modules/recipes/slots';
+import { shopperSearchHits } from '../modules/shopper/slots';
+import { checklistsSearchHits } from '../modules/checklists/slots';
+import type { ShopperWant } from '../modules/shopper/shopper';
 import type {
   Appointment,
   Checklist,
@@ -11,12 +28,11 @@ import type {
   SetupItem,
 } from '../types';
 import type { UnifiedDocument } from '../modules/documents/documents';
-import { ALL_MODULE_IDS, hiddenWithDisabledModules, type ModuleId } from '../modules';
+import { ALL_MODULE_IDS, hiddenWithDisabledModules } from '../modules';
 
-// HOUP-147: unit coverage for the pure hit-building/action-resolution logic
-// behind useGlobalSearchIndex — this package's vitest environment is `node`
-// (no jsdom/testing-library), so the hook itself isn't rendered; see
-// use-fuzzy-search.test.ts for the same convention.
+// HOUP-147: unit coverage for each module's pure search builder (its
+// slots.ts), the search slot's gating (core slots/search.ts) and the
+// nav-vs-modal decision.
 
 function task(overrides: Partial<HouseholdTask> = {}): HouseholdTask {
   return {
@@ -206,97 +222,90 @@ function checklist(overrides: Partial<Checklist> = {}): Checklist {
   };
 }
 
-const EMPTY_ARGS = {
-  hiddenSections: [] as string[],
-  tasks: [] as HouseholdTask[],
-  groceries: [] as GroceryItem[],
-  costItems: [] as CostItem[],
-  setupItems: [] as SetupItem[],
-  appointments: [] as Appointment[],
-  apartments: [] as { id: string; address: string; suburb?: string | null; main_location?: string | null; notes?: string | null }[],
-  checklistItems: [] as ChecklistItem[],
-  documents: [] as UnifiedDocument[],
-  recipes: [] as Recipe[],
-  checklists: [] as Checklist[],
+
+const DOC: UnifiedDocument = {
+  key: 'doc-1',
+  storeId: 'doc-1',
+  title: 'Lease',
+  filename: 'lease.pdf',
+  docType: 'lease',
+  source: 'capture',
+  createdAt: '2026-06-15T00:00:00.000Z',
+  storagePath: 'group-1/lease.pdf',
+  bucket: 'documents',
+  folderId: null,
+  legacy: false,
+  groupId: 'group-1',
+  expiryDate: null,
+  tags: [],
+  metadata: {},
+  uploadedBy: null,
 };
 
-describe('buildGlobalHits', () => {
-  it('excludes a hidden section entirely', () => {
-    const hits = buildGlobalHits({ ...EMPTY_ARGS, tasks: [task()] });
-    expect(hits.some((h) => h.section === 'tasks')).toBe(true);
+const WANT: ShopperWant = {
+  id: 'want-1',
+  group_id: 'group-1',
+  title: 'Sony Bravia 7',
+  query: null,
+  target_cents: null,
+  budget_cents: null,
+  status: 'watching',
+  need_by: null,
+  notes: null,
+  best_cents: null,
+  best_store: null,
+  last_checked_at: null,
+  bought_at: null,
+  created_by: null,
+  created_at: '2026-10-21T00:00:00.000Z',
+  updated_at: '2026-10-21T00:00:00.000Z',
+  deleted: false,
+};
 
-    const hiddenHits = buildGlobalHits({ ...EMPTY_ARGS, hiddenSections: ['household'], tasks: [task()] });
-    expect(hiddenHits.some((h) => h.section === 'tasks')).toBe(false);
-  });
-
+describe("each module's search builder", () => {
   it('skips soft-deleted rows', () => {
-    const hits = buildGlobalHits({
-      ...EMPTY_ARGS,
-      groceries: [grocery({ id: 'g1' }), grocery({ id: 'g2', deleted: true })],
-    });
-    expect(hits.map((h) => h.id)).toEqual(['g1']);
+    expect(groceriesSearchHits([grocery({ id: 'g1' }), grocery({ id: 'g2', deleted: true })]).map((h) => h.id)).toEqual(['g1']);
+    expect(tasksSearchHits([task({ deleted: true })])).toEqual([]);
   });
 
-  it('gates calendar, checklist, and apartment hits on the "search" hidden key, not their own section names', () => {
-    const args = {
-      ...EMPTY_ARGS,
+  it("puts viewings, the viewing checklist and listings under Home Search's tile", () => {
+    const hits = homeSearchHits({
       appointments: [appointment()],
       checklistItems: [checklistItem()],
       apartments: [{ id: 'apt-1', address: '1 Main St' }],
-    };
-
-    const shown = buildGlobalHits(args);
-    expect(shown.map((h) => h.section).sort()).toEqual(['calendar', 'checklist', 'search']);
-
-    // Hiding 'calendar' (the SectionKey's own name) does nothing — the hook
-    // gates all three on 'search' visibility instead.
-    const stillShown = buildGlobalHits({ ...args, hiddenSections: ['calendar'] });
-    expect(stillShown.map((h) => h.section).sort()).toEqual(['calendar', 'checklist', 'search']);
-
-    const hidden = buildGlobalHits({ ...args, hiddenSections: ['search'] });
-    expect(hidden).toEqual([]);
+    });
+    expect(hits.map((h) => [h.section, h.sectionId, h.href])).toEqual([
+      ['calendar', 'calendar', '/calendar'],
+      ['checklist', 'search', '/checklist'],
+      ['search', 'search', '/apartment/apt-1'],
+    ]);
+    expect(hits[0].title).toBe('1 Main St');
   });
 
   it('stamps setup hits with href: "/setup"', () => {
-    const hits = buildGlobalHits({ ...EMPTY_ARGS, setupItems: [setupItem()] });
-    expect(hits).toHaveLength(1);
-    expect(hits[0]).toMatchObject({ section: 'setup', href: '/setup' });
+    expect(setupSearchHits([setupItem()])).toEqual([expect.objectContaining({ section: 'setup', sectionId: 'setup', href: '/setup' })]);
   });
 
-  it('includes documents passed in directly (the hook fetches them; this fn just renders the list)', () => {
-    const doc: UnifiedDocument = {
-      key: 'doc-1',
-      storeId: 'doc-1',
-      title: 'Lease',
-      filename: 'lease.pdf',
-      docType: 'lease',
-      source: 'capture',
-      createdAt: '2026-06-15T00:00:00.000Z',
-      storagePath: 'group-1/lease.pdf',
-      bucket: 'documents',
-      folderId: null,
-      legacy: false,
-      groupId: 'group-1',
-      expiryDate: null,
-      tags: [],
-      metadata: {},
-      uploadedBy: null,
-    };
-    const hits = buildGlobalHits({ ...EMPTY_ARGS, documents: [doc] });
-    expect(hits).toEqual([
+  it('lists documents it is given', () => {
+    expect(documentsSearchHits([DOC])).toEqual([
       expect.objectContaining({ section: 'documents', id: 'doc-1', title: 'Lease', href: '/documents' }),
     ]);
   });
 
-  it('builds recipe and checklist hits with their own per-item hrefs', () => {
-    const hits = buildGlobalHits({
-      ...EMPTY_ARGS,
-      recipes: [recipe({ id: 'r1' })],
-      checklists: [checklist({ id: 'c1' })],
-    });
-    expect(hits).toEqual([
-      expect.objectContaining({ section: 'recipes', id: 'r1', href: '/recipes/r1' }),
+  it('builds recipe, checklist and Shopper hits with their own per-item hrefs', () => {
+    expect(recipesSearchHits([recipe({ id: 'r1' })])).toEqual([expect.objectContaining({ section: 'recipes', id: 'r1', href: '/recipes/r1' })]);
+    expect(checklistsSearchHits([checklist({ id: 'c1' })])).toEqual([
       expect.objectContaining({ section: 'checklists', id: 'c1', href: '/checklists/c1' }),
+    ]);
+    expect(shopperSearchHits([WANT])).toEqual([expect.objectContaining({ section: 'shopper', href: '/shopper/want-1' })]);
+  });
+
+  it('gives tasks, groceries and costs no href: they open their editor', () => {
+    const hits = [...tasksSearchHits([task()]), ...groceriesSearchHits([grocery()]), ...costsSearchHits([costItem()])];
+    expect(hits.map((h) => [h.section, h.sectionId, h.href])).toEqual([
+      ['tasks', 'household', undefined],
+      ['groceries', 'groceries', undefined],
+      ['costs', 'costs', undefined],
     ]);
   });
 });
@@ -304,6 +313,7 @@ describe('buildGlobalHits', () => {
 describe('resolveGlobalHitAction', () => {
   const baseHit: GlobalHit = {
     section: 'tasks',
+    sectionId: 'household',
     sectionLabel: 'Tasks',
     id: 'hit-1',
     title: 'Hit',
@@ -315,134 +325,77 @@ describe('resolveGlobalHitAction', () => {
     expect(action).toEqual({ kind: 'modal', section, id: 'hit-1' });
   });
 
-  it('resolves setup to a nav action at /setup', () => {
-    const action = resolveGlobalHitAction({ ...baseHit, section: 'setup', href: '/setup' });
-    expect(action).toEqual({ kind: 'nav', href: '/setup' });
-  });
-
-  it.each(['calendar', 'checklist', 'search', 'documents', 'recipes', 'shopper', 'checklists'] as const)(
-    'resolves %s hits to a nav action',
+  it.each(['setup', 'calendar', 'checklist', 'search', 'documents', 'recipes', 'shopper', 'checklists', 'a-new-module'])(
+    'resolves %s hits to a nav action at their href',
     (section) => {
-      const action = resolveGlobalHitAction({ ...baseHit, section, href: '/somewhere' });
-      expect(action.kind).toBe('nav');
+      expect(resolveGlobalHitAction({ ...baseHit, section, href: '/somewhere' })).toEqual({ kind: 'nav', href: '/somewhere' });
     }
   );
+});
 
-  it('prefers the per-item href over the section-level fallback', () => {
-    const action = resolveGlobalHitAction({ ...baseHit, section: 'documents', href: '/documents/custom-doc' });
-    expect(action).toEqual({ kind: 'nav', href: '/documents/custom-doc' });
+// One row of every kind, built by each module's own builder.
+const HITS_BY_MODULE: Record<string, GlobalHit[]> = {
+  household: tasksSearchHits([task()]),
+  groceries: groceriesSearchHits([grocery()]),
+  costs: costsSearchHits([costItem()]),
+  setup: setupSearchHits([setupItem()]),
+  search: homeSearchHits({ appointments: [appointment()], apartments: [{ id: 'apt-1', address: '1 Main St' }], checklistItems: [checklistItem()] }),
+  documents: documentsSearchHits([DOC]),
+  recipes: recipesSearchHits([recipe()]),
+  shopper: shopperSearchHits([WANT]),
+  checklists: checklistsSearchHits([checklist()]),
+};
+
+/** The registry, each source swapped for one that returns its module's fixture rows. */
+const FIXTURE_SOURCES: SearchSource[] = SEARCH_SOURCES.map((s) => ({
+  moduleId: s.moduleId,
+  useHits: ({ groupId }) => ({ hits: groupId ? HITS_BY_MODULE[s.moduleId] ?? [] : [] }),
+}));
+
+function search(hiddenSections: string[]): GlobalHit[] {
+  const { result } = renderHook(() => useSearchHits({ supabase: null, groupId: 'group-1', hiddenSections }, FIXTURE_SOURCES));
+  return result.current.index;
+}
+
+const MODULE_OF = new Map(Object.entries(HITS_BY_MODULE).flatMap(([moduleId, hits]) => hits.map((h) => [`${h.section}:${h.id}`, moduleId] as const)));
+const modulesWithHits = (hits: GlobalHit[]) => new Set(hits.map((h) => MODULE_OF.get(`${h.section}:${h.id}`)));
+
+describe('search slot registry', () => {
+  it('has one source for each module whose manifest lists the search slot, with fixture rows for each', () => {
+    const declared = ALL_MANIFESTS.filter((m) => m.slots?.includes('search')).map((m) => m.id).sort();
+    expect(SEARCH_SOURCES.map((s) => s.moduleId).sort()).toEqual(declared);
+    expect(Object.keys(HITS_BY_MODULE).sort()).toEqual(declared);
+  });
+
+  it("gives every hit a real section's tile", () => {
+    for (const hit of Object.values(HITS_BY_MODULE).flat()) expect(getSection(hit.sectionId), hit.section).toBeDefined();
   });
 });
 
 // Modules (.docs/modules.md): search gates on the person's hidden list plus
 // every switched-off module (hiddenWithDisabledModules). Turning one module
 // off must remove exactly that module's results and leave everyone else's.
-describe('buildGlobalHits with a module switched off', () => {
-  const ALL_ROWS = {
-    ...EMPTY_ARGS,
-    tasks: [task()],
-    groceries: [grocery()],
-    costItems: [costItem()],
-    setupItems: [setupItem()],
-    appointments: [appointment()],
-    apartments: [{ id: 'apt-1', address: '1 Main St' }],
-    checklistItems: [checklistItem()],
-    documents: [
-      {
-        key: 'doc-1',
-        storeId: 'doc-1',
-        title: 'Lease',
-        filename: 'lease.pdf',
-        docType: 'lease',
-        source: 'capture',
-        createdAt: '2026-06-15T00:00:00.000Z',
-        storagePath: 'group-1/lease.pdf',
-        bucket: 'documents',
-        folderId: null,
-        legacy: false,
-        groupId: 'group-1',
-        expiryDate: null,
-        tags: [],
-        metadata: {},
-        uploadedBy: null,
-      } satisfies UnifiedDocument,
-    ],
-    recipes: [recipe()],
-    checklists: [checklist()],
-    shopperWants: [
-      {
-        id: 'want-1',
-        group_id: 'group-1',
-        title: 'Sony Bravia 7',
-        query: null,
-        target_cents: null,
-        budget_cents: null,
-        status: 'watching' as const,
-        need_by: null,
-        notes: null,
-        best_cents: null,
-        best_store: null,
-        last_checked_at: null,
-        bought_at: null,
-        created_by: null,
-        created_at: '2026-10-21T00:00:00.000Z',
-        updated_at: '2026-10-21T00:00:00.000Z',
-        deleted: false,
-      },
-    ],
-  };
+describe('search with a module switched off', () => {
+  const allOn = () => hiddenWithDisabledModules([], new Set(ALL_MODULE_IDS));
 
-  // Which module owns each kind of hit. Viewings (calendar) and the apartment
-  // checklist belong to Home Search, not to Calendar or Checklists.
-  const MODULE_OF_HIT: Record<GlobalHit['section'], ModuleId> = {
-    tasks: 'household',
-    groceries: 'groceries',
-    costs: 'costs',
-    setup: 'setup',
-    calendar: 'search',
-    checklist: 'search',
-    search: 'search',
-    documents: 'documents',
-    recipes: 'recipes',
-    shopper: 'shopper',
-    checklists: 'checklists',
-  };
-
-  const modulesWithHits = (hits: GlobalHit[]) => new Set(hits.map((h) => MODULE_OF_HIT[h.section]));
-
-  it('finds a result from every module that has searchable rows when all are on', () => {
-    const hits = buildGlobalHits({
-      ...ALL_ROWS,
-      hiddenSections: hiddenWithDisabledModules([], new Set(ALL_MODULE_IDS)),
-    });
-    // Calendar has no rows of its own in search yet, Google Calendar and MCP
-    // are integrations with no rows at all, assistant chats aren't searched,
-    // Rewards answers store searches on its own screen, Occasions keeps gifts
-    // out of search for now, Money insights only adds a card to Costs, and
-    // the meal plan's nights are found through their recipes.
-    // A new module starts out of search (scripts/new-module.mjs adds it here); wiring it into search takes it off.
-    const noRows = new Set(['calendar', 'google-calendar', 'mcp', 'assistant', 'rewards', 'occasions', 'bins', 'money-insights', 'home-care', 'meals']);
-    expect([...modulesWithHits(hits)].sort()).toEqual(ALL_MODULE_IDS.filter((id) => !noRows.has(id)).sort());
+  it('finds a result from every module with a search source when all are on, in registry order', () => {
+    const hits = search(allOn());
+    expect([...modulesWithHits(hits)]).toEqual(SEARCH_SOURCES.map((s) => s.moduleId));
   });
 
   it.each(ALL_MODULE_IDS)('turning %s off removes only its results', (off) => {
-    const on = new Set(ALL_MODULE_IDS.filter((id) => id !== off));
-    const before = modulesWithHits(
-      buildGlobalHits({ ...ALL_ROWS, hiddenSections: hiddenWithDisabledModules([], new Set(ALL_MODULE_IDS)) })
-    );
-    const after = modulesWithHits(buildGlobalHits({ ...ALL_ROWS, hiddenSections: hiddenWithDisabledModules([], on) }));
+    const before = modulesWithHits(search(allOn()));
+    const after = modulesWithHits(search(hiddenWithDisabledModules([], new Set(ALL_MODULE_IDS.filter((id) => id !== off)))));
     before.delete(off);
     expect(after).toEqual(before);
   });
 
   it('finds nothing, without throwing, when every module is off', () => {
-    expect(buildGlobalHits({ ...ALL_ROWS, hiddenSections: hiddenWithDisabledModules([], new Set()) })).toEqual([]);
+    expect(search(hiddenWithDisabledModules([], new Set()))).toEqual([]);
   });
 
   it("keeps the person's own hidden sections hidden alongside switched-off modules", () => {
-    const on = new Set(ALL_MODULE_IDS.filter((id) => id !== 'groceries'));
-    const hits = buildGlobalHits({ ...ALL_ROWS, hiddenSections: hiddenWithDisabledModules(['costs'], on) });
-    const found = modulesWithHits(hits);
+    const found = modulesWithHits(search(hiddenWithDisabledModules(['costs'], new Set(ALL_MODULE_IDS.filter((id) => id !== 'groceries')))));
     expect(found.has('groceries')).toBe(false);
     expect(found.has('costs')).toBe(false);
     expect(found.has('household')).toBe(true);

@@ -32,4 +32,5 @@ export const recipesModule = defineModule({
     { name: 'start_timer', kind: 'write' },
     { name: 'save_recipe', kind: 'write' },
   ],
+  slots: ['search'],
 });

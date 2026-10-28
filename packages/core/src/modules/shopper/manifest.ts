@@ -36,4 +36,5 @@ export const shopperModule = defineModule({
   ],
   settings: ['shopper-sources'],
   spaces: [{ key: 'shopper', label: 'Shopper', size: 'tile', lens: 'shopperWatch' }],
+  slots: ['search'],
 });

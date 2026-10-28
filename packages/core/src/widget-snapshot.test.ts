@@ -65,6 +65,28 @@ function snapshotFor(tasks: HouseholdTask[], currentUserId: string | null = ME) 
 }
 
 describe('buildWidgetSnapshotItems', () => {
+  it("carries another module's feed item (bin night) as a row that opens its screen", () => {
+    const [row] = buildWidgetSnapshotItems(
+      [
+        {
+          id: 'bins-x',
+          type: 'module',
+          ownerSection: 'bins',
+          title: 'Bins out tonight',
+          dueDate: TODAY,
+          dueTime: '19:00',
+          overdue: false,
+          done: false,
+          assignedTo: null,
+          sourceLabel: 'Red and yellow',
+          module: { id: 'bins', href: '/bins', completable: true },
+        },
+      ],
+      null,
+    );
+    expect(row).toMatchObject({ type: 'module', section: 'bins', toggleable: false, openPath: '/bins' });
+  });
+
   it('maps a due-today task to the snapshot shape with raw due_date/done (not precomputed labels)', () => {
     const items = snapshotFor([task({ id: 'due-today', priority: 'high' })]);
     expect(items).toEqual([

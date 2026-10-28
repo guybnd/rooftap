@@ -29,4 +29,5 @@ export const setupModule = defineModule({
   ],
   settings: ['setup-stores'],
   spaces: [{ key: 'setup', label: 'Home Setup', size: 'tile' }],
+  slots: ['search'],
 });

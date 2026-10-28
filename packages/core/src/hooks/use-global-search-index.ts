@@ -10,18 +10,18 @@
 // from all available section data. The caller feeds it through useFuzzySearch
 // (fuse.js) and groups the results by section for display.
 //
-// Documents are fetched internally via a useEffect (one async call, mirroring
-// DocumentsTile). All other sections are passed in from the caller — Legend
-// stores are singletons so there is no extra network cost.
+// Each module's rows come from its own search source (core slots/search.ts,
+// the module's slots.ts), which reads its stores while the search is open.
 
-import { useEffect, useMemo, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { listUnifiedDocuments, type UnifiedDocument } from '../modules/documents/documents';
-import { recipeCuisines } from '../modules/recipes/recipes';
-import { useModules } from '../modules-store';
-import type { ShopperWant } from '../modules/shopper/shopper';
-import type { HouseholdTask, GroceryItem, CostItem, SetupItem, Appointment, ChecklistItem, Recipe, Checklist, Document } from '../types';
+import type { Document } from '../types';
+import { useSearchHits } from '../slots/search';
 
+/**
+ * The search domain's keys for the sections first-party modules fill. A
+ * module's search source may add its own key; GlobalHit.section is a plain
+ * string so it can.
+ */
 export type SectionKey =
   | 'tasks'
   | 'groceries'
@@ -35,374 +35,54 @@ export type SectionKey =
   | 'shopper'
   | 'checklists';
 
-export const SECTION_LABELS: Record<SectionKey, string> = {
-  tasks: 'Tasks',
-  groceries: 'Groceries',
-  costs: 'Costs',
-  setup: 'Setup',
-  calendar: 'Calendar',
-  // The search domain's viewing checklist and the Checklists section are two
-  // different things; results group under these labels, so they must differ.
-  checklist: 'Viewing checklist',
-  search: 'Home Search',
-  documents: 'Documents',
-  recipes: 'Recipes',
-  shopper: 'Shopper',
-  checklists: 'Checklists',
-};
-
-/**
- * The sections.ts id each SectionKey belongs to: the search domain's keys are
- * finer-grained than the section registry (tasks live under "household";
- * viewing-checklist items and apartments surface under Home search, while
- * calendar keeps its own section). Drives a hit's leading tile and identity
- * hue on both platforms (moved from apps/mobile's section-key-registry.ts so
- * web's capture sheet reads the same table).
- */
-export const GLOBAL_HIT_SECTION_ID: Record<SectionKey, string> = {
-  tasks: 'household',
-  groceries: 'groceries',
-  costs: 'costs',
-  setup: 'setup',
-  calendar: 'calendar',
-  checklist: 'search',
-  search: 'search',
-  documents: 'documents',
-  recipes: 'recipes',
-  shopper: 'shopper',
-  checklists: 'checklists',
-};
-
-// Section key → base path for navigation-only sections.
-const SECTION_PATHS: Partial<Record<SectionKey, string>> = {
-  setup: '/setup',
-  calendar: '/calendar',
-  checklist: '/checklist',
-  documents: '/documents',
-  recipes: '/recipes',
-  shopper: '/shopper',
-  checklists: '/checklists',
-};
-
 export interface GlobalHit {
-  section: SectionKey;
+  /** The search domain's key (SectionKey for first-party modules): what a row looks like, and whether it opens an editor. */
+  section: string;
+  /** The sections.ts id whose tile and hue the row wears. */
+  sectionId: string;
+  /** The results group's heading. */
   sectionLabel: string;
   id: string;
   title: string;
   subtitle?: string;
   /** Concatenated searchable fields beyond title/subtitle. */
   keywords: string;
-  /** Navigation href for non-modal sections (setup, calendar, checklist, documents, apartments). */
+  /** Where the hit goes, for a section that doesn't open an editor in place. */
   href?: string;
 }
 
 /** The action a hit resolves to when tapped/clicked — the single source of the nav-vs-modal decision. */
 export type GlobalHitAction =
   | { kind: 'nav'; href: string }
-  | { kind: 'modal'; section: SectionKey; id: string };
+  | { kind: 'modal'; section: string; id: string };
 
-const MODAL_SECTIONS = new Set<SectionKey>(['tasks', 'groceries', 'costs']);
+/** Sections whose hits open their editor in the capture sheet instead of navigating. */
+const MODAL_SECTIONS = new Set<string>(['tasks', 'groceries', 'costs']);
 
 /**
  * Resolves what should happen when a GlobalHit is activated. Tasks/groceries/
- * costs open their native edit modal; every other section navigates. Per-item
- * `hit.href` always wins over the section-level `SECTION_PATHS` fallback so
- * per-item routes (apartments, recipes, checklists) survive.
+ * costs open their native edit modal; every other section navigates to the
+ * hit's own href (Home when a source left it out).
  */
 export function resolveGlobalHitAction(hit: GlobalHit): GlobalHitAction {
   if (MODAL_SECTIONS.has(hit.section)) {
     return { kind: 'modal', section: hit.section, id: hit.id };
   }
-  return { kind: 'nav', href: hit.href ?? SECTION_PATHS[hit.section] ?? '' };
+  return { kind: 'nav', href: hit.href ?? '/home' };
 }
 
 interface UseGlobalSearchIndexArgs {
-  supabase: SupabaseClient;
-  groupId: string;
+  supabase: SupabaseClient | null;
+  /** Empty while the search is closed or there is no household: nothing is fetched. */
+  groupId: string | null | undefined;
   hiddenSections: string[];
-  tasks: HouseholdTask[];
-  groceries: GroceryItem[];
-  costItems: CostItem[];
-  setupItems: SetupItem[];
-  appointments: Appointment[];
-  apartments: { id: string; address: string; suburb?: string | null; main_location?: string | null; notes?: string | null }[];
-  checklistItems: ChecklistItem[];
-  recipes: Recipe[];
-  checklists: Checklist[];
-  /** Shopper wants; omitted by callers that don't read the shopper store. */
-  shopperWants?: ShopperWant[];
-  /** Optional pre-fetched document rows (e.g. a Legend store) in place of a fresh fetch. */
+  /** The search is open; closed, the stores aren't read. Defaults to open. */
+  active?: boolean;
+  /** Optional synced document rows (the phone's store) in place of a fresh fetch. */
   documentStoreRows?: Document[];
 }
 
-interface BuildGlobalHitsArgs {
-  hiddenSections: string[];
-  tasks: HouseholdTask[];
-  groceries: GroceryItem[];
-  costItems: CostItem[];
-  setupItems: SetupItem[];
-  appointments: Appointment[];
-  apartments: { id: string; address: string; suburb?: string | null; main_location?: string | null; notes?: string | null }[];
-  checklistItems: ChecklistItem[];
-  documents: UnifiedDocument[];
-  recipes: Recipe[];
-  checklists: Checklist[];
-  shopperWants?: ShopperWant[];
-}
-
-/**
- * Pure hit-building logic behind `useGlobalSearchIndex`'s memo — pulled out
- * so it's unit-testable without rendering the hook (this package's vitest
- * environment is `node`, no jsdom/testing-library; see use-fuzzy-search.test.ts).
- */
-export function buildGlobalHits({
-  hiddenSections,
-  tasks,
-  groceries,
-  costItems,
-  setupItems,
-  appointments,
-  apartments,
-  checklistItems,
-  documents,
-  recipes,
-  checklists,
-  shopperWants = [],
-}: BuildGlobalHitsArgs): GlobalHit[] {
-  const hidden = new Set(hiddenSections);
-  const hits: GlobalHit[] = [];
-
-  // ── Tasks ──────────────────────────────────────────────────────────────────
-  if (!hidden.has('household')) {
-    for (const t of tasks) {
-      if (t.deleted) continue;
-      hits.push({
-        section: 'tasks',
-        sectionLabel: SECTION_LABELS.tasks,
-        id: t.id,
-        title: t.title,
-        subtitle: t.due_date ?? undefined,
-        keywords: [t.notes].filter(Boolean).join(' '),
-      });
-    }
-  }
-
-  // ── Groceries ─────────────────────────────────────────────────────────────
-  if (!hidden.has('groceries')) {
-    for (const g of groceries) {
-      if (g.deleted) continue;
-      hits.push({
-        section: 'groceries',
-        sectionLabel: SECTION_LABELS.groceries,
-        id: g.id,
-        title: g.name,
-        subtitle: g.aisle,
-        keywords: [g.notes].filter(Boolean).join(' '),
-      });
-    }
-  }
-
-  // ── Costs ─────────────────────────────────────────────────────────────────
-  if (!hidden.has('costs')) {
-    for (const c of costItems) {
-      if (c.deleted) continue;
-      hits.push({
-        section: 'costs',
-        sectionLabel: SECTION_LABELS.costs,
-        id: c.id,
-        title: c.name,
-        subtitle: c.provider ?? c.category,
-        keywords: [c.provider, c.notes, c.category].filter(Boolean).join(' '),
-      });
-    }
-  }
-
-  // ── Setup ─────────────────────────────────────────────────────────────────
-  if (!hidden.has('setup')) {
-    for (const s of setupItems) {
-      if (s.deleted) continue;
-      hits.push({
-        section: 'setup',
-        sectionLabel: SECTION_LABELS.setup,
-        id: s.id,
-        title: s.name,
-        subtitle: s.room,
-        keywords: [s.where_to_buy, s.notes, s.room].filter(Boolean).join(' '),
-        href: SECTION_PATHS.setup,
-      });
-    }
-  }
-
-  // ── Calendar / Appointments ───────────────────────────────────────────────
-  if (!hidden.has('search')) {
-    for (const a of appointments) {
-      const apt = apartments.find((ap) => ap.id === a.apartment_id);
-      const label = apt?.address || a.notes || 'Viewing';
-      hits.push({
-        section: 'calendar',
-        sectionLabel: SECTION_LABELS.calendar,
-        id: a.id,
-        title: label,
-        subtitle: a.status,
-        keywords: [a.notes].filter(Boolean).join(' '),
-        href: SECTION_PATHS.calendar,
-      });
-    }
-  }
-
-  // ── Checklist ─────────────────────────────────────────────────────────────
-  if (!hidden.has('search')) {
-    for (const c of checklistItems) {
-      hits.push({
-        section: 'checklist',
-        sectionLabel: SECTION_LABELS.checklist,
-        id: c.id,
-        title: c.label,
-        subtitle: c.category,
-        keywords: c.category,
-        href: SECTION_PATHS.checklist,
-      });
-    }
-  }
-
-  // ── Home Search / Apartments ──────────────────────────────────────────────
-  if (!hidden.has('search')) {
-    for (const ap of apartments) {
-      hits.push({
-        section: 'search',
-        sectionLabel: SECTION_LABELS.search,
-        id: ap.id,
-        title: ap.address,
-        subtitle: ap.suburb ?? ap.main_location ?? undefined,
-        keywords: [ap.suburb, ap.main_location, ap.notes].filter(Boolean).join(' '),
-        href: `/apartment/${ap.id}`,
-      });
-    }
-  }
-
-  // ── Documents ─────────────────────────────────────────────────────────────
-  if (!hidden.has('documents')) {
-    for (const d of documents) {
-      hits.push({
-        section: 'documents',
-        sectionLabel: SECTION_LABELS.documents,
-        id: d.key,
-        title: d.title ?? d.filename,
-        subtitle: d.docType,
-        keywords: [d.filename, ...(d.tags ?? [])].filter(Boolean).join(' '),
-        href: SECTION_PATHS.documents,
-      });
-    }
-  }
-
-  // ── Recipes ───────────────────────────────────────────────────────────────
-  if (!hidden.has('recipes')) {
-    for (const r of recipes) {
-      if (r.deleted) continue;
-      hits.push({
-        section: 'recipes',
-        sectionLabel: SECTION_LABELS.recipes,
-        id: r.id,
-        title: r.title,
-        // HOUP-333: cuisines can be absent on legacy/malformed rows — read via the
-        // shared guard, or the layout-level search index memo crashes the whole shell.
-        subtitle: recipeCuisines(r).join(', ') || undefined,
-        keywords: [r.method, ...recipeCuisines(r)].filter(Boolean).join(' '),
-        href: `/recipes/${r.id}`,
-      });
-    }
-  }
-
-  // ── Shopper ───────────────────────────────────────────────────────────────
-  if (!hidden.has('shopper')) {
-    for (const w of shopperWants) {
-      if (w.deleted) continue;
-      hits.push({
-        section: 'shopper',
-        sectionLabel: SECTION_LABELS.shopper,
-        id: w.id,
-        title: w.title,
-        subtitle: w.status === 'bought' ? 'Bought' : w.best_store ?? undefined,
-        keywords: [w.query, w.notes].filter(Boolean).join(' '),
-        href: `/shopper/${w.id}`,
-      });
-    }
-  }
-
-  // ── Household Checklists ─────────────────────────────────────────────────
-  if (!hidden.has('checklists')) {
-    for (const c of checklists) {
-      if (c.deleted) continue;
-      hits.push({
-        section: 'checklists',
-        sectionLabel: SECTION_LABELS.checklists,
-        id: c.id,
-        title: c.title,
-        subtitle: c.completed_at ? 'Completed' : c.type,
-        keywords: c.type,
-        href: `/checklists/${c.id}`,
-      });
-    }
-  }
-
-  return hits;
-}
-
-export function useGlobalSearchIndex({
-  supabase,
-  groupId,
-  hiddenSections,
-  tasks,
-  groceries,
-  costItems,
-  setupItems,
-  appointments,
-  apartments,
-  checklistItems,
-  recipes,
-  checklists,
-  shopperWants,
-  documentStoreRows,
-}: UseGlobalSearchIndexArgs): { index: GlobalHit[]; docsLoading: boolean } {
-  const [documents, setDocuments] = useState<UnifiedDocument[]>([]);
-  const [docsLoading, setDocsLoading] = useState(false);
-  const documentsHidden = hiddenSections.includes('documents');
-  // Legacy bill files and grocery receipts are searchable only while their
-  // module is on (module-features.ts).
-  const { feature } = useModules();
-  const costsOn = feature('documents.costs');
-  const groceriesOn = feature('documents.groceries');
-
-  useEffect(() => {
-    if (!groupId || documentsHidden) return;
-    setDocsLoading(true);
-    listUnifiedDocuments(supabase, groupId, documentStoreRows, { costs: costsOn, groceries: groceriesOn })
-      .then(setDocuments)
-      .catch(() => {})
-      .finally(() => setDocsLoading(false));
-    // documentsHidden (not hiddenSections) so unrelated section toggles don't
-    // trigger a needless re-fetch — only un-hiding documents itself does.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groupId, documentsHidden, supabase, documentStoreRows, costsOn, groceriesOn]);
-
-  const index = useMemo<GlobalHit[]>(
-    () =>
-      buildGlobalHits({
-        hiddenSections,
-        tasks,
-        groceries,
-        costItems,
-        setupItems,
-        appointments,
-        apartments,
-        checklistItems,
-        documents,
-        recipes,
-        checklists,
-        shopperWants,
-      }),
-    [hiddenSections, tasks, groceries, costItems, setupItems, appointments, apartments, checklistItems, documents, recipes, checklists, shopperWants]
-  );
-
-  return { index, docsLoading };
+/** The global search index: every module's search source (core slots/search.ts), merged. */
+export function useGlobalSearchIndex(args: UseGlobalSearchIndexArgs): { index: GlobalHit[]; docsLoading: boolean } {
+  return useSearchHits(args);
 }

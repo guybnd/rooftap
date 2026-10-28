@@ -39,9 +39,6 @@ import {
 } from 'lucide-react-native';
 import { Text, BottomSheet, LeadingTile, SectionSearchBar, ToastHost, cn, useThemeMaterial } from '@homeup/ui';
 import {
-  apartmentChecklistItems$,
-  apartments$,
-  appointments$,
   checklists$,
   costItems$,
   documents$,
@@ -62,10 +59,7 @@ import {
   syncedGroupId,
   useReconnectSync,
   useStoreHelpers,
-  type Apartment,
-  type Appointment,
   type Checklist,
-  type ChecklistItem,
   type CostItem,
   type Document,
   type GroceryItem,
@@ -182,32 +176,18 @@ export function CaptureSheet() {
   const costItemsList = use$(() => Object.values(costs$.get() ?? {}).filter((c): c is CostItem => !!c && !c.deleted));
   const setupItemsList = use$(() => Object.values(setup$.get() ?? {}).filter((s): s is SetupItem => !!s && !s.deleted));
 
-  // Read-only stores that only back the search index — gated on `open` (the
-  // only surface search runs from) rather than unconditionally, unlike the
-  // write-target stores above.
-  const appointments$store = appointments$(syncedGroup(appointments$));
-  const apartments$store = apartments$(syncedGroup(apartments$));
-  const checklistItems$store = apartmentChecklistItems$(syncedGroup(apartmentChecklistItems$));
+  // Every module's search rows come from its search source (core
+  // slots/search.ts), read only while the sheet is open. Read here, gated on
+  // `open` too: recipes, checklists and wants for their result rows' bodies,
+  // and documents from the phone's synced store, handed to the index.
   const recipes$store = recipes$(syncedGroup(recipes$));
   const checklists$store = checklists$(syncedGroup(checklists$));
-  const documents$store = documents$(syncedGroup(documents$));
   const shopper$store = shopperWants$(syncedGroup(shopperWants$));
-  useReconnectSync(appointments$store);
-  useReconnectSync(apartments$store);
-  useReconnectSync(checklistItems$store);
+  const documents$store = documents$(syncedGroup(documents$));
   useReconnectSync(recipes$store);
   useReconnectSync(checklists$store);
-  useReconnectSync(documents$store);
   useReconnectSync(shopper$store);
-  const appointments = use$(() =>
-    open ? Object.values(appointments$store.get() ?? {}).filter((a): a is Appointment => !!a && !a.deleted) : []
-  );
-  const apartments = use$(() =>
-    open ? Object.values(apartments$store.get() ?? {}).filter((a): a is Apartment => !!a && !a.deleted) : []
-  );
-  const checklistItems = use$(() =>
-    open ? Object.values(checklistItems$store.get() ?? {}).filter((c): c is ChecklistItem => !!c && !c.deleted) : []
-  );
+  useReconnectSync(documents$store);
   const recipesList = use$(() =>
     open ? Object.values(recipes$store.get() ?? {}).filter((r): r is Recipe => !!r && !r.deleted) : []
   );
@@ -230,17 +210,8 @@ export function CaptureSheet() {
     supabase: boundSupabase as SupabaseClient,
     groupId: open ? (groupId ?? '') : '',
     hiddenSections,
-    tasks,
-    groceries,
-    costItems: costItemsList,
-    setupItems: setupItemsList,
-    appointments,
-    apartments,
-    checklistItems,
-    recipes: recipesList,
-    checklists: checklistsList,
+    active: open,
     documentStoreRows: documentRows,
-    shopperWants: shopperList,
   });
 
   // Setup stores name a setup row's store and back its editor's store picker

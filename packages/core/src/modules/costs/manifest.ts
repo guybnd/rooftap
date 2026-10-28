@@ -45,4 +45,5 @@ export const costsModule = defineModule({
     { key: 'budget', label: 'Budget', size: 'card', lens: 'budgetPulse', setting: 'spaceBudget' },
     { key: 'bills', label: 'Bills', size: 'card', lens: 'billsDue', setting: 'spaceBills' },
   ],
+  slots: ['search'],
 });

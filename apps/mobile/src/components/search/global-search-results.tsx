@@ -24,7 +24,7 @@ import {
   ListItemTitle,
   ListItemTrailing,
 } from '@homeup/ui';
-import { GLOBAL_HIT_SECTION_ID, resolveGlobalHitAction, type GlobalHit } from '@homeup/core/src/hooks/use-global-search-index';
+import { resolveGlobalHitAction, type GlobalHit } from '@homeup/core/src/hooks/use-global-search-index';
 import { sectionIconFor } from '@/lib/section-icons';
 
 // The results scroll inside the sheet, capped so the sheet, the search field
@@ -51,7 +51,7 @@ export interface GlobalSearchResultsProps {
 
 /** A hit with no row of its own: section tile, title, one meta line, chevron. */
 function PlainHitRow({ hit, onPress }: { hit: GlobalHit; onPress: () => void }) {
-  const sectionId = GLOBAL_HIT_SECTION_ID[hit.section];
+  const sectionId = hit.sectionId;
   const action = resolveGlobalHitAction(hit);
   return (
     <ListItem onPress={onPress} accessibilityRole="button" className="items-center">

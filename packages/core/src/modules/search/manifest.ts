@@ -43,4 +43,5 @@ export const searchModule = defineModule({
   ],
   settings: ['search-budget', 'search-appointments', 'search-saved', 'search-agents'],
   spaces: [{ key: 'search', label: 'Home Search', size: 'tile' }],
+  slots: ['search'],
 });

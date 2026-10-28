@@ -8,7 +8,10 @@
 // slot registries that list the sources.
 
 import type { ModuleFeatureId } from '../module-features';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import type { HeroItem } from '../hero';
+import type { GlobalHit } from '../hooks/use-global-search-index';
+import type { Document } from '../types';
 
 /** The days a calendar screen has on view, as YYYY-MM-DD, both ends included. */
 export interface CalendarRange {
@@ -82,4 +85,31 @@ export interface HomeAgendaSource {
   feature: ModuleFeatureId;
   /** A React hook, called on every render in a fixed order. */
   useAgenda(ctx: HomeAgendaContext): HomeAgendaPart;
+}
+
+// ── Search ──────────────────────────────────────────────────────────────────
+
+export interface SearchSourceContext {
+  /** undefined while the module is off or hidden: open the inert stores. */
+  groupId: string | undefined;
+  /** The search surface is open. Closed, read nothing (the stores stay unsubscribed). */
+  active: boolean;
+  /** For a source that fetches (Documents' legacy files); null before the app binds a client. */
+  supabase: SupabaseClient | null;
+  /** The phone's synced document rows, read in place of fetching them. */
+  documentStoreRows?: Document[];
+}
+
+/** What a module adds to the global search index. */
+export interface SearchPart {
+  hits: GlobalHit[];
+  /** Still fetching (Documents). */
+  loading?: boolean;
+}
+
+/** A module's search source, kept in its folder's slots.ts. */
+export interface SearchSource {
+  moduleId: string;
+  /** A React hook, called on every render in a fixed order. */
+  useHits(ctx: SearchSourceContext): SearchPart;
 }

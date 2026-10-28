@@ -32,4 +32,5 @@ export const householdModule = defineModule({
     { name: 'get_agenda', kind: 'read' },
   ],
   settings: ['task-defaults'],
+  slots: ['search'],
 });
