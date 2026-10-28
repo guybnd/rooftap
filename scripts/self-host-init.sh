@@ -144,4 +144,8 @@ else
   echo "Reusing existing HOUSEHOLD_KEYS_SECRET from $ENV_FILE (not regenerating)."
 fi
 
+# Made here, as the operator, before `migrate` bind-mounts it: Docker would
+# make a missing folder as root, and scripts/backup/backup.sh writes there too.
+mkdir -p backups
+
 exec docker compose up "$@"

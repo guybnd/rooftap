@@ -21,6 +21,8 @@ build/
 .env
 .env.local
 .env.*.local
+# the .env a full restore replaced (scripts/backup/restore.sh)
+*.before-restore-*
 
 # debug
 npm-debug.log*

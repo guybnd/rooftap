@@ -50,7 +50,7 @@ On the first run, `./scripts/self-host-init.sh` generates these values and write
 
 **The script never generates them again.** Every session and every database request depends on `JWT_SECRET`. Every Postgres role depends on `POSTGRES_PASSWORD`, and every Realtime connection depends on the two Realtime values. New values would end every session and lock the services out of the database. The script checks each value first and keeps a value that is already set, so a restart changes nothing.
 
-**Back up `.env`** together with the Postgres volume ("Backing up your data" below). Without `.env`, the services cannot sign in to `db` again and every session ends.
+**Back up `.env`** together with the database. `scripts/backup/backup.sh` does both ("Backing up your server" below). Without `.env`, the services cannot sign in to `db` again and every session ends.
 
 Compose cannot do this step itself. It reads the `${VAR}` values in the compose file once, before any container starts. A container that generates the values starts too late, because every other service already has the empty values. So the script writes `.env` on the host first, then runs `docker compose up` for you.
 
@@ -310,23 +310,121 @@ If you build your own APK, it gets no updates. `apps/mobile/app.config.ts` sets 
 
 An update cannot carry a native change. A change that adds or upgrades a native module needs a new APK.
 
-## Backing up your data
+## Backing up your server
 
-Two places hold everything that matters:
+`scripts/backup/backup.sh` writes one file that holds everything you need to bring the server back, on this machine or on a new one. The server keeps running while it works.
 
-- The `db-data` Docker volume holds all household data. Back it up with `docker compose exec db pg_dump -U postgres postgres > backup.sql`, or archive the volume (`docker run --rm -v homeup_db-data:/data -v $(pwd):/backup alpine tar czf /backup/db-data.tar.gz /data`).
-- The `.env` file at the repo root holds your generated secrets ("First-boot secrets"). Without `.env` and without a `db-data` backup, the data is lost. With a `db-data` backup but no `.env`, you must generate new secrets, and every session ends.
+```bash
+./scripts/backup/backup.sh
+```
 
-The `db-config` volume holds the pgsodium root key, which Vault needs to decrypt the push-notification secrets. Back it up with `db-data`. If you lose the key, the next start encrypts both secrets again from `.env`, because `migrate` updates them on every run.
+The file is `backups/rooftap-backup-<UTC time>.tar`, or `.tar.enc` when you set a passphrase. It holds these parts:
 
-The `storage-data` volume holds uploaded files (photos, attachments). Back it up like `db-data` if you upload files.
+| Part | Content |
+|---|---|
+| `database/` | A `pg_dump` of the whole database, and the newest migration it has. |
+| `files/` | The `storage-data` volume: photos, receipts and documents. |
+| `config/` | `.env` (all secrets and settings) and `docker-compose.override.yml`, if you have one. |
+| `server/` | The Rooftap source that the server runs. With `--with-images`, also every Docker image (a few GB), so a restore needs no download. |
+| `manifest.json` | The Rooftap version and commit, the database migration, the Postgres version, each image tag and digest, and a SHA-256 checksum for each part. |
+| `RESTORE.txt` | How to restore by hand, without the scripts. |
+
+`--only database,files` takes some parts only. The script dumps the database before it archives the files. So each file record in the dump has its file.
+
+The `db-config` volume (the pgsodium key) is not in the backup, and the restore does not need it. `migrate` encrypts the two Vault secrets again from `.env` on each start. TLS certificates (`caddy-data`) and the Tailscale node (`tailscale-state`) are not in the backup either. Caddy gets a new certificate, and Tailscale joins again with `TS_AUTHKEY`.
+
+### Encrypt the backup
+
+The backup holds `.env` and the password hash of each account. Encrypt it. Put a long passphrase in a file outside the repo folder, and tell the script where the file is:
+
+```bash
+openssl rand -base64 32 > ~/.rooftap-backup-pass
+chmod 600 ~/.rooftap-backup-pass
+echo "BACKUP_PASSPHRASE_FILE=$HOME/.rooftap-backup-pass" >> .env
+```
+
+The script then encrypts the file with AES-256 (`openssl enc`, PBKDF2 with 600,000 rounds). Keep a copy of the passphrase in a password manager. If you lose the machine and the passphrase, you cannot open the backup. Without a passphrase the script writes an unencrypted file and shows a warning.
+
+### Schedule backups and keep copies away from the server
+
+The script keeps the newest seven full backups and deletes older ones. `BACKUP_KEEP` in `.env` changes the number (`0` keeps all). `BACKUP_DIR` changes the folder. The `pre-migrate-*.dump` files from upgrades are not counted or deleted.
+
+A backup on the same disk does not help when the disk fails. `BACKUP_AFTER` in `.env` is a command that runs after each backup, with the file in `$BACKUP_FILE`. Use it to copy the file to another place, for example with `rclone`. Put the command in single quotes, so that Docker Compose does not read `$BACKUP_FILE`:
+
+```bash
+BACKUP_AFTER='rclone copy "$BACKUP_FILE" offsite:rooftap && rclone copy "$BACKUP_FILE.sha256" offsite:rooftap'
+```
+
+To take a backup each night at 03:00, add this line to the crontab of the user that runs Docker (`crontab -e`):
+
+```
+0 3 * * * cd /path/to/rooftap && ./scripts/backup/backup.sh --quiet
+```
+
+A systemd timer, Unraid's User Scripts or a NAS task scheduler can run the same command. Only one backup runs at a time.
+
+### Restore a full backup
+
+`scripts/backup/restore.sh` puts a backup back. First check the file. This changes nothing:
+
+```bash
+./scripts/backup/restore.sh backups/rooftap-backup-<time>.tar.enc --info
+./scripts/backup/restore.sh backups/rooftap-backup-<time>.tar.enc --check
+```
+
+`--info` shows the version, the time and the parts. `--check` also decrypts the file, compares each checksum and reads the database dump. Do a check from time to time, because a backup you never tested may not work.
+
+To restore on the same machine, run the script from the Rooftap version that took the backup:
+
+```bash
+./scripts/backup/restore.sh backups/rooftap-backup-<time>.tar.enc
+```
+
+The script asks you to type `restore`. Then it does these steps:
+
+1. It puts back `.env` and the override file. It keeps a different `.env` as `.env.before-restore-<time>`.
+2. It replaces the uploaded files.
+3. It deletes the database volume, builds the schema from the migrations and loads the rows from the backup (with `restore-backup.sh`).
+4. It starts the server.
+
+Everything written after the backup is lost. Because `.env` keeps the old signing keys, phones and browsers stay signed in.
+
+To restore some parts only, add `--only config,files`. `--yes` skips the question, and `--no-build` uses the Docker images you already have.
+
+If the checkout is not the version that took the backup, the script stops and names the commit. Check out that commit, or use the source in the backup. Upgrade after the restore, in the usual way.
+
+### Restore on a new machine
+
+You need Docker with the compose plugin, `git` and `openssl`. Copy the backup file to the new machine, then:
+
+```bash
+./scripts/backup/restore.sh rooftap-backup-<time>.tar.enc --unpack-source rooftap
+cd rooftap
+./scripts/backup/restore.sh ../rooftap-backup-<time>.tar.enc
+```
+
+The first command needs a Rooftap checkout. If you do not have one, unpack the source by hand:
+
+```bash
+mkdir rooftap
+openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 -md sha256 -in rooftap-backup-<time>.tar.enc \
+  | tar -xOf - --wildcards '*/server/source.tar.gz' | tar -xzf - -C rooftap
+```
+
+If the new machine has a different address, change `SITE_URL`, `SUPABASE_PUBLIC_URL` and the other addresses in `.env`, then run `./scripts/self-host-init.sh -d --build`.
+
+`scripts/self-host-e2e.sh backup` tests all of this. It takes an encrypted backup of a stack with data and a file, deletes the stack, and restores the backup into a new folder.
+
+### Other ways to back up
+
+Standard tools also work, if you already use them. Run `docker compose exec db pg_dump -U supabase_admin -Fc postgres > rooftap.dump` for the database. Archive the `storage-data` volume for the files with a tool that keeps extended attributes, for example GNU `tar --xattrs --xattrs-include='*'`. The storage service keeps the content type of each file in them, and a file without them does not download. Keep a copy of `.env`, because without it you must make new secrets, and each person must sign in again.
 
 ### Encryption at rest
 
 Rooftap does not encrypt your data or your uploaded files itself. Postgres and the storage service write them to the Docker volumes as they are. A person with the disk, or with a copy of a backup, can read passports, receipts and every other upload. So:
 
 - **Encrypt the disk** that holds Docker's data (`/var/lib/docker` by default): LUKS on Linux (most installers offer it), FileVault on a Mac, BitLocker on Windows. A NAS usually has an encrypted-volume option.
-- **Encrypt your backups** before they leave the machine. This includes the `backups/pre-migrate-*.dump` files that `migrate` writes into the repo folder. For example, use `restic` or `borg` (both encrypt by default), or `gpg -c backup.sql` for one file.
+- **Encrypt your backups** before they leave the machine. Set `BACKUP_PASSPHRASE_FILE` for full backups (see "Encrypt the backup"). The `backups/pre-migrate-*.dump` files that `migrate` writes into the repo folder are not encrypted. Keep them on an encrypted disk, or use `restic` or `borg` (both encrypt by default).
 - **Keep `.env` away from unencrypted backups.** It holds the service-role key and the database password.
 
 ## Upgrading Rooftap

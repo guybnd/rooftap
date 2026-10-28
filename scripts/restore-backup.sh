@@ -4,7 +4,10 @@ set -euo pipefail
 # Rolls a self-hosted Rooftap back to a pre-migration backup written by
 # scripts/apply-migrations.sh (backups/pre-migrate-<UTC time>.dump).
 #
-# Usage: ./scripts/restore-backup.sh backups/pre-migrate-<time>.dump
+# Usage: ./scripts/restore-backup.sh backups/pre-migrate-<time>.dump [--yes] [--no-build]
+#
+# --yes skips the confirmation and --no-build boots the images you already
+# have; scripts/backup/restore.sh uses both to load a full backup's dump.
 #
 # Check out the Rooftap version you were running when the backup was taken
 # first; the script refuses to run if that version's newest migration doesn't
@@ -23,9 +26,18 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-dump="${1:-}"
+dump=""
+confirmed=0
+build="--build"
+for arg in "$@"; do
+  case "$arg" in
+    --yes) confirmed=1 ;;
+    --no-build) build="" ;;
+    *) dump="$arg" ;;
+  esac
+done
 if [ -z "$dump" ] || [ ! -f "$dump" ]; then
-  echo "Usage: $0 backups/pre-migrate-<time>.dump" >&2
+  echo "Usage: $0 backups/pre-migrate-<time>.dump [--yes] [--no-build]" >&2
   ls -1t backups/pre-migrate-*.dump 2>/dev/null | sed 's/^/  /' >&2 || true
   exit 1
 fi
@@ -61,17 +73,19 @@ fi
 
 echo "This deletes the database volume '$volume' and replaces its contents with $dump."
 echo "Everything written since that backup is lost. Uploaded files are kept."
-read -r -p "Type 'restore' to continue: " answer
-if [ "$answer" != "restore" ]; then
-  echo "Cancelled; nothing changed."
-  exit 1
+if [ "$confirmed" -eq 0 ]; then
+  read -r -p "Type 'restore' to continue: " answer
+  if [ "$answer" != "restore" ]; then
+    echo "Cancelled; nothing changed."
+    exit 1
+  fi
 fi
 
 docker compose down
 docker volume rm "$volume"
 
 echo "Rebuilding the schema from this checkout's migrations ..."
-./scripts/self-host-init.sh -d --build
+./scripts/self-host-init.sh -d $build
 migrate="$(docker compose ps -a -q migrate)"
 if [ "$(docker wait "$migrate")" != "0" ]; then
   echo "error: migrations failed on the fresh database; see 'docker compose logs migrate'. The backup file is untouched." >&2

@@ -16,8 +16,13 @@ set -euo pipefail
 #            --from <ref>) with data in it is upgraded to this checkout:
 #            only the new migrations run, a backup is written first, the
 #            data survives, and scripts/restore-backup.sh rolls it back in.
+#   backup   An install with data and an upload takes an encrypted full
+#            backup (scripts/backup/backup.sh). Then the install is deleted,
+#            and a new folder with only the backup file restores it
+#            (scripts/backup/restore.sh): accounts stay signed in, and the
+#            rows and the file come back.
 #
-# Usage: scripts/self-host-e2e.sh [fresh|upgrade|all] [--from <git ref>] [--keep]
+# Usage: scripts/self-host-e2e.sh [fresh|upgrade|backup|all] [--from <git ref>] [--keep]
 #
 # Needs bash, git, curl, openssl and Docker with the compose plugin on Linux
 # (the app container uses host networking). Every run uses its own compose
@@ -36,10 +41,10 @@ from=""
 keep=0
 while [ $# -gt 0 ]; do
   case "$1" in
-    fresh | upgrade | all) mode="$1" ;;
+    fresh | upgrade | backup | all) mode="$1" ;;
     --from) from="${2:?--from needs a git ref}"; shift ;;
     --keep) keep=1 ;;
-    -h | --help) sed -n '4,31p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h | --help) sed -n '4,36p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
   shift
@@ -409,10 +414,99 @@ run_upgrade() {
   fi
 }
 
+run_backup() {
+  local dir="$work/backup-old" fresh="$work/backup-new" name="$project_prefix-backup"
+  local token group file pass_file="$work/backup-pass" anon
+  log "full backup, then a restore onto a new machine"
+  export_tree worktree "$dir"
+  write_env "$dir"
+  boot "$dir" "$name"
+  wait_migrate "$dir" "$name"
+  wait_http "$app/api/public-config" 200 300 || die "the app never came up"
+  anon="$(get_env "$dir" ANON_KEY)"
+
+  admin_user "$dir" saver@e2e.test saver-pass-1
+  token="$(sign_in "$dir" saver@e2e.test saver-pass-1)"
+  group="$(household_of "$dir" "$token")"
+  add_grocery "$dir" "$token" "$group" e2e-backed-up
+  expect_status "grocery item added before the backup" 201
+  curl -s -o "$work/body" -w '%{http_code}' -X POST "$kong/storage/v1/object/documents/$group/e2e/kept.pdf" \
+    -H "apikey: $anon" -H "Authorization: Bearer $token" -H 'Content-Type: application/pdf' \
+    --data-binary '%PDF-1.4 e2e kept' > "$work/code" || true
+  expect_status "file uploaded before the backup" 200
+
+  printf 'e2e passphrase\n' > "$pass_file"
+  if (cd "$dir" && COMPOSE_PROJECT_NAME="$name" BACKUP_PASSPHRASE_FILE="$pass_file" ./scripts/backup/backup.sh); then
+    pass "backup.sh finished"
+  else
+    fail "backup.sh failed"
+    return
+  fi
+  file="$(ls -1 "$dir"/backups/rooftap-backup-*.tar.enc 2> /dev/null | tail -1)"
+  [ -n "$file" ] && pass "encrypted backup written ($(basename "$file"))" || { fail "no .tar.enc backup"; return; }
+  if (cd "$dir" && BACKUP_PASSPHRASE_FILE="$pass_file" ./scripts/backup/restore.sh "$file" --check); then
+    pass "restore.sh --check accepts it"
+  else
+    fail "restore.sh --check refused the backup"
+  fi
+  if printf 'wrong\n' > "$work/wrong-pass" && (cd "$dir" && BACKUP_PASSPHRASE_FILE="$work/wrong-pass" ./scripts/backup/restore.sh "$file" --check > /dev/null 2>&1); then
+    fail "restore.sh --check accepted a wrong passphrase"
+  else
+    pass "a wrong passphrase is refused"
+  fi
+  add_grocery "$dir" "$token" "$group" e2e-after-backup
+  expect_status "a write after the backup" 201
+
+  # The machine is lost: containers, volumes and the folder all go. Only the
+  # backup file is left.
+  mkdir -p "$work/offsite"
+  cp "$file" "$file.sha256" "$work/offsite/"
+  file="$work/offsite/$(basename "$file")"
+  dc "$dir" "$name" down -v --remove-orphans > /dev/null 2>&1
+  docker run --rm -v "$work:/work" alpine:3.22 rm -rf /work/backup-old > /dev/null
+
+  # A new machine: the Rooftap source comes out of the backup by hand, the
+  # way RESTORE.txt says, then restore.sh puts back the rest.
+  log "restore $(basename "$file") into a new folder"
+  mkdir -p "$fresh"
+  openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 -md sha256 -pass "file:$pass_file" -in "$file" \
+    | tar -xOf - --wildcards '*/server/source.tar.gz' | tar -xzf - -C "$fresh" \
+    || { fail "couldn't unpack the source from the backup by hand"; return; }
+  [ ! -f "$fresh/.env" ] && pass "the new folder has no .env yet" || fail "the source archive holds a .env"
+  projects+=("$fresh=$name")
+  if (cd "$fresh" && COMPOSE_PROJECT_NAME="$name" BACKUP_PASSPHRASE_FILE="$pass_file" ./scripts/backup/restore.sh "$file" --yes); then
+    pass "restore.sh finished"
+  else
+    fail "restore.sh failed"
+    return
+  fi
+  wait_http "$app/api/public-config" 200 300 || fail "the app never came up after the restore"
+  [ "$(get_env "$fresh" JWT_SECRET)" != "" ] && pass ".env came back" || fail ".env is missing after the restore"
+  [ "$(groceries_named "$fresh" "$token" e2e-backed-up)" = "1" ] \
+    && pass "a session from before the backup still works and sees its data" || fail "the old session or its data is gone"
+  [ "$(groceries_named "$fresh" "$token" e2e-after-backup)" = "0" ] \
+    && pass "what came after the backup is not there" || fail "a row from after the backup came back"
+  token="$(sign_in "$fresh" saver@e2e.test saver-pass-1)"
+  [ -n "$token" ] && pass "the account signs in with its password" || fail "the account can't sign in after the restore"
+  # Storage can still be starting; give it a minute.
+  local tries=0
+  while :; do
+    curl -s -o "$work/body" -w '%{http_code}' "$kong/storage/v1/object/documents/$group/e2e/kept.pdf" \
+      -H "apikey: $anon" -H "Authorization: Bearer $token" > "$work/code" || true
+    [ "$(cat "$work/code")" = "200" ] || [ "$tries" -ge 20 ] && break
+    tries=$((tries + 1))
+    sleep 3
+  done
+  expect_status "the uploaded file downloads after the restore" 200
+  grep -q 'e2e kept' "$work/body" && pass "the file's content came back" || fail "the file's content differs"
+  check_migration_rows "$fresh" "$name"
+}
+
 case "$mode" in
   fresh) run_fresh ;;
   upgrade) run_upgrade ;;
-  all) run_fresh; run_upgrade ;;
+  backup) run_backup ;;
+  all) run_fresh; run_upgrade; run_backup ;;
 esac
 
 echo

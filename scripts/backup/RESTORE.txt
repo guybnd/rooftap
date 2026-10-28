@@ -1,0 +1,48 @@
+Rooftap full backup
+===================
+
+This folder is a complete backup of a self-hosted Rooftap server.
+manifest.json says when it was taken, which Rooftap version and database
+migration it holds, and the checksum of every part.
+
+  database/database.dump   the whole database (pg_dump custom format)
+  database/migration.txt   the newest migration the database had applied
+  files/storage.tar.gz     the uploaded files (the storage-data volume)
+  config/env               the server's .env: secrets and settings
+  server/source.tar.gz     the Rooftap source the server ran
+  server/images.tar        the Docker images (only if taken with --with-images)
+  SHA256SUMS               check the parts with: sha256sum -c SHA256SUMS
+
+The easy way to restore (needs Docker, git and openssl)
+-------------------------------------------------------
+
+1. Unpack the Rooftap source of this backup into an empty folder:
+     mkdir rooftap && tar -xzf server/source.tar.gz -C rooftap
+   Or clone Rooftap and check out the commit in manifest.json.
+2. In that folder, run:
+     ./scripts/backup/restore.sh /path/to/rooftap-backup-<time>.tar[.enc]
+   It puts back .env, the database and the files, and starts the server.
+3. Upgrade to a newer Rooftap afterwards, the usual way (git pull, then
+   ./scripts/self-host-init.sh -d --build).
+
+By hand, without the scripts
+----------------------------
+
+An encrypted backup (.tar.enc) is a tar file encrypted with openssl:
+  openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 -md sha256 \
+    -in rooftap-backup-<time>.tar.enc | tar -xf -
+
+The database dump restores with standard PostgreSQL tools (pg_restore 17 or
+newer). The Supabase Postgres image makes its own roles and extensions, so
+the scripts load only the rows of the public, auth and storage schemas into
+a schema that the same Rooftap version's migrations built. See
+scripts/restore-backup.sh in the source for the exact steps.
+
+files/storage.tar.gz is the content of the storage volume. Unpack it into
+the volume mounted at /var/lib/storage in the storage container with GNU
+tar and --xattrs --xattrs-include='*'. The storage service keeps each
+file's content type in extended attributes; without them it cannot serve
+the file.
+
+Keep config/env secret. It holds the database password and the keys that
+sign every session.
