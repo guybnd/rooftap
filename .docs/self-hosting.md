@@ -355,6 +355,28 @@ git checkout <the version you came from>
 
 The script checks that the checkout matches the backup and asks you to confirm. It then deletes the database volume, builds the schema from that version's migrations and loads the rows from the backup (app data, accounts and file records). It does not touch uploaded files, `.env` or the other volumes. You lose anything written after the backup.
 
+## Testing the stack
+
+`scripts/self-host-e2e.sh` boots the whole stack from a copy of your checkout and checks it from the outside. It needs Linux with Docker and the compose plugin.
+
+```bash
+./scripts/self-host-e2e.sh fresh                 # a new install
+./scripts/self-host-e2e.sh upgrade --from v1.1.3 # an upgrade with data in it
+./scripts/self-host-e2e.sh all                   # both (the default)
+```
+
+The fresh test checks these things:
+
+- Every migration applies, and `/api/public-config` reports the newest one.
+- The first account comes from the app, and sign-up is closed after it.
+- Each account gets its own household, and row level security keeps a second account out of the first account's data.
+- Files upload to storage and download again.
+- The edge functions answer, and realtime accepts a connection.
+
+The upgrade test starts an install of an older version (the latest release tag by default) and adds data to it. Then it upgrades the install to your checkout. It checks that only the new migrations ran, that a backup came first and that the data is still there. Last, it restores that backup with `restore-backup.sh` from the older version.
+
+Each run uses its own Docker project, `.env` and ports (18000, 13737 and 15432; change them with `E2E_KONG_PORT`, `E2E_APP_PORT` and `E2E_PG_PORT`). It does not touch your data. The realtime container has a fixed name, so the test cannot run while your own install runs on the same machine. `--keep` leaves the last stack running so you can look at it.
+
 ## Upgrading stack images
 
 `docker-compose.yml` pins each Supabase image (`auth`, `rest`, `realtime`, `storage`, `kong`, `edge-runtime`, `db`) to a version, with no `:latest` tag. So an image never changes on a restart. To upgrade one, change its tag, then run `docker compose pull && docker compose up -d`. Read that service's release notes first. `db` holds your schema and data, so plan a Postgres major-version upgrade as carefully as any production database upgrade.
