@@ -91,8 +91,13 @@ export async function upConnectionRow(admin: SupabaseClient, userId: string): Pr
 }
 
 export async function upBankStatus(admin: SupabaseClient, userId: string, groupId: string): Promise<UpBankStatus> {
-  const [allowed, row] = await Promise.all([upBankAllowed(admin, groupId), upConnectionRow(admin, userId)]);
+  const [allowed, row, imported] = await Promise.all([
+    upBankAllowed(admin, groupId),
+    upConnectionRow(admin, userId),
+    importedFeed(admin, userId),
+  ]);
   return {
+    ...(imported !== undefined ? { imported: imported && { shareMode: row ? shareModeOf(row) : imported.shareMode } } : {}),
     allowed,
     canStore: canStoreHouseholdKeys(),
     connection: row
@@ -107,6 +112,69 @@ export async function upBankStatus(admin: SupabaseClient, userId: string, groupI
         }
       : null,
   };
+}
+
+/**
+ * Whether this person has imported accounts, with their sharing choice from
+ * bank_feed_settings. Undefined on a server before 20261028140000_bank_csv_import.
+ */
+async function importedFeed(admin: SupabaseClient, userId: string): Promise<{ shareMode: BankShareMode } | null | undefined> {
+  const [{ count, error }, settings] = await Promise.all([
+    admin.from("bank_accounts").select("id", { count: "exact", head: true }).eq("user_id", userId).neq("source", UP_SOURCE),
+    admin.from("bank_feed_settings").select("share_mode").eq("user_id", userId).maybeSingle(),
+  ]);
+  if (error || settings.error) return undefined;
+  if (!count) return null;
+  const mode = settings.data?.share_mode;
+  return { shareMode: isBankShareMode(mode) ? mode : "none" };
+}
+
+/** A `bank_feed_settings` row: one person's sharing for bank connectors other than Up. */
+export interface BankFeedSettingsRow {
+  user_id: string;
+  group_id: string;
+  share_mode: BankShareMode;
+  auto_costs: boolean;
+}
+
+/** Everyone's bank feed settings in a household; empty on servers without the table. */
+export async function bankFeedSettingsRows(admin: SupabaseClient, groupId: string): Promise<BankFeedSettingsRow[]> {
+  const { data, error } = await admin.from("bank_feed_settings").select("user_id, group_id, share_mode, auto_costs").eq("group_id", groupId);
+  return error ? [] : ((data ?? []) as BankFeedSettingsRow[]);
+}
+
+/**
+ * Saves a person's sharing choices for every bank connector: the feed
+ * settings row, and their Up connection when they have one, so both stay in
+ * step. Quietly does nothing for the feed settings on servers without the table.
+ */
+export async function saveBankFeedSettings(
+  admin: SupabaseClient,
+  owner: { userId: string; groupId: string },
+  patch: { shareMode?: BankShareMode; autoCosts?: boolean },
+  opts: { up?: boolean } = {},
+): Promise<string | null> {
+  const now = new Date().toISOString();
+  const { data: current } = await admin.from("bank_feed_settings").select("share_mode, auto_costs").eq("user_id", owner.userId).maybeSingle();
+  await admin.from("bank_feed_settings").upsert({
+    user_id: owner.userId,
+    group_id: owner.groupId,
+    share_mode: patch.shareMode ?? current?.share_mode ?? "none",
+    auto_costs: patch.autoCosts ?? current?.auto_costs ?? false,
+    updated_at: now,
+  });
+  if (!opts.up) return null;
+  const existing = await upConnectionRow(admin, owner.userId);
+  if (!existing) return null;
+  const { error } = await admin
+    .from("up_bank_connections")
+    .update({
+      ...(patch.shareMode !== undefined ? { shared: patch.shareMode !== "none", ...(existing.share_mode !== undefined ? { share_mode: patch.shareMode } : {}) } : {}),
+      ...(patch.autoCosts !== undefined && existing.auto_costs !== undefined ? { auto_costs: patch.autoCosts } : {}),
+      updated_at: now,
+    })
+    .eq("user_id", owner.userId);
+  return error ? error.message : null;
 }
 
 // ── Up's API ─────────────────────────────────────────────────────────────
@@ -343,10 +411,17 @@ async function autoFileJointPayments(
   rules: BankLinkRow[],
   sharing: BankSharing,
 ): Promise<boolean> {
-  const { data: conns } = await admin.from("up_bank_connections").select("*").eq("group_id", groupId);
-  const people = ((conns ?? []) as UpConnectionRow[])
-    .filter((c) => c.auto_costs === true && shareModeOf(c) !== "none")
-    .map((c) => c.user_id);
+  const [{ data: conns }, feeds] = await Promise.all([
+    admin.from("up_bank_connections").select("*").eq("group_id", groupId),
+    bankFeedSettingsRows(admin, groupId),
+  ]);
+  const upConns = (conns ?? []) as UpConnectionRow[];
+  const withUp = new Set(upConns.map((c) => c.user_id));
+  const people = [
+    ...upConns.filter((c) => c.auto_costs === true && shareModeOf(c) !== "none").map((c) => c.user_id),
+    // People with only imported statements keep the choice in their feed settings.
+    ...feeds.filter((f) => !withUp.has(f.user_id) && f.auto_costs && f.share_mode !== "none").map((f) => f.user_id),
+  ];
   if (!people.length) return false;
 
   const { data, error } = await admin
@@ -672,11 +747,14 @@ export async function applyUpEvent(
 
 /** Who shares what in the household, for one viewer. */
 export async function bankSharing(admin: SupabaseClient, viewerId: string, groupId: string): Promise<BankSharing> {
-  const [{ data: conns }, { data: joint }] = await Promise.all([
+  const [{ data: conns }, { data: joint }, feeds] = await Promise.all([
     admin.from("up_bank_connections").select("*").eq("group_id", groupId),
     admin.from("bank_accounts").select("user_id, external_id, name").eq("group_id", groupId).eq("ownership", "JOINT"),
+    bankFeedSettingsRows(admin, groupId),
   ]);
+  // Up's choice wins for people who have it; the two are kept in step (saveBankFeedSettings).
   const modes: Record<string, BankShareMode> = {};
+  for (const f of feeds) if (isBankShareMode(f.share_mode)) modes[f.user_id] = f.share_mode;
   for (const c of (conns ?? []) as UpConnectionRow[]) modes[c.user_id] = shareModeOf(c);
   const jointBy: Record<string, { ids: string[]; names: string[] }> = {};
   for (const a of (joint ?? []) as { user_id: string; external_id: string; name: string }[]) {

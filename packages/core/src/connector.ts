@@ -26,7 +26,7 @@ export type ConnectorData = 'bank-transactions';
  * component (apps/*\/settings-registry.ts, typed against this union, so a
  * panel can't be missing on one platform).
  */
-export type ConnectorPanelId = 'up-bank';
+export type ConnectorPanelId = 'up-bank' | 'bank-import';
 
 /** A key a connector needs before it works. */
 export interface ConnectorKey {

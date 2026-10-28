@@ -327,6 +327,7 @@ describe('server schema', () => {
       'several dishes on one night in the meal plan',
       'choosing which occasions show on the calendar',
       'keeping Scout searches and watches from someone',
+      'importing bank statements',
     ]);
 
     act(() => setServerSchema('20261020050000_mcp_oauth'));
@@ -373,6 +374,7 @@ describe('server schema', () => {
         'several dishes on one night in the meal plan',
         'choosing which occasions show on the calendar',
         'keeping Scout searches and watches from someone',
+        'importing bank statements',
       ]);
     } finally {
       delete mcp.minSchema;

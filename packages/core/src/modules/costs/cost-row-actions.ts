@@ -182,9 +182,9 @@ export function costPaymentMenu(input: {
   };
 }
 
-/** A shop row whose month of payments can be hidden: an Up shop, on servers with 'costs.quick-move'. */
+/** A shop row whose month of payments can be hidden: a shop from a bank connector, on servers with 'costs.quick-move'. */
 export function canHideCostLine(line: CostMonthLine, quickMove: boolean): boolean {
-  return quickMove && line.kind === 'shop' && !!line.vendor && line.source === 'up';
+  return quickMove && line.kind === 'shop' && !!line.vendor && !!line.source && line.source !== 'manual';
 }
 
 /** What a toast says after a row action, and how its Undo puts it back (null when it can't). */

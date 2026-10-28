@@ -1,6 +1,6 @@
 'use client';
 
-// Up Bank connector: the cost editor's "Paid from Up" section (Guy's pick A2).
+// Up Bank connector: the cost editor's "Paid from your bank" section (Guy's pick A2).
 // A cost line links to bank payments by payee name or Up tag; the server then
 // files every matching payment under the line, and with "Keep the amount in
 // step" sets the line's amount to each new settled payment. Linked lines show
@@ -47,7 +47,7 @@ export function CostBankLink({
   if (!show) return null;
 
   return (
-    <FormSection title="Paid from Up">
+    <FormSection title="Paid from your bank">
       {mergeTargets.length > 0 && (
         <div className="rounded-2xl bg-muted/40">
           <p className="px-4 pt-3 text-xs text-muted-foreground">
@@ -71,7 +71,7 @@ export function CostBankLink({
         </div>
       )}
       {!detail ? (
-        <p className="px-1 text-sm text-muted-foreground">{error ?? 'Reading your Up payments…'}</p>
+        <p className="px-1 text-sm text-muted-foreground">{error ?? 'Reading your bank payments…'}</p>
       ) : picking ? (
         <PayeePicker
           category={category}
@@ -85,7 +85,7 @@ export function CostBankLink({
           onClick={() => setPicking(true)}
           className="flex min-h-12 w-full items-center rounded-2xl bg-muted/40 px-4 text-left text-sm font-medium text-primary hover:bg-muted/60"
         >
-          Link to Up payments
+          Link to bank payments
         </button>
       ) : (
         <div className="rounded-2xl bg-muted/40">
@@ -181,7 +181,7 @@ function PayeePicker({
     <div className="space-y-2">
       <FieldRow hint="Pick who you pay, or type part of their name. Start with # for an Up tag.">
         <div className="flex items-center gap-2">
-          <Input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search your Up payments" />
+          <Input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search your bank payments" />
           <button type="button" onClick={onCancel} className="min-h-10 shrink-0 px-1 text-sm text-muted-foreground hover:text-foreground">
             Cancel
           </button>

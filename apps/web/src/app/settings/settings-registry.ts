@@ -20,6 +20,7 @@ import { McpSettings } from "@/components/mcp-settings";
 import { UsersManager } from "@/components/users-manager";
 import { CostsSettings, CostsRecentSettings, CostsSubscriptionsSettings, CostsSummariesSettings } from "@/components/costs-settings";
 import { UpBankSettings } from "@/components/up-bank-settings";
+import { BankImportSettings } from "@/components/bank-import-settings";
 import { GroceriesSettings } from "@/components/groceries-settings";
 import { ChecklistsSettings } from "@/components/checklists-settings";
 import { HouseholdSettings } from "@/components/household-settings";
@@ -38,6 +39,7 @@ import { VersionSettings } from "@/components/version-settings";
 // each shows only while the module it fills is on (PANEL_MODULE below).
 const CONNECTOR_PANELS: Record<ConnectorPanelId, ComponentType> = {
   "up-bank": UpBankSettings,
+  "bank-import": BankImportSettings,
 };
 
 export interface GlobalMenu {

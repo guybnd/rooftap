@@ -133,6 +133,10 @@ export const SERVER_FEATURES = {
     minSchema: '20261023220000_scout_keep_from',
     label: 'keeping Scout searches and watches from someone',
   },
+  'connectors.bank-import': {
+    minSchema: '20261028140000_bank_csv_import',
+    label: 'importing bank statements',
+  },
 } as const satisfies Record<string, ServerFeatureDef>;
 
 export type ServerFeatureId = keyof typeof SERVER_FEATURES;

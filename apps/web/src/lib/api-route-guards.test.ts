@@ -104,6 +104,7 @@ const ROUTES: Record<string, RouteRule> = {
 
   storage: { auth: "session", module: null, why: "file uploads for Documents, photos and receipts" },
 
+  "bank-import": { auth: "session", module: null, why: "bank statement import is a connector in Settings, not a module" },
   "up-bank": { auth: "session", module: null, why: "Up Bank is a connector in Settings, not a module" },
   "up-bank/digest": { auth: "cron", module: null, why: "the weekly job checks each household" },
   "up-bank/links/[costItemId]": { auth: "session", module: null, why: "Up Bank is a connector in Settings, not a module" },

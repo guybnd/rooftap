@@ -1,6 +1,6 @@
 # Connectors
 
-A connector brings data from outside Rooftap into one module. It either works by itself (the server reads the outside service, or the service pushes to the server) or a person imports a file by hand. Up Bank is the first connector. Each connector has a panel in **Settings > Connectors**, and the panel shows only while the connector's module is on.
+A connector brings data from outside Rooftap into one module. It either works by itself (the server reads the outside service, or the service pushes to the server) or a person imports a file by hand. Up Bank and bank statement import (CSV) are the bundled connectors. Each connector has a panel in **Settings > Connectors**, and the panel shows only while the connector's module is on.
 
 The apps never talk to the outside service. The connector runs on the household's server (the hosted one, or a self-hosted one). It writes rows into the module's tables, and both apps read those rows through the normal API.
 
@@ -41,6 +41,8 @@ What each field means:
 
 Connectors with `data: 'bank-transactions'` write accounts to `bank_accounts` and payments to `bank_transactions`. Both tables are private to the server. The server applies each person's sharing choice (nothing, joint accounts only, or everything) when it reads them.
 
+A person makes one sharing choice for all bank connectors. The server keeps it in `bank_feed_settings`, and also on the Up connection for a person who has one. `saveBankFeedSettings` in `apps/web/src/lib/up-bank.ts` writes both, so the two stay the same. An account is joint when its row has `ownership` set to `JOINT`. Up says which accounts are joint. For an imported statement, the person says it.
+
 All bank connectors save through `apps/web/src/lib/connectors/bank-feed.ts`:
 - `saveBankAccounts(admin, owner, source, rows, { prune })` saves one person's accounts. With `prune`, it removes the accounts of that source that the read no longer lists.
 - `saveBankTransactions(admin, rows)` saves payments in batches. A row is keyed by `source`, person and the bank's own id, so a second read of the same payment updates it.
@@ -73,3 +75,16 @@ The bundled connectors:
 | id | Module | Kinds | Needs |
 |---|---|---|---|
 | `up-bank` | Costs | pull, webhook | each person's Up token |
+| `csv-bank` | Costs | import | nothing |
+
+## Bank statement import
+
+The `csv-bank` connector works with any bank that exports a CSV statement. The app reads the file on the device, with the helpers in `packages/core/src/modules/costs/bank-csv.ts`:
+- `parseCsv` splits the text into cells. It accepts quoted cells, a comma, a semicolon or a tab between cells, and a byte order mark.
+- `guessCsvMapping` finds the date, description and amount columns. It reads the header names when the file has a header, and the values when it does not. It accepts one signed amount column, or a debit and a credit column. It also finds a balance column.
+- `guessDateOrder` reads dates day first, unless a value such as `12/31/2026` shows that the month comes first.
+- `csvTransactionIds` gives each payment an id from its date, amount and description. Two identical payments on the same day get different ids. When a person imports an overlapping statement, the server finds the same ids and does not add the payments again.
+
+The person checks what the app found, names the account and says whether it is joint. Then the app sends the payments to `POST /api/bank-import`. `GET` lists the person's imported accounts, `PUT` changes the sharing choice, and `DELETE ?account=<id>` removes one account and its payments. A statement without a balance column gives an account with `has_balance` set to false, and Costs leaves it out of the balance totals.
+
+To make the reader understand a new bank's layout, add a test with a few rows of that bank's export to `bank-csv.test.ts`.

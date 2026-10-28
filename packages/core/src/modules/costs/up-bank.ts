@@ -59,6 +59,27 @@ export interface UpBankStatus {
   /** The server can encrypt a token (HOUSEHOLD_KEYS_SECRET is set). */
   canStore: boolean;
   connection: UpBankConnection | null;
+  /**
+   * This person has accounts from a statement import (CSV), and what they
+   * share. Null without any; missing on servers before 'connectors.bank-import'.
+   */
+  imported?: { shareMode: BankShareMode } | null;
+}
+
+/** This person has bank data to show: Up connected (and allowed here), or an imported statement. */
+export function bankDataOn(s: UpBankStatus | null | undefined): boolean {
+  return !!s && ((s.allowed && !!s.connection) || !!s.imported);
+}
+
+/** Up is connected and may be read on this server, so Costs reads it on open. */
+export function upReadable(s: UpBankStatus | null | undefined): boolean {
+  return !!s?.allowed && !!s.connection;
+}
+
+/** What this person shares, from Up's choice or the import's; null when it isn't known (older servers). */
+export function bankShareModeOf(s: UpBankStatus | null | undefined): BankShareMode | null {
+  if (s?.connection) return s.connection.shareMode ?? (s.connection.shared ? 'all' : 'none');
+  return s?.imported?.shareMode ?? null;
 }
 
 export interface UpBankSaveInput {
@@ -123,6 +144,8 @@ export interface BankAccountRow {
   ownership: 'INDIVIDUAL' | 'JOINT';
   balance_cents: number;
   currency: string;
+  /** False for an imported account whose statement had no balance column. Missing before 20261028140000_bank_csv_import. */
+  has_balance?: boolean;
 }
 
 export interface BankAccountSummary {
@@ -735,7 +758,7 @@ export function summariseAccounts(rows: readonly BankAccountRow[]): {
   saversCents: number;
 } {
   const accounts = uniqueByExternal(rows)
-    .filter((a) => a.account_type !== 'HOME_LOAN')
+    .filter((a) => a.account_type !== 'HOME_LOAN' && a.has_balance !== false)
     .map((a) => ({
       id: a.external_id,
       name: a.name,

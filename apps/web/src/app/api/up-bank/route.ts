@@ -5,6 +5,7 @@ import {
   UP_NOT_ALLOWED,
   UP_SOURCE,
   applyBankLinks,
+  saveBankFeedSettings,
   checkUpToken,
   createUpWebhook,
   deleteUpWebhook,
@@ -88,6 +89,10 @@ export async function PUT(request: Request) {
         })
         .eq("user_id", req.userId);
       if (error) return NextResponse.json({ error: "Could not save that." }, { status: 500 });
+      // One choice for every bank connector: an imported statement follows it too.
+      if (shareMode !== undefined || body.autoCosts !== undefined) {
+        await saveBankFeedSettings(req.admin, req, { shareMode, autoCosts: body.autoCosts });
+      }
       // Turning filing on files what's there now; sharing changes who can see what.
       if (body.autoCosts === true) await applyBankLinks(req.admin, req.groupId);
     }

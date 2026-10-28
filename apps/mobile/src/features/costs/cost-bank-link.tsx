@@ -1,4 +1,4 @@
-// Up Bank connector: the cost editor's "Paid from Up" section (Guy's pick A2).
+// Up Bank connector: the cost editor's "Paid from your bank" section (Guy's pick A2).
 // A cost line links to bank payments by payee name or Up tag; the server then
 // files every matching payment under the line, and with "Keep the amount in
 // step" sets the line's amount to each new settled payment. Linked lines show
@@ -44,7 +44,7 @@ export function CostBankLink({
   if (!show) return null;
 
   return (
-    <FormSection title="Paid from Up">
+    <FormSection title="Paid from your bank">
       {mergeTargets.length > 0 && (
         <View className="rounded-2xl bg-muted/40">
           <Text className="px-4 pt-3 text-xs text-muted-foreground">
@@ -63,7 +63,7 @@ export function CostBankLink({
         </View>
       )}
       {!detail ? (
-        <Text className="px-1 text-sm text-muted-foreground">{error ?? 'Reading your Up payments…'}</Text>
+        <Text className="px-1 text-sm text-muted-foreground">{error ?? 'Reading your bank payments…'}</Text>
       ) : picking ? (
         <PayeePicker
           category={category}
@@ -77,7 +77,7 @@ export function CostBankLink({
           onPress={() => setPicking(true)}
           className="min-h-12 justify-center rounded-2xl bg-muted/40 px-4"
         >
-          <Text className="text-sm font-medium text-primary">Link to Up payments</Text>
+          <Text className="text-sm font-medium text-primary">Link to bank payments</Text>
         </Pressable>
       ) : (
         <View className="rounded-2xl bg-muted/40">
@@ -176,7 +176,7 @@ function PayeePicker({
     <View className="gap-2">
       <FieldRow hint="Pick who you pay, or type part of their name. Start with # for an Up tag.">
         <View className="flex-row items-center gap-2">
-          <Input className="flex-1" value={query} onChangeText={setQuery} placeholder="Search your Up payments" autoCorrect={false} />
+          <Input className="flex-1" value={query} onChangeText={setQuery} placeholder="Search your bank payments" autoCorrect={false} />
           <Pressable accessibilityRole="button" onPress={onCancel} hitSlop={8} className="min-h-11 justify-center px-1">
             <Text className="text-sm text-muted-foreground">Cancel</Text>
           </Pressable>

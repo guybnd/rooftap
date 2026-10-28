@@ -1,7 +1,7 @@
 'use client';
 
 // Up Bank connector: one read of Up per Costs visit, shared by the spending
-// card, the cost rows ("Paid 3w ago") and the cost editor's "Paid from Up"
+// card, the cost rows ("Paid 3w ago") and the cost editor's "Paid from your bank"
 // section on both apps. It shows what's stored straight away, then reads Up
 // (the server skips that when it read Up under a minute ago) and shows the
 // result. Servers without 'connectors.up-bank-links' answer the older
@@ -24,7 +24,7 @@ import { costTargets, type BankActuals } from './costs';
 import { bankActualsOf, monthTotals, type MonthTotals } from './money-insights';
 import { costMonths, type CostMonth } from './cost-month';
 import type { CostItem } from '../../types';
-import { monthStartOf, type BankScope, type BankShareMode, type CostBankLink, type UpBankApi, type UpBankStatus, type UpOverview, type UpSpending } from './up-bank';
+import { bankDataOn, bankShareModeOf, monthStartOf, upReadable, type BankScope, type BankShareMode, type CostBankLink, type UpBankApi, type UpBankStatus, type UpOverview, type UpSpending } from './up-bank';
 
 export interface UpOverviewState {
   status: UpBankStatus | null;
@@ -132,8 +132,8 @@ export function clearUpOverviewCache(): void {
 
 /** The scope Costs opens on: Mine for someone who shares nothing, else Household. */
 function openingScope(status: UpBankStatus | null, sharing: boolean): UpViewScope | null {
-  if (!sharing || !status?.connection) return null;
-  return status.connection.shareMode === 'none' ? 'mine' : 'household';
+  if (!sharing || !bankDataOn(status)) return null;
+  return bankShareModeOf(status) === 'none' ? 'mine' : 'household';
 }
 
 const UpOverviewContext = createContext<UpOverviewState>({
@@ -172,7 +172,7 @@ export function UpOverviewProvider({
   const [month, setMonth] = useState(() => monthStartOf(new Date()));
   const [picked, setScope] = useState<UpViewScope | null>(null);
   // Someone who shares nothing starts on Mine: Household would leave them out.
-  const scope: UpViewScope | null = !sharing || !status?.connection ? null : picked ?? openingScope(status, sharing);
+  const scope: UpViewScope | null = !sharing || !bankDataOn(status) ? null : picked ?? openingScope(status, sharing);
   const read = async (m: string, s: UpViewScope | null) => {
     const next = await (linking ? api.overview(m, s ?? undefined) : api.spending(m));
     lastReads.set(readKey(m, s), next);
@@ -180,8 +180,8 @@ export function UpOverviewProvider({
   };
   const keepStatus = (s: UpBankStatus) => {
     lastStatus = s;
-    const connected = s.allowed && !!s.connection;
-    const shareMode = s.connection?.shareMode ?? null;
+    const connected = bankDataOn(s);
+    const shareMode = bankShareModeOf(s);
     if (kept?.connected !== connected || kept.shareMode !== shareMode) keep({ month: kept?.month ?? null, connected, shareMode });
     setStatus(s);
     openingChanged();
@@ -190,7 +190,7 @@ export function UpOverviewProvider({
     openingRead = { month: m, data: next };
     openingChanged();
   };
-  const opened = status?.connection != null;
+  const opened = bankDataOn(status);
 
   useEffect(() => {
     if (!enabled) return;
@@ -202,7 +202,7 @@ export function UpOverviewProvider({
         // read the stored payments while the status call is out, instead of
         // one after the other.
         const guess =
-          lastStatus?.allowed && lastStatus.connection
+          bankDataOn(lastStatus)
             ? openingScope(lastStatus, sharing)
             : !lastStatus && kept?.connected
               ? (sharing ? (kept.shareMode === 'none' ? 'mine' : 'household') : null)
@@ -212,7 +212,7 @@ export function UpOverviewProvider({
         const s = await api.status();
         if (!live) return;
         keepStatus(s);
-        if (!s.allowed || !s.connection) {
+        if (!bankDataOn(s)) {
           setData(null);
           return;
         }
@@ -220,6 +220,8 @@ export function UpOverviewProvider({
         const first = early && opening === guess ? await early : await read(month, opening);
         keepOpening(month, first);
         if (live) setData(first);
+        // Only Up is read on open; an imported statement is already all stored.
+        if (!upReadable(s)) return;
         const synced = await api.sync().catch((err: unknown) => {
           if (live) setError(err instanceof Error ? err.message : "Couldn't reach Up.");
           return null;
@@ -233,7 +235,7 @@ export function UpOverviewProvider({
           }
         }
       } catch (err) {
-        if (live) setError(err instanceof Error ? err.message : "Couldn't load Up spending.");
+        if (live) setError(err instanceof Error ? err.message : "Couldn't load your bank spending.");
       }
     })();
     return () => {
@@ -277,7 +279,7 @@ export function UpOverviewProvider({
       status,
       data,
       error,
-      ready: !enabled || !!error || !!data || (status !== null && (!status.allowed || !status.connection)),
+      ready: !enabled || !!error || !!data || (status !== null && !bankDataOn(status)),
       linking: enabled && linking,
       reload: () => setRound((r) => r + 1),
       month,
@@ -294,10 +296,10 @@ export function useUpOverview(): UpOverviewState {
   return useContext(UpOverviewContext);
 }
 
-/** Whether this person has Up connected on this server. */
+/** Whether this person has bank data on this server: Up connected, or an imported statement. */
 export function useUpConnected(): boolean {
   const { status } = useUpOverview();
-  return !!status?.allowed && !!status.connection;
+  return bankDataOn(status);
 }
 
 /** A cost line's link to Up payments, if it has one the viewer can see. */
@@ -381,7 +383,7 @@ export function useOpeningCostMonth(items: readonly CostItem[], bankOn: boolean)
     const month = (data: UpOverviewState['data']) => monthsOf(items, data, now, [key])[0];
     if (!bankOn) return month(null);
     if (!lastStatus) return keptMonth(now);
-    if (!lastStatus.allowed || !lastStatus.connection) return month(null);
+    if (!bankDataOn(lastStatus)) return month(null);
     if (!openingRead?.data || openingRead.month !== monthStartOf(now)) return keptMonth(now);
     return month(openingRead.data);
     // version: a new read or status.

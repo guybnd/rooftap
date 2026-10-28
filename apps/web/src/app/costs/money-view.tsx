@@ -31,6 +31,7 @@ import {
   paymentCategoryLabel,
   shiftMonth,
   useUpConnected,
+  bankDataOn,
   useUpOverview,
   useMoneyTransactions,
   useTransactionSheet,
@@ -170,8 +171,8 @@ export function MoneyView({
     });
   };
 
-  if (status && !status.connection) return <p className="text-sm text-muted-foreground">Connect Up in Settings, Connectors to see your money here.</p>;
-  if (!data) return <p className="text-sm text-muted-foreground">Reading your Up accounts…</p>;
+  if (status && !bankDataOn(status)) return <p className="text-sm text-muted-foreground">Connect your bank or import a statement in Settings, Connectors to see your money here.</p>;
+  if (!data) return <p className="text-sm text-muted-foreground">Reading your accounts…</p>;
   const monthName = monthLabel(month);
 
   return (

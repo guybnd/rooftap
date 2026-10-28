@@ -2,7 +2,7 @@
 
 // The Up Bank state behind Costs, shared by both apps' screens: the Money
 // view's transaction list, the transaction sheet, a shop's payments sheet and
-// the cost editor's "Paid from Up" section. Each app passes its own
+// the cost editor's "Paid from your bank" section. Each app passes its own
 // createUpBankApi client and keeps its own rendering, toasts and haptics;
 // `notify` is the app's plain toast.
 
@@ -328,7 +328,7 @@ export function useShopPayments(
   };
 }
 
-/** The cost editor's "Paid from Up" section: the line's link rule and latest payments. */
+/** The cost editor's "Paid from your bank" section: the line's link rule and latest payments. */
 export function usePaidFromUp(
   api: UpBankApi,
   opts: {
@@ -357,7 +357,7 @@ export function usePaidFromUp(
         if (live) setDetail(d);
       })
       .catch((err: unknown) => {
-        if (live) setError(messageOf(err, "Couldn't read Up payments."));
+        if (live) setError(messageOf(err, "Couldn't read your bank payments."));
       });
     return () => {
       live = false;

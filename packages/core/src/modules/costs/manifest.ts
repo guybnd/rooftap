@@ -1,5 +1,6 @@
 import { defineModule, REACH_REASONS } from '../../module-manifest';
 import { upBankConnector } from './connectors/up-bank';
+import { csvBankConnector } from './connectors/csv-bank';
 
 export const costsModule = defineModule({
   id: 'costs',
@@ -24,6 +25,7 @@ export const costsModule = defineModule({
     up_bank_connections: { reach: { none: REACH_REASONS.account } },
     bank_accounts: { reach: { tools: ['get_bank_spending'] } },
     bank_transactions: { reach: { tools: ['get_bank_spending', 'update_bank_payment', 'make_cost_from_payment'] } },
+    bank_feed_settings: { reach: { none: "A person's own choice of what bank data the household sees, kept out of the Assistant on purpose." } },
     bank_links: { reach: { tools: ['set_bank_link_rule', 'merge_cost_lines', 'update_bank_payment'] } },
   },
   tools: [
@@ -37,6 +39,6 @@ export const costsModule = defineModule({
     { name: 'set_bank_link_rule', kind: 'write' },
     { name: 'merge_cost_lines', kind: 'write' },
   ],
-  connectors: [upBankConnector],
+  connectors: [upBankConnector, csvBankConnector],
   settings: ['costs-goal', 'costs-recent', 'costs-subscriptions', 'costs-summaries'],
 });

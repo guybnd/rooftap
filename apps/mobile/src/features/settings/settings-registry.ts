@@ -32,6 +32,7 @@ import { SetupStoresSettings } from './panels/setup-stores-settings';
 import { HouseholdSettings } from './panels/household-settings';
 import { CostsSettings, CostsRecentSettings, CostsSubscriptionsSettings, CostsSummariesSettings } from './panels/costs-settings';
 import { UpBankSettings } from './panels/up-bank-settings';
+import { BankImportSettings } from './panels/bank-import-settings';
 import { GroceriesSettings } from './panels/groceries-settings';
 import { ChecklistsSettings } from './panels/checklists-settings';
 import { CalendarSetup } from './panels/calendar-setup';
@@ -43,6 +44,7 @@ import { ShopperSettings } from './panels/shopper-settings';
 // each shows only while the module it fills is on (PANEL_MODULE below).
 const CONNECTOR_PANELS: Record<ConnectorPanelId, ComponentType> = {
   'up-bank': UpBankSettings,
+  'bank-import': BankImportSettings,
 };
 
 export interface GlobalMenu {
