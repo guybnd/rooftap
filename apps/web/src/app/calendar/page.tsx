@@ -44,17 +44,13 @@ import { memberLabel } from "@/app/setup/member-label";
 import { useLongPress } from "@/hooks/use-long-press";
 import { HouseholdTaskModal } from "@/app/tasks/household-task-modal";
 import { EventModal } from "@/app/calendar/event-modal";
-import { BinLids } from "@/components/bin-lids";
+import { CalendarEntryTrailing } from "@/components/calendar-entry-rows";
 import { useRowContextMenu } from "@/components/ui/row-context-menu";
 import {
   eventCategoryClasses,
-  binCollections,
-  binNamesPhrase,
-  useBins,
-  occasionKindLabel,
-  occasionsOnDay,
-  occasionTitle,
-  useOccasionDays,
+  calendarEntriesOn,
+  calendarRangeOf,
+  useCalendarEntries,
   householdTasks$,
   groupEvents$,
   costItems$,
@@ -94,7 +90,7 @@ import {
   type RowMenu,
 } from '@homeup/core';
 import { MonthDatePicker } from "@/components/month-date-picker";
-import type { Agent, Apartment, Appointment, CalendarAgendaItem, GoogleCalendarEventWithAttribution, GroupEvent, HouseholdTask } from '@homeup/core';
+import type { Agent, Apartment, Appointment, CalendarAgendaItem, CalendarEntry, GoogleCalendarEventWithAttribution, GroupEvent, HouseholdTask } from '@homeup/core';
 import { useEventForecast } from "@/lib/use-event-forecast";
 import { useLegTravel } from "@/lib/use-event-travel";
 import { calendarApi } from "@/lib/calendar-client";
@@ -153,17 +149,6 @@ function CalendarPage() {
   // Pulled Google events need calendar and google-calendar; off, nothing is fetched.
   const showGoogleEvents = modules.feature("calendar.google-events");
   const viewingsGroupId = showViewings ? group?.id : undefined;
-  // Bin collection days need calendar and bins (module-features.ts).
-  const showBins = modules.feature("calendar.bins");
-  const binsApi = useBins(showBins ? group?.id : undefined, currentUserId);
-  const binDayOf = (date: Date) => {
-    if (!showBins || binsApi.streams.length === 0) return null;
-    const key = toISODate(date);
-    return binCollections(binsApi.streams, binsApi.changes, key, key)[0] ?? null;
-  };
-  // Birthdays and other occasions need calendar and occasions; each can be switched off on its own.
-  const showOccasions = modules.feature("calendar.occasions");
-  const occasionDays = useOccasionDays(showOccasions ? group?.id : undefined);
 
   const apts$ = apartments$(viewingsGroupId);
   const agentsStore$ = agents$(viewingsGroupId);
@@ -305,6 +290,9 @@ function CalendarPage() {
       setImportApartmentPickerOpen(false);
     },
   });
+  // Other modules' entries (bin night, occasions): the calendar slot, each gated on its own feature.
+  const slotRange = useMemo(() => calendarRangeOf(days), [days]);
+  const slotEntries = useCalendarEntries(group?.id, currentUserId, slotRange);
   const {
     connected: calendarConnected,
     events: calendarEvents,
@@ -766,10 +754,10 @@ const filteredApartments = useMemo(() => filterApartments(apartments, searchQuer
     title: string;
     subtitle?: string;
     subtitleTone?: "warning";
-    /** The owner section's tile: "search" for a viewing, else the calendar's. Omitted for tasks (checkbox). */
-    sectionId?: "search" | "calendar" | "bins" | "occasions";
-    /** Bin night: the lid colours collected that day. */
-    lids?: string[];
+    /** The owner section's tile: "search" for a viewing, a slot entry's module, else the calendar's. Omitted for tasks (checkbox). */
+    sectionId?: string;
+    /** A slot entry, for its module's own trailing part (bin lids). */
+    entry?: CalendarEntry;
     onClick: () => void;
     task?: HouseholdTask;
     /** A group event, for its forecast. */
@@ -811,22 +799,14 @@ const filteredApartments = useMemo(() => filterApartments(apartments, searchQuer
           event: item.event,
           onClick: () => openEventDetail(item.event),
         };
-      case "bins":
+      case "entry":
         return {
           ...base,
-          title: "Bin collection",
-          subtitle: binNamesPhrase(item.collection.streams),
-          sectionId: "bins",
-          lids: item.collection.streams.map((st) => st.lid),
-          onClick: () => router.push("/bins"),
-        };
-      case "occasion":
-        return {
-          ...base,
-          title: occasionTitle(item.occasion, currentUserId ?? null),
-          subtitle: occasionKindLabel(item.occasion.kind),
-          sectionId: "occasions",
-          onClick: () => router.push("/occasions"),
+          title: item.entry.title,
+          subtitle: item.entry.subtitle,
+          sectionId: item.entry.moduleId,
+          entry: item.entry,
+          onClick: () => router.push(item.entry.href),
         };
       case "task":
         return {
@@ -848,8 +828,7 @@ const filteredApartments = useMemo(() => filterApartments(apartments, searchQuer
       groupEvents,
       tasks,
       calendarEvents: calendarConnected ? calendarEvents : [],
-      binDay: binDayOf(date),
-      occasions: occasionDays,
+      entries: slotEntries,
     })
       .map(toAgendaRow)
       .sort((a, b) => a.sortMinutes - b.sortMinutes || compareStrings(a.title, b.title));
@@ -871,23 +850,14 @@ const filteredApartments = useMemo(() => filterApartments(apartments, searchQuer
   // midnight edge, so they stay in view when the grid opens on the afternoon.
   type AllDayChip = { key: string; title: string; classes: string; onClick: () => void };
   const getAllDayChips = (day: Date): AllDayChip[] => [
-    ...(() => {
-      const binDay = binDayOf(day);
-      return binDay
-        ? [{
-            key: `bins-${binDay.date}`,
-            title: `Bins: ${binNamesPhrase(binDay.streams).toLowerCase()}`,
-            classes: "border border-border bg-muted text-foreground",
-            onClick: () => router.push("/bins"),
-          }]
-        : [];
-    })(),
-    ...occasionsOnDay(occasionDays, toISODate(day)).map((o) => ({
-      key: `occasion-${o.id}`,
-      title: occasionTitle(o, currentUserId ?? null),
-      classes: "border border-border bg-muted text-foreground",
-      onClick: () => router.push("/occasions"),
-    })),
+    ...calendarEntriesOn(slotEntries, toISODate(day))
+      .filter((entry) => entry.time === null)
+      .map((entry) => ({
+        key: entry.key,
+        title: entry.chipTitle ?? entry.title,
+        classes: "border border-border bg-muted text-foreground",
+        onClick: () => router.push(entry.href),
+      })),
     ...(calendarConnected ? getCalendarEventsForDay(day) : []).filter(isAllDayCalendarEvent).map((ev) => ({
       key: `gcal-${ev.id}`,
       title: ev.title || "Untitled event",
@@ -1421,7 +1391,7 @@ const filteredApartments = useMemo(() => filterApartments(apartments, searchQuer
                         // Hearth v2 (§6 feed row): the owner section's tile.
                         <LeadingTile
                           sectionId={item.sectionId ?? "calendar"}
-                          Icon={item.sectionId === "search" ? Building2 : sectionIconFor(item.sectionId === "bins" || item.sectionId === "occasions" ? item.sectionId : "calendar")}
+                          Icon={item.sectionId === "search" ? Building2 : sectionIconFor(item.sectionId ?? "calendar")}
                           size="md"
                         />
                       )}
@@ -1447,7 +1417,7 @@ const filteredApartments = useMemo(() => filterApartments(apartments, searchQuer
                           </span>
                           {item.event && legOf(item.event.id) ? <LegLine leg={legOf(item.event.id)!} /> : null}
                         </span>
-                        {item.lids ? <BinLids lids={item.lids} className="ml-2" /> : null}
+                        {item.entry ? <CalendarEntryTrailing entry={item.entry} className="ml-2" /> : null}
                       </button>
                     </div>
                   ))}

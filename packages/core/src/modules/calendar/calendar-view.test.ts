@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Apartment, Appointment, GoogleCalendarEventWithAttribution, GroupEvent, HouseholdTask } from '../../types';
-import type { BinCollection } from '../bins/bins';
+import type { CalendarEntry } from '../../slots/types';
 import {
   CALENDAR_DEFAULT_HOUR,
   calendarAgenda,
@@ -15,7 +15,6 @@ import {
   isSameLocalDay,
   timedStartHours,
 } from './calendar-view';
-import { buildOccasion, type Occasion } from '../occasions/occasions';
 
 // Local wall-clock instants, so the tests hold in any time zone.
 const at = (day: number, hour = 0, minute = 0) => new Date(2026, 9, day, hour, minute).toISOString();
@@ -116,22 +115,27 @@ describe('calendarOpenHour', () => {
 });
 
 describe('calendarAgenda', () => {
-  const bins = { date: '2026-10-20', streams: [] } as unknown as BinCollection;
+  const entry = (key: string, date: string, time: string | null = null): CalendarEntry => ({
+    key,
+    moduleId: 'bins',
+    date,
+    time,
+    title: key,
+    href: '/bins',
+  });
 
-  it('adds occasions on the day as all-day rows, unless switched off', () => {
-    const base: Occasion = buildOccasion({ id: 'o', groupId: 'g', title: '', kind: 'birthday', date: '1990-10-20', createdBy: null });
+  it('adds other modules\' entries on the day, all-day or at their time', () => {
     const items = calendarAgenda(day(20), {
       appointments: [],
       apartments: [],
       groupEvents: [],
       calendarEvents: [],
-      occasions: [
-        { ...base, id: 'b', title: "Tegan's birthday", date: '1990-10-20' },
-        { ...base, id: 'off', title: 'Hidden', date: '1990-10-20', on_calendar: false },
-        { ...base, id: 'other', title: 'Later', date: '1990-10-21' },
-      ],
+      entries: [entry('bins-2026-10-20', '2026-10-20'), entry('late', '2026-10-20', '21:30'), entry('next', '2026-10-21')],
     });
-    expect(items.map((i) => [i.key, i.timeLabel])).toEqual([['occasion-b', 'All day']]);
+    expect(items.map((i) => [i.key, i.kind, i.timeLabel])).toEqual([
+      ['bins-2026-10-20', 'entry', 'All day'],
+      ['late', 'entry', '9:30 PM'],
+    ]);
   });
 
   it('merges a day and sorts it, all-day rows first', () => {
@@ -141,7 +145,7 @@ describe('calendarAgenda', () => {
       groupEvents: [event('lunch', at(20, 12, 30)), event('trip', at(19, 9), { ends_at: at(21, 9) })],
       calendarEvents: [gcal('g', at(20, 9)), gcal('holiday', at(20), { is_all_day: true })],
       tasks: [task('bins out', '2026-10-20', '07:15'), task('call', '2026-10-20'), task('later', '2026-10-21')],
-      binDay: bins,
+      entries: [entry('bins-2026-10-20', '2026-10-20')],
     });
     expect(items.map((i) => i.key)).toEqual([
       'bins-2026-10-20',

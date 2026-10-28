@@ -43,6 +43,14 @@ export interface ManifestSection {
   tabRoutes?: readonly string[];
 }
 
+/**
+ * A shared screen a module can put its own content on (.docs/modules.md,
+ * section 17). The module lists the slots it fills here and keeps each slot's
+ * source in its own folder; packages/core/src/slots/ lists the sources and the
+ * shared screen loops over them.
+ */
+export type SlotId = 'calendar';
+
 /** A database table the module owns. Every table in supabase/migrations belongs to a module or to the platform list in assistant-reach.ts. */
 export interface ManifestTable {
   reach: Reach;
@@ -85,6 +93,8 @@ export interface ModuleManifest {
   noTools?: string;
   /** Its settings panels, in the order Settings and the screen's settings sheet show them (module-settings.ts). */
   settings?: readonly SettingsPanelId[];
+  /** The shared screens it puts content on, each with a source in its folder (slots/). */
+  slots?: readonly SlotId[];
 }
 
 /** Declares a module. The `const` type parameter keeps the id a literal, which is how ModuleId is built. */

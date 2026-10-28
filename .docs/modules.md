@@ -440,3 +440,26 @@ A panel that applies only when a feature is on returns nothing when the feature 
 A screen with no More menu, for example Home search, Calendar or Assistant, puts `ModuleSettingsButton` in its header instead. The button opens the same sheet and shows nothing when the module has nothing to set.
 
 `module-conformance.test.ts` fails a module that has settings but no `useModuleSettingsSheet` call or `ModuleSettingsButton` in its screens.
+
+## 17. Slots on shared screens
+
+Some screens belong to no module: the calendar, Home, capture, share and search. A module puts its own content on such a screen through a slot. The screen does not check for the module by name.
+
+A slot has two parts:
+
+- A contract in `packages/core/src/slots/types.ts`: the shape of one entry, and the source a module writes.
+- A registry in `packages/core/src/slots/`. It lists the sources, and it gives the screen one hook that merges them.
+
+The calendar slot is the first one. Bin night and Occasions fill it.
+
+To put a module on the calendar:
+
+1. Add a feature `calendar.<id>` that names `calendar` and the module (`module-features.ts`).
+2. Write `calendar-source.ts` in the module's folder. Its `useEntries` hook returns a `CalendarEntry` for each date in the range: a title, a subtitle, a time (or none for all day) and the route a tap opens. Keep the logic in a pure function next to it, and test that function.
+3. Add `slots: ['calendar']` to the manifest, and list the source in `CALENDAR_SOURCES` (`slots/calendar.ts`).
+
+Both calendar screens draw each entry with one generic row in the module's colour and glyph. All-day entries also show in the week grid's all-day band. A module that needs a special look adds a trailing part in `calendar-entry-rows.tsx` (web) and `entry-rows.tsx` (phone). Bin night does this for its lid colours.
+
+`slots/calendar.test.tsx` fails when a manifest lists the slot with no source, when a source has no manifest entry, or when the feature of a source does not name the calendar and the module. It also switches each module off and checks that only the entries of that module go away.
+
+The items of the calendar itself (household events, Google events, to-dos and viewings) do not use the slot. A person edits, drags and books them in place, and a slot entry only opens its module.

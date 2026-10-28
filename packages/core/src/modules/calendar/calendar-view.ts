@@ -9,8 +9,7 @@ import type {
   GroupEvent,
   HouseholdTask,
 } from '../../types';
-import type { BinCollection } from '../bins/bins';
-import { occasionsOnDay, type Occasion } from '../occasions/occasions';
+import type { CalendarEntry } from '../../slots/types';
 import { daysBetweenISO, toISODate } from '../../date-utils';
 import { getEventsForDay, isEventStartDay } from './calendar-overlap';
 
@@ -128,23 +127,21 @@ export type CalendarAgendaItem =
   | { kind: 'event'; key: string; sortMinutes: number; timeLabel: string; event: GroupEvent }
   | { kind: 'calendarEvent'; key: string; sortMinutes: number; timeLabel: string; calendarEvent: GoogleCalendarEventWithAttribution }
   | { kind: 'task'; key: string; sortMinutes: number; timeLabel: string; task: HouseholdTask }
-  | { kind: 'bins'; key: string; sortMinutes: number; timeLabel: string; collection: BinCollection }
-  | { kind: 'occasion'; key: string; sortMinutes: number; timeLabel: string; occasion: Occasion };
+  | { kind: 'entry'; key: string; sortMinutes: number; timeLabel: string; entry: CalendarEntry };
 
-/** A day's agenda sources, plus the apartments viewings name, the day's bin collection and the household's occasions. */
+/** A day's agenda sources, plus the apartments viewings name and other modules' calendar entries. */
 export interface CalendarAgendaSources extends CalendarDaySources {
   apartments: Apartment[];
-  binDay?: BinCollection | null;
-  /** Every occasion (calendar.occasions); those falling on the day and shown on the Calendar become rows. */
-  occasions?: Occasion[];
+  /** Other modules' entries (the calendar slot, useCalendarEntries); those on the day become rows. */
+  entries?: readonly CalendarEntry[];
 }
 
 const ALL_DAY = 'All day';
 
 /**
- * One day's agenda: viewings, Google events, household events, the bin
- * collection, birthdays and other occasions, and to-dos due that day, sorted by time (all-day rows first, in
- * that order otherwise). A later day of a spanned event is an all-day row,
+ * One day's agenda: other modules' entries (bin collection, birthdays and
+ * other occasions), viewings, Google events, household events and to-dos due
+ * that day, sorted by time (all-day rows first, in that order otherwise). A later day of a spanned event is an all-day row,
  * since only its start day carries a clock time.
  */
 export function calendarAgenda(date: Date, sources: CalendarAgendaSources): CalendarAgendaItem[] {
@@ -152,13 +149,18 @@ export function calendarAgenda(date: Date, sources: CalendarAgendaSources): Cale
   const dateKey = toISODate(date);
   const minutesOf = (d: Date) => d.getHours() * 60 + d.getMinutes();
 
-  if (sources.binDay) {
-    items.push({ kind: 'bins', key: `bins-${sources.binDay.date}`, sortMinutes: -1, timeLabel: ALL_DAY, collection: sources.binDay });
-  }
-
-  occasionsOnDay(sources.occasions ?? [], dateKey).forEach((occasion) => {
-    items.push({ kind: 'occasion', key: `occasion-${occasion.id}`, sortMinutes: -1, timeLabel: ALL_DAY, occasion });
-  });
+  (sources.entries ?? [])
+    .filter((e) => e.date === dateKey)
+    .forEach((entry) => {
+      const [h, m] = entry.time ? entry.time.split(':').map(Number) : [null, null];
+      items.push({
+        kind: 'entry',
+        key: entry.key,
+        sortMinutes: h === null ? -1 : h * 60 + (m ?? 0),
+        timeLabel: entry.time ? formatWallClock(entry.time) : ALL_DAY,
+        entry,
+      });
+    });
 
   appointmentsOn(sources.appointments, date).forEach((app) => {
     const d = new Date(app.scheduled_at);

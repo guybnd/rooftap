@@ -29,4 +29,5 @@ export const occasionsModule = defineModule({
     { name: 'add_gift_ideas', kind: 'write' },
     { name: 'add_wishlist_items', kind: 'write' },
   ],
+  slots: ['calendar'],
 });

@@ -27,10 +27,9 @@ import { useLocalSearchParams } from 'expo-router';
 import { Building2, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, LayoutList, ListPlus, Plus } from 'lucide-react-native';
 import { Text, ActionMenu, type ActionMenuAnchor, BottomSheet, Button, HeroLede, Input, MonthDatePicker, ScreenBackground, SegmentedControl, cn, haptics, toast } from '@homeup/ui';
 import {
-  binCollections,
-  useBins,
-  occasionTitle,
-  useOccasionDays,
+  calendarRangeOf,
+  useCalendarEntries,
+  type CalendarEntry,
   agents$,
   apartments$,
   appointments$,
@@ -100,28 +99,9 @@ export default function CalendarSectionScreen() {
   const viewingsGroupId = showViewings ? group?.id : undefined;
   // An event's ticket cost as a Budget line needs calendar and costs.
   const showBudget = modules.feature('calendar.budget');
-  // Bin collection days need calendar and bins (module-features.ts).
-  const showBins = modules.feature('calendar.bins');
-  const binsApi = useBins(showBins ? group?.id : undefined, currentUserId);
   const openRoute = useOpenRoute();
-  const openBins = React.useCallback(() => openRoute('/bins'), [openRoute]);
-  const binDayOf = React.useCallback(
-    (date: Date) => {
-      if (!showBins || binsApi.streams.length === 0) return null;
-      const key = toISODate(date);
-      return binCollections(binsApi.streams, binsApi.changes, key, key)[0] ?? null;
-    },
-    [showBins, binsApi.streams, binsApi.changes]
-  );
-  // Birthdays and other occasions need calendar and occasions; each can be switched off on its own.
-  // Titled for this person ("Your birthday") before the agenda places them.
-  const showOccasions = modules.feature('calendar.occasions');
-  const occasionRows = useOccasionDays(showOccasions ? group?.id : undefined);
-  const occasions = React.useMemo(
-    () => occasionRows.map((o) => ({ ...o, title: occasionTitle(o, currentUserId ?? null) })),
-    [occasionRows, currentUserId]
-  );
-  const openOccasions = React.useCallback(() => openRoute('/occasions'), [openRoute]);
+  // A slot entry (bin night, an occasion) opens its module's screen.
+  const openEntry = React.useCallback((entry: CalendarEntry) => openRoute(entry.href), [openRoute]);
 
   const apts$ = apartments$(viewingsGroupId);
   const agentsStore$ = agents$(viewingsGroupId);
@@ -210,6 +190,9 @@ export default function CalendarSectionScreen() {
     [span, currentDate, weekDays]
   );
   const spanDays = React.useMemo(() => calendarSpanDays(span, currentDate), [span, currentDate]);
+  // Other modules' entries (bin night, occasions): the calendar slot, each gated on its own feature.
+  const slotRange = React.useMemo(() => calendarRangeOf([...overlayDays, ...spanDays]), [overlayDays, spanDays]);
+  const slotEntries = useCalendarEntries(group?.id, currentUserId, slotRange);
 
   // Google Calendar overlay (HOUP-100): core's useCalendarOverlay, shared with
   // web. Best-effort: a failed call keeps what's shown, never blocks.
@@ -297,10 +280,9 @@ export default function CalendarSectionScreen() {
         groupEvents,
         tasks,
         calendarEvents: dayCalendarEvents,
-        binDay: binDayOf(currentDate),
-        occasions,
+        entries: slotEntries,
       }),
-    [currentDate, appointments, apartments, groupEvents, tasks, dayCalendarEvents, binDayOf, occasions]
+    [currentDate, appointments, apartments, groupEvents, tasks, dayCalendarEvents, slotEntries]
   );
 
   // Day view opens scrolled to roughly the current time when viewing today,
@@ -343,12 +325,11 @@ export default function CalendarSectionScreen() {
           groupEvents,
           tasks,
           calendarEvents: calendarConnected ? calendarEvents.filter((ev) => isSameLocalDay(new Date(ev.starts_at), day)) : [],
-          binDay: binDayOf(day),
-          occasions,
+          entries: slotEntries,
         }),
       }))
       .filter((group) => group.items.length > 0 || span === 'day');
-  }, [listMode, spanDays, appointments, apartments, groupEvents, tasks, calendarConnected, calendarEvents, span, binDayOf, occasions]);
+  }, [listMode, spanDays, appointments, apartments, groupEvents, tasks, calendarConnected, calendarEvents, span, slotEntries]);
 
   const taskCountFor = React.useCallback(
     (day: Date) => {
@@ -640,8 +621,7 @@ export default function CalendarSectionScreen() {
                     onPressEvent={openEvent}
                     onPressCalendarEvent={setSelectedCalendarEvent}
                     onPressTask={openTask}
-              onPressBins={openBins}
-              onPressOccasions={openOccasions}
+              onPressEntry={openEntry}
                     onToggleTaskDone={toggleTaskDone}
                     addPhrase={calendarAddPhrase({ tasks: showTasks, viewings: showViewings })}
                     onAddSomething={() =>
@@ -704,8 +684,7 @@ export default function CalendarSectionScreen() {
               onPressEvent={openEvent}
               onPressCalendarEvent={setSelectedCalendarEvent}
               onPressTask={openTask}
-              onPressBins={openBins}
-              onPressOccasions={openOccasions}
+              onPressEntry={openEntry}
               onToggleTaskDone={toggleTaskDone}
               addPhrase={calendarAddPhrase({ tasks: showTasks, viewings: showViewings })}
               onAddSomething={() => openChooserAt(new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), new Date().getHours()))}

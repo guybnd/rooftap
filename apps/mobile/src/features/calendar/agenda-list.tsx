@@ -7,11 +7,10 @@ import { Pressable, View } from 'react-native';
 import { Building2, Check, CalendarDays, Navigation } from 'lucide-react-native';
 import { Text, Button, LeadingTile, ListGroup, ListItem, ListItemContent, ListItemLeading, ListItemMeta, ListItemTitle } from '@homeup/ui';
 import {
-  binNamesPhrase,
   eventDetailLabel,
-  occasionKindLabel,
   legText,
   type CalendarAgendaItem,
+  type CalendarEntry,
   type Appointment,
   type GoogleCalendarEventWithAttribution,
   type GroupEvent,
@@ -21,7 +20,7 @@ import {
 import { sectionIconFor } from '@/lib/section-icons';
 import { useEventForecast } from './use-event-forecast';
 import { useLegTravel } from './use-event-travel';
-import { BinLids } from '@/features/bins/bin-lids';
+import { CalendarEntryTrailing } from './entry-rows';
 
 type MemberProfiles = Record<string, { email: string; name: string | null; avatar: string | null }>;
 
@@ -40,10 +39,8 @@ interface AgendaListProps {
   onPressEvent: (event: GroupEvent) => void;
   onPressCalendarEvent?: (event: GoogleCalendarEventWithAttribution) => void;
   onPressTask: (task: HouseholdTask) => void;
-  /** Bin night: a collection row opens Bins. */
-  onPressBins?: () => void;
-  /** An occasion row opens Occasions. */
-  onPressOccasions?: () => void;
+  /** Another module's entry (the calendar slot) opens its module's screen. */
+  onPressEntry?: (entry: CalendarEntry) => void;
   onToggleTaskDone: (task: HouseholdTask) => void;
   /** Launches the same "New…" chooser a long-press opens (Hearth E-series). */
   onAddSomething?: () => void;
@@ -112,8 +109,7 @@ export function AgendaList({
   onPressEvent,
   onPressCalendarEvent,
   onPressTask,
-  onPressBins,
-  onPressOccasions,
+  onPressEntry,
   onToggleTaskDone,
   onAddSomething,
   addPhrase = 'an appointment, event, or to-do',
@@ -186,31 +182,18 @@ export function AgendaList({
           );
         }
 
-        if (item.kind === 'bins') {
+        if (item.kind === 'entry') {
+          const entry = item.entry;
           return (
-            <ListItem key={item.key} onPress={onPressBins}>
+            <ListItem key={item.key} onPress={() => onPressEntry?.(entry)}>
               <ListItemLeading>
-                <LeadingTile sectionId="bins" Icon={sectionIconFor('bins')} size="md" />
+                <LeadingTile sectionId={entry.moduleId} Icon={sectionIconFor(entry.moduleId)} size="md" />
               </ListItemLeading>
               <ListItemContent>
-                <ListItemTitle>Bin collection</ListItemTitle>
-                <AgendaMeta timeLabel={item.timeLabel} subtitle={binNamesPhrase(item.collection.streams)} />
+                <ListItemTitle>{entry.title}</ListItemTitle>
+                <AgendaMeta timeLabel={item.timeLabel} subtitle={entry.subtitle} />
               </ListItemContent>
-              <BinLids lids={item.collection.streams.map((st) => st.lid)} size="sm" />
-            </ListItem>
-          );
-        }
-
-        if (item.kind === 'occasion') {
-          return (
-            <ListItem key={item.key} onPress={onPressOccasions}>
-              <ListItemLeading>
-                <LeadingTile sectionId="occasions" Icon={sectionIconFor('occasions')} size="md" />
-              </ListItemLeading>
-              <ListItemContent>
-                <ListItemTitle>{item.occasion.title}</ListItemTitle>
-                <AgendaMeta timeLabel={item.timeLabel} subtitle={occasionKindLabel(item.occasion.kind)} />
-              </ListItemContent>
+              <CalendarEntryTrailing entry={entry} />
             </ListItem>
           );
         }

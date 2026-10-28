@@ -29,4 +29,5 @@ export const binsModule = defineModule({
     { name: 'mark_bins_out', kind: 'write' },
     { name: 'change_bin_collection', kind: 'write' },
   ],
+  slots: ['calendar'],
 });
