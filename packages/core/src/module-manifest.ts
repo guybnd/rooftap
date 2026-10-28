@@ -11,6 +11,7 @@
 import type { NavItem } from './sections';
 import type { SectionHue } from './section-hues';
 import type { SettingsPanelId } from './module-settings';
+import type { ConnectorManifest } from './connector';
 
 /** How the Assistant reaches a table: the household tools that read or change it, or why none do. */
 export type Reach = { tools: readonly string[] } | { none: string };
@@ -93,6 +94,8 @@ export interface ModuleManifest {
   noTools?: string;
   /** Its settings panels, in the order Settings and the screen's settings sheet show them (module-settings.ts). */
   settings?: readonly SettingsPanelId[];
+  /** Outside sources that fill this module's data (connectors.ts, .docs/connectors.md). Shown in Settings > Connectors while the module is on. */
+  connectors?: readonly ConnectorManifest[];
   /** The shared screens it puts content on, each with a source in its folder (slots/). */
   slots?: readonly SlotId[];
 }

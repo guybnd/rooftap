@@ -43,8 +43,8 @@ export interface LedgerRow {
   count: number;
   /** The latest payment, an instant. */
   lastAt: string;
-  /** Where the payments came from. */
-  source: 'up' | 'csv';
+  /** Where the payments came from: the connector's `source` ('up', 'csv'). */
+  source: string;
 }
 
 /** A price a recurring cost takes from a date on. */
@@ -97,8 +97,8 @@ export interface CostMonthLine {
   date: string | null;
   /** The cost line behind it, when there is one. */
   item?: CostItem;
-  /** Where its money came from: a source, or 'manual' for a cost added by hand. */
-  source: 'up' | 'csv' | 'manual' | null;
+  /** Where its money came from: a connector's `source` ('up', 'csv'), or 'manual' for a cost added by hand. */
+  source: string | null;
   /** The shop's name for a drilldown, for kind 'shop'. */
   vendor?: string;
   /** The source's own category for a shop's payments (Up's), a hint when moving it. */

@@ -80,7 +80,8 @@ export interface BankTransaction {
   id: string;
   group_id: string;
   user_id: string;
-  source: 'up';
+  /** The connector that read it (its manifest's `source`): 'up', 'csv'. */
+  source: string;
   external_id: string;
   /** The bank's id for the account. Missing on rows read before it was kept. */
   account_id?: string | null;
@@ -114,7 +115,8 @@ export interface BankTransaction {
 export interface BankAccountRow {
   user_id: string;
   group_id: string;
-  source: 'up';
+  /** The connector that read it (its manifest's `source`). */
+  source: string;
   external_id: string;
   name: string;
   account_type: 'SAVER' | 'TRANSACTIONAL' | 'HOME_LOAN';

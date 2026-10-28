@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import { moduleSettingsPanels, type ModuleId, type SettingsPanelId } from "@homeup/core";
+import { CONNECTORS, moduleSettingsPanels, type ConnectorPanelId, type ModuleId, type SettingsPanelId } from "@homeup/core";
 import { AppearanceSettings } from "@/components/appearance-settings";
 import { SectionPreferences } from "@/components/section-preferences";
 import { GroupManager } from "@/components/group-manager";
@@ -33,6 +33,13 @@ import { ShopperSettings } from "@/components/shopper-settings";
 import { WhatsNewHistory } from "@/components/whats-new";
 import { VersionSettings } from "@/components/version-settings";
 
+// Every connector's Settings > Connectors panel by its core id (connectors.ts,
+// .docs/connectors.md). The Connectors menu lists them in registry order, and
+// each shows only while the module it fills is on (PANEL_MODULE below).
+const CONNECTOR_PANELS: Record<ConnectorPanelId, ComponentType> = {
+  "up-bank": UpBankSettings,
+};
+
 export interface GlobalMenu {
   key: string;
   label: string;
@@ -47,7 +54,7 @@ export const globalMenus: GlobalMenu[] = [
   { key: "users", label: "Users", panels: [GroupManager, UsersManager] },
   { key: "appearance", label: "Appearance", panels: [AppearanceSettings] },
   { key: "notifications", label: "Notifications", panels: [NotificationsSettings, NotificationKinds] },
-  { key: "connectors", label: "Connectors", panels: [UpBankSettings] },
+  { key: "connectors", label: "Connectors", panels: CONNECTORS.map((c) => CONNECTOR_PANELS[c.panel]) },
   { key: "integrations", label: "Integrations & keys", panels: [HouseholdAiKeys, AiProvidersSettings, ApiKeysSettings, FeedbackInbox, PatSettings, McpSettings] },
   { key: "whats-new", label: "About & updates", panels: [VersionSettings, WhatsNewHistory] },
 ];
@@ -86,6 +93,7 @@ export function moduleSettingsComponents(id: string, enabled: ReadonlySet<string
 // while that module is on. Every other panel follows its section or menu.
 const PANEL_MODULE = new Map<ComponentType, ModuleId>([
   [McpSettings, "mcp"],
+  ...CONNECTORS.map((c): [ComponentType, ModuleId] => [CONNECTOR_PANELS[c.panel], c.module]),
 ]);
 
 /** The panels to show for this household's modules. */

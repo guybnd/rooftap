@@ -5,7 +5,7 @@
 // packages/core/scripts/check-import-boundary.mjs and this map holds live
 // component refs).
 import type { ComponentType } from 'react';
-import { moduleSettingsPanels, type ModuleId, type SettingsPanelId } from '@homeup/core';
+import { CONNECTORS, moduleSettingsPanels, type ConnectorPanelId, type ModuleId, type SettingsPanelId } from '@homeup/core';
 import { AppearanceSettings, HapticsSettings, MotionSettings } from './panels/appearance-settings';
 import { SectionPreferences } from './panels/section-preferences';
 import { HomeProfileSettings } from './panels/home-profile-settings';
@@ -38,6 +38,13 @@ import { CalendarSetup } from './panels/calendar-setup';
 import { AppUpdates } from './panels/app-updates';
 import { ShopperSettings } from './panels/shopper-settings';
 
+// Every connector's Settings > Connectors panel by its core id (connectors.ts,
+// .docs/connectors.md). The Connectors menu lists them in registry order, and
+// each shows only while the module it fills is on (PANEL_MODULE below).
+const CONNECTOR_PANELS: Record<ConnectorPanelId, ComponentType> = {
+  'up-bank': UpBankSettings,
+};
+
 export interface GlobalMenu {
   key: string;
   label: string;
@@ -50,7 +57,7 @@ export const globalMenus: GlobalMenu[] = [
   { key: 'users', label: 'Users', panels: [GroupManager, UsersManager] },
   { key: 'appearance', label: 'Appearance', panels: [AppearanceSettings, MotionSettings, HapticsSettings] },
   { key: 'notifications', label: 'Notifications', panels: [NotificationsSettings, NotificationKinds] },
-  { key: 'connectors', label: 'Connectors', panels: [UpBankSettings] },
+  { key: 'connectors', label: 'Connectors', panels: CONNECTORS.map((c) => CONNECTOR_PANELS[c.panel]) },
   { key: 'integrations', label: 'Integrations & keys', panels: [HouseholdAiKeys, AiProvidersSettings, ApiKeysSettings, FeedbackInbox, PatSettings, McpSettings] },
   { key: 'about', label: 'About & updates', panels: [AppUpdates] },
 ];
@@ -89,6 +96,7 @@ export function moduleSettingsComponents(id: string, enabled: ReadonlySet<string
 // while that module is on. Every other panel follows its section or menu.
 const PANEL_MODULE = new Map<ComponentType, ModuleId>([
   [McpSettings, 'mcp'],
+  ...CONNECTORS.map((c): [ComponentType, ModuleId] => [CONNECTOR_PANELS[c.panel], c.module]),
 ]);
 
 /** The panels to show for this household's modules. */

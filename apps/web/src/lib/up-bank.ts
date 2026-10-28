@@ -25,18 +25,25 @@ import {
   type UpAccountResource,
   type UpBankStatus,
   type UpTransactionResource,
+  upBankConnector,
 } from "@homeup/core";
 import { billingMode, householdTier } from "@/lib/billing";
 import { canStoreHouseholdKeys, decryptHouseholdKey } from "@/lib/ai/household-keys";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSessionUser } from "@/lib/supabase/session";
 import { resolveGroupId } from "@/lib/pat";
+import { saveBankAccounts, saveBankTransactions } from "@/lib/connectors/bank-feed";
 
 // Up Bank connector: talking to Up's API for one person (packages/core
 // up-bank.ts has the shapes and the why). Up allows its API for personal use
 // only, so on the hosted server (ROOFTAP_BILLING=on) only the operator's own
 // household (billing exempt) may connect. Self-hosted servers belong to the
-// household that runs them, so everyone there may.
+// household that runs them, so everyone there may. Its manifest is
+// packages/core/src/modules/costs/connectors/up-bank.ts; it writes through
+// the shared bank feed path in lib/connectors/bank-feed.ts.
+
+/** The `source` Up's rows carry (upBankConnector.source). */
+export const UP_SOURCE = upBankConnector.source;
 
 export interface UpConnectionRow {
   user_id: string;
@@ -155,34 +162,8 @@ async function upAccounts(token: string): Promise<UpAccountResource[]> {
 /** Saves this person's accounts and balances, and drops accounts Up no longer lists (closed savers). */
 async function saveAccounts(admin: SupabaseClient, row: UpConnectionRow, accounts: UpAccountResource[]): Promise<Map<string, string>> {
   const owner = { groupId: row.group_id, userId: row.user_id };
-  const rows = accounts.map((a) => ({ ...upAccountRow(a, owner), updated_at: new Date().toISOString() }));
-  if (rows.length) {
-    const { error } = await admin.from("bank_accounts").upsert(rows, { onConflict: "source,user_id,external_id" });
-    if (error) console.warn("[up-bank] accounts not saved", error.message);
-  }
-  const listed = new Set(rows.map((r) => r.external_id));
-  const { data: stored } = await admin.from("bank_accounts").select("id, external_id").eq("user_id", row.user_id).eq("source", "up");
-  const gone = (stored ?? []).filter((a) => !listed.has(a.external_id as string)).map((a) => a.id as string);
-  if (gone.length) await admin.from("bank_accounts").delete().in("id", gone);
+  await saveBankAccounts(admin, owner, UP_SOURCE, accounts.map((a) => upAccountRow(a, owner)), { prune: true });
   return new Map(accounts.map((a) => [a.id, a.attributes.displayName]));
-}
-
-async function upsertRows(admin: SupabaseClient, rows: Omit<BankTransaction, "id">[]) {
-  const now = new Date().toISOString();
-  const write = (list: Omit<BankTransaction, "id">[]) =>
-    admin
-      .from("bank_transactions")
-      .upsert(
-        list.map((r) => ({ ...r, updated_at: now })),
-        { onConflict: "source,user_id,external_id" },
-      );
-  const res = await write(rows);
-  // Code can run a few minutes ahead of its migration on the hosted server;
-  // without the account_id column, save the rows without it.
-  if (res.error && /account_id/.test(res.error.message)) {
-    return write(rows.map(({ account_id: _accountId, ...rest }) => rest));
-  }
-  return res;
 }
 
 /**
@@ -211,10 +192,8 @@ export async function syncUp(admin: SupabaseClient, row: UpConnectionRow, opts: 
     next = body.links.next;
   }
 
-  for (let i = 0; i < rows.length; i += 500) {
-    const { error } = await upsertRows(admin, rows.slice(i, i + 500));
-    if (error) throw new UpApiError(`Transactions couldn't be saved: ${error.message}`, 500);
-  }
+  const saveError = await saveBankTransactions(admin, rows);
+  if (saveError) throw new UpApiError(`Transactions couldn't be saved: ${saveError}`, 500);
 
   // Held transactions Up dropped (a hold released) leave no trace in a list,
   // so they go when they're missing from a complete read of the window.
@@ -224,7 +203,7 @@ export async function syncUp(admin: SupabaseClient, row: UpConnectionRow, opts: 
       .from("bank_transactions")
       .select("id, external_id")
       .eq("user_id", row.user_id)
-      .eq("source", "up")
+      .eq("source", UP_SOURCE)
       .eq("status", "HELD")
       .gte("occurred_at", since);
     const gone = (held ?? []).filter((h) => !listed.has(h.external_id as string)).map((h) => h.id as string);
@@ -670,7 +649,7 @@ export async function applyUpEvent(
       .from("bank_transactions")
       .delete()
       .eq("user_id", row.user_id)
-      .eq("source", "up")
+      .eq("source", UP_SOURCE)
       .eq("external_id", event.transactionId);
     return;
   }
@@ -681,8 +660,8 @@ export async function applyUpEvent(
   ]);
   const accounts = await saveAccounts(admin, row, accountList);
   const saved = upTransactionRow(res.data, { groupId: row.group_id, userId: row.user_id }, accounts);
-  const { error } = await upsertRows(admin, [saved]);
-  if (error) throw new Error(error.message);
+  const error = await saveBankTransactions(admin, [saved]);
+  if (error) throw new Error(error);
   await applyBankLinks(admin, row.group_id, {
     userId: row.user_id,
     since: new Date(Date.parse(saved.occurred_at) - 60_000).toISOString(),

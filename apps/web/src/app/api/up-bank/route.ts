@@ -3,6 +3,7 @@ import { isBankShareMode, upTokenLast4, upTokenLooksValid, type BankShareMode, t
 import { canStoreHouseholdKeys, decryptHouseholdKey, encryptHouseholdKey } from "@/lib/ai/household-keys";
 import {
   UP_NOT_ALLOWED,
+  UP_SOURCE,
   applyBankLinks,
   checkUpToken,
   createUpWebhook,
@@ -17,6 +18,7 @@ import {
   upWebhookUrl,
   type UpConnectionRow,
 } from "@/lib/up-bank";
+import { removeBankFeed } from "@/lib/connectors/bank-feed";
 
 // Up Bank connector: Settings > Connectors > Up Bank. Each person connects their
 // own Up account; nobody else in the home can see or change it. GET reads
@@ -175,9 +177,8 @@ export async function DELETE() {
     const token = decryptHouseholdKey(row.encrypted_token);
     if (token) await deleteUpWebhook(token, row.webhook_id);
   }
-  const { error } = await req.admin.from("bank_transactions").delete().eq("user_id", req.userId).eq("source", "up");
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  await req.admin.from("bank_accounts").delete().eq("user_id", req.userId).eq("source", "up");
+  const error = await removeBankFeed(req.admin, req.userId, UP_SOURCE);
+  if (error) return NextResponse.json({ error }, { status: 500 });
   const gone = await req.admin.from("up_bank_connections").delete().eq("user_id", req.userId);
   if (gone.error) return NextResponse.json({ error: gone.error.message }, { status: 500 });
   return NextResponse.json({ ok: true });

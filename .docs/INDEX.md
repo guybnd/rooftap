@@ -7,3 +7,4 @@
 | [modules.md](./modules.md) | Modules: how a household switches features on and off, and what "off" hides. |
 | [design/hearth.md](./design/hearth.md) | Hearth, the design language: hierarchy, colour, type, line items, motion and haptics. |
 | [shopper-sources.md](./shopper-sources.md) | Shopper price sources: the source contract and how to add a regional connector. |
+| [connectors.md](./connectors.md) | Connectors: how outside data, such as a bank, gets into a module, and how to add one. |

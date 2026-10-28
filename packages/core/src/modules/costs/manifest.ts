@@ -1,4 +1,5 @@
 import { defineModule, REACH_REASONS } from '../../module-manifest';
+import { upBankConnector } from './connectors/up-bank';
 
 export const costsModule = defineModule({
   id: 'costs',
@@ -36,5 +37,6 @@ export const costsModule = defineModule({
     { name: 'set_bank_link_rule', kind: 'write' },
     { name: 'merge_cost_lines', kind: 'write' },
   ],
+  connectors: [upBankConnector],
   settings: ['costs-goal', 'costs-recent', 'costs-subscriptions', 'costs-summaries'],
 });

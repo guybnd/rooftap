@@ -65,6 +65,10 @@ A new migration also needs new database types. That step needs Docker (`npx supa
 
 Shopper gets prices, stores and deals from sources. A source for your region is one file and one test, as [.docs/shopper-sources.md](.docs/shopper-sources.md) describes. A source can also run as your own small web service, with no pull request.
 
+## Adding a connector
+
+A connector brings outside data into a module, for example payments from a bank into Costs. A connector is a manifest next to its module, a settings panel for each app and the server routes that save its rows through a shared write path. [.docs/connectors.md](.docs/connectors.md) describes each step.
+
 ## License
 
 Rooftap uses the [Elastic License 2.0](LICENSE). When you submit a contribution, you agree that it uses the same license, and you confirm that you have the right to submit it.

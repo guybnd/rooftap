@@ -357,6 +357,7 @@ export const binsModule = defineModule({
 | `tools` | `MCP_TOOLS`. The handlers live in `apps/web/src/lib/mcp/`. |
 | `noTools` | `MODULES_WITHOUT_TOOLS`, for a module with no tool. |
 | `settings` | `MODULE_SETTINGS` (section 16). |
+| `connectors` | `CONNECTORS` in `connectors.ts`, so Settings > Connectors lists each one while the module is on. See [connectors.md](connectors.md). |
 
 `packages/core/src/module-manifests.ts` lists every manifest. Its order is the registry order. Sections keep their switcher order from `SECTION_ORDER` in `sections.ts`. A section that is not on that list goes after the others, so a new module needs no edit there.
 
