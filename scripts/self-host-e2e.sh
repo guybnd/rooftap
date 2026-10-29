@@ -9,6 +9,8 @@ set -euo pipefail
 #   fresh    A new install: migrations apply, /api/public-config reports the
 #            newest migration, the first account is made through the app and
 #            then sign-up is closed, a household is made for that account,
+#            the app works in a browser opened by the network address over
+#            plain http (when Node and Playwright are installed),
 #            row level security keeps a second account out of it, files
 #            upload to storage, the edge functions answer and realtime
 #            accepts a WebSocket.
@@ -44,7 +46,7 @@ while [ $# -gt 0 ]; do
     fresh | upgrade | backup | all) mode="$1" ;;
     --from) from="${2:?--from needs a git ref}"; shift ;;
     --keep) keep=1 ;;
-    -h | --help) sed -n '4,36p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h | --help) sed -n '4,38p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
   shift
@@ -264,6 +266,23 @@ check_migration_rows() {
 
 # ---------------------------------------------------------------------------
 
+# Opens the app in a browser by this machine's network address over plain
+# http, the way a home install is opened (scripts/self-host-e2e-browser.mjs).
+# Skipped when Node or Playwright is missing.
+check_browser() {
+  local host
+  host="$(hostname -I 2> /dev/null | awk '{print $1}')"
+  if [ -z "$host" ] || ! command -v node > /dev/null || ! node -e "require.resolve('playwright')" > /dev/null 2>&1; then
+    printf '  skip  browser check (needs node, Playwright and a network address)\n'
+    return
+  fi
+  if node "$repo/scripts/self-host-e2e-browser.mjs" "http://$host:$app_port"; then
+    pass "the app works in a browser over plain http on $host"
+  else
+    fail "the app fails in a browser over plain http on $host"
+  fi
+}
+
 run_fresh() {
   local dir="$work/fresh" name="$project_prefix-fresh" anon service token1 token2 group1 group2
   log "fresh install from this checkout"
@@ -297,6 +316,8 @@ run_fresh() {
   add_grocery "$dir" "$token1" "$group1" e2e-milk
   expect_status "owner adds a grocery item" 201
   [ "$(groceries_named "$dir" "$token1" e2e-milk)" = "1" ] && pass "owner reads it back" || fail "owner cannot read the item back"
+
+  check_browser
 
   admin_user "$dir" other@e2e.test other-pass-1
   expect_status "operator adds a second account" 200
