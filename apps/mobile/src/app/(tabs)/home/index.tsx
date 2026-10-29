@@ -125,6 +125,7 @@ import {
   whosOnHookBuckets,
   BILLS_DUE_MAX_ROWS,
   type HeroTipGlyph,
+  type TaskRepeatFields,
 } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
 import { useOpenRoute } from '@/lib/tab-routes';
@@ -790,8 +791,8 @@ function HomeSectionBody() {
     patchRow(task.id, { priority });
   };
 
-  const handleRecurrenceChange = (task: HouseholdTask, days: number | null) => {
-    patchRow(task.id, { recurrence_days: days });
+  const handleRecurrenceChange = (task: HouseholdTask, repeat: TaskRepeatFields) => {
+    patchRow(task.id, repeat);
   };
 
   const handleFieldChange = (task: HouseholdTask, field: 'title' | 'due_date' | 'notes', value: string) => {

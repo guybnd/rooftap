@@ -1,11 +1,11 @@
 'use client';
 
 import { useEffect, useState, type ReactNode } from 'react';
-import { completionLabel } from '@homeup/core';
+import { completionLabel, repeatChoices, repeatValueLabel, selectedRepeatChoice, useModules } from '@homeup/core';
 import { cn } from '@/lib/utils';
 import { DateScrollField } from '@/components/date-scroll-field';
 import { Pencil, Trash2, Repeat, CalendarPlus, MessageSquare, FileText, ListTodo, AlarmClock, RotateCcw, UserRound, ChevronRight, ChevronLeft, Flag } from 'lucide-react';
-import type { GroupMember, Checklist, ChecklistTaskItem, TaskSnooze } from '@homeup/core';
+import type { GroupMember, Checklist, ChecklistTaskItem, TaskRepeatFields, TaskSnooze } from '@homeup/core';
 import { daysBetweenISO, todayISO, addDaysISO } from './moving-tasks';
 import { memberLabel } from '../setup/member-label';
 import { MenuItem, MenuLabel, MenuDivider } from '../setup/pop-menu';
@@ -96,14 +96,6 @@ export function DateEditPanel({ value, onChange }: { value: string; onChange: (v
   );
 }
 
-// Recurrence presets, in days. `null` means no recurrence.
-export const RECURRENCE_OPTIONS: { label: string; days: number | null }[] = [
-  { label: 'Does not repeat', days: null },
-  { label: 'Daily', days: 1 },
-  { label: 'Weekly', days: 7 },
-  { label: 'Fortnightly', days: 14 },
-  { label: 'Monthly', days: 30 },
-];
 
 // Relative due-date hint + colour for a pending task.
 export function dueMeta(dueDate: string): { label: string; className: string } {
@@ -166,7 +158,8 @@ export interface TaskQuickMenuBodyProps {
   open: boolean;
   dueDate: string | null;
   notes: string | null;
-  recurrenceDays: number | null;
+  /** How the task repeats now: its day count and, when the server has it, its calendar rule. */
+  repeat: TaskRepeatFields;
   isDone: boolean;
   assignedTo: string | null;
   priority: Priority;
@@ -175,7 +168,7 @@ export interface TaskQuickMenuBodyProps {
   onDateChange?: (v: string) => void;
   onAddDescription?: () => void;
   onSnooze: (dur: SnoozeDuration) => void;
-  onRecurrenceChange?: (days: number | null) => void;
+  onRecurrenceChange?: (repeat: TaskRepeatFields) => void;
   onReassign?: (userId: string | null) => void;
   onPriorityChange?: (priority: Priority) => void;
   onEdit: () => void;
@@ -202,7 +195,7 @@ export function TaskQuickMenuBody({
   open,
   dueDate,
   notes,
-  recurrenceDays,
+  repeat,
   isDone,
   assignedTo,
   priority,
@@ -281,10 +274,11 @@ export function TaskQuickMenuBody({
       <>
         <BackRow onBack={() => setMode('main')} label="Repeat" />
         <RepeatMenuPanel
-          value={recurrenceDays}
-          onPick={(days) => {
+          value={repeat}
+          dueDate={dueDate}
+          onPick={(next) => {
             tick();
-            onRecurrenceChange?.(days);
+            onRecurrenceChange?.(next);
             close();
           }}
         />
@@ -310,8 +304,7 @@ export function TaskQuickMenuBody({
   // Hearth §7 (E2): current value for each property row — the whole item is
   // readable without opening a sub-panel.
   const dueValue = dueDate ? dueMeta(dueDate).label : 'None';
-  const repeatValue =
-    RECURRENCE_OPTIONS.find((opt) => (recurrenceDays ?? null) === opt.days)?.label ?? 'Does not repeat';
+  const repeatValue = repeatValueLabel(repeat);
   const assigneeValue = assignedTo ? memberLabel(assignedTo, memberProfiles) : 'Unassigned';
   const hasPropertyRows = !!(onDateChange || onRecurrenceChange || onReassign || onPriorityChange);
 
@@ -522,22 +515,35 @@ export function AssigneeMenuPanel({
   );
 }
 
+// The smart list from the due date (Hearth §7: the same choices as the task
+// editor's Repeat field). Custom rules are set in the editor; a task that has
+// one shows it at the top, ticked.
 export function RepeatMenuPanel({
   value,
+  dueDate,
   onPick,
 }: {
-  value: number | null;
-  onPick: (days: number | null) => void;
+  value: TaskRepeatFields;
+  dueDate: string | null;
+  onPick: (repeat: TaskRepeatFields) => void;
 }) {
+  const rules = useModules().server('tasks.repeat-rules');
+  const choices = repeatChoices(dueDate, todayISO(), rules);
+  const selected = selectedRepeatChoice(value, choices);
   return (
     <>
       <MenuLabel>Repeat</MenuLabel>
-      {RECURRENCE_OPTIONS.map((opt) => (
+      {selected === null && value.recurrence_days ? (
+        <MenuItem icon={<Repeat className="h-3.5 w-3.5" />} active onClick={() => onPick(value)}>
+          {repeatValueLabel(value)}
+        </MenuItem>
+      ) : null}
+      {choices.map((opt) => (
         <MenuItem
-          key={opt.label}
+          key={opt.id}
           icon={<Repeat className="h-3.5 w-3.5" />}
-          active={(value ?? null) === opt.days}
-          onClick={() => onPick(opt.days)}
+          active={selected === opt.id}
+          onClick={() => onPick(opt.patch)}
         >
           {opt.label}
         </MenuItem>

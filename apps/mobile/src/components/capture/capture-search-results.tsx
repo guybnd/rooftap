@@ -245,7 +245,7 @@ export function CaptureSearchResults({
             onSnooze={(t, dur: TaskSnooze) => snoozeWithUndo(t, dur)}
             onReassign={(t, userId) => patchTask(t.id, { assigned_to: userId })}
             onPriorityChange={(t, priority) => patchTask(t.id, { priority })}
-            onRecurrenceChange={(t, days) => patchTask(t.id, { recurrence_days: days })}
+            onRecurrenceChange={(t, repeat) => patchTask(t.id, repeat)}
             onFieldChange={(t, field, value) => {
               const patch = taskFieldPatch(t, field, value);
               if (patch) patchTask(t.id, patch);

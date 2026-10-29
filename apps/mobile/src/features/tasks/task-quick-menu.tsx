@@ -31,12 +31,17 @@ import {
   addDaysISO,
   completionLabel,
   daysBetweenISO,
+  repeatChoices,
+  repeatValueLabel,
+  selectedRepeatChoice,
+  useModules,
   toISODate,
   todayISO,
   type Checklist,
   type ChecklistTaskItem,
   type GroupMember,
   type HouseholdTask,
+  type TaskRepeatFields,
   type TaskSnooze,
   dialog,
 } from '@homeup/core';
@@ -77,13 +82,6 @@ export function SnoozeDatePicker({
 }
 export type QuickMenuMode = 'main' | 'date' | 'snooze' | 'assignee' | 'repeat' | 'priority';
 
-const RECURRENCE_OPTIONS: { label: string; days: number | null }[] = [
-  { label: 'Does not repeat', days: null },
-  { label: 'Daily', days: 1 },
-  { label: 'Weekly', days: 7 },
-  { label: 'Fortnightly', days: 14 },
-  { label: 'Monthly', days: 30 },
-];
 
 const PRIORITY_LABEL: Record<Priority, string> = { low: 'Low', medium: 'Med', high: 'High' };
 const PRIORITY_DOT: Record<Priority, string> = { low: 'bg-muted-foreground', medium: 'bg-warning', high: 'bg-destructive' };
@@ -170,7 +168,7 @@ export interface TaskQuickMenuProps {
   onSnooze: (dur: SnoozeDuration) => void;
   /** Opens the row's custom snooze-date picker (after this sheet closes). */
   onPickSnoozeDate: () => void;
-  onRecurrenceChange: (days: number | null) => void;
+  onRecurrenceChange: (repeat: TaskRepeatFields) => void;
   onReassign: (userId: string | null) => void;
   onPriorityChange: (priority: Priority) => void;
   onAddDescription: () => void;
@@ -227,6 +225,10 @@ export function TaskQuickMenu({
   const close = () => onOpenChange(false);
 
   // HA: every choice in this menu is a pick, so select().
+  // The same smart list as the editor's Repeat field, from the due date.
+  const repeatRules = useModules().server('tasks.repeat-rules');
+  const repeatOptions = repeatChoices(task.due_date, todayISO(), repeatRules);
+  const repeatSelected = selectedRepeatChoice(task, repeatOptions);
   const commit = (fn: () => void) => {
     haptics.select();
     fn();
@@ -260,7 +262,7 @@ export function TaskQuickMenu({
               label="Repeat"
               trailing={
                 <PropertyValue>
-                  {RECURRENCE_OPTIONS.find((o) => (task.recurrence_days ?? null) === o.days)?.label ?? 'Does not repeat'}
+                  {repeatValueLabel(task)}
                 </PropertyValue>
               }
               onPress={() => setMode('repeat')}
@@ -460,13 +462,22 @@ export function TaskQuickMenu({
         {mode === 'repeat' && (
           <>
             <BackRow label="Repeat" onPress={() => setMode('main')} />
-            {RECURRENCE_OPTIONS.map((opt) => (
+            {/* Custom rules are set in the editor; a task with one shows it first, ticked. */}
+            {repeatSelected === null && !!task.recurrence_days && (
               <MenuItem
-                key={opt.label}
+                icon={<Repeat size={16} className="text-muted-foreground" />}
+                label={repeatValueLabel(task)}
+                active
+                onPress={() => commit(() => {})}
+              />
+            )}
+            {repeatOptions.map((opt) => (
+              <MenuItem
+                key={opt.id}
                 icon={<Repeat size={16} className="text-muted-foreground" />}
                 label={opt.label}
-                active={(task.recurrence_days ?? null) === opt.days}
-                onPress={() => commit(() => onRecurrenceChange(opt.days))}
+                active={repeatSelected === opt.id}
+                onPress={() => commit(() => onRecurrenceChange(opt.patch))}
               />
             ))}
           </>

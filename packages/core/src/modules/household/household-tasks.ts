@@ -5,6 +5,7 @@
 
 import { addDaysISO, todayISO } from '../../date-utils';
 import type { HouseholdTask } from '../../types';
+import { formatRepeatRule, nextRepeat, parseRepeatRule } from './repeat-rule';
 
 /**
  * Compute the next occurrence date for a recurring task on completion. Bases
@@ -48,8 +49,13 @@ export function applyTaskCompletion(
 
   const now = opts.now ?? new Date();
   let createNextOccurrence: HouseholdTask | null = null;
-  if (task.recurrence_days && task.recurrence_days > 0) {
-    const next = nextOccurrenceISO(task.due_date, task.recurrence_days);
+  // A calendar rule wins over the day count; a rule that has run out (its
+  // last time, or past its end date) makes no next one.
+  const rule = parseRepeatRule(task.repeat_rule);
+  const ruled = rule ? nextRepeat(rule, task.due_date, todayISO()) : null;
+  const repeats = rule ? !!ruled : !!(task.recurrence_days && task.recurrence_days > 0);
+  if (repeats) {
+    const next = ruled ? ruled.dueDate : nextOccurrenceISO(task.due_date, task.recurrence_days!);
     createNextOccurrence = {
       id: opts.nextId,
       group_id: task.group_id,
@@ -70,6 +76,9 @@ export function applyTaskCompletion(
       created_at: null as unknown as string,
       updated_at: null as unknown as string,
     };
+    // Only rows that have a rule carry the field, so a server without the
+    // column never sees it.
+    if (ruled) createNextOccurrence.repeat_rule = formatRepeatRule(ruled.rule);
   }
   return { update: { done: true, completed_at: now.toISOString() }, createNextOccurrence };
 }

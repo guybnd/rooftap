@@ -13,7 +13,7 @@
 
 import { useRef, useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
-import { feedRowWhen, heroItemSectionId, parseReminderKey, useEntityCommentCount, useAddChecklistToTask, useModules, recurrenceLabel, type ModuleFeatureId } from '@homeup/core';
+import { feedRowWhen, heroItemSectionId, parseReminderKey, useEntityCommentCount, useAddChecklistToTask, useModules, repeatChoices, repeatValueLabel, selectedRepeatChoice, taskRepeatFields, type ModuleFeatureId, type TaskRepeatFields } from '@homeup/core';
 import { LeadingTile } from '@/components/ui/leading-tile';
 import { sectionIconFor } from '@/lib/section-icons';
 import { cn } from '@/lib/utils';
@@ -44,7 +44,7 @@ import { useLongPress as useSharedLongPress, HOLD_FILL_DELAY_MS } from '@/hooks/
 import { AvatarBubble, formatTime12h, stopNav, type HeroItem } from '../home/hub-shared';
 import { success } from '@/lib/haptics';
 import { toastUndoAction } from '@/lib/undo-toast';
-import { TaskQuickMenuBody, dueMeta, RECURRENCE_OPTIONS, PRIORITY_LABEL, SNOOZE_PRESETS, SnoozeDateInput, type Priority, type MemberProfiles, type SnoozeDuration } from './task-quick-menu';
+import { TaskQuickMenuBody, dueMeta, PRIORITY_LABEL, SNOOZE_PRESETS, SnoozeDateInput, type Priority, type MemberProfiles, type SnoozeDuration } from './task-quick-menu';
 export type { SnoozeDuration } from './task-quick-menu';
 
 // ── Shared swipe configs — right = done/undo, left = Snooze. Both layouts
@@ -247,7 +247,9 @@ interface TaskRowMenuInput {
   title: string;
   isDone: boolean;
   dueDate: string | null;
-  recurrenceDays: number | null;
+  repeat: TaskRepeatFields;
+  /** The server keeps calendar repeat rules (tasks.repeat-rules). */
+  repeatRules: boolean;
   assignedTo: string | null;
   priority: Priority;
   groupMembers: GroupMember[];
@@ -259,7 +261,7 @@ interface TaskRowMenuInput {
   onDateChange?: (v: string) => void;
   onPickDate?: () => void;
   onSnooze?: (dur: SnoozeDuration) => void;
-  onRecurrenceChange?: (days: number | null) => void;
+  onRecurrenceChange?: (repeat: TaskRepeatFields) => void;
   onReassign?: (userId: string | null) => void;
   onPriorityChange?: (priority: Priority) => void;
   onAddChecklist?: () => void;
@@ -326,13 +328,17 @@ function taskRowMenu(t: TaskRowMenuInput): RowMenu {
         label: 'Repeat',
         group: 'set',
         icon: 'repeat',
-        value: t.recurrenceDays ? recurrenceLabel(t.recurrenceDays) : undefined,
-        options: RECURRENCE_OPTIONS.map((o) => ({
-          id: String(o.days),
-          label: o.label,
-          checked: (t.recurrenceDays ?? null) === o.days,
-          run: () => onRepeat(o.days),
-        })),
+        value: t.repeat.recurrence_days ? repeatValueLabel(t.repeat) : undefined,
+        options: (() => {
+          const choices = repeatChoices(t.dueDate, today, t.repeatRules);
+          const selected = selectedRepeatChoice(t.repeat, choices);
+          return choices.map((o) => ({
+            id: o.id,
+            label: o.label,
+            checked: selected === o.id,
+            run: () => onRepeat(o.patch),
+          }));
+        })(),
       },
       onPick && {
         id: 'assign',
@@ -494,8 +500,8 @@ export function TaskRow({
   };
 
   // Change recurrence cadence inline — no need to open the full modal.
-  const handleRecurrenceChange = (days: number | null) => {
-    onUpdate({ ...task, recurrence_days: days });
+  const handleRecurrenceChange = (repeat: TaskRepeatFields) => {
+    onUpdate({ ...task, ...repeat });
   };
 
   // Hearth §7 (E3): Priority is now a quick-edit property, same shape as
@@ -529,12 +535,14 @@ export function TaskRow({
 
   const longPress = useRowLongPress(() => setHoldMenuOpen(true));
   const priority = task.priority ?? 'medium';
+  const repeatRules = useModules().server('tasks.repeat-rules');
   const rowMenu = useRowContextMenu(() =>
     taskRowMenu({
       title: task.title,
       isDone: task.done,
       dueDate: task.due_date,
-      recurrenceDays: task.recurrence_days,
+      repeat: taskRepeatFields(task),
+      repeatRules,
       assignedTo: task.assigned_to,
       priority,
       groupMembers,
@@ -677,7 +685,7 @@ export function TaskRow({
           {task.recurrence_days != null && (
             <span className="flex items-center gap-1" title="Repeats">
               <Repeat className="h-3 w-3" />
-              {recurrenceLabel(task.recurrence_days)}
+              {repeatValueLabel(taskRepeatFields(task))}
             </span>
           )}
           {reminderOrigin ? (
@@ -805,7 +813,7 @@ export function TaskRow({
             open={holdMenuOpen}
             dueDate={task.due_date}
             notes={task.notes}
-            recurrenceDays={task.recurrence_days}
+            repeat={taskRepeatFields(task)}
             isDone={task.done}
             assignedTo={task.assigned_to}
             priority={priority}
@@ -987,12 +995,14 @@ export function HeroTaskRow({
   );
 
   const task = item.task;
+  const repeatRules = useModules().server('tasks.repeat-rules');
   const rowMenu = useRowContextMenu(() =>
     taskRowMenu({
       title: item.title,
       isDone: item.done,
       dueDate: item.dueDate,
-      recurrenceDays: task?.recurrence_days ?? null,
+      repeat: task ? taskRepeatFields(task) : { recurrence_days: null },
+      repeatRules,
       assignedTo: item.assignedTo,
       priority: task?.priority ?? 'medium',
       groupMembers,
@@ -1005,7 +1015,7 @@ export function HeroTaskRow({
       onDateChange: !opensElsewhere && onUpdate ? (v) => onUpdate(item, { due_date: v || null }) : undefined,
       onPickDate: opensElsewhere ? undefined : () => setHoldMenuOpen(true),
       onSnooze: opensElsewhere ? undefined : exit.startSnooze,
-      onRecurrenceChange: onUpdate && task && !opensElsewhere ? (days) => onUpdate(item, { recurrence_days: days }) : undefined,
+      onRecurrenceChange: onUpdate && task && !opensElsewhere ? (repeat) => onUpdate(item, repeat) : undefined,
       onReassign: onUpdate && task && !opensElsewhere ? (userId) => onUpdate(item, { assigned_to: userId || null }) : undefined,
       onPriorityChange: onUpdate && task && !opensElsewhere ? (p) => onUpdate(item, { priority: p }) : undefined,
       onAddChecklist: checklistsOn && !opensElsewhere ? handleAddChecklist : undefined,
@@ -1184,7 +1194,7 @@ export function HeroTaskRow({
             open={holdMenuOpen}
             dueDate={item.dueDate}
             notes={item.task?.notes ?? null}
-            recurrenceDays={item.task?.recurrence_days ?? null}
+            repeat={item.task ? taskRepeatFields(item.task) : { recurrence_days: null }}
             isDone={isDone}
             assignedTo={item.assignedTo}
             priority={item.task?.priority ?? 'medium'}
@@ -1193,7 +1203,7 @@ export function HeroTaskRow({
             onDateChange={onUpdate ? (v) => onUpdate(item, { due_date: v || null }) : undefined}
             onAddDescription={() => requestAnimationFrame(() => onEdit(item))}
             onSnooze={(dur) => onSnooze(item, dur)}
-            onRecurrenceChange={onUpdate && item.task ? (days) => onUpdate(item, { recurrence_days: days }) : undefined}
+            onRecurrenceChange={onUpdate && item.task ? (repeat) => onUpdate(item, repeat) : undefined}
             onReassign={onUpdate && item.task ? (userId) => onUpdate(item, { assigned_to: userId || null }) : undefined}
             onPriorityChange={onUpdate && item.task ? (p) => onUpdate(item, { priority: p }) : undefined}
             onEdit={() => onEdit(item)}

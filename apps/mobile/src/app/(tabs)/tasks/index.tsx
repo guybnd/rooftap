@@ -95,6 +95,7 @@ import {
   type ChecklistTaskItem,
   type HouseholdTask,
   type TaskEditableField,
+  type TaskRepeatFields,
 } from '@homeup/core';
 // Direct path: the barrel deliberately doesn't export client hooks (they break
 // apps/web's server-route builds — see core/src/index.ts).
@@ -644,8 +645,8 @@ export default function TasksSectionScreen() {
     patchRow(task.id, { priority });
   };
 
-  const handleRecurrenceChange = (task: HouseholdTask, days: number | null) => {
-    patchRow(task.id, { recurrence_days: days });
+  const handleRecurrenceChange = (task: HouseholdTask, repeat: TaskRepeatFields) => {
+    patchRow(task.id, repeat);
   };
 
   // Core's taskFieldPatch: an empty title is a no-op, and hand-setting a

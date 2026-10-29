@@ -5,6 +5,12 @@ import {
   listCostItems,
   isTaskOwnerEnabled,
   applyTaskCompletion,
+  anchorRepeatRule,
+  approxRepeatDays,
+  firstRepeatDate,
+  formatRepeatRule,
+  parseRepeatRule,
+  taskRepeatLabel,
   billsDue,
   addDaysISO,
   toISODate,
@@ -346,6 +352,30 @@ function basic<T extends object>(
   ) as Partial<T>;
 }
 
+const REPEAT_RULE_HELP =
+  "How it repeats, as an iCalendar RRULE (what Google Calendar uses). The 1st of every month: FREQ=MONTHLY;BYMONTHDAY=1. The first Sunday of the month: FREQ=MONTHLY;BYDAY=1SU. The last day of the month: FREQ=MONTHLY;BYMONTHDAY=-1. The last Friday: FREQ=MONTHLY;BYDAY=-1FR. Every Monday: FREQ=WEEKLY;BYDAY=MO. Every 2 weeks on Monday and Thursday: FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,TH. Every weekday: FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR. Every 3 months on the 15th: FREQ=MONTHLY;INTERVAL=3;BYMONTHDAY=15. Every year on 1 November: FREQ=YEARLY;BYMONTH=11;BYMONTHDAY=1. Add UNTIL=YYYYMMDD to end on a date or COUNT=n to stop after n times. null stops repeating.";
+
+/**
+ * A repeat rule from the Assistant, checked and anchored on the due date: the
+ * due date moves to the first day the rule falls on (today when there is none).
+ */
+function readRepeatRule(
+  text: string,
+  dueDate: string | null,
+  today: string,
+): { rule: string; days: number; dueDate: string } | { error: string } {
+  const parsed = parseRepeatRule(text);
+  if (!parsed)
+    return {
+      error: `Can't read repeat_rule "${text}". Use an RRULE such as FREQ=MONTHLY;BYMONTHDAY=1 or FREQ=MONTHLY;BYDAY=1SU.`,
+    };
+  const from = dueDate ?? today;
+  const rule = anchorRepeatRule(parsed, from);
+  const first = firstRepeatDate(rule, from);
+  if (!first) return { error: "That repeat rule ends before the due date." };
+  return { rule: formatRepeatRule(rule), days: approxRepeatDays(rule), dueDate: first };
+}
+
 const TASK_BASIC = [
   "id",
   "title",
@@ -356,6 +386,7 @@ const TASK_BASIC = [
   "priority",
   "notes",
   "recurrence_days",
+  "repeat_rule",
 ] as const;
 const EVENT_BASIC = [
   "id",
@@ -661,7 +692,7 @@ export function householdTools({
     "get_tasks",
     {
       description:
-        "Household to-dos visible to the authenticated user. Pass done false for what's still open, or done true for what got done: done ones come newest first with completed_at and who ticked it off (completed_by). recurrence_days says how often a to-do repeats; ticking off a repeating one makes the next. Each task says whether it's assigned to you.",
+        "Household to-dos visible to the authenticated user. Pass done false for what's still open, or done true for what got done: done ones come newest first with completed_at and who ticked it off (completed_by). repeats says how often a to-do repeats in words (repeat_rule is the calendar rule, recurrence_days its rough day count); ticking off a repeating one makes the next. Each task says whether it's assigned to you.",
       inputSchema: {
         done: z.boolean().optional(),
         search: z
@@ -711,6 +742,7 @@ export function householdTools({
         : null;
       const shaped = tasks.map((t) => ({
         ...basic(t, TASK_BASIC),
+        ...(taskRepeatLabel(t) ? { repeats: taskRepeatLabel(t) } : {}),
         assigned_to_me: t.assigned_to === userId,
         ...(t.completed_by
           ? {
@@ -729,7 +761,7 @@ export function householdTools({
     "create_task",
     {
       description:
-        "Create a new household to-do, assigned to the authenticated user. Set repeat_every_days for a chore that repeats (bins every Tuesday: due_date the next Tuesday, repeat_every_days 7).",
+        "Create a new household to-do, assigned to the authenticated user. For one that repeats set repeat_rule, a calendar rule that lands on real dates (the 1st of every month, the first Sunday, every Tuesday); the due date moves to the first day the rule falls on.",
       inputSchema: {
         title: z.string().min(1),
         due_date: z.string().optional(),
@@ -745,8 +777,13 @@ export function householdTools({
           .nullable()
           .optional()
           .describe(
-            "Repeat this often in days: 7 weekly, 14 fortnightly, 30 monthly. Needs a due date for the first one. null stops repeating.",
+            "Repeat every this many days, for a plain day count (every 3 days). For weeks, months and years use repeat_rule instead. null stops repeating.",
           ),
+        repeat_rule: z
+          .string()
+          .nullable()
+          .optional()
+          .describe(REPEAT_RULE_HELP),
       },
     },
     async ({
@@ -757,17 +794,27 @@ export function householdTools({
       priority,
       private: isPrivate,
       repeat_every_days,
+      repeat_rule,
     }) => {
       if (!groupId) return noGroupError();
+      const repeat = repeat_rule
+        ? readRepeatRule(
+            repeat_rule,
+            due_date ?? null,
+            todayIn(await personTimeZone(admin, userId)),
+          )
+        : null;
+      if (repeat && "error" in repeat) return toolError(repeat.error);
       const id = crypto.randomUUID();
       const row: Record<string, unknown> = {
         id,
         group_id: groupId,
         title,
-        due_date: due_date ?? null,
+        due_date: repeat ? repeat.dueDate : (due_date ?? null),
         due_time: due_time ?? null,
         offset_days: null,
-        recurrence_days: repeat_every_days ?? null,
+        recurrence_days: repeat ? repeat.days : (repeat_every_days ?? null),
+        ...(repeat ? { repeat_rule: repeat.rule } : {}),
         done: false,
         completed_at: null,
         assigned_to: userId,
@@ -784,7 +831,11 @@ export function householdTools({
         content: [
           {
             type: "text",
-            text: JSON.stringify({ ...row, priority: priority ?? "medium" }),
+            text: JSON.stringify({
+              ...row,
+              priority: priority ?? "medium",
+              ...(repeat ? { repeats: taskRepeatLabel(row as { repeat_rule: string; recurrence_days: number }) } : {}),
+            }),
           },
         ],
       };
@@ -795,7 +846,7 @@ export function householdTools({
     "update_task",
     {
       description:
-        "Update fields on an existing household to-do (title, due date/time, notes, priority, private flag, how often it repeats). Only the fields provided are changed; omit a field to leave it as-is.",
+        "Update fields on an existing household to-do (title, due date/time, notes, priority, private flag, how often it repeats). Only the fields provided are changed; omit a field to leave it as-is. repeat_rule null (or repeat_every_days null) stops it repeating.",
       inputSchema: {
         task_id: z.string(),
         title: z.string().min(1).optional(),
@@ -812,11 +863,16 @@ export function householdTools({
           .nullable()
           .optional()
           .describe(
-            "Repeat this often in days: 7 weekly, 14 fortnightly, 30 monthly. Needs a due date for the first one. null stops repeating.",
+            "Repeat every this many days, for a plain day count (every 3 days). For weeks, months and years use repeat_rule instead. null stops repeating.",
           ),
+        repeat_rule: z
+          .string()
+          .nullable()
+          .optional()
+          .describe(REPEAT_RULE_HELP),
       },
     },
-    async ({ task_id, repeat_every_days, ...patch }) => {
+    async ({ task_id, repeat_every_days, repeat_rule, ...patch }) => {
       if (!groupId) return noGroupError();
       const task = await findVisibleTask(
         admin,
@@ -837,8 +893,26 @@ export function householdTools({
       ] as const) {
         if (patch[key] !== undefined) updates[key] = patch[key];
       }
-      if (repeat_every_days !== undefined)
-        updates.recurrence_days = repeat_every_days;
+      if (repeat_rule) {
+        const due =
+          patch.due_date !== undefined ? patch.due_date : task.due_date;
+        const repeat = readRepeatRule(
+          repeat_rule,
+          due,
+          todayIn(await personTimeZone(admin, userId)),
+        );
+        if ("error" in repeat) return toolError(repeat.error);
+        updates.repeat_rule = repeat.rule;
+        updates.recurrence_days = repeat.days;
+        updates.due_date = repeat.dueDate;
+      } else if (repeat_rule === null || repeat_every_days !== undefined) {
+        // A day count, or stopping: the calendar rule goes too.
+        updates.recurrence_days =
+          repeat_rule === null && repeat_every_days === undefined
+            ? null
+            : (repeat_every_days ?? null);
+        updates.repeat_rule = null;
+      }
       if (Object.keys(updates).length > 0) {
         const { error } = await admin
           .from("household_tasks")

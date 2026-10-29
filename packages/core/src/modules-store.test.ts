@@ -328,6 +328,7 @@ describe('server schema', () => {
       'choosing which occasions show on the calendar',
       'keeping Scout searches and watches from someone',
       'importing bank statements',
+      'repeating tasks on calendar dates, like the 1st of every month',
     ]);
 
     act(() => setServerSchema('20261020050000_mcp_oauth'));
@@ -375,6 +376,7 @@ describe('server schema', () => {
         'choosing which occasions show on the calendar',
         'keeping Scout searches and watches from someone',
         'importing bank statements',
+        'repeating tasks on calendar dates, like the 1st of every month',
       ]);
     } finally {
       delete mcp.minSchema;

@@ -594,6 +594,12 @@ export interface HouseholdTask {
   due_time: string | null; // wall-clock HH:MM[:SS]; null = all-day (FLUX-144)
   offset_days: number | null;
   recurrence_days: number | null;
+  /**
+   * Calendar repeat rule (RRULE text, "FREQ=MONTHLY;BYMONTHDAY=1"); when set it
+   * decides the next date and recurrence_days is only its rough day count.
+   * Missing before 20261029220000_task_repeat_rule.
+   */
+  repeat_rule?: string | null;
   done: boolean;
   completed_at: string | null; // ISO timestamp set when done→true, cleared on un-check (FLUX-164)
   /** Who ticked it off; a database trigger fills it. Missing before 20261023060000_task_completed_by. */

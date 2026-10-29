@@ -274,6 +274,52 @@ describe("task tools", () => {
     expect(tables.household_tasks[0].recurrence_days).toBeNull();
   });
 
+  it("creates a to-do on the 1st of every month", async () => {
+    const tables: Record<string, Row[]> = { household_tasks: [] };
+    const { body } = await run(tables, "create_task", {
+      title: "Send out invoice",
+      due_date: "2026-10-29",
+      repeat_rule: "RRULE:FREQ=MONTHLY;BYMONTHDAY=1",
+    });
+    // The due date moves to the first day the rule falls on.
+    expect(tables.household_tasks[0]).toMatchObject({
+      due_date: "2026-11-01",
+      repeat_rule: "FREQ=MONTHLY;BYMONTHDAY=1",
+      recurrence_days: 30,
+    });
+    expect(body.repeats).toBe("Monthly on the 1st");
+  });
+
+  it("fills a bare rule from the due date and refuses one it can't read", async () => {
+    const tables: Record<string, Row[]> = { household_tasks: [] };
+    await run(tables, "create_task", { title: "Rent", due_date: "2026-11-01", repeat_rule: "FREQ=MONTHLY;BYDAY=1SU" });
+    expect(tables.household_tasks[0]).toMatchObject({ due_date: "2026-11-01", repeat_rule: "FREQ=MONTHLY;BYDAY=1SU" });
+    const { res } = await run(tables, "create_task", { title: "x", repeat_rule: "FREQ=HOURLY" });
+    expect(res.isError).toBe(true);
+    expect(tables.household_tasks).toHaveLength(1);
+  });
+
+  it("sets a rule on update, then a day count clears it", async () => {
+    const tables: Record<string, Row[]> = { household_tasks: [bins({ due_date: "2026-11-02" })] };
+    await run(tables, "update_task", { task_id: "t1", repeat_rule: "FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,TH" });
+    expect(tables.household_tasks[0]).toMatchObject({ repeat_rule: "FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,TH", due_date: "2026-11-02" });
+    const listed = await run(tables, "get_tasks", {});
+    expect(listed.body[0].repeats).toBe("Fortnightly on Mon, Thu");
+    await run(tables, "update_task", { task_id: "t1", repeat_every_days: 3 });
+    expect(tables.household_tasks[0]).toMatchObject({ repeat_rule: null, recurrence_days: 3 });
+    await run(tables, "update_task", { task_id: "t1", repeat_rule: null });
+    expect(tables.household_tasks[0]).toMatchObject({ repeat_rule: null, recurrence_days: null });
+  });
+
+  it("ticking off a ruled to-do makes the next one on its rule", async () => {
+    const tables: Record<string, Row[]> = {
+      household_tasks: [bins({ due_date: "2026-11-01", recurrence_days: 30, repeat_rule: "FREQ=MONTHLY;BYMONTHDAY=1" })],
+    };
+    await run(tables, "complete_task", { task_id: "t1", done: true });
+    expect(tables.household_tasks[1].due_date).toMatch(/-01$/);
+    expect(tables.household_tasks[1].repeat_rule).toBe("FREQ=MONTHLY;BYMONTHDAY=1");
+  });
+
   it("ticking off a repeating to-do makes the next one, once", async () => {
     const tables: Record<string, Row[]> = { household_tasks: [bins()] };
     const { body } = await run(tables, "complete_task", { task_id: "t1", done: true });

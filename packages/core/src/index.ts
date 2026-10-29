@@ -150,6 +150,8 @@ export * from './modules/calendar/calendar-view';
 export * from './modules/calendar/calendar-api';
 export * from './modules/calendar/event-form';
 export * from './modules/household/household-tasks';
+export * from './modules/household/repeat-rule';
+export * from './modules/household/repeat-editor';
 export * from './modules/household/task-list-view';
 export * from './modules/groceries/grocery-items';
 export * from './pending-actions';

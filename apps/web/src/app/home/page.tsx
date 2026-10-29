@@ -35,7 +35,8 @@ import { toastUndoAction } from '@/lib/undo-toast';
 import { EventModal } from '@/app/calendar/event-modal';
 import { Moment } from '@/components/ui/moment';
 import { HouseholdTaskModal } from '@/app/tasks/household-task-modal';
-import { todayISO, addDaysISO, nextOccurrenceISO } from '@/app/tasks/moving-tasks';
+import { todayISO, addDaysISO } from '@/app/tasks/moving-tasks';
+import { applyTaskCompletion } from '@homeup/core';
 import { HOUSEHOLD_TASKS_CHANGED_EVENT } from '@/hooks/use-overdue-task-count';
 import { buildHeroItems, heroRangeWindow, parseLocalISODate, type HeroItem, type HeroRange } from './hub-shared';
 import { TodayHero, type AddOnDayKind } from './today-hero';
@@ -410,28 +411,9 @@ function HomeHub() {
     }
     maybeShowAllClear(task.id);
     // Mark done: record completion timestamp for linger-until-next-day filtering.
-    patchTask(task.id, { done: true, completed_at: new Date().toISOString() });
-    if (task.recurrence_days && task.recurrence_days > 0) {
-      writeTask({
-        id: crypto.randomUUID(),
-        group_id: task.group_id,
-        title: task.title,
-        due_date: nextOccurrenceISO(task.due_date, task.recurrence_days),
-        due_time: task.due_time,
-        offset_days: null,
-        recurrence_days: task.recurrence_days,
-        done: false,
-        completed_at: null,
-        assigned_to: task.assigned_to,
-        private: task.private,
-        template_key: null,
-        notes: task.notes,
-        sort_order: task.sort_order,
-        deleted: false,
-        created_at: null as unknown as string,
-        updated_at: null as unknown as string,
-      });
-    }
+    const { update, createNextOccurrence } = applyTaskCompletion(task, true, { nextId: crypto.randomUUID() });
+    patchTask(task.id, update);
+    if (createNextOccurrence) writeTask(createNextOccurrence);
     bumpBadge();
   };
 

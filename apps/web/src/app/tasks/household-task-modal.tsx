@@ -7,14 +7,13 @@ import { todayISO, addDaysISO } from './moving-tasks';
 import { DateScrollField } from '@/components/date-scroll-field';
 import { TimeScrollField } from '@/components/time-scroll-field';
 import { ItemFormSheet, FormSection, FieldRow } from '@/components/ui/item-form-sheet';
-import { DragNumberField } from '@/components/ui/drag-number-field';
-import { SegmentedControl } from '@/components/ui/segmented-control';
 import { PrioritySlider, type Priority } from '@/components/ui/priority-slider';
 import { SearchablePicker, type PickerOption } from '@/components/ui/searchable-picker';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { dueDayLabel, type HouseholdTask } from '@homeup/core';
+import { dueDayLabel, repeatFollowDue, repeatSaveFields, useModules, type HouseholdTask, type TaskRepeatFields } from '@homeup/core';
+import { RepeatField } from './repeat-field';
 import { sectionIconFor } from '@/lib/section-icons';
 
 // Hearth v2 (E1): the sheet header wears the section's identity tile.
@@ -48,30 +47,12 @@ interface HouseholdTaskModalProps {
   onDelete?: (taskId: string) => void;
 }
 
-type RecurrenceUnit = 'days' | 'weeks' | 'months';
-
-const UNIT_DAYS: Record<RecurrenceUnit, number> = { days: 1, weeks: 7, months: 30 };
-
-const UNIT_OPTIONS = [
-  { value: 'days' as const, label: 'Day' },
-  { value: 'weeks' as const, label: 'Week' },
-  { value: 'months' as const, label: 'Month' },
-];
-
-// Convert a stored recurrence_days value back into the most natural count + unit.
-function splitRecurrence(days: number | null): { count: number | null; unit: RecurrenceUnit } {
-  if (!days || days <= 0) return { count: null, unit: 'weeks' };
-  if (days % 30 === 0) return { count: days / 30, unit: 'months' };
-  if (days % 7 === 0) return { count: days / 7, unit: 'weeks' };
-  return { count: days, unit: 'days' };
-}
-
 export function HouseholdTaskModal({ isOpen, task, groupId, defaultTitle, defaultDueDate, defaultDueTime, onClose, onSave, onDelete }: HouseholdTaskModalProps) {
   const { groupMembers, memberProfiles, currentUserId } = useDataCache();
   const isNew = !task;
+  const rules = useModules().server('tasks.repeat-rules');
 
   const buildInitialForm = useCallback(() => {
-    const rec = splitRecurrence(task?.recurrence_days ?? null);
     return {
       title: task?.title || defaultTitle || '',
       // New tasks default to today, assigned to whoever opened the modal (FLUX-142).
@@ -79,10 +60,12 @@ export function HouseholdTaskModal({ isOpen, task, groupId, defaultTitle, defaul
       due_date: task?.due_date ?? (isNew ? defaultDueDate || todayISO() : ''),
       // Wall-clock time, normalised to HH:MM (Postgres `time` returns HH:MM:SS); '' = all-day (FLUX-144).
       due_time: task?.due_time ? task.due_time.slice(0, 5) : isNew ? defaultDueTime || '' : '',
-      // FLUX-182: Repeat defaults to "Doesn't repeat" — off unless the task already recurs.
-      repeat: rec.count != null,
-      recurrence_count: rec.count,
-      recurrence_unit: rec.unit as RecurrenceUnit,
+      // FLUX-182: Repeat defaults to "Does not repeat". repeat_rule rides
+      // along only when the task has one, so an older server never sees it.
+      repeat: {
+        recurrence_days: task?.recurrence_days ?? null,
+        ...(task?.repeat_rule !== undefined ? { repeat_rule: task.repeat_rule } : {}),
+      } as TaskRepeatFields,
       assigned_to: task?.assigned_to ?? (isNew ? currentUserId ?? '' : ''),
       priority: (task?.priority ?? 'medium') as Priority,
       notes: task?.notes || '',
@@ -109,14 +92,20 @@ export function HouseholdTaskModal({ isOpen, task, groupId, defaultTitle, defaul
     [groupMembers, memberProfiles]
   );
 
+  // Moving the date keeps a picked repeat on the same pattern ("Weekly on
+  // Sunday" becomes "Weekly on Monday"); a custom rule stays as it is.
+  const setDue = (due_date: string) =>
+    setFormData((f) => ({
+      ...f,
+      due_date,
+      repeat: repeatFollowDue(f.repeat, f.due_date || null, due_date || null, todayISO(), rules),
+    }));
+
   const handleSubmit = () => {
     if (!formData.title.trim()) return;
 
-    const count = formData.recurrence_count;
-    const recurrence_days =
-      formData.repeat && count != null && count > 0 ? count * UNIT_DAYS[formData.recurrence_unit] : null;
-
-    const due_date = formData.due_date || null;
+    // A repeating task with no date starts on its rule's first day.
+    const { due_date, ...repeat } = repeatSaveFields(formData.repeat, formData.due_date || null, todayISO());
     // Time only makes sense with a date — drop it if the date was cleared (FLUX-144).
     const due_time = due_date ? formData.due_time || null : null;
     const title = formData.title.trim();
@@ -135,7 +124,7 @@ export function HouseholdTaskModal({ isOpen, task, groupId, defaultTitle, defaul
         title,
         due_date,
         due_time,
-        recurrence_days,
+        ...repeat,
         assigned_to,
         priority,
         notes,
@@ -150,7 +139,7 @@ export function HouseholdTaskModal({ isOpen, task, groupId, defaultTitle, defaul
         title,
         due_date,
         due_time,
-        recurrence_days,
+        ...repeat,
         assigned_to,
         priority,
         notes,
@@ -218,7 +207,7 @@ export function HouseholdTaskModal({ isOpen, task, groupId, defaultTitle, defaul
             formData.due_date ? (
               <button
                 type="button"
-                onClick={() => setFormData({ ...formData, due_date: '' })}
+                onClick={() => setDue('')}
                 className="text-xs font-medium text-muted-foreground hover:text-foreground"
               >
                 Clear
@@ -238,7 +227,7 @@ export function HouseholdTaskModal({ isOpen, task, groupId, defaultTitle, defaul
                 <button
                   key={chip.label}
                   type="button"
-                  onClick={() => setFormData({ ...formData, due_date: chip.value })}
+                  onClick={() => setDue(chip.value)}
                   className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
                     active
                       ? 'border-primary/40 bg-primary/15 text-primary'
@@ -253,7 +242,7 @@ export function HouseholdTaskModal({ isOpen, task, groupId, defaultTitle, defaul
           <div className="py-2">
             <DateScrollField
               value={formData.due_date}
-              onChange={(v) => setFormData({ ...formData, due_date: v })}
+              onChange={(v) => setDue(v)}
             />
           </div>
         </FieldRow>
@@ -315,53 +304,14 @@ export function HouseholdTaskModal({ isOpen, task, groupId, defaultTitle, defaul
           />
         </FieldRow>
 
-        {/* Recurrence — off by default (FLUX-182). */}
-        <FieldRow
-          label="Repeat"
-          action={
-            <button
-              type="button"
-              role="switch"
-              aria-checked={formData.repeat}
-              aria-label="Repeat"
-              onClick={() =>
-                setFormData((f) => ({
-                  ...f,
-                  repeat: !f.repeat,
-                  recurrence_count: !f.repeat && f.recurrence_count == null ? 1 : f.recurrence_count,
-                }))
-              }
-              className={`relative h-5 w-9 rounded-full transition-colors ${formData.repeat ? 'bg-primary' : 'bg-muted-foreground/30'}`}
-            >
-              <span
-                className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${formData.repeat ? 'translate-x-[18px]' : 'translate-x-0.5'}`}
-              />
-            </button>
-          }
-          hint={formData.repeat ? 'Completing a repeating task schedules the next one automatically.' : "Doesn't repeat."}
-        >
-          {formData.repeat && (
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">every</span>
-              <DragNumberField
-                value={formData.recurrence_count}
-                onChange={(recurrence_count) => setFormData({ ...formData, recurrence_count })}
-                step={1}
-                min={1}
-                precision={0}
-                placeholder="1"
-                ariaLabel="Repeat interval"
-                className="w-24"
-              />
-              <SegmentedControl
-                options={UNIT_OPTIONS}
-                value={formData.recurrence_unit}
-                onChange={(recurrence_unit) => setFormData({ ...formData, recurrence_unit })}
-                size="sm"
-                ariaLabel="Repeat unit"
-              />
-            </div>
-          )}
+        {/* Recurrence, off by default (FLUX-182); calendar rules like Google's. */}
+        <FieldRow label="Repeat">
+          <RepeatField
+            value={formData.repeat}
+            dueDate={formData.due_date || null}
+            rules={rules}
+            onChange={(repeat) => setFormData((f) => ({ ...f, repeat }))}
+          />
         </FieldRow>
       </FormSection>
 

@@ -137,6 +137,10 @@ export const SERVER_FEATURES = {
     minSchema: '20261028140000_bank_csv_import',
     label: 'importing bank statements',
   },
+  'tasks.repeat-rules': {
+    minSchema: '20261029220000_task_repeat_rule',
+    label: 'repeating tasks on calendar dates, like the 1st of every month',
+  },
 } as const satisfies Record<string, ServerFeatureDef>;
 
 export type ServerFeatureId = keyof typeof SERVER_FEATURES;

@@ -7,7 +7,7 @@ import { use$ } from '@legendapp/state/react';
 import { syncState } from '@legendapp/state';
 import { useDataCache } from '@/lib/data-cache';
 import { createClient } from '@/lib/supabase/client';
-import { HouseholdTask, Checklist, ChecklistTaskItem, householdTasks$, checklists$, checklistItems$, useReconnectSync, useStoreHelpers, useStoreLoaded, createPendingActionTracker, usePendingIds, createUndoBatchTracker, useModules, isTaskOwnerEnabled, splitUpcomingByWindow, upcomingWindowDays, bucketTasksByDueDate, compareTasksByDueDateTimeOrder, groupTasksByPerson, moveInCountdown, checklistsById, checklistItemsByChecklistId, type TaskSnooze } from '@homeup/core';
+import { HouseholdTask, Checklist, ChecklistTaskItem, householdTasks$, checklists$, checklistItems$, useReconnectSync, useStoreHelpers, useStoreLoaded, createPendingActionTracker, usePendingIds, createUndoBatchTracker, useModules, isTaskOwnerEnabled, splitUpcomingByWindow, upcomingWindowDays, bucketTasksByDueDate, compareTasksByDueDateTimeOrder, groupTasksByPerson, moveInCountdown, checklistsById, checklistItemsByChecklistId, applyTaskCompletion, type TaskSnooze } from '@homeup/core';
 import {
   Plus,
   RotateCw,
@@ -36,7 +36,6 @@ import {
   findOutOfSyncTasks,
   syncMovingTaskDates,
   isMovingActive,
-  nextOccurrenceISO,
   todayISO,
 } from './moving-tasks';
 import { HOUSEHOLD_TASKS_CHANGED_EVENT } from '@/hooks/use-overdue-task-count';
@@ -183,30 +182,11 @@ export default function TasksPage() {
       pendingTracker.cancel(task.id);
       return;
     }
-    patchRow(task.id, { done: true, completed_at: new Date().toISOString() });
+    // The shared helper picks the next date (a calendar rule, else the day count).
+    const { update, createNextOccurrence } = applyTaskCompletion(task, true, { nextId: crypto.randomUUID() });
+    patchRow(task.id, update);
     pendingTracker.schedule(task.id, () => {});
-    if (task.recurrence_days && task.recurrence_days > 0) {
-      const next = nextOccurrenceISO(task.due_date, task.recurrence_days);
-      writeRow({
-        id: crypto.randomUUID(),
-        group_id: task.group_id,
-        title: task.title,
-        due_date: next,
-        due_time: task.due_time,
-        offset_days: null,
-        recurrence_days: task.recurrence_days,
-        done: false,
-        completed_at: null,
-        assigned_to: task.assigned_to,
-        private: task.private,
-        template_key: null,
-        notes: task.notes,
-        sort_order: task.sort_order,
-        deleted: false,
-        created_at: null as unknown as string,
-        updated_at: null as unknown as string,
-      });
-    }
+    if (createNextOccurrence) writeRow(createNextOccurrence);
   };
 
   const handleRequestDelete = (task: HouseholdTask) => {

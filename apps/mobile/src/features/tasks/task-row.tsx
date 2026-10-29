@@ -65,13 +65,14 @@ import {
   todayISO,
   useAddChecklistToTask,
   useModules,
-  recurrenceLabel,
+  repeatValueLabel,
   type Checklist,
   type ChecklistTaskItem,
   type GroupMember,
   type HeroItem,
   type HouseholdTask,
   type ModuleFeatureId,
+  type TaskRepeatFields,
 } from '@homeup/core';
 import { SNOOZE_PRESETS, SnoozeDatePicker, TaskQuickMenu, type QuickMenuMode, type SnoozeDuration } from './task-quick-menu';
 import { sectionIconFor } from '@/lib/section-icons';
@@ -177,7 +178,7 @@ interface TaskRowProps {
   onSnooze: (task: HouseholdTask, dur: SnoozeDuration) => void;
   onReassign: (task: HouseholdTask, userId: string | null) => void;
   onPriorityChange: (task: HouseholdTask, priority: Priority) => void;
-  onRecurrenceChange: (task: HouseholdTask, days: number | null) => void;
+  onRecurrenceChange: (task: HouseholdTask, repeat: TaskRepeatFields) => void;
   onFieldChange: (task: HouseholdTask, field: 'title' | 'due_date' | 'notes', value: string) => void;
   /** HOUP-123: task.linked_checklist_id → checklist, for the inline "Checklist N/M" chip + panel. */
   checklistsById?: Record<string, Checklist>;
@@ -414,7 +415,7 @@ export function TaskRow({
           {task.recurrence_days != null && (
             <View className="flex-row items-center gap-1">
               <Repeat size={11} className="text-muted-foreground" />
-              <Text className="text-caption text-muted-foreground">{recurrenceLabel(task.recurrence_days)}</Text>
+              <Text className="text-caption text-muted-foreground">{repeatValueLabel(task)}</Text>
             </View>
           )}
           <Text className={`text-caption font-medium ${PRIORITY_META[priority]}`}>{PRIORITY_LABEL[priority]}</Text>
@@ -550,7 +551,7 @@ export function TaskRow({
         onDateChange={(v) => onFieldChange(task, 'due_date', v)}
         onSnooze={(dur) => exit.startSnooze(dur)}
         onPickSnoozeDate={() => setSnoozeDateOpen(true)}
-        onRecurrenceChange={(days) => onRecurrenceChange(task, days)}
+        onRecurrenceChange={(repeat) => onRecurrenceChange(task, repeat)}
         onReassign={(userId) => onReassign(task, userId)}
         onPriorityChange={(p) => onPriorityChange(task, p)}
         onAddDescription={() => setEditingNotes(true)}
@@ -601,7 +602,7 @@ export interface HeroTaskRowProps {
   onSnooze: (task: HouseholdTask, dur: SnoozeDuration) => void;
   onReassign: (task: HouseholdTask, userId: string | null) => void;
   onPriorityChange: (task: HouseholdTask, priority: Priority) => void;
-  onRecurrenceChange: (task: HouseholdTask, days: number | null) => void;
+  onRecurrenceChange: (task: HouseholdTask, repeat: TaskRepeatFields) => void;
   onFieldChange: (task: HouseholdTask, field: 'title' | 'due_date' | 'notes', value: string) => void;
   /** FLUX-1565 parity: task.linked_checklist_id → checklist, for the inline expand panel. */
   checklistsById?: Record<string, Checklist>;
@@ -826,7 +827,7 @@ export function HeroTaskRow({
         onDateChange={(v) => onFieldChange(task, 'due_date', v)}
         onSnooze={(dur) => exit.startSnooze(dur)}
         onPickSnoozeDate={() => setSnoozeDateOpen(true)}
-        onRecurrenceChange={(days) => onRecurrenceChange(task, days)}
+        onRecurrenceChange={(repeat) => onRecurrenceChange(task, repeat)}
         onReassign={(userId) => onReassign(task, userId)}
         onPriorityChange={(p) => onPriorityChange(task, p)}
         // Hero row has no inline notes editor (unlike TaskRow above) — "Add
