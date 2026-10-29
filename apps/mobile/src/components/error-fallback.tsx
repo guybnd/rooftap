@@ -7,13 +7,27 @@
 // A broken screen is usually a bad over-the-air update, and the fix ships the
 // same way, so the screen's main action fetches and applies the newest update
 // in place instead of leaving it to a cold restart.
+//
+// The screen also reports the crash on its own (core crash-report.ts,
+// lib/crash-reports.ts), unless this phone switched that off in Settings >
+// About & updates. "Show details" shows exactly what was sent; with reports
+// off, a button there sends it by hand.
 import * as React from 'react';
 import { Pressable, ScrollView, useColorScheme, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Updates from 'expo-updates';
 import { RefreshCw } from 'lucide-react-native';
-import { DEFAULT_THEME_PREFERENCE, resolveThemePreference } from '@homeup/core';
+import {
+  DEFAULT_THEME_PREFERENCE,
+  buildCrashReport,
+  crashReceiptNote,
+  crashReportLines,
+  reportCrash,
+  resolveThemePreference,
+  type CrashOutcome,
+} from '@homeup/core';
 import { Text, Button, ThemeProvider } from '@homeup/ui';
+import { crashContext, sendCrash } from '@/lib/crash-reports';
 
 type FixState = 'idle' | 'checking' | 'downloading' | 'restarting' | 'latest' | 'offline';
 
@@ -55,6 +69,25 @@ function ErrorScreen({ error, retry }: { error: Error; retry: () => Promise<void
     console.error('[ErrorBoundary]', error?.message, error?.stack);
   }, [error]);
 
+  const report = React.useMemo(() => buildCrashReport(error, crashContext()), [error]);
+  const [outcome, setOutcome] = React.useState<CrashOutcome | null>(null);
+  React.useEffect(() => {
+    let live = true;
+    void reportCrash(report, sendCrash, { keepOffline: true })
+      .catch((): CrashOutcome => 'skipped')
+      .then((result) => live && setOutcome(result));
+    return () => {
+      live = false;
+    };
+  }, [report]);
+  const sendByHand = React.useCallback(() => {
+    setOutcome('skipped');
+    void reportCrash(report, sendCrash, { byHand: true })
+      .catch((): CrashOutcome => 'skipped')
+      .then(setOutcome);
+  }, [report]);
+  const sentNote = crashReceiptNote(outcome === 'known' || (outcome && typeof outcome === 'object') ? outcome : null);
+
   const busy = fix === 'checking' || fix === 'downloading' || fix === 'restarting';
 
   const checkForFix = React.useCallback(async () => {
@@ -74,7 +107,6 @@ function ErrorScreen({ error, retry }: { error: Error; retry: () => Promise<void
     }
   }, []);
 
-  const details = [error?.message, ...(error?.stack ?? '').split('\n').slice(1, 5)].filter(Boolean).join('\n');
   const note = FIX_NOTE[fix];
 
   return (
@@ -105,15 +137,33 @@ function ErrorScreen({ error, retry }: { error: Error; retry: () => Promise<void
         </Button>
         {note && <Text className="text-center text-caption text-muted-foreground">{note}</Text>}
       </View>
+      {sentNote && <Text className="text-center text-caption text-muted-foreground">{sentNote}</Text>}
       <Pressable hitSlop={12} onPress={() => setShowDetails((v) => !v)} accessibilityRole="button">
         <Text className="text-caption text-muted-foreground underline">
           {showDetails ? 'Hide details' : 'Show details'}
         </Text>
       </Pressable>
       {showDetails && (
-        <Text selectable className="text-center text-caption text-muted-foreground">
-          {details || 'No details were recorded.'}
-        </Text>
+        <View className="w-full max-w-sm gap-3">
+          <View className="gap-1 rounded-xl bg-muted p-3">
+            {crashReportLines(report).map((line, i) => (
+              <Text key={i} selectable className="font-mono text-caption text-foreground">
+                <Text className="font-mono text-caption text-muted-foreground">{line.label.padEnd(7)}</Text>
+                {line.value}
+              </Text>
+            ))}
+          </View>
+          {outcome === 'off' ? (
+            <Button size="lg" variant="outline" className="h-11" onPress={sendByHand}>
+              <Text className="text-body font-medium text-foreground">Send this report</Text>
+            </Button>
+          ) : null}
+          <Text className="text-center text-caption text-muted-foreground">
+            {outcome === 'off'
+              ? 'Crash reports are off on this phone. Only what you see above is sent.'
+              : 'This is everything the report holds. Turn reports off in Settings > About & updates.'}
+          </Text>
+        </View>
       )}
     </ScrollView>
   );

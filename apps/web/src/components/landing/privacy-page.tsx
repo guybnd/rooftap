@@ -19,6 +19,7 @@ const SECTIONS: ReadonlyArray<[title: string, paragraphs: readonly string[]]> = 
       "Your account: your name, your email address and how you sign in.",
       "Your household's data: the tasks, groceries, costs, events, recipes, documents and checklists that you enter, and the files you upload.",
       "On Android, a push token, so the app can send you notifications.",
+      "Crash reports: when a screen does not load, the app sends its server the error, the screen and the app version. Never your name, household or items. You can turn this off in Settings, About & updates. A self-hosted server passes reports on to us only if its owner chooses to.",
     ],
   ],
   [

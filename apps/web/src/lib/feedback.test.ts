@@ -95,6 +95,16 @@ describe("feedback", () => {
   it("lists the inbox with first names", async () => {
     const rows: Row[] = [{ id: "f1", user_id: "u1", group_id: "g1", message: "Hi", server_version: null, issue_url: null, done_at: null, created_at: "2026-10-23T03:00:00Z" }];
     const items = await listFeedback(fakeAdmin(rows));
-    expect(items).toEqual([{ id: "f1", message: "Hi", from: "Guy", serverVersion: null, issueUrl: null, done: false, createdAt: "2026-10-23T03:00:00Z" }]);
+    expect(items).toEqual([
+      { id: "f1", message: "Hi", from: "Guy", serverVersion: null, issueUrl: null, kind: "feedback", seen: 1, done: false, createdAt: "2026-10-23T03:00:00Z" },
+    ]);
+  });
+
+  it("names nobody on a crash report, and counts its repeats", async () => {
+    const rows: Row[] = [
+      { id: "c1", source: "crash", user_id: "u1", group_id: "g1", message: "Crash: TypeError: boom", seen_count: 4, server_version: null, issue_url: null, done_at: null, created_at: "2026-10-23T03:00:00Z" },
+    ];
+    const [item] = await listFeedback(fakeAdmin(rows));
+    expect(item).toMatchObject({ kind: "crash", from: null, seen: 4 });
   });
 });

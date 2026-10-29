@@ -19,6 +19,7 @@ interface FeedbackRow {
   message: string;
   server_version: string | null;
   issue_url: string | null;
+  seen_count?: number | null;
   done_at: string | null;
   created_at: string;
 }
@@ -31,7 +32,7 @@ export function feedbackGithub(): { repo: string; token: string } | null {
   return { repo, token };
 }
 
-function serverVersion(): string | null {
+export function serverVersion(): string | null {
   return process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) || process.env.HOMEUP_SCHEMA_VERSION || null;
 }
 
@@ -49,7 +50,13 @@ export function feedbackIssueBody(message: string, meta: { version: string | nul
   return `${message.trim()}\n\n---\n_${from.join(", ")}._`;
 }
 
-async function openIssue(gh: { repo: string; token: string }, title: string, body: string): Promise<string | null> {
+/** Opens an issue with these labels; answers its URL, or null when GitHub said no or took too long. */
+export async function openIssue(
+  gh: { repo: string; token: string },
+  title: string,
+  body: string,
+  labels: string[] = ["feedback"]
+): Promise<string | null> {
   try {
     const res = await fetch(`https://api.github.com/repos/${gh.repo}/issues`, {
       method: "POST",
@@ -59,7 +66,7 @@ async function openIssue(gh: { repo: string; token: string }, title: string, bod
         "Content-Type": "application/json",
         "X-GitHub-Api-Version": "2022-11-28",
       },
-      body: JSON.stringify({ title, body, labels: ["feedback"] }),
+      body: JSON.stringify({ title, body, labels }),
       signal: AbortSignal.timeout(GITHUB_TIMEOUT_MS),
     });
     if (!res.ok) return null;
@@ -104,15 +111,21 @@ export async function listFeedback(admin: SupabaseClient, limit = 100): Promise<
       for (const [id, name] of await memberNames(admin, g).catch(() => new Map<string, string>())) names.set(id, name);
     })
   );
-  return rows.map((r) => ({
-    id: r.id,
-    message: r.message,
-    from: (r.user_id && names.get(r.user_id)) || null,
-    serverVersion: r.server_version,
-    issueUrl: r.issue_url,
-    done: !!r.done_at,
-    createdAt: r.created_at,
-  }));
+  return rows.map((r) => {
+    const crash = !!r.source?.startsWith("crash");
+    return {
+      id: r.id,
+      message: r.message,
+      // A crash report names nobody, in the inbox too.
+      from: crash ? null : (r.user_id && names.get(r.user_id)) || null,
+      serverVersion: r.server_version,
+      issueUrl: r.issue_url,
+      kind: crash ? ("crash" as const) : ("feedback" as const),
+      seen: r.seen_count ?? 1,
+      done: !!r.done_at,
+      createdAt: r.created_at,
+    };
+  });
 }
 
 /** Marks feedback dealt with, or back to new. */

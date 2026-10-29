@@ -64,3 +64,8 @@ export function feedbackInbox(): Promise<FeedbackInbox> {
 export function setFeedbackDone(id: string, done: boolean): Promise<FeedbackInbox> {
   return call('/api/admin/feedback', { method: 'PATCH', body: JSON.stringify({ id, done }) });
 }
+
+/** The operator's answer to "Share crash reports with the Rooftap team?"; answers the inbox. */
+export function setCrashSharing(crashSharing: 'share' | 'off'): Promise<FeedbackInbox> {
+  return call('/api/admin/feedback', { method: 'PATCH', body: JSON.stringify({ crashSharing }) });
+}

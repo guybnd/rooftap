@@ -37,6 +37,7 @@ import { GroceriesSettings } from './panels/groceries-settings';
 import { ChecklistsSettings } from './panels/checklists-settings';
 import { CalendarSetup } from './panels/calendar-setup';
 import { AppUpdates } from './panels/app-updates';
+import { CrashReportsSettings } from './panels/crash-reports-settings';
 import { ShopperSettings } from './panels/shopper-settings';
 
 // Every connector's Settings > Connectors panel by its core id (connectors.ts,
@@ -61,7 +62,7 @@ export const globalMenus: GlobalMenu[] = [
   { key: 'notifications', label: 'Notifications', panels: [NotificationsSettings, NotificationKinds] },
   { key: 'connectors', label: 'Connectors', panels: CONNECTORS.map((c) => CONNECTOR_PANELS[c.panel]) },
   { key: 'integrations', label: 'Integrations & keys', panels: [HouseholdAiKeys, AiProvidersSettings, ApiKeysSettings, FeedbackInbox, PatSettings, McpSettings] },
-  { key: 'about', label: 'About & updates', panels: [AppUpdates] },
+  { key: 'about', label: 'About & updates', panels: [AppUpdates, CrashReportsSettings] },
 ];
 
 // Every module settings panel by its core id (module-settings.ts). The

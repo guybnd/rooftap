@@ -427,6 +427,16 @@ Rooftap does not encrypt your data or your uploaded files itself. Postgres and t
 - **Encrypt your backups** before they leave the machine. Set `BACKUP_PASSPHRASE_FILE` for full backups (see "Encrypt the backup"). The `backups/pre-migrate-*.dump` files that `migrate` writes into the repo folder are not encrypted. Keep them on an encrypted disk, or use `restic` or `borg` (both encrypt by default).
 - **Keep `.env` away from unencrypted backups.** It holds the service-role key and the database password.
 
+## Crash reports
+
+When a screen in the app does not load, the app sends a crash report to your server. A report holds the error, the first lines of the stack, the screen's route (such as `/costs/[id]`, never the item) and the app version. It never holds names, households, emails or items. The app removes quoted text, links, ids and long numbers from the error before it sends it, and the server does this again. Each person can switch reports off in **Settings → About & updates**.
+
+Reports go to the **Feedback** panel in **Settings → Integrations & keys**, which only the operators see. One crash makes one row, and repeats raise its count.
+
+The first time a crash comes in, the panel asks the operators one question: share crash reports with the Rooftap team? Until someone answers, no report leaves your server. If you share, your server sends each new crash to the Rooftap team. It sends the report and the server's version, never the server's address. If you keep reports, each crash row has a **Report upstream** link that opens a filled-in GitHub issue for you to read and send yourself.
+
+To decide in `.env` instead, set `ROOFTAP_CRASH_REPORTS=share` or `ROOFTAP_CRASH_REPORTS=off`. The panel then does not ask. To send shared reports to another server, set `ROOFTAP_CRASH_UPSTREAM` to its address.
+
 ## Upgrading Rooftap
 
 When a newer Rooftap release is out, the app tells the people who run your server. These are the operators in `SERVER_OPERATOR_EMAILS`. If you name no operators, it tells the household owners. They see a note once for each release, and **Settings → About & updates** shows the release, a link to what changed and the commands below. Other people see nothing.

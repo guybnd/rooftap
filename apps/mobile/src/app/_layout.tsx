@@ -26,6 +26,7 @@ import { Fredoka_700Bold } from '@expo-google-fonts/fredoka';
 import { Geist_500Medium, Geist_600SemiBold, Geist_700Bold } from '@expo-google-fonts/geist';
 import { GeistMono_600SemiBold } from '@expo-google-fonts/geist-mono';
 import { Stack, usePathname } from 'expo-router';
+import { CrashPathTracker, useSendKeptCrashes } from '@/lib/crash-reports';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
@@ -111,6 +112,7 @@ function RootEffects() {
   useAuthAutoRefresh();
   useAuthGuard();
   usePushNotificationRouting();
+  useSendKeptCrashes();
   return null;
 }
 
@@ -176,6 +178,8 @@ function AppShell() {
                     (src/app/(tabs)/_layout.tsx); detail screens push here. */}
                 <Stack screenOptions={{ headerShown: false }} />
                 <RouteTabBar />
+                {/* The path a crash report names, as a pattern (lib/crash-reports.ts). */}
+                <CrashPathTracker />
                 <RouteCookHeads />
                 <CaptureSheet />
                 {/* The pop-up chat that grows out of the + (features/assistant/chat-popup.tsx). */}

@@ -33,6 +33,7 @@ import { AssistantHomeAssistant } from "@/components/assistant-home-assistant";
 import { ShopperSettings } from "@/components/shopper-settings";
 import { WhatsNewHistory } from "@/components/whats-new";
 import { VersionSettings } from "@/components/version-settings";
+import { CrashReportsSettings } from "@/components/crash-reports-settings";
 
 // Every connector's Settings > Connectors panel by its core id (connectors.ts,
 // .docs/connectors.md). The Connectors menu lists them in registry order, and
@@ -58,7 +59,7 @@ export const globalMenus: GlobalMenu[] = [
   { key: "notifications", label: "Notifications", panels: [NotificationsSettings, NotificationKinds] },
   { key: "connectors", label: "Connectors", panels: CONNECTORS.map((c) => CONNECTOR_PANELS[c.panel]) },
   { key: "integrations", label: "Integrations & keys", panels: [HouseholdAiKeys, AiProvidersSettings, ApiKeysSettings, FeedbackInbox, PatSettings, McpSettings] },
-  { key: "whats-new", label: "About & updates", panels: [VersionSettings, WhatsNewHistory] },
+  { key: "whats-new", label: "About & updates", panels: [VersionSettings, WhatsNewHistory, CrashReportsSettings] },
 ];
 
 // Every module settings panel by its core id (module-settings.ts). The

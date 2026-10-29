@@ -67,6 +67,12 @@ const ROUTES: Record<string, RouteRule> = {
   "event-forecast": { auth: "session", module: null, why: "weather lookup only, no household data" },
   "event-travel": { auth: "session", module: null, why: "a travel-time lookup only, no household data" },
   "geocode-backfill": { auth: "session", module: "search" },
+  "feedback/crash": { auth: "session", module: null, why: "crash reports from the error screen, for every module" },
+  "feedback/crash/upstream": {
+    auth: "public",
+    module: null,
+    why: "self-hosted servers have no account here; hosted only, scrubbed, capped per day",
+  },
   geocode: { auth: "session", module: null, why: "address lookup for several modules" },
   mcp: { auth: "pat", module: null, why: "the mcp module is checked inside, per tool and for the whole endpoint" },
   "money/summaries": { auth: "cron", module: null, why: "the daily job checks each household's modules" },
