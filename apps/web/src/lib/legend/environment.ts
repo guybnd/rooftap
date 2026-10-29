@@ -10,6 +10,8 @@
 // — so importing/registering this module is safe even if it were ever
 // evaluated during SSR.
 
+// First: fills in crypto.randomUUID on plain-http self-hosted servers.
+import '@/lib/random-uuid';
 import type { Change } from '@legendapp/state';
 import type { PersistMetadata } from '@legendapp/state/sync';
 import { observablePersistIndexedDB } from '@legendapp/state/persist-plugins/indexeddb';
