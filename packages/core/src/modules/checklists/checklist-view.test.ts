@@ -110,6 +110,19 @@ describe('partitionDone', () => {
     expect(done.map((i) => i.id)).toEqual(['late', 'early', 'unstamped']);
   });
 
+  it('does not throw on a done row whose checked_at is not a string', () => {
+    // A half-synced cached row on the phone held a non-string stamp, and the
+    // old comparator called localeCompare on it ("undefined is not a function").
+    const iso = item({ id: 'iso', is_done: true, order: 0, checked_at: '2026-10-19T08:00:00.000Z' });
+    const num = item({ id: 'num', is_done: true, order: 1, checked_at: Date.parse('2026-10-19T10:00:00.000Z') as unknown as string });
+    const date = item({ id: 'date', is_done: true, order: 2, checked_at: new Date('2026-10-19T09:00:00.000Z') as unknown as string });
+    const junk = item({ id: 'junk', is_done: true, order: 3, checked_at: { bad: true } as unknown as string });
+
+    const { done } = partitionDone([iso, junk, num, date]);
+    expect(done.map((i) => i.id)).toEqual(['num', 'date', 'iso', 'junk']);
+    expect(() => sortItems([iso, junk, num, date], 'recent')).not.toThrow();
+  });
+
   it('returns empty arrays for an all-open or all-done projection', () => {
     const o = item({ id: 'o', is_done: false });
     const d = item({ id: 'd', is_done: true });

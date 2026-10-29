@@ -47,13 +47,28 @@ function priceDesc(a: ChecklistTaskItem, b: ChecklistTaskItem): number {
   return bv - av;
 }
 
+/**
+ * A `checked_at` stamp as epoch ms, or null when missing or unreadable. The
+ * type says ISO string, but a cached row on the phone can hold another shape
+ * (a number or a Date), and calling `localeCompare` on one of those threw and
+ * took the whole checklist screen down. Parse instead of trusting the type.
+ */
+function checkedTime(value: unknown): number | null {
+  if (value == null || value === '') return null;
+  const ms =
+    value instanceof Date ? value.getTime()
+    : typeof value === 'number' ? value
+    : Date.parse(String(value));
+  return Number.isFinite(ms) ? ms : null;
+}
+
 function recentDesc(a: ChecklistTaskItem, b: ChecklistTaskItem): number {
-  const av = a.checked_at;
-  const bv = b.checked_at;
+  const av = checkedTime(a.checked_at);
+  const bv = checkedTime(b.checked_at);
   if (av == null && bv == null) return 0;
   if (av == null) return 1; // unchecked last
   if (bv == null) return -1;
-  return bv.localeCompare(av); // ISO strings — lexical compare = chronological
+  return bv - av;
 }
 
 /**
