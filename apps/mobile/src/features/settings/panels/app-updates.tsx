@@ -8,7 +8,7 @@ import * as Updates from 'expo-updates';
 import * as Application from 'expo-application';
 import { useRouter } from 'expo-router';
 import { Download, Info, RefreshCw, Sparkles, TriangleAlert } from 'lucide-react-native';
-import { Text, ListItem, ListItemContent, ListItemTitle, ListItemTrailing, Button } from '@homeup/ui';
+import { Text, ListItem, ListItemContent, ListItemMeta, ListItemTitle, ListItemTrailing, Button } from '@homeup/ui';
 import {
   appStanding,
   appStandingLabel,
@@ -20,22 +20,25 @@ import {
   useWhatsNewHistory,
 } from '@homeup/core';
 import { WhatsNewGroups } from '@/components/whats-new/whats-new-list';
+import { buildCommit } from '@/lib/build-info';
 import { useDataCache } from '@/lib/data-cache';
 import { ServerUpdatePanel } from './server-update';
 import { SettingsInset, SettingsPanel } from './settings-panel';
 
-/** A read-only label/value line (T3: ids and versions in tabular type). */
-function InfoRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+/** A label/value line with an optional status under the label (T3: versions in tabular type). */
+function InfoRow({ label, value, status }: { label: string; value: string; status?: string | null }) {
   return (
     <ListItem className="min-h-12 items-center px-3.5 py-2.5">
       <ListItemContent>
         <ListItemTitle>{label}</ListItemTitle>
+        {status && (
+          <ListItemMeta>
+            <Text className="text-caption text-muted-foreground">{status}</Text>
+          </ListItemMeta>
+        )}
       </ListItemContent>
       <ListItemTrailing className="mt-0">
-        <Text
-          numberOfLines={1}
-          className={mono ? 'text-data-fragment text-muted-foreground' : 'text-caption tabular-nums text-muted-foreground'}
-        >
+        <Text numberOfLines={1} className="text-caption tabular-nums text-muted-foreground">
           {value}
         </Text>
       </ListItemTrailing>
@@ -88,17 +91,24 @@ export function AppUpdates() {
 
   const version = Application.nativeApplicationVersion ?? '–';
   const build = Application.nativeBuildVersion ?? '–';
+  // One fine-print line for the build details, so the card stays two rows.
+  // The commit answers "which merge am I running?"; the update id stands in
+  // on bundles without one, and the channel shows only when it isn't the
+  // usual production.
   const bundleAge = currentlyRunning.createdAt ? timeAgo(currentlyRunning.createdAt.toISOString()) : null;
-  const bundleLabel = currentlyRunning.isEmbeddedLaunch
-    ? 'Built in'
-    : `Over the air${bundleAge ? ` · ${bundleAge}` : ''}`;
-  const channel = currentlyRunning.channel ?? '–';
-  const updateId = currentlyRunning.updateId ? currentlyRunning.updateId.slice(0, 8) : '–';
-  // The main-branch commit this bundle was built from, inlined by CI's OTA
-  // publish step (.github/workflows/ci.yml), so the screen answers "which
-  // merge am I running?" without cross-referencing EAS update ids. Absent on
-  // local/factory builds.
-  const commit = process.env.EXPO_PUBLIC_GIT_SHA?.slice(0, 7) ?? '–';
+  const commit = buildCommit();
+  const details = [
+    `Build ${Updates.runtimeVersion ?? '–'}`,
+    currentlyRunning.isEmbeddedLaunch ? 'built in' : `updated${bundleAge ? ` ${bundleAge}` : ' over the air'}`,
+    currentlyRunning.channel && currentlyRunning.channel !== 'production' ? currentlyRunning.channel : null,
+    commit ?? currentlyRunning.updateId?.slice(0, 8) ?? null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  const serverStatus =
+    serverUpdateAdds.length > 0
+      ? `An update adds ${serverUpdateAdds.length} ${serverUpdateAdds.length === 1 ? 'feature' : 'features'}`
+      : null;
 
   const check = React.useCallback(async () => {
     setError(null);
@@ -135,18 +145,13 @@ export function AppUpdates() {
       <ServerUpdatePanel />
       <SettingsPanel icon={Info} title="Version">
         <SettingsInset>
-          <InfoRow label="App version" value={`${version} (${build})`} />
-          {standingLabel && <InfoRow label="App status" value={standingLabel} />}
-          <InfoRow label="App build" value={Updates.runtimeVersion ?? '–'} />
-          <InfoRow label="Server version" value={serverVersionLabel(release, schema)} />
-          {serverUpdateAdds.length > 0 && (
-            <InfoRow label="Server status" value={`An update adds ${serverUpdateAdds.length} ${serverUpdateAdds.length === 1 ? "feature" : "features"}`} />
-          )}
-          <InfoRow label="Bundle" value={bundleLabel} />
-          <InfoRow label="Channel" value={channel} />
-          <InfoRow label="Commit" value={commit} mono />
-          <InfoRow label="Update ID" value={updateId} mono />
+          <InfoRow label="App" value={`${version} (${build})`} status={standingLabel} />
+          <InfoRow label="Server" value={serverVersionLabel(release, schema)} status={serverStatus} />
         </SettingsInset>
+        {/* selectable: long-press copies the line for a bug report. */}
+        <Text selectable className="px-1 text-data-fragment text-muted-foreground">
+          {details}
+        </Text>
       </SettingsPanel>
 
       <SettingsPanel icon={RefreshCw} title="Updates">

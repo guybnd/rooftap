@@ -10,6 +10,7 @@ import * as Updates from 'expo-updates';
 import { sendKeptCrashes, type CrashContext, type CrashReceipt, type CrashSender } from '@homeup/core';
 import { getCurrentSupabaseClient } from '@/lib/supabase-client';
 import { getStoredServer } from '@/lib/server-config';
+import { buildCommit } from '@/lib/build-info';
 
 // The error screen sits above the router's providers, so it can't ask for
 // the path itself. A leaf in the root layout keeps the last one here.
@@ -32,7 +33,7 @@ export function crashContext(): CrashContext {
     path: lastPath,
     os: ios ? `iOS ${Platform.Version}` : `Android API ${Platform.Version}`,
     app: Updates.runtimeVersion ?? null,
-    build: process.env.EXPO_PUBLIC_GIT_SHA?.slice(0, 7) ?? Updates.updateId?.slice(0, 8) ?? null,
+    build: buildCommit() ?? Updates.updateId?.slice(0, 8) ?? null,
   };
 }
 

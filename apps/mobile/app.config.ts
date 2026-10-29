@@ -52,6 +52,12 @@ const config: ExpoConfig = {
   owner: 'guybnd',
   extra: {
     eas: { projectId: '4a9e9340-0bd0-451a-bfbf-593a88495d82' },
+    // The main-branch commit an OTA was built from, set by CI's publish step
+    // (.github/workflows/ci.yml). It rides in the update's manifest, so the
+    // app reads it with lib/build-info.ts. An inlined EXPO_PUBLIC_ variable
+    // does not work here: Metro's transform cache ignores env values and kept
+    // serving a screen bundled without it.
+    gitSha: process.env.ROOFTAP_GIT_SHA || null,
   },
   // OTA updates (HOUP-168): release builds fetch JS-only bundles from the
   // `production` channel (see eas.json). The dev client (IS_DEV) carries no

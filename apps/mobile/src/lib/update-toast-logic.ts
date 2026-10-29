@@ -28,7 +28,7 @@ export function resolveLaunch(
 }
 
 /** One-line description for the "App updated" toast. */
-export function appliedDescription(commitSha: string | undefined): string {
+export function appliedDescription(commitSha: string | null | undefined): string {
   const short = commitSha?.slice(0, 7);
   return short ? `Now running ${short}.` : 'Now running the latest version.';
 }

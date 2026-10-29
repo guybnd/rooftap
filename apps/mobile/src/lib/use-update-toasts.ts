@@ -12,7 +12,7 @@
 // - "Update ready": fires once per downloaded update while the app is open,
 //   with a Restart action that applies it now.
 // - "App updated": fires once on the first launch running a new OTA, naming
-//   the commit CI inlined (EXPO_PUBLIC_GIT_SHA), same value as the panel's
+//   the commit CI set (lib/build-info.ts), same value as the panel's
 //   Commit row.
 //
 // - "Rooftap 1.1.3 is out": once per release whose APK has a newer native
@@ -46,6 +46,7 @@ import {
 import { fetchServerUpdate } from '@/features/settings/server-update-api';
 import { useDataCache } from './data-cache';
 import { nativeStoreEnvironment } from './legend/environment';
+import { buildCommit } from './build-info';
 import {
   LAST_SEEN_UPDATE_KEY,
   appliedDescription,
@@ -80,7 +81,7 @@ export function useUpdateToasts(): void {
     }
     if (announceApplied) {
       toast.success('App updated', {
-        description: appliedDescription(process.env.EXPO_PUBLIC_GIT_SHA),
+        description: appliedDescription(buildCommit()),
         placement: 'top',
       });
     }
