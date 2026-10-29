@@ -311,7 +311,15 @@ services:
     # networking" feature (Settings -> Resources -> Network) — see
     # .docs/self-hosting.md.
     network_mode: host
+    # One-click updates (scripts/updater/). The Update button drops a version
+    # number in the inbox; the updater on the host does the rest and writes
+    # its progress to state, which the app can only read. The app gets no
+    # Docker socket and no other path into the repo.
+    volumes:
+      - ./updates/inbox:/rooftap-updates/inbox
+      - ./updates/state:/rooftap-updates/state:ro
     environment:
+      ROOFTAP_UPDATER_DIR: /rooftap-updates
       NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-http://localhost:8000}
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${ANON_KEY}
       # HOUP-69: runtime (non-inlined) var for GET /api/public-config, the

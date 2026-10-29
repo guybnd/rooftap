@@ -1,29 +1,22 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/supabase/session";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { hasServerOperators, isServerOperator } from "@/lib/admin-auth";
+import { isServerAdmin } from "@/lib/admin-auth";
 import { serverUpdate } from "@/lib/server-update";
+import { readServerUpdater } from "@/lib/server-updater";
 
 // Whether a newer Rooftap release is out for this server (core
-// app-release.ts). Only the people who can upgrade the server hear it: its
-// operators (SERVER_OPERATOR_EMAILS), or, on a server that names none, the
-// household owners. Everyone else gets { update: null } and the server asks
-// GitHub nothing on their behalf.
+// app-release.ts), and how a one-click update is going (core
+// server-updater.ts). Only the people who can upgrade the server hear it:
+// its operators (SERVER_OPERATOR_EMAILS), or, on a server that names none,
+// the household owners. Everyone else gets { update: null, updater: null }
+// and the server asks GitHub nothing on their behalf.
 
 export async function GET() {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!(await isServerAdmin(user))) return NextResponse.json({ update: null, updater: null });
 
-  let admin = isServerOperator(user);
-  if (!admin && !hasServerOperators()) {
-    const { count } = await createAdminClient()
-      .from("group_members")
-      .select("group_id", { count: "exact", head: true })
-      .eq("user_id", user.id)
-      .eq("role", "owner");
-    admin = (count ?? 0) > 0;
-  }
-  if (!admin) return NextResponse.json({ update: null });
-
-  return NextResponse.json({ update: await serverUpdate() }, { headers: { "Cache-Control": "private, max-age=300" } });
+  const [update, updater] = await Promise.all([serverUpdate(), readServerUpdater()]);
+  // No caching: an open panel asks every few seconds while an update runs.
+  return NextResponse.json({ update, updater }, { headers: { "Cache-Control": "private, no-store" } });
 }

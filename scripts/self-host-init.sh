@@ -146,6 +146,7 @@ fi
 
 # Made here, as the operator, before `migrate` bind-mounts it: Docker would
 # make a missing folder as root, and scripts/backup/backup.sh writes there too.
-mkdir -p backups
+# The same goes for the app's one-click update folders (scripts/updater/).
+mkdir -p backups updates/inbox updates/state
 
 exec docker compose up "$@"

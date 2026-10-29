@@ -71,6 +71,7 @@ export * from './server-features';
 export * from './app-release';
 export * from './app-release-store';
 export * from './server-update-store';
+export * from './server-updater';
 export * from './task-modules';
 export * from './mcp-tools';
 export * from './assistant-reach';

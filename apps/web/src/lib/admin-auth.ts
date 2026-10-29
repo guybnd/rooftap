@@ -73,3 +73,19 @@ export async function requireOwner(groupId?: string): Promise<OwnerGateResult> {
 
   return { user, admin, groupId: membership.group_id as string };
 }
+
+/**
+ * Whether this person runs the server, for server updates: an operator, or,
+ * on a server that names none, the owner of any household. Only these people
+ * hear about a newer release and can start a one-click update.
+ */
+export async function isServerAdmin(user: User): Promise<boolean> {
+  if (isServerOperator(user)) return true;
+  if (hasServerOperators()) return false;
+  const { count } = await createAdminClient()
+    .from("group_members")
+    .select("group_id", { count: "exact", head: true })
+    .eq("user_id", user.id)
+    .eq("role", "owner");
+  return (count ?? 0) > 0;
+}

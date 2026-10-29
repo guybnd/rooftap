@@ -469,6 +469,37 @@ git checkout <the version you came from>
 
 The script checks that the checkout matches the backup and asks you to confirm. It then deletes the database volume, builds the schema from that version's migrations and loads the rows from the backup (app data, accounts and file records). It does not touch uploaded files, `.env` or the other volumes. You lose anything written after the backup.
 
+### One-click updates
+
+The updater installs a new release when an operator taps **Update** in **Settings → About & updates**. It is off until you turn it on. Run this once in the Rooftap folder, as the user that runs the stack:
+
+```bash
+./scripts/updater/install.sh
+```
+
+On a machine with systemd, the script asks for `sudo` once to add a small unit that runs the updater when a request arrives. Without systemd, it adds a cron entry that checks every minute. Use `--cron` to choose cron on a systemd machine. On a NAS with neither, run `scripts/updater/updater.sh` every minute from its task scheduler. To turn the updater off, run `./scripts/updater/install.sh --remove`.
+
+When an operator taps **Update**, the updater does these steps:
+
+1. It checks that the version is the newest release on GitHub, newer than the one the server runs. It also checks that the Rooftap folder has no local changes or commits of its own, and that the release keeps the same database image. If a check fails, it changes nothing.
+2. It makes a full backup with `scripts/backup/backup.sh` into `backups/updater`, which keeps the newest two. Your own backups are not touched. If the backup fails, it stops.
+3. It gets the release and moves the checkout to it.
+4. It builds the new app. The old app keeps running during the build.
+5. It restarts the stack with `self-host-init.sh -d`. New migrations apply as usual.
+6. It waits until the app reports the new version.
+
+If a step from 4 on fails, the updater goes back to the old version. If new migrations ran, it also restores the database from the dump that `migrate` made just before them, so data written during the build is kept. Without that dump (`MIGRATE_BACKUP=off`), it uses the backup of step 2. The panel shows each step, and the reason when an update fails. The full log is `updates/state/update.log`.
+
+How the updater keeps the server safe:
+
+- The updater runs on the host, not in a container. The app gets no Docker socket and no shell.
+- The app can write to one folder only, `updates/inbox`. A request holds one version number and nothing more. The updater ignores anything that is not the newest release.
+- The app reads the progress from `updates/state`. It cannot write there.
+- Only the people who get the release notice can tap **Update**.
+- The updater trusts the release tags in `ROOFTAP_SERVER_UPDATES`, as a manual `git pull` does. To fetch from another address, set `ROOFTAP_UPDATER_REMOTE` in `.env`.
+
+A release that changes the Postgres image needs a manual update. Going back across a database upgrade is not safe without a person watching. A checkout with local changes, or with commits that are not in the release, also gets the manual steps. The updater never overwrites your changes. `ROOFTAP_UPDATER_TIMEOUT` in `.env` sets how many seconds the updater waits for the new version to answer (default 600).
+
 ## Testing the stack
 
 `scripts/self-host-e2e.sh` boots the whole stack from a copy of your checkout and checks it from the outside. It needs Linux with Docker and the compose plugin.
@@ -476,7 +507,8 @@ The script checks that the checkout matches the backup and asks you to confirm. 
 ```bash
 ./scripts/self-host-e2e.sh fresh                 # a new install
 ./scripts/self-host-e2e.sh upgrade --from v1.1.3 # an upgrade with data in it
-./scripts/self-host-e2e.sh all                   # both (the default)
+./scripts/self-host-e2e.sh updater               # a one-click update and a rollback
+./scripts/self-host-e2e.sh all                   # every test (the default)
 ```
 
 The fresh test checks these things:
@@ -488,6 +520,8 @@ The fresh test checks these things:
 - The edge functions answer, and realtime accepts a connection.
 
 The upgrade test starts an install of an older version (the latest release tag by default) and adds data to it. Then it upgrades the install to your checkout. It checks that only the new migrations ran, that a backup came first and that the data is still there. Last, it restores that backup with `restore-backup.sh` from the older version.
+
+The updater test makes the checkout a git repository that calls itself 9.0.0, with two test releases on a local git remote. A stand-in answers the GitHub release check. The updater installs 9.0.1, which adds a migration. The test checks that a backup came first, that the data is still there and that the app shows the finished update. Then a broken 9.0.2, whose app does not start, must roll back to 9.0.1. The test checks that its migration is gone and that data written on 9.0.1 is still there.
 
 Each run uses its own Docker project, `.env` and ports (18000, 13737 and 15432; change them with `E2E_KONG_PORT`, `E2E_APP_PORT` and `E2E_PG_PORT`). It does not touch your data. The realtime container has a fixed name, so the test cannot run while your own install runs on the same machine. `--keep` leaves the last stack running so you can look at it.
 

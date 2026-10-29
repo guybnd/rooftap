@@ -23,8 +23,14 @@ set -euo pipefail
 #            and a new folder with only the backup file restores it
 #            (scripts/backup/restore.sh): accounts stay signed in, and the
 #            rows and the file come back.
+#   updater  One-click updates (scripts/updater/): an install of this
+#            checkout, made a git repo that calls itself 9.0.0, is updated
+#            by updater.sh to a 9.0.1 with a new migration. Then a broken
+#            9.0.2 (the app never starts) is rolled back to 9.0.1 with the
+#            data written in between kept. A stand-in answers for the GitHub
+#            release check; the tags come from a local git remote.
 #
-# Usage: scripts/self-host-e2e.sh [fresh|upgrade|backup|all] [--from <git ref>] [--keep]
+# Usage: scripts/self-host-e2e.sh [fresh|upgrade|backup|updater|all] [--from <git ref>] [--keep]
 #
 # Needs bash, git, curl, openssl and Docker with the compose plugin on Linux
 # (the app container uses host networking). Every run uses its own compose
@@ -43,10 +49,10 @@ from=""
 keep=0
 while [ $# -gt 0 ]; do
   case "$1" in
-    fresh | upgrade | backup | all) mode="$1" ;;
+    fresh | upgrade | backup | updater | all) mode="$1" ;;
     --from) from="${2:?--from needs a git ref}"; shift ;;
     --keep) keep=1 ;;
-    -h | --help) sed -n '4,38p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h | --help) sed -n '4,44p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
   shift
@@ -523,11 +529,108 @@ run_backup() {
   check_migration_rows "$fresh" "$name"
 }
 
+run_updater() {
+  local dir="$work/updater" remote="$work/updater-remote.git" name="$project_prefix-updater" shim="$work/updater-bin"
+  local token group status version
+  log "one-click update to a new release, then a rollback from a broken one"
+  export_tree worktree "$dir"
+
+  # The install is a git checkout of 9.0.0. 9.0.1 adds a migration; 9.0.2
+  # adds another and its app exits at once (a last CMD in the Dockerfile), so
+  # its health check fails.
+  (
+    cd "$dir"
+    git init -q -b main
+    git config user.email e2e@e2e.test
+    git config user.name e2e
+    sed -i -E "s/^( *version: *')[^']*'/\19.0.0'/" apps/mobile/app.config.ts
+    git add -A && git commit -qm "9.0.0"
+    git init -q --bare "$remote"
+    sed -i -E "s/^( *version: *')[^']*'/\19.0.1'/" apps/mobile/app.config.ts
+    printf 'create table if not exists public.e2e_updater_one (id int);\ngrant select on public.e2e_updater_one to anon, authenticated, service_role;\n' \
+      > supabase/migrations/29990101000000_e2e_updater_one.sql
+    git add -A && git commit -qm "9.0.1" && git tag v9.0.1
+    sed -i -E "s/^( *version: *')[^']*'/\19.0.2'/" apps/mobile/app.config.ts
+    printf 'create table if not exists public.e2e_updater_two (id int);\ngrant select on public.e2e_updater_two to anon, authenticated, service_role;\n' \
+      > supabase/migrations/29990101000001_e2e_updater_two.sql
+    printf '\nCMD ["sh", "-c", "exit 1"]\n' >> Dockerfile
+    git add -A && git commit -qm "9.0.2" && git tag v9.0.2
+    git push -q "$remote" v9.0.1 v9.0.2
+    git reset -q --hard HEAD~2 && git tag -d v9.0.1 v9.0.2 > /dev/null
+  ) || die "could not make the test releases"
+
+  # GitHub's release check answers from a file; every other call is real curl.
+  mkdir -p "$shim"
+  cat > "$shim/curl" << SHIM
+#!/usr/bin/env bash
+case "\$*" in
+  *api.github.com*) printf '{"tag_name": "v%s"}\\n' "\$(cat "$work/updater-latest")" ;;
+  *) exec "$(command -v curl)" "\$@" ;;
+esac
+SHIM
+  # The installer's cron path, without touching this machine's crontab.
+  printf '#!/usr/bin/env bash\nif [ "$1" = "-l" ]; then cat "%s" 2> /dev/null; else cat > "%s"; fi\n' "$work/crontab" "$work/crontab" > "$shim/crontab"
+  chmod +x "$shim/curl" "$shim/crontab"
+
+  write_env "$dir"
+  set_env "$dir" ROOFTAP_UPDATER_REMOTE "$remote"
+  set_env "$dir" ROOFTAP_UPDATER_TIMEOUT 120
+  boot "$dir" "$name"
+  wait_migrate "$dir" "$name"
+  wait_http "$app/api/public-config" 200 300 || die "the app never came up"
+  admin_user "$dir" updater@e2e.test updater-pass-1
+  token="$(sign_in "$dir" updater@e2e.test updater-pass-1)"
+  group="$(household_of "$dir" "$token")"
+  add_grocery "$dir" "$token" "$group" e2e-before-update
+  expect_status "grocery item added on 9.0.0" 201
+
+  (cd "$dir" && PATH="$shim:$PATH" ./scripts/updater/install.sh --cron) > /dev/null || die "install.sh failed"
+  grep -q 'scripts/updater/updater.sh' "$work/crontab" && pass "install.sh added the cron entry" || fail "install.sh added no cron entry"
+  [ "$(stat -c %a "$dir/updates/inbox")" = "1733" ] && pass "the inbox is write-only for the app" || fail "inbox mode is $(stat -c %a "$dir/updates/inbox")"
+  dc "$dir" "$name" up -d app > /dev/null 2>&1
+
+  # What the Update button leaves, then what cron runs.
+  update_to() {
+    echo "$1" > "$work/updater-latest"
+    echo "$1" > "$dir/updates/inbox/request"
+    req GET "$app/api/server-update" "" "Authorization: Bearer $token" > /dev/null
+    grep -q '"pending":true' "$work/body" && pass "the app sees the waiting request for $1" || fail "the app does not see the request: $(head -c 300 "$work/body")"
+    (cd "$dir" && COMPOSE_PROJECT_NAME="$name" PATH="$shim:$PATH" ./scripts/updater/updater.sh) || fail "updater.sh exited with an error"
+    status="$(sed -n 's/.*"state": *"\([^"]*\)".*/\1/p' "$dir/updates/state/status.json")"
+    version="$(req GET "$app/api/public-config" "" | json_field version)"
+  }
+
+  update_to 9.0.1
+  [ "$status" = "done" ] && pass "the update to 9.0.1 finished" || { fail "update status is $status"; tail -30 "$dir/updates/state/update.log" >&2; }
+  [ "$version" = "9.0.1" ] && pass "the app reports 9.0.1" || fail "the app reports '$version' after the update"
+  [ "$(sql "$dir" "$name" "select count(*) from information_schema.tables where table_name = 'e2e_updater_one'")" = "1" ] \
+    && pass "9.0.1's migration ran" || fail "9.0.1's migration did not run"
+  ls "$dir"/backups/updater/rooftap-backup-*.tar > /dev/null 2>&1 && pass "a full backup came first" || fail "no backup in backups/updater"
+  token="$(sign_in "$dir" updater@e2e.test updater-pass-1)"
+  [ "$(groceries_named "$dir" "$token" e2e-before-update)" = "1" ] && pass "the data survived the update" || fail "the item from 9.0.0 is gone"
+  req GET "$app/api/server-update" "" "Authorization: Bearer $token" > /dev/null
+  grep -q '"state":"done"' "$work/body" && pass "the app shows the finished update" || fail "the app shows no finished update: $(head -c 300 "$work/body")"
+  add_grocery "$dir" "$token" "$group" e2e-after-update
+  expect_status "a write on 9.0.1" 201
+
+  update_to 9.0.2
+  [ "$status" = "rolled-back" ] && pass "the broken 9.0.2 was rolled back" || { fail "rollback status is $status"; tail -40 "$dir/updates/state/update.log" >&2; }
+  grep -q '"dataRestored": true' "$dir/updates/state/status.json" && pass "the database was restored" || fail "the database was not restored"
+  [ "$version" = "9.0.1" ] && pass "the app is back on 9.0.1" || fail "the app reports '$version' after the rollback"
+  [ "$(sql "$dir" "$name" "select count(*) from information_schema.tables where table_name = 'e2e_updater_two'")" = "0" ] \
+    && pass "9.0.2's migration was undone" || fail "9.0.2's table is still there"
+  token="$(sign_in "$dir" updater@e2e.test updater-pass-1)"
+  [ "$(groceries_named "$dir" "$token" e2e-after-update)" = "1" ] && pass "the write made on 9.0.1 survived the rollback" || fail "the rollback lost the write made on 9.0.1"
+  [ -z "$(git -C "$dir" status --porcelain --untracked-files=no)" ] && [ "$(git -C "$dir" describe --tags --exact-match 2> /dev/null)" = "v9.0.1" ] \
+    && pass "the checkout is back on v9.0.1" || fail "the checkout is at $(git -C "$dir" describe --tags --always)"
+}
+
 case "$mode" in
   fresh) run_fresh ;;
   upgrade) run_upgrade ;;
   backup) run_backup ;;
-  all) run_fresh; run_upgrade; run_backup ;;
+  updater) run_updater ;;
+  all) run_fresh; run_upgrade; run_backup; run_updater ;;
 esac
 
 echo

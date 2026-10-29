@@ -2,7 +2,7 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { loadServerUpdate, resetServerUpdate, useServerUpdate } from './server-update-store';
+import { loadServerUpdate, refreshServerUpdate, resetServerUpdate, useServerUpdate, useServerUpdater } from './server-update-store';
 
 const update = { current: '1.1.3', latest: '1.2.0', url: 'https://github.com/guybnd/rooftap/releases/tag/v1.2.0' };
 
@@ -39,5 +39,27 @@ describe('useServerUpdate', () => {
     const admin = vi.fn(async (): Promise<unknown> => ({ update }));
     await act(async () => rerender({ id: 'u3', f: admin }));
     await waitFor(() => expect(result.current).toEqual(update));
+  });
+});
+
+describe('useServerUpdater', () => {
+  it('reads the updater from the same answer, and keeps it through a failed refresh', async () => {
+    const updater = { installed: true, pending: false, pendingSince: null, status: null };
+    let fail = false;
+    const fetchUpdate = vi.fn(async () => {
+      if (fail) throw new Error('restarting');
+      return { update, updater };
+    });
+    const { result } = renderHook(() => useServerUpdater(fetchUpdate, 'u1'));
+    await waitFor(() => expect(result.current).toEqual(updater));
+    fail = true;
+    await act(async () => refreshServerUpdate(fetchUpdate));
+    expect(result.current).toEqual(updater);
+  });
+
+  it('is null from a server with no updater', async () => {
+    const fetchUpdate = vi.fn(async () => ({ update }));
+    const { result } = renderHook(() => useServerUpdater(fetchUpdate, 'u1'));
+    await waitFor(() => expect(result.current).toBeNull());
   });
 });

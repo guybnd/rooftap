@@ -18,6 +18,7 @@ out/
 
 # Backups and swap exports: data, never build context
 backups/
+updates/
 server-export/
 !.env.example
 

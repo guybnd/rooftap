@@ -95,6 +95,7 @@ const ROUTES: Record<string, RouteRule> = {
   "push/device-token": { auth: "session", module: null, why: "notifications for every module" },
   "push/subscribe": { auth: "session", module: null, why: "notifications for every module" },
   "server-update": { auth: "session", module: null, why: "server upgrades, told only to the people who run the server" },
+  "server-update/install": { auth: "session", module: null, why: "server upgrades, started only by the people who run the server" },
   "setup/first-user": { auth: "public", module: null, why: "the first account on a new server, closed once any account exists" },
   "setup/status": { auth: "public", module: null, why: "only says whether any account exists" },
 
