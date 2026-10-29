@@ -96,6 +96,24 @@ describe('useBinSetup', () => {
     expect(result.current.readError).toBe('off');
   });
 
+  it('shows an error and stops reading when a read throws, so Save still works', async () => {
+    const bins = fakeBins();
+    const { result } = renderHook(() => useBinSetup({ bins, today: WED, readHomeAssistantBins: noHa }));
+    await act(() =>
+      result.current.readCouncil(async () => {
+        throw new Error('picker failed');
+      }),
+    );
+    expect(result.current.reading).toBe(false);
+    expect(result.current.readError).toMatch(/Couldn't read that/);
+    let ok = false;
+    act(() => {
+      ok = result.current.submit();
+    });
+    expect(ok).toBe(true);
+    expect(bins.saveSetup).toHaveBeenCalled();
+  });
+
   it('saves the rotation with a fresh anchor when the first person changes', () => {
     const bins = fakeBins([stream({ id: 'r', name: 'Red' })]);
     const { result } = renderHook(() => useBinSetup({ bins, today: WED, readHomeAssistantBins: noHa }));

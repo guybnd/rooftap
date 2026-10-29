@@ -124,23 +124,35 @@ export function useBinSetup(input: {
   };
 
   /** Runs the app's council-calendar read (a picker, then the server). A null result means the picker was cancelled. */
-  const readCouncil = async (read: () => Promise<BinSetupResult | null>) => {
+  /**
+   * Runs a read with the sheet in its reading state. A read that throws (a
+   * picker or file error, a reply that isn't JSON) shows an error instead of
+   * leaving the sheet stuck on "Reading…". Null: the picker was cancelled.
+   */
+  const runRead = async <T>(read: () => Promise<T | null>): Promise<T | null> => {
     setReading(true);
     setReadError(null);
     setReadNote(null);
-    const result = await read();
-    setReading(false);
+    try {
+      return await read();
+    } catch {
+      setReadError("Couldn't read that. Try again, or enter the days yourself.");
+      return null;
+    } finally {
+      setReading(false);
+    }
+  };
+
+  const readCouncil = async (read: () => Promise<BinSetupResult | null>) => {
+    const result = await runRead(read);
     if (!result) return;
     if (!result.ok) setReadError(result.error);
     else applyRead(result.setup, 'council');
   };
 
   const readHomeAssistant = async (entityId?: string) => {
-    setReading(true);
-    setReadError(null);
-    setReadNote(null);
-    const result = await input.readHomeAssistantBins(entityId);
-    setReading(false);
+    const result = await runRead(() => input.readHomeAssistantBins(entityId));
+    if (!result) return;
     if (!result.ok) {
       setReadError(result.error);
       return;

@@ -95,7 +95,6 @@ export function BinSetupSheet({
       title={bins.streams.length ? 'Bin days' : 'Set up bin night'}
       onSubmit={submit}
       submitLabel="Save bin days"
-      saving={reading}
     >
       <FormSection>
         <FieldRow label="Where the days come from" hint="Pick the easiest way. You can change it later.">
