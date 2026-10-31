@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Apartment, Checklist, ChecklistItem, ChecklistResponse, ChecklistTaskItem, SetupItem } from '../types';
-import { homeChecklistMaps, homeSetupProgress, scoreApartments } from './use-home-data';
+import { homeChecklistMaps, homeSetupProgress, liveRows, scoreApartments } from './use-home-data';
 
 const apt = (id: string) => ({ id, address: id }) as unknown as Apartment;
 const criterion = (id: string, weight: number) =>
@@ -38,5 +38,18 @@ describe('homeSetupProgress', () => {
   it('counts installed items out of all', () => {
     const items = ['installed', 'needed', 'installed'].map((status) => ({ status }) as unknown as SetupItem);
     expect(homeSetupProgress(items)).toEqual({ done: 2, total: 3 });
+  });
+});
+
+describe('liveRows', () => {
+  it('keeps whole rows and drops tombstones, Symbol(delete) values and partial objects', () => {
+    const record = {
+      a: { id: 'a', title: 'Bins', deleted: false },
+      b: { id: 'b', title: 'Gone', deleted: true },
+      c: Symbol('delete'),
+      d: { updated_at: '2026-10-30T00:00:00Z' },
+      e: undefined,
+    } as unknown as Record<string, { id: string; title: string; deleted: boolean }>;
+    expect(liveRows(record).map((r) => r.id)).toEqual(['a']);
   });
 });

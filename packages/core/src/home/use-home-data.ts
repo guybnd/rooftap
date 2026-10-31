@@ -51,8 +51,15 @@ import {
   type ShopperWant,
 } from '../modules/shopper/shopper';
 
-function live<T extends { deleted: boolean }>(record: Record<string, T | undefined> | undefined): T[] {
-  return Object.values(record ?? {}).filter((r): r is T => !!r && !r.deleted);
+/**
+ * The store's rows that are really there. A local cache can briefly hold a
+ * value that is not a whole row (a Symbol(delete) left by a sync, or a partial
+ * object with no id), and Home drew each one as a blank, untitled to-do.
+ */
+export function liveRows<T extends { deleted: boolean }>(record: Record<string, T | undefined> | undefined): T[] {
+  return Object.values(record ?? {}).filter(
+    (r): r is T => typeof r === 'object' && r !== null && typeof (r as { id?: unknown }).id === 'string' && !r.deleted,
+  );
 }
 
 /** Each listing with its checklist score, or null before anyone answered its checklist. */
@@ -133,19 +140,19 @@ export function useHomeData(groupId: string | null | undefined, enabledModules: 
   useReconnectSync(checklistsStore$);
   useReconnectSync(checklistItemsStore$);
 
-  const tasks = use$(() => live<HouseholdTask>(tasks$.get()));
-  const events = use$(() => live<GroupEvent>(events$.get()));
-  const appointments = use$(() => live<Appointment>(appointmentsStore$.get()));
-  const apartments = use$(() => live<Apartment>(apartmentsStore$.get()));
-  const searchChecklistItems = use$(() => live<ChecklistItem>(searchChecklistItems$.get()));
-  const searchResponses = use$(() => live<ChecklistResponse>(searchResponses$.get()));
-  const costItems = use$(() => live<CostItem>(costs$.get()));
-  const setupItems = use$(() => live<SetupItem>(setup$.get()));
-  const groceries = use$(() => live<GroceryItem>(groceries$.get()));
-  const shopperWantsList = use$(() => live<ShopperWant>(wants$.get()).filter((w) => w.status === 'watching'));
-  const shopperSnapsList = use$(() => live<ShopperPriceSnapshot>(snaps$.get()));
-  const checklists = use$(() => live<Checklist>(checklistsStore$.get()));
-  const checklistTaskItems = use$(() => live<ChecklistTaskItem>(checklistItemsStore$.get()));
+  const tasks = use$(() => liveRows<HouseholdTask>(tasks$.get()));
+  const events = use$(() => liveRows<GroupEvent>(events$.get()));
+  const appointments = use$(() => liveRows<Appointment>(appointmentsStore$.get()));
+  const apartments = use$(() => liveRows<Apartment>(apartmentsStore$.get()));
+  const searchChecklistItems = use$(() => liveRows<ChecklistItem>(searchChecklistItems$.get()));
+  const searchResponses = use$(() => liveRows<ChecklistResponse>(searchResponses$.get()));
+  const costItems = use$(() => liveRows<CostItem>(costs$.get()));
+  const setupItems = use$(() => liveRows<SetupItem>(setup$.get()));
+  const groceries = use$(() => liveRows<GroceryItem>(groceries$.get()));
+  const shopperWantsList = use$(() => liveRows<ShopperWant>(wants$.get()).filter((w) => w.status === 'watching'));
+  const shopperSnapsList = use$(() => liveRows<ShopperPriceSnapshot>(snaps$.get()));
+  const checklists = use$(() => liveRows<Checklist>(checklistsStore$.get()));
+  const checklistTaskItems = use$(() => liveRows<ChecklistTaskItem>(checklistItemsStore$.get()));
 
   const apartmentsWithScore = useMemo(
     () => scoreApartments(apartments, searchChecklistItems, searchResponses),

@@ -312,8 +312,16 @@ export function createGroupStore<T extends SyncedRow>(config: {
         syncedSupabase({
           supabase: env.supabase,
           collection,
+          // A full pull (first load, or the daily resetLastSync re-pull) skips
+          // tombstones. Legend applies a full pull in 'set' mode, which writes
+          // a deleted row in as a bare Symbol(delete) value instead of removing
+          // it, so every deleted row showed up as a blank, untitled row until
+          // the app reloaded from its cache. A delta pull (lastSync set) still
+          // asks for them: it runs in 'assign' mode, where a tombstone removes
+          // the local row.
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          filter: (select: any) => select.eq('group_id', groupId),
+          filter: (select: any, params?: { lastSync?: number }) =>
+            params?.lastSync ? select.eq('group_id', groupId) : select.eq('group_id', groupId).eq('deleted', false),
           // No hard deletes — the `deleted` tombstone (configured globally in
           // ensureLegendConfigured) is how we signal a removal to Supabase.
           actions: ['read', 'create', 'update'],
