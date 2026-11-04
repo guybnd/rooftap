@@ -330,6 +330,7 @@ export async function applyBankLinks(
     rules = await bankLinkRows(admin, groupId);
     await linkPass(admin, groupId, rules, sharing, { since: new Date(Date.now() - AUTO_FILE_DAYS * DAY_MS).toISOString() });
   }
+  await dropEmptyBankLineCopies(admin, groupId);
   await refreshBankLines(admin, groupId);
   await keepAmountsInStep(admin, groupId, rules);
 }
@@ -493,7 +494,7 @@ async function autoFileJointPayments(
   }
 
   if (newLines.length) {
-    const made = await insertBankLines(admin, newLines);
+    const made = await keepFirstBankLines(admin, groupId, await insertBankLines(admin, newLines));
     for (const m of made) joined.push({ lineId: m.id, key: squashName(m.provider) });
   }
   if (!joined.length) return false;
@@ -569,6 +570,131 @@ async function insertBankLines(admin: SupabaseClient, lines: Record<string, unkn
     else made.push(one.data as { id: string; provider: string });
   }
   return made;
+}
+
+/**
+ * Two reads can file the same payee at once (Up sends a webhook when a
+ * payment is made and again when it settles, and opening Costs syncs too),
+ * so each makes a line. After its insert, a run reads the payee's lines
+ * again and keeps the oldest: a newer copy it made goes, and its payments
+ * join the oldest line instead.
+ */
+async function keepFirstBankLines(
+  admin: SupabaseClient,
+  groupId: string,
+  made: { id: string; provider: string }[],
+): Promise<{ id: string; provider: string }[]> {
+  if (!made.length) return made;
+  const { data, error } = await admin
+    .from("cost_items")
+    .select("id, provider, created_at")
+    .eq("group_id", groupId)
+    .eq("bank_source", "up")
+    .eq("deleted", false)
+    .in("provider", [...new Set(made.map((m) => m.provider))]);
+  if (error || !data) return made;
+  const first = new Map<string, BankLineRow>();
+  for (const l of data as BankLineRow[]) {
+    const key = squashName(l.provider);
+    const kept = first.get(key);
+    if (!kept || bankLineOlder(l, kept)) first.set(key, l);
+  }
+  const extra = made.filter((m) => {
+    const kept = first.get(squashName(m.provider));
+    return kept && kept.id !== m.id;
+  });
+  if (extra.length) await admin.from("cost_items").update({ deleted: true }).in("id", extra.map((m) => m.id));
+  return made.map((m) => {
+    const kept = first.get(squashName(m.provider));
+    return kept ? { id: kept.id, provider: m.provider } : m;
+  });
+}
+
+interface BankLineRow {
+  id: string;
+  provider: string | null;
+  created_at: string;
+}
+
+function bankLineOlder(a: BankLineRow, b: BankLineRow): boolean {
+  const at = Date.parse(a.created_at);
+  const bt = Date.parse(b.created_at);
+  return at !== bt ? at < bt : a.id < b.id;
+}
+
+/** A copy has to be this old before the clean-up removes it, so a run still filing it is done. */
+const DUPLICATE_GRACE_MS = 10 * 60_000;
+
+/**
+ * The bank's empty copies of a payee's line: for each payee with more than
+ * one line the bank made, every line with no payments and older than the
+ * grace period, unless all of them are empty, when the oldest stays. A line
+ * with payments is never a copy, so lines a person split by hand stay.
+ */
+export function emptyBankLineCopies(
+  lines: readonly BankLineRow[],
+  paymentsPerLine: ReadonlyMap<string, number>,
+  now: number,
+): { keep: string; drop: string[] }[] {
+  const byPayee = new Map<string, BankLineRow[]>();
+  for (const l of lines) {
+    const key = squashName(l.provider);
+    if (!key) continue;
+    byPayee.set(key, [...(byPayee.get(key) ?? []), l]);
+  }
+  const out: { keep: string; drop: string[] }[] = [];
+  for (const group of byPayee.values()) {
+    if (group.length < 2) continue;
+    const sorted = [...group].sort((a, b) => (bankLineOlder(a, b) ? -1 : 1));
+    const keep = sorted.find((l) => (paymentsPerLine.get(l.id) ?? 0) > 0) ?? sorted[0];
+    const drop = sorted
+      .filter((l) => l.id !== keep.id && !(paymentsPerLine.get(l.id) ?? 0) && now - Date.parse(l.created_at) >= DUPLICATE_GRACE_MS)
+      .map((l) => l.id);
+    if (drop.length) out.push({ keep: keep.id, drop });
+  }
+  return out;
+}
+
+/**
+ * Removes the empty copies of bank lines that two runs made at once, with
+ * their link rules, so each payee has one line. A copy's rule moves to the
+ * kept line when that line has none.
+ */
+async function dropEmptyBankLineCopies(admin: SupabaseClient, groupId: string): Promise<void> {
+  const { data: lines, error } = await admin
+    .from("cost_items")
+    .select("id, provider, created_at")
+    .eq("group_id", groupId)
+    .eq("bank_source", "up")
+    .eq("deleted", false)
+    .not("provider", "is", null);
+  if (error || !lines?.length) return;
+  const keys = new Map<string, number>();
+  for (const l of lines as BankLineRow[]) keys.set(squashName(l.provider), (keys.get(squashName(l.provider)) ?? 0) + 1);
+  const candidates = (lines as BankLineRow[]).filter((l) => (keys.get(squashName(l.provider)) ?? 0) > 1);
+  if (!candidates.length) return;
+  const { data: paid, error: paidError } = await admin
+    .from("bank_transactions")
+    .select("cost_item_id")
+    .in("cost_item_id", candidates.map((l) => l.id))
+    .limit(LINK_BATCH);
+  if (paidError) return;
+  const payments = new Map<string, number>();
+  for (const p of (paid ?? []) as { cost_item_id: string }[]) payments.set(p.cost_item_id, (payments.get(p.cost_item_id) ?? 0) + 1);
+  const copies = emptyBankLineCopies(candidates, payments, Date.now());
+  if (!copies.length) return;
+  const { data: rules } = await admin
+    .from("bank_links")
+    .select("cost_item_id")
+    .in("cost_item_id", copies.flatMap((c) => [c.keep, ...c.drop]));
+  const ruled = new Set(((rules ?? []) as { cost_item_id: string }[]).map((r) => r.cost_item_id));
+  for (const { keep, drop } of copies) {
+    const moving = ruled.has(keep) ? undefined : drop.find((id) => ruled.has(id));
+    if (moving) await admin.from("bank_links").update({ cost_item_id: keep }).eq("cost_item_id", moving);
+    const gone = drop.filter((id) => id !== moving && ruled.has(id));
+    if (gone.length) await admin.from("bank_links").delete().in("cost_item_id", gone);
+    await admin.from("cost_items").update({ deleted: true }).in("id", drop).eq("group_id", groupId);
+  }
 }
 
 function mostCommon(values: readonly string[]): string | null {
