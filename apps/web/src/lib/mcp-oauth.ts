@@ -15,6 +15,12 @@ const CLIENT_PREFIX = "rt_client_";
 export const ACCESS_TOKEN_TTL_SECONDS = 60 * 60;
 const CODE_TTL_MS = 5 * 60 * 1000;
 export const MCP_SCOPE = "mcp";
+// A shared device is a connection the person marked on the consent screen as
+// one the whole household can hear, such as a voice speaker: it signs in as one
+// person, but anyone in the room hears the answers. The mark lives on the
+// connection (oauth_tokens.shared_device), not on the app, so the same app can
+// be a private connection for one person and a shared one for another.
+const SHARED_DEVICE_HIDDEN_TOOLS: ReadonlySet<string> = new Set(["add_occasion", "add_gift_ideas", "add_wishlist_items"]);
 
 const MAX_REDIRECT_URIS = 10;
 const MAX_URI_LENGTH = 2000;
@@ -103,6 +109,11 @@ export function parseRegistration(body: unknown): RegistrationResult {
   return { ok: true, client: { id: secret(CLIENT_PREFIX).slice(0, CLIENT_PREFIX.length + 32), client_name: name || null, redirect_uris: uris } };
 }
 
+/** A tool a shared-device connection may see and call. Other connections are not limited here. */
+export function sharedDeviceAllows(tool: { name: string }): boolean {
+  return !SHARED_DEVICE_HIDDEN_TOOLS.has(tool.name);
+}
+
 export async function saveClient(admin: SupabaseClient, client: OAuthClient): Promise<boolean> {
   const { error } = await admin.from("oauth_clients").insert(client);
   if (error) console.error("[oauth] client registration failed", error.message);
@@ -169,6 +180,7 @@ export async function createAuthorizationCode(
   admin: SupabaseClient,
   userId: string,
   request: AuthorizeRequest,
+  sharedDevice = false,
 ): Promise<string> {
   const code = secret(CODE_PREFIX);
   const { error } = await admin.from("oauth_authorization_codes").insert({
@@ -178,6 +190,8 @@ export async function createAuthorizationCode(
     redirect_uri: request.redirectUri,
     code_challenge: request.codeChallenge,
     expires_at: new Date(Date.now() + CODE_TTL_MS).toISOString(),
+    // Only sent when set, so a plain sign-in works before the column exists.
+    ...(sharedDevice ? { shared_device: true } : {}),
   });
   if (error) throw new Error(error.message);
   return code;
@@ -240,7 +254,9 @@ export async function exchangeAuthorizationCode(
     .from("oauth_authorization_codes")
     .delete()
     .eq("code_hash", hashToken(code))
-    .select("client_id,user_id,redirect_uri,code_challenge,expires_at")
+    // "*" rather than a column list: shared_device may not exist yet when this
+    // code deploys ahead of its migration.
+    .select("*")
     .maybeSingle();
 
   if (!row) return invalidGrant("Unknown or used code.");
@@ -255,6 +271,7 @@ export async function exchangeAuthorizationCode(
   const { error } = await admin.from("oauth_tokens").insert({
     client_id: row.client_id,
     user_id: row.user_id,
+    ...(row.shared_device === true ? { shared_device: true } : {}),
     ...tokens.row,
   });
   if (error) throw new Error(error.message);
@@ -286,6 +303,8 @@ export async function refreshAccessToken(admin: SupabaseClient, params: ParamSou
 export interface OAuthIdentity {
   userId: string;
   tokenId: string;
+  /** The person marked this connection as a shared device on the consent screen. */
+  sharedDevice: boolean;
 }
 
 export function isOAuthAccessToken(authHeader: string | null): boolean {
@@ -299,7 +318,8 @@ export async function resolveOAuthUser(admin: SupabaseClient, authHeader: string
 
   const { data: row } = await admin
     .from("oauth_tokens")
-    .select("id,user_id,revoked_at,access_expires_at")
+    // "*" so shared_device is read when it exists, and older schemas still work.
+    .select("*")
     .eq("access_token_hash", hashToken(token))
     .maybeSingle();
 
@@ -308,7 +328,7 @@ export async function resolveOAuthUser(admin: SupabaseClient, authHeader: string
 
   // Builders are lazy: an un-awaited update never reaches the database.
   await admin.from("oauth_tokens").update({ last_used_at: new Date().toISOString() }).eq("id", row.id);
-  return { userId: row.user_id, tokenId: row.id };
+  return { userId: row.user_id, tokenId: row.id, sharedDevice: row.shared_device === true };
 }
 
 // Same budget and fail-open rule as checkPatRateLimit.
@@ -331,12 +351,13 @@ export interface OAuthConnection {
   clientName: string;
   createdAt: string;
   lastUsedAt: string | null;
+  sharedDevice: boolean;
 }
 
 export async function listConnections(admin: SupabaseClient, userId: string): Promise<OAuthConnection[]> {
   const { data } = await admin
     .from("oauth_tokens")
-    .select("id,created_at,last_used_at,oauth_clients(client_name)")
+    .select("*,oauth_clients(client_name)")
     .eq("user_id", userId)
     .is("revoked_at", null)
     .order("created_at", { ascending: false });
@@ -349,6 +370,7 @@ export async function listConnections(admin: SupabaseClient, userId: string): Pr
       clientName: name || "Unnamed app",
       createdAt: row.created_at,
       lastUsedAt: row.last_used_at,
+      sharedDevice: row.shared_device === true,
     };
   });
 }

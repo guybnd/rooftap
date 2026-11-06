@@ -57,19 +57,31 @@ export default async function AuthorizePage({
         Only connect apps you trust. You&apos;ll go back to{" "}
         <span className="font-mono">{new URL(check.request.redirectUri).host}</span>.
       </p>
-      <form method="post" action="/api/oauth/authorize" className="flex items-center gap-2 pt-2">
+      <form method="post" action="/api/oauth/authorize" className="space-y-4 pt-2">
         <input type="hidden" name="client_id" value={check.request.clientId} />
         <input type="hidden" name="redirect_uri" value={check.request.redirectUri} />
         <input type="hidden" name="response_type" value="code" />
         <input type="hidden" name="code_challenge" value={check.request.codeChallenge} />
         <input type="hidden" name="code_challenge_method" value="S256" />
         {check.request.state != null && <input type="hidden" name="state" value={check.request.state} />}
-        <Button type="submit" name="decision" value="allow" size="lg" className="px-4">
-          Allow
-        </Button>
-        <Button type="submit" name="decision" value="deny" size="lg" variant="ghost" className="px-4">
-          Cancel
-        </Button>
+        <label className="flex items-start gap-3 rounded-xl bg-muted/50 px-3.5 py-3">
+          <input type="checkbox" name="shared_device" className="mt-0.5 size-4 shrink-0 accent-primary" />
+          <span className="space-y-0.5">
+            <span className="block text-sm text-foreground">This is a shared device</span>
+            <span className="block text-xs text-muted-foreground">
+              For a speaker or screen that anyone at home can hear. It leaves out gift plans, surprises and anything kept
+              from someone, and it can&apos;t add occasions, gift ideas or wishlist items.
+            </span>
+          </span>
+        </label>
+        <div className="flex items-center gap-2">
+          <Button type="submit" name="decision" value="allow" size="lg" className="px-4">
+            Allow
+          </Button>
+          <Button type="submit" name="decision" value="deny" size="lg" variant="ghost" className="px-4">
+            Cancel
+          </Button>
+        </div>
       </form>
     </Shell>
   );

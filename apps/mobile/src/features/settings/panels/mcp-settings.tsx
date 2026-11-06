@@ -201,6 +201,8 @@ interface Connection {
   clientName: string;
   createdAt: string;
   lastUsedAt: string | null;
+  /** Marked on the consent screen as heard by the whole household. Absent from older servers. */
+  sharedDevice?: boolean;
 }
 
 // Same session-bearer pattern as pat-settings.tsx's patRequest.
@@ -270,7 +272,7 @@ function ConnectedApps() {
           {connections.map((c) => (
             <ListItem key={c.id}>
               <ListItemContent>
-                <ListItemTitle>{c.clientName}</ListItemTitle>
+                <ListItemTitle>{c.sharedDevice ? `${c.clientName} (shared device)` : c.clientName}</ListItemTitle>
                 <ListItemMeta>
                   {/* H6: one middle dot per line. */}
                   <Text numberOfLines={1} className="text-caption text-muted-foreground">

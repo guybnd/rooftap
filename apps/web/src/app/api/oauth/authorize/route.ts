@@ -24,6 +24,6 @@ export async function POST(req: Request) {
   if (params.get("decision") !== "allow") {
     return NextResponse.redirect(redirectWith(request.redirectUri, { error: "access_denied", state: request.state }), 303);
   }
-  const code = await createAuthorizationCode(admin, user.id, request);
+  const code = await createAuthorizationCode(admin, user.id, request, params.get("shared_device") === "on");
   return NextResponse.redirect(redirectWith(request.redirectUri, { code, state: request.state }), 303);
 }

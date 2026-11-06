@@ -177,6 +177,11 @@ export interface HouseholdToolContext {
    * leave out anything kept from anyone (gift surprises), not just from this person.
    */
   shared?: boolean;
+  /**
+   * A device anyone in the room can hear: get_occasions gives what and when
+   * only, and never reads gift ideas or wishlists. Use with shared.
+   */
+  occasionDatesOnly?: boolean;
 }
 
 const COST_CATEGORIES = Object.keys(CATEGORY_META) as [
@@ -419,6 +424,7 @@ export function householdTools({
   enabled,
   deviceId,
   shared = false,
+  occasionDatesOnly = false,
 }: HouseholdToolContext): HouseholdTool[] {
   const tools: HouseholdTool[] = [];
 
@@ -2012,12 +2018,34 @@ export function householdTools({
   tool(
     "get_occasions",
     {
-      description:
-        "Occasions: the household's birthdays, anniversaries and other days, soonest first, with next_date, days_to, who it is for (person_user_id for a member, person for a name), the gift budget and the gift ideas so far (status idea, watching, bought or booked; prices in cents; kept_from names the members an idea is kept from). wishlists lists each member's own wishlist; taken says someone already plans to give that thing. Never tell a member about ideas kept from them.",
+      description: occasionDatesOnly
+        ? "Occasions: the household's birthdays, anniversaries, holidays and other days, soonest first, with next_date, days_to and who it is for. Dates only: gift plans are not available here."
+        : "Occasions: the household's birthdays, anniversaries and other days, soonest first, with next_date, days_to, who it is for (person_user_id for a member, person for a name), the gift budget and the gift ideas so far (status idea, watching, bought or booked; prices in cents; kept_from names the members an idea is kept from). wishlists lists each member's own wishlist; taken says someone already plans to give that thing. Never tell a member about ideas kept from them.",
     },
     async () => {
       if (!groupId) return noGroupError();
       const { today, occasions } = await occasionsContext(groupId);
+      if (occasionDatesOnly) {
+        // An allowlist, and the gift tables stay unread, so a new field can't leak here.
+        const memberName = await memberNames(admin, groupId);
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({
+                today,
+                occasions: sortOccasions(occasions, today).map((o) => ({
+                  title: o.title,
+                  kind: o.kind,
+                  next_date: nextOccasionDay(o, today),
+                  days_to: daysToOccasion(o, today),
+                  ...(o.person_id ? { person: memberName.get(o.person_id) ?? "Someone" } : o.person_name ? { person: o.person_name } : {}),
+                })),
+              }),
+            },
+          ],
+        };
+      }
       const [names, ideaRows, wishRows] = await Promise.all([
         memberNames(admin, groupId),
         admin.from("gift_ideas").select("*").eq("group_id", groupId).eq("deleted", false),

@@ -6,7 +6,7 @@ import type { ModuleId } from '@homeup/core';
 import { MCP_TOOLS, MCP_TOOL_BY_NAME } from "@/lib/mcp-tools";
 import { getMcpSettings, toolAllowed, type McpSettings } from "@/lib/mcp-settings";
 import { getEnabledModules, moduleNotFound } from "@/lib/server-modules";
-import { checkOAuthRateLimit, isOAuthAccessToken, resolveOAuthUser, wwwAuthenticate } from "@/lib/mcp-oauth";
+import { checkOAuthRateLimit, sharedDeviceAllows, isOAuthAccessToken, resolveOAuthUser, wwwAuthenticate } from "@/lib/mcp-oauth";
 import { householdTools } from "@/lib/mcp/household-tools";
 
 // Generic, non-enumerating 401 body — identical for missing/malformed/unknown/revoked auth,
@@ -25,10 +25,14 @@ function buildServer(
   userId: string,
   groupId: string | null,
   settings: McpSettings,
-  enabled: ReadonlySet<ModuleId>
+  enabled: ReadonlySet<ModuleId>,
+  sharedDevice = false
 ) {
   const server = new McpServer({ name: "homeup", version: "1.0.0" });
-  const tools = householdTools({ admin, userId, groupId, enabled });
+  // A shared device speaks to the room, so tools treat the turn like the
+  // household's shared chat: anything kept from anyone stays out. Occasions
+  // give dates only.
+  const tools = householdTools({ admin, userId, groupId, enabled, ...(sharedDevice ? { shared: true, occasionDatesOnly: true } : {}) });
 
   // Gates every tool through the household's modules (a switched-off
   // module's tools don't exist) and the settings conjunction
@@ -38,6 +42,7 @@ function buildServer(
     if (!meta) throw new Error(`Unknown MCP tool "${t.name}" — add it to its module manifest's tools (packages/core/src/modules/<id>/manifest.ts)`);
     if (!enabled.has(meta.module)) continue;
     if (!toolAllowed(settings, meta)) continue;
+    if (sharedDevice && !sharedDeviceAllows(meta)) continue;
     server.registerTool(t.name, { description: t.description, inputSchema: t.inputSchema } as never, t.handler as never);
   }
 
@@ -71,7 +76,7 @@ async function handleMcp(req: Request): Promise<Response> {
   const admin = createAdminClient();
   // A bot API key, or an access token from MCP sign-in.
   const authHeader = req.headers.get("authorization");
-  let identity: { userId: string };
+  let identity: { userId: string; sharedDevice?: boolean };
   if (isOAuthAccessToken(authHeader)) {
     const oauth = await resolveOAuthUser(admin, authHeader);
     if (!oauth) return unauthorized(req);
@@ -89,7 +94,7 @@ async function handleMcp(req: Request): Promise<Response> {
   const enabled = await getEnabledModules(admin, groupId);
   if (!enabled.has("mcp")) return moduleNotFound();
   const settings = await getMcpSettings(admin, identity.userId);
-  const server = buildServer(admin, identity.userId, groupId, settings, enabled);
+  const server = buildServer(admin, identity.userId, groupId, settings, enabled, identity.sharedDevice === true);
   const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
   await server.connect(transport);
   return transport.handleRequest(req);

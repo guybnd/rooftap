@@ -3,6 +3,7 @@ import { createHash } from "crypto";
 import {
   authorizationServerMetadata,
   checkAuthorizeRequest,
+  createAuthorizationCode,
   exchangeAuthorizationCode,
   isAllowedRedirectUri,
   isOAuthAccessToken,
@@ -115,6 +116,41 @@ describe("code exchange", () => {
     expect(expired.ok).toBe(false);
     const used = await exchangeAuthorizationCode(adminReturning(null), params({ code: "c", code_verifier: verifier }));
     expect(used.ok).toBe(false);
+  });
+  // A shared device is chosen on the consent screen and must reach the token.
+  function recordingAdmin(row: unknown) {
+    const inserts: Record<string, unknown>[] = [];
+    const builder: Record<string, unknown> = {};
+    for (const m of ["select", "eq", "delete"]) builder[m] = () => builder;
+    builder.insert = (value: Record<string, unknown>) => {
+      inserts.push(value);
+      return Promise.resolve({ error: null });
+    };
+    builder.maybeSingle = async () => ({ data: row, error: null });
+    return { admin: { from: () => builder } as never, inserts };
+  }
+
+  it("carries the shared device mark from the code to the token", async () => {
+    const shared = recordingAdmin({ ...row, shared_device: true });
+    await exchangeAuthorizationCode(shared.admin, params({ code: "c", code_verifier: verifier }));
+    expect(shared.inserts[0].shared_device).toBe(true);
+
+    // A normal code, or one from before the column existed, never sends it.
+    for (const r of [{ ...row, shared_device: false }, row]) {
+      const plain = recordingAdmin(r);
+      await exchangeAuthorizationCode(plain.admin, params({ code: "c", code_verifier: verifier }));
+      expect("shared_device" in plain.inserts[0]).toBe(false);
+    }
+  });
+
+  it("stores the shared device mark on the code only when it is set", async () => {
+    const request = { clientId: client.id, redirectUri: client.redirect_uris[0], codeChallenge: "x", state: null };
+    const shared = recordingAdmin(null);
+    await createAuthorizationCode(shared.admin, "user-1", request, true);
+    expect(shared.inserts[0].shared_device).toBe(true);
+    const plain = recordingAdmin(null);
+    await createAuthorizationCode(plain.admin, "user-1", request);
+    expect("shared_device" in plain.inserts[0]).toBe(false);
   });
 });
 

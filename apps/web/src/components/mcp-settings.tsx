@@ -161,6 +161,8 @@ interface Connection {
   clientName: string;
   createdAt: string;
   lastUsedAt: string | null;
+  /** Marked on the consent screen as heard by the whole household. Absent from older servers. */
+  sharedDevice?: boolean;
 }
 
 // Apps connected by signing in to Rooftap (MCP sign-in, lib/mcp-oauth.ts),
@@ -207,7 +209,7 @@ function ConnectedApps() {
           {connections.map((c) => (
             <ListItem key={c.id}>
               <ListItemContent>
-                <ListItemTitle>{c.clientName}</ListItemTitle>
+                <ListItemTitle>{c.sharedDevice ? `${c.clientName} (shared device)` : c.clientName}</ListItemTitle>
                 {/* H6: one middle dot per line. */}
                 <ListItemMeta>
                   Connected {timeAgo(c.createdAt)}
