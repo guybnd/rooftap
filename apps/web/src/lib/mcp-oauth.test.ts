@@ -10,6 +10,7 @@ import {
   parseRegistration,
   pkceChallenge,
   redirectWith,
+  refreshAccessToken,
   wwwAuthenticate,
 } from "./mcp-oauth";
 import { safeNextPath } from "./next-path";
@@ -151,6 +152,96 @@ describe("code exchange", () => {
     const plain = recordingAdmin(null);
     await createAuthorizationCode(plain.admin, "user-1", request);
     expect("shared_device" in plain.inserts[0]).toBe(false);
+  });
+});
+
+// A different row per table, for flows that read a code or token and then its client.
+function adminByTable(rows: Record<string, unknown>) {
+  return {
+    from: (table: string) => {
+      const builder: Record<string, unknown> = {};
+      for (const m of ["select", "eq", "is", "delete", "update"]) builder[m] = () => builder;
+      builder.insert = async () => ({ error: null });
+      builder.then = (resolve: (v: unknown) => void) => resolve({ error: null });
+      builder.maybeSingle = async () => ({ data: rows[table] ?? null, error: null });
+      return builder;
+    },
+  } as never;
+}
+
+describe("sign-in with a client secret", () => {
+  const registered = parseRegistration({
+    client_name: "Home Assistant",
+    redirect_uris: ["https://my.home-assistant.io/redirect/oauth"],
+    token_endpoint_auth_method: "client_secret_post",
+  });
+  if (!registered.ok || !registered.clientSecret) throw new Error("registration failed");
+  const secretClient = registered.client;
+  const clientSecret = registered.clientSecret;
+  const codeRow = {
+    client_id: secretClient.id,
+    user_id: "u1",
+    redirect_uri: secretClient.redirect_uris[0],
+    code_challenge: null,
+    expires_at: new Date(Date.now() + 60_000).toISOString(),
+  };
+  const noPkce = { client_id: secretClient.id, redirect_uri: secretClient.redirect_uris[0], response_type: "code" };
+
+  it("stores only a hash of the secret, and only when asked", () => {
+    expect(secretClient.client_secret_hash).toBeTruthy();
+    expect(JSON.stringify(secretClient)).not.toContain(clientSecret);
+    for (const body of [{ redirect_uris: client.redirect_uris }, { redirect_uris: client.redirect_uris, token_endpoint_auth_method: "none" }]) {
+      const plain = parseRegistration(body);
+      expect(plain.ok && !plain.clientSecret && !("client_secret_hash" in plain.client)).toBe(true);
+    }
+  });
+
+  it("lets only a secret client skip PKCE at authorize", async () => {
+    const ok = await checkAuthorizeRequest(adminReturning(secretClient), params(noPkce));
+    expect(ok.ok && ok.request.codeChallenge).toBe(null);
+    const publicClient = await checkAuthorizeRequest(
+      adminReturning(client),
+      params({ client_id: client.id, redirect_uri: client.redirect_uris[0], response_type: "code" }),
+    );
+    expect(publicClient.ok).toBe(false);
+    const weak = await checkAuthorizeRequest(adminReturning(secretClient), params({ ...noPkce, code_challenge: "a", code_challenge_method: "plain" }));
+    expect(weak.ok).toBe(false);
+  });
+
+  it("issues tokens for the right secret only", async () => {
+    const admin = () => adminByTable({ oauth_authorization_codes: codeRow, oauth_clients: secretClient });
+    expect((await exchangeAuthorizationCode(admin(), params({ code: "c", client_secret: clientSecret }))).ok).toBe(true);
+    expect((await exchangeAuthorizationCode(admin(), params({ code: "c", client_secret: "rt_ocs_wrong" }))).ok).toBe(false);
+    expect((await exchangeAuthorizationCode(admin(), params({ code: "c" }))).ok).toBe(false);
+  });
+
+  it("refuses a code with no challenge for a client with no secret", async () => {
+    const admin = adminByTable({ oauth_authorization_codes: { ...codeRow, client_id: client.id, redirect_uri: client.redirect_uris[0] }, oauth_clients: client });
+    expect((await exchangeAuthorizationCode(admin, params({ code: "c", client_secret: "anything" }))).ok).toBe(false);
+  });
+
+  it("still requires the verifier when a code has a challenge, and the secret too if the client has one", async () => {
+    const verifier = "a".repeat(50);
+    const withChallenge = { ...codeRow, code_challenge: pkceChallenge(verifier) };
+    const pub = adminByTable({ oauth_authorization_codes: { ...withChallenge, client_id: client.id, redirect_uri: client.redirect_uris[0] }, oauth_clients: client });
+    expect((await exchangeAuthorizationCode(pub, params({ code: "c" }))).ok).toBe(false);
+    expect((await exchangeAuthorizationCode(pub, params({ code: "c", code_verifier: verifier }))).ok).toBe(true);
+    const sec = adminByTable({ oauth_authorization_codes: withChallenge, oauth_clients: secretClient });
+    expect((await exchangeAuthorizationCode(sec, params({ code: "c", code_verifier: verifier }))).ok).toBe(false);
+  });
+
+  it("fails closed when the client can't be read", async () => {
+    const admin = adminByTable({ oauth_authorization_codes: { ...codeRow, code_challenge: pkceChallenge("a".repeat(50)) } });
+    expect((await exchangeAuthorizationCode(admin, params({ code: "c", code_verifier: "a".repeat(50) }))).ok).toBe(false);
+  });
+
+  it("needs the secret to refresh, and leaves a public client alone", async () => {
+    const tokenRow = { id: "t1", client_id: secretClient.id, revoked_at: null };
+    const sec = () => adminByTable({ oauth_tokens: tokenRow, oauth_clients: secretClient });
+    expect((await refreshAccessToken(sec(), params({ refresh_token: "r", client_secret: clientSecret }))).ok).toBe(true);
+    expect((await refreshAccessToken(sec(), params({ refresh_token: "r" }))).ok).toBe(false);
+    const pub = adminByTable({ oauth_tokens: { ...tokenRow, client_id: client.id }, oauth_clients: client });
+    expect((await refreshAccessToken(pub, params({ refresh_token: "r" }))).ok).toBe(true);
   });
 });
 

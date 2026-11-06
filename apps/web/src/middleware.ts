@@ -47,6 +47,7 @@ export async function middleware(request: NextRequest) {
     // MCP sign-in (lib/mcp-oauth.ts): discovery, app registration and token
     // exchange are called by the connecting app, never with a session.
     request.nextUrl.pathname.startsWith("/.well-known/oauth-") ||
+    request.nextUrl.pathname.startsWith("/.well-known/openid-configuration") ||
     request.nextUrl.pathname.startsWith("/api/oauth/register") ||
     request.nextUrl.pathname.startsWith("/api/oauth/token") ||
     // HOUP-69: the native app's server picker calls this before it has any

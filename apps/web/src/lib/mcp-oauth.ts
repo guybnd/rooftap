@@ -1,4 +1,4 @@
-import { randomBytes, createHash } from "crypto";
+import { randomBytes, createHash, timingSafeEqual } from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { hashToken, PAT_RATE_LIMIT_PER_MINUTE } from "@/lib/pat";
 
@@ -11,6 +11,12 @@ export const ACCESS_TOKEN_PREFIX = "rt_oat_";
 const REFRESH_TOKEN_PREFIX = "rt_ort_";
 const CODE_PREFIX = "rt_oac_";
 const CLIENT_PREFIX = "rt_client_";
+const CLIENT_SECRET_PREFIX = "rt_ocs_";
+// A server-side app can't do PKCE (Home Assistant's MCP integration, for one).
+// It asks for this at registration, gets a secret once, and proves itself with
+// the secret at the token endpoint. Not in the discovery document: clients that
+// read it keep using PKCE as before.
+const SECRET_AUTH_METHOD = "client_secret_post";
 
 export const ACCESS_TOKEN_TTL_SECONDS = 60 * 60;
 const CODE_TTL_MS = 5 * 60 * 1000;
@@ -90,14 +96,17 @@ export interface OAuthClient {
   id: string;
   client_name: string | null;
   redirect_uris: string[];
+  /** Set for a server-side app that signs in with a secret instead of PKCE. */
+  client_secret_hash?: string | null;
 }
 
 export type RegistrationResult =
-  | { ok: true; client: OAuthClient }
+  // clientSecret is the only copy: only its hash is stored.
+  | { ok: true; client: OAuthClient; clientSecret?: string }
   | { ok: false; error: string; description: string };
 
 export function parseRegistration(body: unknown): RegistrationResult {
-  const b = (body ?? {}) as { redirect_uris?: unknown; client_name?: unknown };
+  const b = (body ?? {}) as { redirect_uris?: unknown; client_name?: unknown; token_endpoint_auth_method?: unknown };
   const uris = b.redirect_uris;
   if (!Array.isArray(uris) || uris.length === 0 || uris.length > MAX_REDIRECT_URIS) {
     return { ok: false, error: "invalid_redirect_uri", description: "Give 1 to 10 redirect_uris." };
@@ -106,7 +115,17 @@ export function parseRegistration(body: unknown): RegistrationResult {
     return { ok: false, error: "invalid_redirect_uri", description: "redirect_uris must be https, or http on localhost." };
   }
   const name = typeof b.client_name === "string" ? b.client_name.trim().slice(0, MAX_CLIENT_NAME_LENGTH) : null;
-  return { ok: true, client: { id: secret(CLIENT_PREFIX).slice(0, CLIENT_PREFIX.length + 32), client_name: name || null, redirect_uris: uris } };
+  const client: OAuthClient = { id: secret(CLIENT_PREFIX).slice(0, CLIENT_PREFIX.length + 32), client_name: name || null, redirect_uris: uris };
+  if (b.token_endpoint_auth_method !== SECRET_AUTH_METHOD) return { ok: true, client };
+  const clientSecret = secret(CLIENT_SECRET_PREFIX);
+  return { ok: true, client: { ...client, client_secret_hash: hashToken(clientSecret) }, clientSecret };
+}
+
+function secretMatches(client: OAuthClient, sent: string | null): boolean {
+  if (!sent || !client.client_secret_hash) return false;
+  const a = Buffer.from(hashToken(sent));
+  const b = Buffer.from(client.client_secret_hash);
+  return a.length === b.length && timingSafeEqual(a, b);
 }
 
 /** A tool a shared-device connection may see and call. Other connections are not limited here. */
@@ -124,7 +143,9 @@ export async function getClient(admin: SupabaseClient, clientId: string | null):
   if (!clientId) return null;
   const { data } = await admin
     .from("oauth_clients")
-    .select("id,client_name,redirect_uris")
+    // "*" rather than a column list: client_secret_hash may not exist yet when
+    // this code deploys ahead of its migration.
+    .select("*")
     .eq("id", clientId)
     .maybeSingle();
   return data ?? null;
@@ -135,7 +156,8 @@ export async function getClient(admin: SupabaseClient, clientId: string | null):
 export interface AuthorizeRequest {
   clientId: string;
   redirectUri: string;
-  codeChallenge: string;
+  /** Null only for a client that signs in with a secret. */
+  codeChallenge: string | null;
   state: string | null;
 }
 
@@ -158,13 +180,16 @@ export async function checkAuthorizeRequest(admin: SupabaseClient, params: Param
     return { ok: false, message: "This app asked for an unsupported sign-in type." };
   }
   const codeChallenge = params.get("code_challenge");
-  if (!codeChallenge || params.get("code_challenge_method") !== "S256") {
+  const pkceOk = !!codeChallenge && params.get("code_challenge_method") === "S256";
+  // PKCE stays required, except for a client that proves itself with a secret.
+  const secretOk = !codeChallenge && !!client.client_secret_hash;
+  if (!pkceOk && !secretOk) {
     return { ok: false, message: "This app didn't send a secure sign-in challenge (PKCE S256)." };
   }
   return {
     ok: true,
     client,
-    request: { clientId: client.id, redirectUri, codeChallenge, state: params.get("state") },
+    request: { clientId: client.id, redirectUri, codeChallenge: codeChallenge || null, state: params.get("state") },
   };
 }
 
@@ -247,7 +272,7 @@ export async function exchangeAuthorizationCode(
 ): Promise<TokenResult> {
   const code = params.get("code");
   const verifier = params.get("code_verifier");
-  if (!code || !verifier) return { ok: false, error: "invalid_request", description: "code and code_verifier are required." };
+  if (!code) return { ok: false, error: "invalid_request", description: "code is required." };
 
   // Codes are single use: delete first, then check what was deleted.
   const { data: row } = await admin
@@ -265,7 +290,17 @@ export async function exchangeAuthorizationCode(
   if (clientId && clientId !== row.client_id) return invalidGrant("Code was issued to another client.");
   const redirectUri = params.get("redirect_uri");
   if (redirectUri && redirectUri !== row.redirect_uri) return invalidGrant("redirect_uri doesn't match.");
-  if (pkceChallenge(verifier) !== row.code_challenge) return invalidGrant("code_verifier doesn't match.");
+  if (row.code_challenge) {
+    if (!verifier) return { ok: false, error: "invalid_request", description: "code_verifier is required." };
+    if (pkceChallenge(verifier) !== row.code_challenge) return invalidGrant("code_verifier doesn't match.");
+  }
+  // A client with a secret always proves it, and a code with no challenge can
+  // only belong to such a client. A failed lookup fails closed.
+  const codeClient = await getClient(admin, row.client_id);
+  if (!codeClient) return invalidGrant("Unknown client.");
+  if (codeClient.client_secret_hash || !row.code_challenge) {
+    if (!secretMatches(codeClient, params.get("client_secret"))) return invalidGrant("client_secret doesn't match.");
+  }
 
   const tokens = freshTokens();
   const { error } = await admin.from("oauth_tokens").insert({
@@ -290,6 +325,11 @@ export async function refreshAccessToken(admin: SupabaseClient, params: ParamSou
   if (!row || row.revoked_at != null) return invalidGrant("Unknown or revoked refresh token.");
   const clientId = params.get("client_id");
   if (clientId && clientId !== row.client_id) return invalidGrant("Refresh token was issued to another client.");
+  const refreshClient = await getClient(admin, row.client_id);
+  if (!refreshClient) return invalidGrant("Unknown client.");
+  if (refreshClient.client_secret_hash && !secretMatches(refreshClient, params.get("client_secret"))) {
+    return invalidGrant("client_secret doesn't match.");
+  }
 
   // Rotate both tokens; the old refresh token stops working.
   const tokens = freshTokens();

@@ -61,8 +61,12 @@ export default async function AuthorizePage({
         <input type="hidden" name="client_id" value={check.request.clientId} />
         <input type="hidden" name="redirect_uri" value={check.request.redirectUri} />
         <input type="hidden" name="response_type" value="code" />
-        <input type="hidden" name="code_challenge" value={check.request.codeChallenge} />
-        <input type="hidden" name="code_challenge_method" value="S256" />
+        {check.request.codeChallenge != null && (
+          <>
+            <input type="hidden" name="code_challenge" value={check.request.codeChallenge} />
+            <input type="hidden" name="code_challenge_method" value="S256" />
+          </>
+        )}
         {check.request.state != null && <input type="hidden" name="state" value={check.request.state} />}
         <label className="flex items-start gap-3 rounded-xl bg-muted/50 px-3.5 py-3">
           <input type="checkbox" name="shared_device" className="mt-0.5 size-4 shrink-0 accent-primary" />
