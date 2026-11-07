@@ -363,7 +363,7 @@ export const SCENES: Scene[] = [
     id: "assistant",
     path: "/assistant",
     page: Assistant,
-    marks: { pending: ["text=waiting on your OK", 2], ask: "textarea", household: '[class*="list-item"]:has-text("Household")', chats: '[class*="list-item"]:has-text("Hosting Saturday")', quick: '[class*="list-item"]:has-text("Dinner tonight")', house: '[class*="list-item"]:has-text("The house tonight")' },
+    marks: { pending: "text=/waits? on your OK/", ask: "textarea", household: '[class*="list-item"]:has-text("Household")', chats: '[class*="list-item"]:has-text("Hosting Saturday")', quick: '[class*="list-item"]:has-text("Dinner tonight")', house: '[class*="list-item"]:has-text("The house tonight")' },
   },
   {
     id: "assistant-household",

@@ -3,7 +3,8 @@
 // the server, or this month's budget used up.
 // Web twin: apps/web/src/app/assistant/assistant-notice.tsx.
 import type { AssistantErrorCode } from '@homeup/core';
-import { Sparkles } from 'lucide-react-native';
+import type { LucideIcon } from 'lucide-react-native';
+import { RooftapGlyph } from '@/components/brand/rooftap-mark';
 import { EmptyState } from '@homeup/ui';
 
 const COPY: Record<AssistantErrorCode, { title: string; description: string }> = {
@@ -32,5 +33,5 @@ const COPY: Record<AssistantErrorCode, { title: string; description: string }> =
 
 export function AssistantNotice({ code }: { code: AssistantErrorCode }) {
   const copy = COPY[code];
-  return <EmptyState icon={Sparkles} title={copy.title} description={copy.description} />;
+  return <EmptyState icon={RooftapGlyph as unknown as LucideIcon} title={copy.title} description={copy.description} />;
 }

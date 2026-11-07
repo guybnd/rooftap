@@ -8,7 +8,8 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowUp, AtSign, Check, ChevronRight, ImageOff, ImagePlus, Loader2, Mic, Sparkles, X } from 'lucide-react';
+import { ArrowUp, AtSign, Check, ChevronRight, ImageOff, ImagePlus, Loader2, Mic, X } from 'lucide-react';
+import { RooftapGlyph } from '@/components/brand/rooftap-mark';
 import {
   GHOST_REPLY_GROW_MS,
   GHOST_REPLY_LINES,
@@ -430,7 +431,7 @@ function MentionChips({ options, active, onPick }: { options: MentionOption[]; a
             i === active ? 'bg-muted' : 'bg-background'
           )}
         >
-          {o.kind === 'rooftap' ? <Sparkles className="h-3.5 w-3.5" /> : <AtSign className="h-3.5 w-3.5 text-muted-foreground" />}
+          {o.kind === 'rooftap' ? <RooftapGlyph className="h-3.5 w-3.5" /> : <AtSign className="h-3.5 w-3.5 text-muted-foreground" />}
           <span className="font-medium text-foreground">{o.name}</span>
           {o.kind === 'rooftap' && <span className="text-xs text-muted-foreground">ask it</span>}
         </button>

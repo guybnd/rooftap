@@ -18,7 +18,8 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useRouter, type Href } from 'expo-router';
-import { ArrowUp, AtSign, Camera, Check, ChevronRight, ImageOff, ImagePlus, Images, Mic, Sparkles, X } from 'lucide-react-native';
+import { ArrowUp, AtSign, Camera, Check, ChevronRight, ImageOff, ImagePlus, Images, Mic, X } from 'lucide-react-native';
+import { RooftapGlyph } from '@/components/brand/rooftap-mark';
 import {
   BottomSheet,
   ListGroup,
@@ -502,7 +503,7 @@ function MentionChips({ options, onPick }: { options: MentionOption[]; onPick: (
           hitSlop={{ top: 8, bottom: 8 }}
           className="h-9 flex-row items-center gap-1.5 rounded-full border border-border/60 bg-background px-3 active:bg-muted"
         >
-          {o.kind === 'rooftap' ? <Sparkles size={14} className="text-foreground" /> : <AtSign size={14} className="text-muted-foreground" />}
+          {o.kind === 'rooftap' ? <RooftapGlyph size={14} className="text-foreground" /> : <AtSign size={14} className="text-muted-foreground" />}
           <Text className="text-sm font-medium text-foreground">{o.name}</Text>
           {o.kind === 'rooftap' && <Text className="text-xs text-muted-foreground">ask it</Text>}
         </Pressable>

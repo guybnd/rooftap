@@ -54,15 +54,69 @@ function LoadFailed({ message, onRetry }: { message: string; onRetry: () => void
 const arrive = (i: number) => ({ '--arrive-delay': `${arriveDelayMs(i)}ms` }) as CSSProperties;
 
 /**
+ * "Try asking": asks worth asking from the household's enabled modules (core
+ * askStarters: plans and changes, never what Home already shows), each a row
+ * that sends the ask as it is. Shared by the empty Ask sheet and the
+ * Assistant space. Renders nothing when no module offers one.
+ */
+export function AskStarters({
+  onAsk,
+  disabled,
+  count,
+  className,
+  arriveFrom = 0,
+}: {
+  onAsk: (text: string) => void;
+  disabled: boolean;
+  count?: number;
+  className?: string;
+  /** Where in the Arrive sequence the label starts. */
+  arriveFrom?: number;
+}) {
+  const modules = useModules();
+  const starters = useMemo(() => askStarters((id) => modules.isEnabled(id), count), [modules, count]);
+  if (starters.length === 0) return null;
+  return (
+    <div className={cn("space-y-2", className)}>
+      <p className="ask-arrive px-1 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground" style={arrive(arriveFrom)}>
+        Try asking
+      </p>
+      <ListGroup className="ask-arrive" style={arrive(arriveFrom + 1)}>
+        {starters.map((s) => (
+          <ListItem key={s.module} asChild>
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => onAsk(s.text)}
+              aria-label={`Ask: ${s.text}`}
+              className="flex w-full items-center gap-3 text-left disabled:opacity-50"
+            >
+              <LeadingTile sectionId={s.module} Icon={sectionIconFor(s.module)} size="md" />
+              <ListItemContent>
+                <ListItemTitle>
+                  <span className="text-foreground">{s.text}</span>
+                </ListItemTitle>
+                <ListItemMeta>{s.touches}</ListItemMeta>
+              </ListItemContent>
+              <ListItemTrailing>
+                <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden />
+              </ListItemTrailing>
+            </button>
+          </ListItem>
+        ))}
+      </ListGroup>
+    </div>
+  );
+}
+
+/**
  * A new ask with nothing said yet (Hearth §13 "Ask sheet"): a greeting, then
  * asks worth asking from the household's enabled modules as a list (core
  * askStarters: plans and changes, never what Home already shows). Blocks
  * rise in one after another (Arrive); a click sends the ask as it is.
  */
 function AskEmpty({ onAsk, disabled }: { onAsk: (text: string) => void; disabled: boolean }) {
-  const modules = useModules();
   const { memberProfiles, currentUserId } = useDataCache();
-  const starters = useMemo(() => askStarters((id) => modules.isEnabled(id)), [modules]);
   const name = currentUserId ? memberProfiles[currentUserId]?.name : null;
   return (
     <div className="space-y-3">
@@ -70,37 +124,7 @@ function AskEmpty({ onAsk, disabled }: { onAsk: (text: string) => void; disabled
         <h2 className="font-heading text-[26px] font-bold leading-tight text-foreground">{askGreeting(name)}</h2>
         <p className="text-sm leading-snug text-muted-foreground">I can plan, add and sort things across the house. I check with you before I change anything.</p>
       </div>
-      {starters.length > 0 && (
-        <div className="space-y-2 pt-1">
-          <p className="ask-arrive px-1 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground" style={arrive(1)}>
-            Try asking
-          </p>
-          <ListGroup className="ask-arrive" style={arrive(2)}>
-            {starters.map((s) => (
-              <ListItem key={s.module} asChild>
-                <button
-                  type="button"
-                  disabled={disabled}
-                  onClick={() => onAsk(s.text)}
-                  aria-label={`Ask: ${s.text}`}
-                  className="flex w-full items-center gap-3 text-left disabled:opacity-50"
-                >
-                  <LeadingTile sectionId={s.module} Icon={sectionIconFor(s.module)} size="md" />
-                  <ListItemContent>
-                    <ListItemTitle>
-                      <span className="text-foreground">{s.text}</span>
-                    </ListItemTitle>
-                    <ListItemMeta>{s.touches}</ListItemMeta>
-                  </ListItemContent>
-                  <ListItemTrailing>
-                    <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden />
-                  </ListItemTrailing>
-                </button>
-              </ListItem>
-            ))}
-          </ListGroup>
-        </div>
-      )}
+      <AskStarters onAsk={onAsk} disabled={disabled} className="pt-1" arriveFrom={1} />
     </div>
   );
 }

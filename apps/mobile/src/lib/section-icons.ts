@@ -35,6 +35,7 @@ import {
   type LucideIcon,
 } from 'lucide-react-native';
 import { getSection, profileSection } from '@homeup/core';
+import { RooftapGlyph } from '@/components/brand/rooftap-mark';
 
 // HOUP-142: filled out to match apps/web/src/lib/section-icons.ts's full
 // 19-iconId set — this map previously only covered section-level icons, so
@@ -52,6 +53,8 @@ export const sectionIcons: Record<string, LucideIcon> = {
   gift: Gift,
   'trash-2': Trash2,
   sparkles: Sparkles,
+  // The Assistant's section glyph: Rooftap's own mark, not a lucide icon.
+  rooftap: RooftapGlyph as unknown as LucideIcon,
   'list-todo': ListTodo,
   'chef-hat': ChefHat,
   utensils: Utensils,

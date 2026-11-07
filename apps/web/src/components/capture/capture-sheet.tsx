@@ -11,7 +11,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { toast } from "sonner";
 import { use$ } from "@legendapp/state/react";
-import { Camera, Upload, FileText, ShoppingCart, Receipt, File as FileIcon, Loader2, ArrowLeft, Tag, Sparkles, Wallet, ListChecks, ClipboardCheck, Building2, ScanLine, Search, Plus, Check, CalendarDays, ChefHat, ListTodo } from "lucide-react";
+import { Camera, Upload, FileText, ShoppingCart, Receipt, File as FileIcon, Loader2, ArrowLeft, Tag, Sparkles, Wallet, ChevronRight, ListChecks, ClipboardCheck, Building2, ScanLine, Search, Plus, Check, CalendarDays, ChefHat, ListTodo } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -26,7 +26,7 @@ import { useCapture } from "@/components/capture/capture-context";
 import { getCaptureLauncherCurrentKey } from "@/components/capture/launcher-current";
 import { useSectionSettings } from "@/lib/use-section";
 import { getEnabledModules, getEnabledSections, getSectionByPath, hiddenWithDisabledModules, isCaptureCategoryEnabled, isFeatureEnabled, looksLikeQuestion, listSetupStores, openAssistantPopup, useAssistantUnread, sectionHue, syncedGroupId, useModules, useReconnectSync, useStoreHelpers, householdTasks$, groceryItems$, costItems$, setupItems$, recipes$ as recipesStore$, checklists$ as checklistsStore$, shopperWants$ } from "@homeup/core";
-import { dialog } from "@homeup/core";
+import { dialog, launcherColumns } from "@homeup/core";
 import { useGlobalSearchIndex, resolveGlobalHitAction, type GlobalHit } from "@/hooks/use-global-search-index";
 import { useKeyboardInset } from "@/hooks/use-keyboard-inset";
 import { HOUSEHOLD_TASKS_CHANGED_EVENT } from "@/hooks/use-overdue-task-count";
@@ -38,6 +38,8 @@ import { CostModal } from "@/app/costs/cost-modal";
 import { SetupItemModal } from "@/app/setup/setup-item-modal";
 import { CaptureSearchResults } from "@/components/capture/capture-search-results";
 import { LeadingTile } from "@/components/ui/leading-tile";
+import { ListGroup, ListItem, ListItemContent, ListItemLeading, ListItemMeta, ListItemTitle, ListItemTrailing } from "@/components/ui/list-item";
+import { RooftapTile } from "@/components/brand/rooftap-mark";
 import { toastItemAdded } from "@/lib/added-toast";
 import {
   uploadDocument,
@@ -442,16 +444,17 @@ export function CaptureSheet() {
   // file-capture flow (zero behavior change); page-heavy flows navigate.
   const launcherActions: LauncherAction[] = [
     { key: "cost", label: "Cost", section: "costs", icon: Wallet, run: () => openAddCost() },
-    { key: "doc", label: "Doc / Scan", section: "documents", icon: ScanLine, onlineOnly: true, run: () => setStep("source") },
+    { key: "doc", label: "Scan doc", section: "documents", icon: ScanLine, onlineOnly: true, run: () => setStep("source") },
     { key: "grocery", label: "Grocery", section: "groceries", icon: ShoppingCart, run: () => openAddGrocery() },
     { key: "todo", label: "To-do", section: "household", icon: ListChecks, run: () => openAddTask() },
-    { key: "calendar", label: "Calendar event", section: "calendar", icon: CalendarDays, run: () => navigateTo("/calendar?compose=event") },
+    { key: "calendar", label: "Event", section: "calendar", icon: CalendarDays, run: () => navigateTo("/calendar?compose=event") },
     { key: "checklist", label: "Viewing checklist", section: "search", icon: ClipboardCheck, run: () => navigateTo("/checklist") },
-    { key: "apartment", label: "Apartment listing", section: "search", icon: Building2, onlineOnly: true, run: () => navigateTo("/apartment/new") },
+    { key: "apartment", label: "Listing", section: "search", icon: Building2, onlineOnly: true, run: () => navigateTo("/apartment/new") },
     { key: "recipe", label: "Recipe", section: "recipes", icon: ChefHat, run: () => navigateTo("/recipes/new") },
     { key: "new-checklist", label: "Checklist", section: "checklists", icon: ListTodo, run: () => navigateTo("/checklists/new") },
   ];
   const enabledActions = launcherActions.filter((a) => enabledSectionIds.has(a.section));
+  const launcherCols = launcherColumns(enabledActions.length);
 
   // Add-as chips, gated the same way (only offer types whose section is enabled).
   const addAsChips = [
@@ -815,6 +818,10 @@ export function CaptureSheet() {
             : undefined
         }
       >
+        {/* The Ask sheet's look (Hearth §13 "Ask sheet"): on the launcher the
+            title and the field sit on a tinted band, and everything below is
+            one group with hairlines (H4). */}
+        <div className={cn(step === "launcher" && "border-b border-border bg-muted/40 pb-3")}>
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
             {step !== "launcher" && !busy && (
@@ -843,29 +850,32 @@ export function CaptureSheet() {
           </SheetDescription>
         </SheetHeader>
 
+        {step === "launcher" && (
+          <div className="relative mx-4">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              onKeyDown={(e) => {
+                // A question goes to Rooftap on Enter; anything else waits for a pick.
+                if (e.key === "Enter" && asking) {
+                  e.preventDefault();
+                  askRooftap(q);
+                }
+              }}
+              placeholder={canAsk ? "Add or ask anything" : "Search or add…"}
+              aria-label={canAsk ? "Add or ask anything" : "Search or add"}
+              enterKeyHint={asking ? "send" : undefined}
+              className="w-full rounded-full border border-border bg-card py-2.5 pl-9 pr-3 text-sm outline-none focus:border-ring"
+            />
+          </div>
+        )}
+        </div>
+
         <div className="px-4 pb-2">
           {step === "launcher" ? (
             // ── Quick-add launcher (FLUX-174) — opens even offline ──────────────
-            <div className="space-y-3">
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                  onKeyDown={(e) => {
-                    // A question goes to Rooftap on Enter; anything else waits for a pick.
-                    if (e.key === "Enter" && asking) {
-                      e.preventDefault();
-                      askRooftap(q);
-                    }
-                  }}
-                  placeholder={canAsk ? "Add or ask anything" : "Search or add…"}
-                  aria-label={canAsk ? "Add or ask anything" : "Search or add"}
-                  enterKeyHint={asking ? "send" : undefined}
-                  className="w-full rounded-lg border border-border bg-background pl-9 pr-3 py-2 text-sm outline-none focus:border-ring"
-                />
-              </div>
-
+            <div className="space-y-3 pt-3">
               {q.trim() ? (
                 <div className="space-y-3">
                   {/* Add-as chips pinned ABOVE results so the keyboard can't hide
@@ -874,49 +884,53 @@ export function CaptureSheet() {
                       When it reads as a question it leads, in the assistant's
                       tile hue, and Enter sends it (one box: add or ask). */}
                   {canAsk && (
-                    <button
-                      type="button"
-                      data-hue={sectionHue("assistant")}
-                      onClick={() => askRooftap(q)}
-                      className={cn(
-                        "flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left text-sm transition",
-                        asking
-                          ? "border-transparent bg-[var(--hue-tile)] hover:brightness-110"
-                          : "border-border bg-card hover:bg-muted/60"
-                      )}
-                    >
-                      <Sparkles className="h-4 w-4 shrink-0 text-[var(--hue-glyph)]" />
-                      <span className="min-w-0 flex-1 truncate">
-                        Ask Rooftap <span className="text-muted-foreground">“{q.trim()}”</span>
-                      </span>
-                      {asking && (
-                        <kbd className="hidden shrink-0 rounded-md border border-border px-1.5 py-0.5 font-sans text-[11px] text-muted-foreground md:inline">
-                          Enter
-                        </kbd>
-                      )}
-                    </button>
+                    <ListGroup>
+                      <ListItem asChild>
+                        <button type="button" onClick={() => askRooftap(q)} className="w-full items-center text-left hover:bg-muted/60">
+                          <ListItemLeading className="mt-0">
+                            <RooftapTile size="sm" />
+                          </ListItemLeading>
+                          <ListItemContent>
+                            <ListItemTitle>Ask Rooftap</ListItemTitle>
+                            <ListItemMeta className="truncate">“{q.trim()}”</ListItemMeta>
+                          </ListItemContent>
+                          {asking && (
+                            <ListItemTrailing>
+                              <kbd className="hidden shrink-0 rounded-md border border-border px-1.5 py-0.5 font-sans text-[11px] text-muted-foreground md:inline">
+                                Enter
+                              </kbd>
+                            </ListItemTrailing>
+                          )}
+                        </button>
+                      </ListItem>
+                    </ListGroup>
                   )}
 
                   {addAsChips.length > 0 && (
-                    <div>
-                      <p className="mb-1.5 text-xs text-muted-foreground">
-                        Add <span className="font-medium text-foreground">“{q.trim()}”</span> as…
-                      </p>
-                      <div className="flex flex-wrap gap-2">
+                    <div className="space-y-1.5">
+                      <p className="px-1 text-micro-label uppercase text-muted-foreground">Add as</p>
+                      <ListGroup>
                         {addAsChips.map((c) => (
-                          <button
-                            key={c.type}
-                            data-hue={sectionHue(c.section)}
-                            onClick={() => handleAddAs(c.type, q.trim())}
-                            className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium transition hover:bg-muted/60"
-                          >
-                            {/* Hearth v2: the chip's glyph wears its section's hue, as on the tab bar. */}
-                            <c.icon className="h-3.5 w-3.5 text-[var(--hue-glyph)]" />
-                            {c.label}
-                            <Plus className="h-3 w-3 text-muted-foreground" />
-                          </button>
+                          <ListItem key={c.type} asChild>
+                            <button
+                              type="button"
+                              onClick={() => handleAddAs(c.type, q.trim())}
+                              aria-label={`Add ${q.trim()} as ${c.label}`}
+                              className="w-full items-center text-left hover:bg-muted/60"
+                            >
+                              <ListItemLeading className="mt-0">
+                                <LeadingTile sectionId={c.section} Icon={c.icon} size="sm" />
+                              </ListItemLeading>
+                              <ListItemContent>
+                                <ListItemTitle>{c.label}</ListItemTitle>
+                              </ListItemContent>
+                              <ListItemTrailing>
+                                <Plus className="size-4 text-muted-foreground" />
+                              </ListItemTrailing>
+                            </button>
+                          </ListItem>
                         ))}
-                      </div>
+                      </ListGroup>
                     </div>
                   )}
 
@@ -968,21 +982,35 @@ export function CaptureSheet() {
                 <div className="space-y-3">
                 {/* The chat, one tap from the + (holding or swiping up the mobile + opens it directly). */}
                 {canAsk && (
-                  <button
-                    type="button"
-                    onClick={openChat}
-                    aria-label={assistantUnread > 0 ? "Chat with Rooftap, new answer waiting" : "Chat with Rooftap"}
-                    data-hue={sectionHue("assistant")}
-                    className="flex min-h-12 w-full items-center gap-3 rounded-xl border border-border bg-card px-3 py-2 text-left transition hover:bg-muted/60 active:scale-[0.99]"
-                  >
-                    <LeadingTile sectionId="assistant" Icon={Sparkles} size="sm" />
-                    <span className="min-w-0 flex-1 text-sm font-medium">Chat with Rooftap</span>
-                    {assistantUnread > 0 && <span aria-hidden className="size-2 rounded-full bg-[var(--hue-glow)]" />}
-                    <span className="text-xs text-muted-foreground md:hidden">Hold + to jump in</span>
-                  </button>
+                  <ListGroup>
+                    <ListItem asChild>
+                      <button
+                        type="button"
+                        onClick={openChat}
+                        aria-label={assistantUnread > 0 ? "Chat with Rooftap, new answer waiting" : "Chat with Rooftap"}
+                        data-hue={sectionHue("assistant")}
+                        className="w-full items-center text-left hover:bg-muted/60"
+                      >
+                        <ListItemLeading className="mt-0">
+                          <RooftapTile size="sm" />
+                        </ListItemLeading>
+                        <ListItemContent>
+                          <ListItemTitle>Chat with Rooftap</ListItemTitle>
+                          <ListItemMeta>{assistantUnread > 0 ? "A new answer is waiting" : <><span className="md:hidden">Hold + to jump in</span><span className="hidden md:inline">Plans, lists and changes across the house</span></>}</ListItemMeta>
+                        </ListItemContent>
+                        <ListItemTrailing className="flex items-center gap-2">
+                          {assistantUnread > 0 && <span aria-hidden className="size-2 rounded-full bg-[var(--hue-glow)]" />}
+                          <ChevronRight className="size-4 text-muted-foreground" />
+                        </ListItemTrailing>
+                      </button>
+                    </ListItem>
+                  </ListGroup>
                 )}
-                <div className="grid grid-cols-3 gap-2.5">
-                  {enabledActions.map((a) => {
+                <p className="px-1 text-micro-label uppercase text-muted-foreground">Add</p>
+                {/* One group, hairlines between the cells (H4): four across, or
+                    three when that fills the rows. */}
+                <div className={cn("grid gap-px overflow-hidden rounded-3xl border border-border/60 bg-border shadow-[var(--card-shadow)]", launcherCols === 3 ? "grid-cols-3" : "grid-cols-4")}>
+                                  {enabledActions.map((a) => {
                     const current = a.key === currentLauncherActionKey;
                     return (
                       <button
@@ -998,15 +1026,10 @@ export function CaptureSheet() {
                               ? "Needs a connection"
                               : undefined
                         }
-                        // Hearth v2: each tile leads with its section's hue tile,
-                        // matching the tab bar; the page you're on is ringed in
+                        // Hearth v2: each cell leads with its section's hue tile,
+                        // matching the tab bar; the page you're on is marked in
                         // that same hue (not --primary, which stays interactive).
-                        className={cn(
-                          "relative flex flex-col items-center justify-center gap-2 rounded-xl border px-2 py-4 text-center transition active:scale-[0.99] disabled:pointer-events-none disabled:opacity-40",
-                          current
-                            ? "border-[color:var(--hue-glyph)]/60 bg-card ring-1 ring-[color:var(--hue-glyph)]/30"
-                            : "border-border bg-card hover:bg-muted/60"
-                        )}
+                        className="relative flex flex-col items-center justify-start gap-1.5 bg-card px-1 py-3 text-center transition hover:bg-muted/60 disabled:pointer-events-none disabled:opacity-40"
                       >
                         {current && (
                           <span
@@ -1016,11 +1039,14 @@ export function CaptureSheet() {
                             <Check className="h-2.5 w-2.5" strokeWidth={3} />
                           </span>
                         )}
-                        <LeadingTile sectionId={a.section} Icon={a.icon} size="lg" />
+                        <LeadingTile sectionId={a.section} Icon={a.icon} size="md" />
                         <span className={cn("text-xs font-medium leading-tight", current && "font-semibold text-[var(--hue-glyph)]")}>{a.label}</span>
                       </button>
                     );
                   })}
+                  {Array.from({ length: (launcherCols - (enabledActions.length % launcherCols)) % launcherCols }, (_, i) => (
+                    <span key={`pad${i}`} aria-hidden className="bg-card" />
+                  ))}
                 </div>
                 </div>
               )}

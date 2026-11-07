@@ -22,6 +22,20 @@ export function RooftapMark({ size = 24, className }: { size?: number; className
   );
 }
 
+/**
+ * The mark as a section glyph, shaped like a lucide icon (size, color,
+ * className) so the tab bar, section lists and leading tiles can draw it
+ * wherever they draw a section's icon (section-icons.ts `rooftap`).
+ */
+export function RooftapGlyph({ size = 24, color, className }: { size?: number; color?: string; className?: string; strokeWidth?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox={ROOFTAP_MARK.viewBox} color={color} className={className} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      <Path d={ROOFTAP_MARK.roof} fill="none" stroke="currentColor" strokeWidth={ROOFTAP_MARK.roofStroke * 0.85} strokeLinecap="round" strokeLinejoin="round" />
+      <Circle cx={ROOFTAP_MARK.dot.cx} cy={ROOFTAP_MARK.dot.cy} r={ROOFTAP_MARK.dot.r} fill="currentColor" />
+    </Svg>
+  );
+}
+
 const TILE = { sm: { box: 28, radius: 9, mark: 20 }, md: { box: 36, radius: 11, mark: 26 }, xl: { box: 56, radius: 17, mark: 40 } } as const;
 // The viewBox, so the dot can be placed as a view over the roof.
 const VB = { x: 172, y: 163, size: 680 };

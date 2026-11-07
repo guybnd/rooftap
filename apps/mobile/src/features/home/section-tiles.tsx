@@ -12,7 +12,8 @@
 import * as React from 'react';
 import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Hammer, LayoutDashboard, CalendarClock, Star, ChevronRight, ShoppingBag, Sparkles } from 'lucide-react-native';
+import { Hammer, LayoutDashboard, CalendarClock, Star, ChevronRight, ShoppingBag } from 'lucide-react-native';
+import { RooftapTile } from '@/components/brand/rooftap-mark';
 import { Text, Card, LeadingTile, ListGroup } from '@homeup/ui';
 import { assistantApi } from '@/features/assistant/assistant-api';
 import { Sparkline } from '@/features/shopper/price-chart';
@@ -38,10 +39,10 @@ import { formatRelativeDay, formatTime12h, pad2 } from '@homeup/core';
 // never also fires the tile's navigation — mirrors GroceriesWidget's header-
 // row-vs-quick-add-row split rather than web's single stopPropagation div.
 // Hearth v2: each tile leads with its section's identity tile (section-hues.ts).
-export function TileHeader({ Icon, sectionId, title, right }: { Icon: typeof Hammer; sectionId: string; title: string; right?: React.ReactNode }) {
+export function TileHeader({ Icon, sectionId, title, right, lead }: { Icon: typeof Hammer; sectionId: string; title: string; right?: React.ReactNode; lead?: React.ReactNode }) {
   return (
     <View className="flex-row items-center gap-2.5">
-      <LeadingTile sectionId={sectionId} Icon={Icon} size="md" />
+      {lead ?? <LeadingTile sectionId={sectionId} Icon={Icon} size="md" />}
       <Text className="text-title text-foreground" numberOfLines={1}>
         {title}
       </Text>
@@ -256,7 +257,7 @@ export function AssistantTile() {
       <Pressable onPress={() => router.push('/assistant')} accessibilityRole="button" accessibilityLabel="Assistant">
         <Card size="sm">
           <View className="gap-2 px-4">
-            <TileHeader Icon={Sparkles} sectionId="assistant" title="Assistant" />
+            <TileHeader Icon={Hammer} lead={<RooftapTile size="md" />} sectionId="assistant" title="Assistant" />
             {pending ? (
               <View className="flex-row items-baseline gap-2">
                 <Text className="text-title font-semibold text-foreground" style={{ fontVariant: ['tabular-nums'] }}>

@@ -30,6 +30,7 @@ import {
   Utensils,
 } from "lucide-react";
 import { getSection, profileSection } from "@homeup/core";
+import { RooftapGlyph } from "@/components/brand/rooftap-mark";
 
 export type IconComponent = React.ComponentType<{ className?: string }>;
 
@@ -50,6 +51,8 @@ export const sectionIcons: Record<string, IconComponent> = {
   gift: Gift,
   "trash-2": Trash2,
   sparkles: Sparkles,
+  // The Assistant's section glyph: Rooftap's own mark, not a lucide icon.
+  rooftap: RooftapGlyph,
   "list-todo": ListTodo,
   "chef-hat": ChefHat,
   utensils: Utensils,

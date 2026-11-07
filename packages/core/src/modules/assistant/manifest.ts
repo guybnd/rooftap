@@ -4,7 +4,7 @@ export const assistantModule = defineModule({
   id: 'assistant',
   label: 'Assistant',
   description: 'A household agent you can ask or talk to, with your OK before it changes anything.',
-  iconId: 'sparkles',
+  iconId: 'rooftap',
   defaultEnabled: false,
   enhances: ['household', 'calendar', 'costs', 'groceries'],
   minSchema: '20261021020000_assistant',
@@ -14,7 +14,7 @@ export const assistantModule = defineModule({
     basePath: '/assistant',
     acceptsShares: false,
     navItems: [
-      { href: '/assistant', label: 'Chats', iconId: 'sparkles', accent: true },
+      { href: '/assistant', label: 'Chats', iconId: 'rooftap', accent: true },
     ],
     hue: 'indigo',
   },

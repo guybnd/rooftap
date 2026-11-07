@@ -18,6 +18,7 @@ export * from './native-client';
 export * from './server-origin';
 export * from './date-utils';
 export * from './geometry';
+export * from './capture-launcher';
 
 export * from './modules/checklists/checklists';
 export * from './modules/checklists/checklist-view';

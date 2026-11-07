@@ -133,15 +133,18 @@ export function TileHeader({
   Icon,
   title,
   right,
+  lead,
 }: {
   sectionId: string;
   Icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
   title: string;
   right?: ReactNode;
+  /** Replaces the section tile, for a tile that leads with its own mark (the Assistant's Rooftap tile). */
+  lead?: ReactNode;
 }) {
   return (
     <div className="mb-3 flex items-center gap-2.5">
-      <LeadingTile sectionId={sectionId} Icon={Icon} size="md" />
+      {lead ?? <LeadingTile sectionId={sectionId} Icon={Icon} size="md" />}
       <h2 className="font-heading text-base font-semibold text-foreground">{title}</h2>
       <div className="ml-auto flex items-center gap-2">
         {right}

@@ -2,7 +2,7 @@
 // paints the app icon's colours instead: the roof in every room hue and the
 // coral tap dot (public/icon.svg).
 // Native twin: apps/mobile/src/components/brand/rooftap-mark.tsx.
-import { useId } from "react";
+import { useId, type CSSProperties } from "react";
 import { ROOFTAP_MARK, ROOFTAP_SPECTRUM, ROOFTAP_TILE } from "@homeup/core";
 import { cn } from "@/lib/utils";
 
@@ -23,6 +23,20 @@ export function RooftapMark({ className, spectrum = false }: { className?: strin
       )}
       <path d={ROOFTAP_MARK.roof} fill="none" stroke={spectrum ? `url(#${id})` : "currentColor"} strokeWidth={ROOFTAP_MARK.roofStroke} strokeLinecap="round" strokeLinejoin="round" />
       <circle cx={ROOFTAP_MARK.dot.cx} cy={ROOFTAP_MARK.dot.cy} r={ROOFTAP_MARK.dot.r} fill={spectrum ? SPECTRUM[0] : "currentColor"} />
+    </svg>
+  );
+}
+
+/**
+ * The mark as a section glyph, shaped like a lucide icon (className sets
+ * its size and colour), so the top bar, sidebar and leading tiles draw it
+ * wherever they draw a section's icon (section-icons.ts `rooftap`).
+ */
+export function RooftapGlyph({ className, style }: { className?: string; style?: CSSProperties }) {
+  return (
+    <svg viewBox={ROOFTAP_MARK.viewBox} width={24} height={24} aria-hidden className={className} style={style}>
+      <path d={ROOFTAP_MARK.roof} fill="none" stroke="currentColor" strokeWidth={ROOFTAP_MARK.roofStroke * 0.85} strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={ROOFTAP_MARK.dot.cx} cy={ROOFTAP_MARK.dot.cy} r={ROOFTAP_MARK.dot.r} fill="currentColor" />
     </svg>
   );
 }

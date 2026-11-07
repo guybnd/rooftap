@@ -53,15 +53,60 @@ function LoadFailed({ message, onRetry }: { message: string; onRetry: () => void
 }
 
 /**
+ * "Try asking": asks worth asking from the household's enabled modules (core
+ * askStarters: plans and changes, never what Home already shows), each a row
+ * that sends the ask as it is. Shared by the empty Ask sheet and the
+ * Assistant space. Renders nothing when no module offers one.
+ */
+export function AskStarters({ onAsk, disabled, count, className }: { onAsk: (text: string) => void; disabled: boolean; count?: number; className?: string }) {
+  const modules = useModules();
+  const starters = React.useMemo(() => askStarters((id) => modules.isEnabled(id), count), [modules, count]);
+  if (starters.length === 0) return null;
+  return (
+    <View className={cn('gap-2', className)}>
+      <ArriveView>
+        <Text className="px-1 text-micro-label uppercase text-muted-foreground">Try asking</Text>
+      </ArriveView>
+      <ArriveView>
+        <ListGroup>
+          {starters.map((s) => (
+            <ListItem
+              key={s.module}
+              disabled={disabled}
+              className={cn('items-center gap-3', disabled && 'opacity-50')}
+              onPress={() => {
+                haptics.select();
+                onAsk(s.text);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={`Ask: ${s.text}`}
+            >
+              <LeadingTile sectionId={s.module} Icon={sectionIconFor(s.module)} size="md" />
+              <ListItemContent>
+                <ListItemTitle numberOfLines={2}>{s.text}</ListItemTitle>
+                <ListItemMeta>
+                  <Text className="text-caption text-muted-foreground">{s.touches}</Text>
+                </ListItemMeta>
+              </ListItemContent>
+              <ListItemTrailing className="mt-0">
+                <ChevronRight size={16} className="text-muted-foreground" />
+              </ListItemTrailing>
+            </ListItem>
+          ))}
+        </ListGroup>
+      </ArriveView>
+    </View>
+  );
+}
+
+/**
  * A new ask with nothing said yet (Hearth §13 "Ask sheet"): a greeting, then
  * asks worth asking from the household's enabled modules as a list (core
  * askStarters: plans and changes, never what Home already shows). Rows rise
  * in one after another (Arrive); a tap sends the ask as it is.
  */
 function AskEmpty({ onAsk, disabled }: { onAsk: (text: string) => void; disabled: boolean }) {
-  const modules = useModules();
   const { memberProfiles, currentUserId } = useDataCache();
-  const starters = React.useMemo(() => askStarters((id) => modules.isEnabled(id)), [modules]);
   const name = currentUserId ? memberProfiles[currentUserId]?.name : null;
   return (
     <ArriveScope>
@@ -72,41 +117,7 @@ function AskEmpty({ onAsk, disabled }: { onAsk: (text: string) => void; disabled
             I can plan, add and sort things across the house. I check with you before I change anything.
           </Text>
         </ArriveView>
-        {starters.length > 0 && (
-          <View className="gap-2 pt-1">
-            <ArriveView>
-              <Text className="px-1 text-micro-label uppercase text-muted-foreground">Try asking</Text>
-            </ArriveView>
-            <ArriveView>
-              <ListGroup>
-                {starters.map((s) => (
-                  <ListItem
-                    key={s.module}
-                    disabled={disabled}
-                    className={cn('items-center gap-3', disabled && 'opacity-50')}
-                    onPress={() => {
-                      haptics.select();
-                      onAsk(s.text);
-                    }}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Ask: ${s.text}`}
-                  >
-                    <LeadingTile sectionId={s.module} Icon={sectionIconFor(s.module)} size="md" />
-                    <ListItemContent>
-                      <ListItemTitle numberOfLines={2}>{s.text}</ListItemTitle>
-                      <ListItemMeta>
-                        <Text className="text-caption text-muted-foreground">{s.touches}</Text>
-                      </ListItemMeta>
-                    </ListItemContent>
-                    <ListItemTrailing className="mt-0">
-                      <ChevronRight size={16} className="text-muted-foreground" />
-                    </ListItemTrailing>
-                  </ListItem>
-                ))}
-              </ListGroup>
-            </ArriveView>
-          </View>
-        )}
+        <AskStarters onAsk={onAsk} disabled={disabled} className="pt-1" />
       </View>
     </ArriveScope>
   );

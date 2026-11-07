@@ -26,6 +26,7 @@ import {
   Building2,
   CalendarDays,
   ChefHat,
+  ChevronRight,
   ClipboardCheck,
   Home,
   ListChecks,
@@ -33,11 +34,24 @@ import {
   Plus,
   ScanLine,
   ShoppingCart,
-  Sparkles,
   Wallet,
   type LucideIcon,
 } from 'lucide-react-native';
-import { Text, BottomSheet, LeadingTile, SectionSearchBar, ToastHost, cn, useThemeMaterial } from '@homeup/ui';
+import {
+  Text,
+  BottomSheet,
+  LeadingTile,
+  ListGroup,
+  ListItem,
+  ListItemContent,
+  ListItemMeta,
+  ListItemTitle,
+  ListItemTrailing,
+  SectionSearchBar,
+  ToastHost,
+  cn,
+  useThemeMaterial,
+} from '@homeup/ui';
 import {
   checklists$,
   costItems$,
@@ -82,6 +96,15 @@ import { useGroceryAux } from '@/features/groceries/use-grocery-aux';
 import { CostModal } from '@/features/costs/cost-modal';
 import { SetupItemSheet } from '@/features/setup/setup-item-sheet';
 import { useOpenRoute } from '@/lib/tab-routes';
+import { RooftapTile } from '@/components/brand/rooftap-mark';
+import { launcherColumns } from '@homeup/core';
+
+/** Rows of `size` for the launcher grid. */
+function chunk<T>(items: readonly T[], size: number): T[][] {
+  const rows: T[][] = [];
+  for (let i = 0; i < items.length; i += size) rows.push(items.slice(i, i + size));
+  return rows;
+}
 
 type ComposeKind = 'todo' | 'grocery' | 'cost' | 'setup' | 'doc';
 
@@ -351,15 +374,16 @@ export function CaptureSheet() {
     { key: 'todo', label: 'To-do', section: 'household', icon: ListChecks, run: () => openCompose('todo') },
     { key: 'grocery', label: 'Grocery', section: 'groceries', icon: ShoppingCart, run: () => openCompose('grocery') },
     { key: 'cost', label: 'Cost', section: 'costs', icon: Wallet, run: () => openCompose('cost') },
-    { key: 'setup', label: 'Setup item', section: 'setup', icon: Home, run: () => { setEditingSetup(undefined); openCompose('setup'); } },
-    { key: 'doc', label: 'Doc / Scan', section: 'documents', icon: ScanLine, onlineOnly: true, run: () => openCompose('doc') },
-    { key: 'apartment', label: 'Apartment listing', section: 'search', icon: Building2, onlineOnly: true, run: () => navigateTo('/apartment/new') },
+    { key: 'setup', label: 'Setup', section: 'setup', icon: Home, run: () => { setEditingSetup(undefined); openCompose('setup'); } },
+    { key: 'doc', label: 'Scan doc', section: 'documents', icon: ScanLine, onlineOnly: true, run: () => openCompose('doc') },
+    { key: 'apartment', label: 'Listing', section: 'search', icon: Building2, onlineOnly: true, run: () => navigateTo('/apartment/new') },
     { key: 'checklist', label: 'Viewing checklist', section: 'search', icon: ClipboardCheck, run: () => navigateTo('/checklist') },
     { key: 'recipe', label: 'Recipe', section: 'recipes', icon: ChefHat, run: () => navigateTo('/recipes/new') },
-    { key: 'calendar', label: 'Calendar event', section: 'calendar', icon: CalendarDays, run: () => navigateTo('/calendar') },
+    { key: 'calendar', label: 'Event', section: 'calendar', icon: CalendarDays, run: () => navigateTo('/calendar') },
     { key: 'new-checklist', label: 'Checklist', section: 'checklists', icon: ListTodo, run: () => navigateTo('/checklists/new') },
   ];
   const enabledActions = launcherActions.filter((a) => enabledSectionIds.has(a.section));
+  const launcherCols = launcherColumns(enabledActions.length);
 
   // Add-as chips, gated the same way (only offer types whose section is enabled).
   const addAsChips = [
@@ -370,55 +394,68 @@ export function CaptureSheet() {
 
   return (
     <>
-      <BottomSheet open={open} onOpenChange={setOpen}>
-        <View className="gap-4 px-4 pb-2 pt-1">
-          <Text className="font-heading text-title font-medium text-foreground">Capture</Text>
+      <BottomSheet open={open} onOpenChange={setOpen} handleClassName="bg-muted/40">
+        {/* The Ask sheet's look (Hearth §13 "Ask sheet"): the field sits on a
+            tinted band under the handle, and everything below is one group
+            with hairlines, so the sheet keeps a single border level (H4). */}
+        <View className="gap-2.5 border-b border-border bg-muted/40 px-4 pb-3">
+          <View>
+            <Text className="font-heading text-title font-medium text-foreground">Capture</Text>
+            <Text className="text-caption text-muted-foreground">{canAsk ? 'Add, find or ask' : 'Add or find'}</Text>
+          </View>
           <SectionSearchBar
             value={q}
             onChange={setQ}
             placeholder={canAsk ? 'Add or ask anything' : 'Search or add…'}
             onSubmit={asking ? askRooftap : undefined}
           />
-
+        </View>
+        <View className="gap-3 px-4 pb-2 pt-3">
           {q.trim() ? (
             <View className="gap-3">
               {/* HOUP-443: hand the text to the assistant as a quick ask.
-                  When it reads as a question it leads, in the assistant's tile
-                  hue, and the keyboard's return key sends it. */}
+                  When it reads as a question it leads with Rooftap's own
+                  tile, and the keyboard's return key sends it. */}
               {canAsk && (
-                <Pressable
-                  onPress={() => askRooftap(q)}
-                  accessibilityRole="button"
-                  className={cn(
-                    'min-h-11 flex-row items-center gap-2 rounded-xl border px-3 py-2.5',
-                    asking ? 'border-transparent' : 'border-border bg-card'
-                  )}
-                  style={asking ? { backgroundColor: sectionHueSwatch('assistant', scheme).tile } : undefined}
-                >
-                  <Sparkles size={16} color={sectionHueSwatch('assistant', scheme).glyph} />
-                  <Text numberOfLines={1} className="min-w-0 flex-1 text-sm text-foreground">
-                    Ask Rooftap <Text className="text-sm text-muted-foreground">&ldquo;{q.trim()}&rdquo;</Text>
-                  </Text>
-                </Pressable>
+                <ListGroup>
+                  <ListItem onPress={() => askRooftap(q)} accessibilityRole="button" className="items-center gap-3">
+                    <RooftapTile size="sm" />
+                    <ListItemContent>
+                      <ListItemTitle numberOfLines={1}>Ask Rooftap</ListItemTitle>
+                      <ListItemMeta>
+                        <Text numberOfLines={1} className="text-caption text-muted-foreground">&ldquo;{q.trim()}&rdquo;</Text>
+                      </ListItemMeta>
+                    </ListItemContent>
+                    {asking && (
+                      <ListItemTrailing className="mt-0">
+                        <Text className="text-xs text-muted-foreground">Return</Text>
+                      </ListItemTrailing>
+                    )}
+                  </ListItem>
+                </ListGroup>
               )}
               {addAsChips.length > 0 && (
-                <View>
-                  <Text className="mb-1.5 text-xs text-muted-foreground">
-                    Add &ldquo;{q.trim()}&rdquo; as…
-                  </Text>
-                  <View className="flex-row flex-wrap gap-2">
+                <View className="gap-1.5">
+                  <Text className="px-1 text-micro-label uppercase text-muted-foreground">Add as</Text>
+                  <ListGroup>
                     {addAsChips.map((c) => (
-                      <Pressable
+                      <ListItem
                         key={c.type}
                         onPress={() => handleAddAs(c.type, q.trim())}
-                        className="flex-row items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5"
+                        accessibilityRole="button"
+                        accessibilityLabel={`Add ${q.trim()} as ${c.label}`}
+                        className="items-center gap-3"
                       >
-                        <c.icon size={14} color={sectionHueSwatch(c.section, scheme).glyph} />
-                        <Text className="text-xs font-medium text-foreground">{c.label}</Text>
-                        <Plus size={12} className="text-muted-foreground" />
-                      </Pressable>
+                        <LeadingTile sectionId={c.section} Icon={c.icon} size="sm" />
+                        <ListItemContent>
+                          <ListItemTitle numberOfLines={1}>{c.label}</ListItemTitle>
+                        </ListItemContent>
+                        <ListItemTrailing className="mt-0">
+                          <Plus size={16} className="text-muted-foreground" />
+                        </ListItemTrailing>
+                      </ListItem>
                     ))}
-                  </View>
+                  </ListGroup>
                 </View>
               )}
               <CaptureSearchResults
@@ -459,39 +496,62 @@ export function CaptureSheet() {
             <View className="gap-3">
               {/* The chat, one tap from the + (holding or swiping up the + opens it directly). */}
               {canAsk && (
-                <Pressable
-                  onPress={openChat}
-                  accessibilityRole="button"
-                  accessibilityLabel={assistantUnread > 0 ? 'Chat with Rooftap, new answer waiting' : 'Chat with Rooftap'}
-                  className="min-h-12 flex-row items-center gap-3 rounded-xl border border-border bg-card px-3 py-2"
-                >
-                  <LeadingTile sectionId="assistant" Icon={Sparkles} size="sm" />
-                  <Text className="min-w-0 flex-1 text-sm font-medium text-foreground">Chat with Rooftap</Text>
-                  {assistantUnread > 0 && (
-                    <View className="size-2 rounded-full" style={{ backgroundColor: sectionHueSwatch('assistant', scheme).glow }} />
-                  )}
-                  <Text className="text-xs text-muted-foreground">Hold + to jump in</Text>
-                </Pressable>
-              )}
-            <View className="flex-row flex-wrap gap-2.5">
-              {enabledActions.map((a) => {
-                const disabled = !!a.onlineOnly && !isOnline;
-                return (
-                  <Pressable
-                    key={a.key}
-                    onPress={a.run}
-                    disabled={disabled}
-                    className={cn(
-                      'w-[31%] items-center justify-center gap-2 rounded-xl border border-border bg-card px-2 py-4',
-                      disabled && 'opacity-40'
-                    )}
+                <ListGroup>
+                  <ListItem
+                    onPress={openChat}
+                    accessibilityRole="button"
+                    accessibilityLabel={assistantUnread > 0 ? 'Chat with Rooftap, new answer waiting' : 'Chat with Rooftap'}
+                    className="items-center gap-3"
                   >
-                    <LeadingTile sectionId={a.section} Icon={a.icon} size="lg" />
-                    <Text className="text-center text-xs font-medium leading-tight text-foreground">{a.label}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
+                    <RooftapTile size="sm" />
+                    <ListItemContent>
+                      <ListItemTitle numberOfLines={1}>Chat with Rooftap</ListItemTitle>
+                      <ListItemMeta>
+                        <Text className="text-caption text-muted-foreground">
+                          {assistantUnread > 0 ? 'A new answer is waiting' : 'Hold + to jump in'}
+                        </Text>
+                      </ListItemMeta>
+                    </ListItemContent>
+                    <ListItemTrailing className="mt-0 flex-row items-center gap-2">
+                      {assistantUnread > 0 && (
+                        <View className="size-2 rounded-full" style={{ backgroundColor: sectionHueSwatch('assistant', scheme).glow }} />
+                      )}
+                      <ChevronRight size={16} className="text-muted-foreground" />
+                    </ListItemTrailing>
+                  </ListItem>
+                </ListGroup>
+              )}
+              <Text className="px-1 text-micro-label uppercase text-muted-foreground">Add</Text>
+              {/* One group, hairlines between the cells: four across, or three when that fills the rows. */}
+              <ListGroup>
+                {chunk(enabledActions, launcherCols).map((row, ri) => (
+                  <View key={ri} className="flex-row">
+                    {row.map((a, ci) => {
+                      const disabled = !!a.onlineOnly && !isOnline;
+                      return (
+                        <Pressable
+                          key={a.key}
+                          onPress={a.run}
+                          disabled={disabled}
+                          accessibilityRole="button"
+                          accessibilityLabel={a.label}
+                          className={cn(
+                            'flex-1 items-center gap-1.5 px-1 py-3 active:bg-muted/60',
+                            ci > 0 && 'border-l border-border',
+                            disabled && 'opacity-40'
+                          )}
+                        >
+                          <LeadingTile sectionId={a.section} Icon={a.icon} size="md" />
+                          <Text numberOfLines={2} className="text-center text-xs font-medium leading-tight text-foreground">{a.label}</Text>
+                        </Pressable>
+                      );
+                    })}
+                    {Array.from({ length: launcherCols - row.length }, (_, i) => (
+                      <View key={`pad${i}`} className="flex-1 border-l border-border" />
+                    ))}
+                  </View>
+                ))}
+              </ListGroup>
             </View>
           )}
         </View>

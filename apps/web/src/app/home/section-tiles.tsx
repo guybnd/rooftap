@@ -6,7 +6,8 @@
 // Each reads its section's existing store/data without leaving the hub.
 
 import { useEffect, useState } from 'react';
-import { Hammer, LayoutDashboard, CalendarClock, Star, ShoppingBag, Sparkles } from 'lucide-react';
+import { Hammer, LayoutDashboard, CalendarClock, Star, ShoppingBag } from 'lucide-react';
+import { RooftapGlyph, RooftapTile } from '@/components/brand/rooftap-mark';
 import type { Group, ApartmentWithScore, Appointment } from '@homeup/core';
 import {
   formatRelativeDay,
@@ -200,7 +201,7 @@ export function AssistantTile() {
       onActivate={shell ? () => openAssistantPopup() || router.push('/assistant') : undefined}
       ariaLabel="Assistant"
     >
-      <TileHeader sectionId="assistant" Icon={Sparkles} title="Assistant" />
+      <TileHeader sectionId="assistant" Icon={RooftapGlyph} lead={<RooftapTile size="md" />} title="Assistant" />
       {pending ? (
         <div className="flex items-baseline gap-2">
           <span className="font-heading text-2xl font-bold tracking-tight text-foreground tabular-nums">{pending}</span>

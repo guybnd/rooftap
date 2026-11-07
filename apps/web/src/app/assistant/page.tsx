@@ -1,7 +1,8 @@
 'use client';
 
-// HOUP-443: the Assistant space. The Hero counts the changes waiting on your
-// OK (H1); the ask field sits on the list it starts (H5); then the pinned
+// HOUP-443: the Assistant space. Rooftap leads with its own mark, the
+// changes waiting on your OK lead as one row, the ask field sits on the list
+// it starts (H5) with a couple of "Try asking" starters; then the pinned
 // Household thread, your chats, open quick asks and earlier ones, each row a
 // three-slot line item (H6). Native twin:
 // apps/mobile/src/app/(tabs)/assistant/index.tsx.
@@ -17,14 +18,15 @@ import {
 } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
 import { assistantApi } from '@/lib/assistant-client';
-import { HeroLede } from '@/components/ui/hero-lede';
 import { ModuleSettingsButton } from '@/components/module-settings-sheet';
 import { LeadingTile } from '@/components/ui/leading-tile';
 import { ListGroup, ListItem, ListItemContent, ListItemLeading, ListItemMeta, ListItemTitle, ListItemTrailing } from '@/components/ui/list-item';
 import { Pill } from '@/components/ui/pill';
+import { RooftapTile } from '@/components/brand/rooftap-mark';
 import { OfflineHint } from '@/components/offline-hint';
 import { SettingsLabel } from '@/components/settings-panel';
 import { Composer } from './assistant-parts';
+import { AskStarters } from './thread-body';
 import { AssistantNotice } from './assistant-notice';
 import { ConversationRow } from './conversation-row';
 import { useDesktopShell, useWideLayout } from '@/lib/desktop-layout';
@@ -60,25 +62,39 @@ export default function AssistantPage() {
 
   return (
     <div className={cn('mx-auto space-y-4 p-4 md:p-6 pb-24', wide ? 'max-w-[1400px] lg:px-8' : 'max-w-3xl')}>
-      <HeroLede
-        layout="inline"
-        value={status?.pending ?? 0}
-        label="waiting on your OK"
-        caption={caption}
-        trailing={
-          <>
-            {!isOnline && <OfflineHint />}
-            <ModuleSettingsButton moduleId="assistant" />
-            <Link
-              href="/assistant/new?kind=chat"
-              className="inline-flex h-11 items-center gap-1.5 rounded-xl bg-primary px-3.5 text-sm font-medium text-primary-foreground hover:bg-primary/80"
-            >
-              <Plus className="h-4 w-4" />
-              New chat
-            </Link>
-          </>
-        }
-      />
+      {/* Rooftap introduces itself with its own mark (the Ask sheet's
+          avatar), and the changes waiting on your OK lead as one row. */}
+      <div className="flex items-center gap-3">
+        <RooftapTile size="md" />
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate font-heading text-[22px] font-bold leading-tight text-foreground">Rooftap</h1>
+          {caption && <p className="truncate text-xs text-muted-foreground tabular-nums">{caption}</p>}
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {!isOnline && <OfflineHint />}
+          <ModuleSettingsButton moduleId="assistant" />
+          <Link
+            href="/assistant/new?kind=chat"
+            className="inline-flex h-11 items-center gap-1.5 rounded-xl bg-primary px-3.5 text-sm font-medium text-primary-foreground hover:bg-primary/80"
+          >
+            <Plus className="h-4 w-4" />
+            New chat
+          </Link>
+        </div>
+      </div>
+      {(status?.pending ?? 0) > 0 && (
+        <ListGroup className={cn(wide && 'max-w-3xl')}>
+          <ListItem className="items-center">
+            <ListItemLeading className="mt-0">
+              <span className="flex size-9 items-center justify-center rounded-[11px] bg-muted text-sm font-semibold tabular-nums">{status!.pending}</span>
+            </ListItemLeading>
+            <ListItemContent>
+              <ListItemTitle>{status!.pending === 1 ? 'A change waits on your OK' : 'Changes wait on your OK'}</ListItemTitle>
+              <ListItemMeta>Open the chat to approve or skip</ListItemMeta>
+            </ListItemContent>
+          </ListItem>
+        </ListGroup>
+      )}
 
       {hardBlock && blocked ? (
         <AssistantNotice code={blocked} />
@@ -89,6 +105,7 @@ export default function AssistantPage() {
           {error && <p className="px-1 text-sm text-destructive">{error}</p>}
           {blocked && <AssistantNotice code={blocked} />}
 
+          <AskStarters onAsk={ask} disabled={!isOnline} count={2} />
           <ListGroup>
             <ConversationRow conversation={groups.household} {...rowProps(groups.household, '/assistant/household')} />
           </ListGroup>
