@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { heroNumber, heroRollDirection, justCleared, roofDots } from './touches';
+import { heroNumber, heroRollDirection, isFreshReply, justCleared, roofDots } from './touches';
 
 describe('heroNumber', () => {
   it('reads counts and amounts', () => {
@@ -47,5 +47,14 @@ describe('justCleared', () => {
     expect(justCleared(0, 0)).toBe(false);
     expect(justCleared(undefined, 0)).toBe(false);
     expect(justCleared(2, 1)).toBe(false);
+  });
+});
+
+describe('isFreshReply', () => {
+  const now = Date.parse('2026-11-07T10:00:30Z');
+  it('is fresh for a reply written in the last 20 seconds', () => {
+    expect(isFreshReply('2026-11-07T10:00:20Z', now)).toBe(true);
+    expect(isFreshReply('2026-11-07T09:59:00Z', now)).toBe(false);
+    expect(isFreshReply(null, now)).toBe(false);
   });
 });

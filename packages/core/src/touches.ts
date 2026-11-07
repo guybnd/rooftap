@@ -99,3 +99,27 @@ export const SPECTRUM_SWEEP_ALPHA = 0.18;
 export function justCleared(before: number | null | undefined, after: number): boolean {
   return before != null && before > 0 && after === 0;
 }
+
+// ── Spectrum once ─────────────────────────────────────────────────────────
+// A card the Assistant just filled with what it did gets one turn of the
+// Ask sheet's spectrum edge as it arrives, then rests plain.
+
+/** The one turn (slow × 3 + base), ease-in-out, fading in and out at its ends. */
+export const SPECTRUM_ONCE_MS = MOTION_DURATIONS_MS.slow * 3 + MOTION_DURATIONS_MS.base;
+/** A reply this young (ms) is new on screen; older ones were there before. */
+export const FRESH_REPLY_MS = 20_000;
+
+/** Whether a message written at `createdAt` is new enough to arrive with a touch. */
+export function isFreshReply(createdAt: string | null | undefined, now = Date.now()): boolean {
+  const at = createdAt ? Date.parse(createdAt) : NaN;
+  return Number.isFinite(at) && now - at >= -5_000 && now - at < FRESH_REPLY_MS;
+}
+
+// ── Timer done ────────────────────────────────────────────────────────────
+// A finished cook timer is waiting for you, so its head keeps a turning
+// spectrum ring and a soft pulse until you tap it: the one touch that loops.
+
+/** One turn of the ring. */
+export const TIMER_DONE_TURN_MS = 1_400;
+/** The pulse swells to this and back once per turn. */
+export const TIMER_DONE_PULSE = 1.06;

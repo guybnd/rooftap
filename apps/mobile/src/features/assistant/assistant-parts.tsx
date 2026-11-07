@@ -62,6 +62,7 @@ import {
   type ProposalPick,
   type ProposalState,
   type ReplySpan,
+  isFreshReply,
 } from '@homeup/core';
 import { sectionIconFor } from '@/lib/section-icons';
 import { useDataCache } from '@/lib/data-cache';
@@ -250,6 +251,8 @@ export function MessageBubble({
   busy: boolean;
   onDecide: (messageId: string, decision: 'confirm' | 'decline', picks?: ProposalPick[]) => void;
 }) {
+  // A reply that just arrived (not one scrolled back to) gets its arrival touch.
+  const [fresh] = React.useState(() => isFreshReply(message.created_at));
   const user = message.role === 'user';
   // Older servers don't say whose a message is: every user message was the viewer's.
   const mine = user && (message.mine ?? true);
@@ -273,7 +276,7 @@ export function MessageBubble({
           {message.content ? <ReplyText text={message.content} /> : null}
           {message.content ? <ReplyItems text={message.content} /> : null}
           <ProposalCard message={message} busy={busy} onDecide={(d, picks) => onDecide(message.id, d, picks)} />
-          <ChatChanges changes={message.changes} />
+          <ChatChanges changes={message.changes} fresh={fresh} />
           {meta}
         </View>
       </View>

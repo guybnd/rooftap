@@ -9,7 +9,7 @@
 // fold under "Show all". A change with no row of its own (a meal plan night,
 // a calendar event) shows its summary line and opens its module.
 // Phone twin: apps/mobile/src/features/assistant/chat-changes.tsx.
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { use$ } from '@legendapp/state/react';
 import { Check, ChevronRight, Undo2 } from 'lucide-react';
@@ -51,15 +51,20 @@ import { useLiveRowRenderer, type LiveRowRef } from '@/components/capture/captur
 
 const UNDOABLE_ROWS = new Set(['tasks', 'groceries', 'costs', 'setup']);
 
-export function ChatChanges({ changes }: { changes: AssistantChange[] | undefined }) {
+/** `fresh`: the reply just arrived, so its cards arrive with one turn of the spectrum edge (Hearth §8 "Spectrum once"). */
+export function ChatChanges({ changes, fresh = false }: { changes: AssistantChange[] | undefined; fresh?: boolean }) {
   const groups = useMemo(() => changeGroups(changes), [changes]);
   if (!groups.length) return null;
   return (
-    <div className="mt-2.5 flex flex-col gap-2.5">
-      {groups.some((g) => g.rowKind) ? <LiveChanges groups={groups} /> : groups.map((g) => <ChangeCard key={g.module} group={g} renderRow={null} />)}
-    </div>
+    <FreshContext.Provider value={fresh}>
+      <div className="mt-2.5 flex flex-col gap-2.5">
+        {groups.some((g) => g.rowKind) ? <LiveChanges groups={groups} /> : groups.map((g) => <ChangeCard key={g.module} group={g} renderRow={null} />)}
+      </div>
+    </FreshContext.Provider>
   );
 }
+
+const FreshContext = createContext(false);
 
 /** Opens the stores the rows read only when a reply changed something that has a row. */
 function LiveChanges({ groups }: { groups: ChangeGroup[] }) {
@@ -179,6 +184,7 @@ function ChangeCard({
   onUndo?: () => void;
 }) {
   const router = useRouter();
+  const fresh = useContext(FreshContext);
   const [all, setAll] = useState(false);
   const [undone, setUndone] = useState(false);
   const shown = all ? group.changes : group.changes.slice(0, CHANGES_SHOWN);
@@ -236,7 +242,7 @@ function ChangeCard({
         ) : null}
       </div>
       {!undone && (
-        <ListGroup>
+        <ListGroup className={cn(fresh && 'spectrum-once relative')}>
           {shown.map(line)}
           {hidden > 0 && (
             <ListItem asChild>

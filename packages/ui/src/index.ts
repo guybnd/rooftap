@@ -75,3 +75,4 @@ export * from './components/word-pop';
 export * from './components/roof-dots';
 export * from './components/hop';
 export * from './components/spectrum-sweep';
+export * from './components/spectrum-once';

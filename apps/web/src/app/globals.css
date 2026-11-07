@@ -1109,6 +1109,57 @@
     background: currentColor;
   }
 
+  /* Hearth §8 "Spectrum once": a card the Assistant just filled with what it
+     did arrives with one turn of the spectrum edge, then rests plain (core
+     SPECTRUM_ONCE_MS). The tokens go to 0ms under still motion, so it never
+     shows there. */
+  .spectrum-once {
+    animation: spectrum-once-turn calc(var(--motion-slow) * 3 + var(--motion-base)) cubic-bezier(0.45, 0, 0.55, 1) both;
+  }
+  .spectrum-once::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 2px;
+    background: conic-gradient(from var(--once-angle), #ff7a5c, #ffc93d, #5fe0b0, #7cb8ff, #9c8bff, #ff7ab8, #ff7a5c);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+    pointer-events: none;
+    opacity: var(--once-alpha);
+  }
+  @keyframes spectrum-once-turn {
+    0% { --once-angle: 0deg; --once-alpha: 0; }
+    12% { --once-alpha: 1; }
+    80% { --once-alpha: 1; }
+    100% { --once-angle: 360deg; --once-alpha: 0; }
+  }
+  [data-theme="e-ink"] .spectrum-once { display: none; }
+
+  /* Hearth §8 "Timer done": a finished cook timer's head keeps a turning
+     spectrum ring and a soft pulse until you tap it (core TIMER_DONE_*), the
+     one touch that loops, because it is waiting for you. */
+  .timer-done-ring {
+    background: conic-gradient(#ff7a5c, #ffc93d, #5fe0b0, #7cb8ff, #9c8bff, #ff7ab8, #ff7a5c);
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+    mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+    animation: timer-done-turn 1400ms linear infinite;
+  }
+  .timer-done-pulse {
+    animation: timer-done-pulse 1400ms ease-in-out infinite;
+  }
+  @keyframes timer-done-turn {
+    to { transform: rotate(360deg); }
+  }
+  @keyframes timer-done-pulse {
+    50% { transform: scale(1.06); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .timer-done-ring, .timer-done-pulse { animation: none; }
+  }
+  [data-theme="e-ink"] .timer-done-ring, [data-theme="e-ink"] .timer-done-pulse { animation: none; }
+
   /* Rooftap's tile while it works: the tap dot hops over the roof. */
   .rooftap-working circle {
     transform-box: fill-box;
@@ -1443,4 +1494,17 @@ html:not([data-layout="classic"]) .desk-classic {
   20% { transform: translateX(-6px); }
   50% { transform: translateX(6px); }
   75% { transform: translateX(-3px); }
+}
+
+/* Hearth §8 "Spectrum once": the edge's angle and strength animate, so they
+   are registered (inherited, so the ::before ring reads them). */
+@property --once-angle {
+  syntax: "<angle>";
+  inherits: true;
+  initial-value: 0deg;
+}
+@property --once-alpha {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
 }

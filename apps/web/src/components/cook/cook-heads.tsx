@@ -315,13 +315,20 @@ function HeadFace({ cook, now, size }: { cook: RunningCook; now: number; size: n
   const r = 29;
   const c = 2 * Math.PI * r;
   const p = near ? (near.state === 'done' ? 1 : timerProgress(near.timer, now)) : 0;
-  const ring = !near ? null : near.state === 'done' ? 'stroke-destructive' : near.state === 'paused' ? 'stroke-muted-foreground' : near.remainingMs < 60_000 ? 'stroke-warning' : 'stroke-primary';
+  // Hearth §8 "Timer done": a finished timer turns a spectrum ring and pulses
+  // until it is tapped (globals.css .timer-done-*; still under reduced motion).
+  const done = near?.state === 'done';
+  const ring = !near || done ? null : near.state === 'paused' ? 'stroke-muted-foreground' : near.remainingMs < 60_000 ? 'stroke-warning' : 'stroke-primary';
   return (
     <span
       data-hue="peach"
-      className="relative flex items-center justify-center rounded-full border-2 border-background bg-[var(--hue-tile)] font-heading text-lg font-bold text-[var(--hue-glyph)] shadow-[0_6px_18px_rgb(0_0_0/0.35)]"
+      className={cn(
+        'relative flex items-center justify-center rounded-full border-2 border-background bg-[var(--hue-tile)] font-heading text-lg font-bold text-[var(--hue-glyph)] shadow-[0_6px_18px_rgb(0_0_0/0.35)]',
+        done && 'timer-done-pulse',
+      )}
       style={{ width: size, height: size }}
     >
+      {done && <span aria-hidden className="timer-done-ring pointer-events-none absolute -inset-1 rounded-full" />}
       {ring && (
         <svg viewBox="0 0 62 62" className="pointer-events-none absolute -inset-1" style={{ width: size + 8, height: size + 8 }} aria-hidden>
           <circle

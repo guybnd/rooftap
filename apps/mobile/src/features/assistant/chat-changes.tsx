@@ -11,7 +11,7 @@ import * as React from 'react';
 import { Pressable, View } from 'react-native';
 import { use$ } from '@legendapp/state/react';
 import { Check, ChevronRight, Undo2 } from 'lucide-react-native';
-import { LeadingTile, ListGroup, ListItem, ListItemContent, ListItemTitle, ListItemTrailing, Text, cn, haptics } from '@homeup/ui';
+import { LeadingTile, ListGroup, ListItem, ListItemContent, ListItemTitle, ListItemTrailing, SpectrumOnce, Text, cn, haptics } from '@homeup/ui';
 import {
   CHANGES_SHOWN,
   changeCaption,
@@ -48,15 +48,20 @@ import { useLiveRowRenderer, type LiveRowRef } from '@/components/capture/captur
 
 const UNDOABLE_ROWS = new Set(['tasks', 'groceries', 'costs', 'setup']);
 
-export function ChatChanges({ changes }: { changes: AssistantChange[] | undefined }) {
+/** `fresh`: the reply just arrived, so its cards arrive with one turn of the spectrum edge (Hearth §8 "Spectrum once"). */
+export function ChatChanges({ changes, fresh = false }: { changes: AssistantChange[] | undefined; fresh?: boolean }) {
   const groups = React.useMemo(() => changeGroups(changes), [changes]);
   if (!groups.length) return null;
   return (
-    <View className="mt-2.5 gap-2.5">
-      {groups.some((g) => g.rowKind) ? <LiveChanges groups={groups} /> : groups.map((g) => <ChangeCard key={g.module} group={g} renderRow={null} />)}
-    </View>
+    <FreshContext.Provider value={fresh}>
+      <View className="mt-2.5 gap-2.5">
+        {groups.some((g) => g.rowKind) ? <LiveChanges groups={groups} /> : groups.map((g) => <ChangeCard key={g.module} group={g} renderRow={null} />)}
+      </View>
+    </FreshContext.Provider>
   );
 }
+
+const FreshContext = React.createContext(false);
 
 /** Opens the stores the rows read only when a reply changed something that has a row. */
 function LiveChanges({ groups }: { groups: ChangeGroup[] }) {
@@ -180,6 +185,7 @@ function ChangeCard({
   onUndo?: () => void;
 }) {
   const openRoute = useOpenRoute();
+  const fresh = React.useContext(FreshContext);
   const [all, setAll] = React.useState(false);
   const [undone, setUndone] = React.useState(false);
   const shown = all ? group.changes : group.changes.slice(0, CHANGES_SHOWN);
@@ -236,14 +242,17 @@ function ChangeCard({
         ) : null}
       </View>
       {!undone && (
-        <ListGroup>
-          {shown.map(line)}
-          {hidden > 0 && (
-            <ListItem className="items-center justify-center" onPress={() => setAll(true)} accessibilityRole="button">
-              <Text className="text-sm font-medium text-foreground">Show all {group.changes.length}</Text>
-            </ListItem>
-          )}
-        </ListGroup>
+        <View>
+          <ListGroup>
+            {shown.map(line)}
+            {hidden > 0 && (
+              <ListItem className="items-center justify-center" onPress={() => setAll(true)} accessibilityRole="button">
+                <Text className="text-sm font-medium text-foreground">Show all {group.changes.length}</Text>
+              </ListItem>
+            )}
+          </ListGroup>
+          {fresh && <SpectrumOnce radius={24} />}
+        </View>
       )}
     </View>
   );

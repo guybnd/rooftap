@@ -13,7 +13,7 @@
 // on the swift-out curve, and reduced motion makes it a jump (MO).
 import * as React from 'react';
 import { Animated, Easing, PanResponder, Pressable, View, useWindowDimensions } from 'react-native';
-import Svg, { Circle } from 'react-native-svg';
+import Svg, { Circle, Path } from 'react-native-svg';
 import { cssInterop } from 'nativewind';
 import { X } from 'lucide-react-native';
 import {
@@ -24,6 +24,9 @@ import {
   hueSwatch,
   overStopTarget,
   snapHeadDock,
+  spectrumRing,
+  TIMER_DONE_PULSE,
+  TIMER_DONE_TURN_MS,
   stopTargetCenter,
   type HeadDock,
 } from '@homeup/core';
@@ -78,16 +81,51 @@ const RING_TEXT: Record<CookHead['tone'], string> = {
   step: 'text-transparent',
 };
 
+/** The finished timer's ring: the roof colours round the head, as arcs. */
+const DONE_ARCS = (() => {
+  const colors = spectrumRing(36);
+  const step = (Math.PI * 2) / colors.length;
+  return colors.map((color, i) => {
+    const a0 = i * step - 0.01;
+    const a1 = (i + 1) * step + 0.01;
+    const p = (a: number) => `${(31 + 29 * Math.cos(a)).toFixed(2)} ${(31 + 29 * Math.sin(a)).toFixed(2)}`;
+    return { color, d: `M${p(a0)} A29 29 0 0 1 ${p(a1)}` };
+  });
+})();
+
+/**
+ * Hearth §8 "Timer done": a finished timer is waiting for you, so its head
+ * keeps a turning spectrum ring and a soft pulse until you tap it (core
+ * TIMER_DONE_*), the one touch that loops. Still motion holds it still.
+ */
+function useTimerDoneLoop(done: boolean) {
+  const still = useStillMotion();
+  const turn = React.useRef(new Animated.Value(0)).current;
+  React.useEffect(() => {
+    if (!done || still) return;
+    turn.setValue(0);
+    const loop = Animated.loop(Animated.timing(turn, { toValue: 1, duration: TIMER_DONE_TURN_MS, easing: Easing.linear, useNativeDriver: true }));
+    loop.start();
+    return () => loop.stop();
+  }, [done, still, turn]);
+  const spin = turn.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+  const pulse = turn.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, TIMER_DONE_PULSE, 1] });
+  return { spin, pulse };
+}
+
 export function CookHeadFace({ head, size = HEAD_SIZE }: { head: CookHead; size?: number }) {
+  const done = head.tone === 'done';
+  const loop = useTimerDoneLoop(done);
   const material = useThemeMaterial();
   const swatch = hueSwatch('peach', material.scheme);
   const r = 29;
   const c = 2 * Math.PI * r;
   const p = head.tone === 'done' ? 1 : head.progress ?? 0;
   return (
-    <View
+    <Animated.View
       className="items-center justify-center rounded-full border-2 border-background"
       style={{
+        transform: done ? [{ scale: loop.pulse }] : undefined,
         width: size,
         height: size,
         backgroundColor: swatch.tile,
@@ -98,7 +136,15 @@ export function CookHeadFace({ head, size = HEAD_SIZE }: { head: CookHead; size?
         elevation: 8,
       }}
     >
-      {head.progress != null && (
+      {done ? (
+        <Animated.View style={{ position: 'absolute', left: -6, top: -6, width: size + 8, height: size + 8, transform: [{ rotate: loop.spin }] }}>
+          <Svg width={size + 8} height={size + 8} viewBox="0 0 62 62">
+            {DONE_ARCS.map((arc, i) => (
+              <Path key={i} d={arc.d} fill="none" stroke={arc.color} strokeWidth={3} />
+            ))}
+          </Svg>
+        </Animated.View>
+      ) : head.progress != null && (
         <Svg
           width={size + 8}
           height={size + 8}
@@ -133,7 +179,7 @@ export function CookHeadFace({ head, size = HEAD_SIZE }: { head: CookHead; size?
           </Text>
         </View>
       )}
-    </View>
+    </Animated.View>
   );
 }
 
