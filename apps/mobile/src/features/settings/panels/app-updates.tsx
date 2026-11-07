@@ -22,6 +22,7 @@ import {
 import { WhatsNewGroups } from '@/components/whats-new/whats-new-list';
 import { buildCommit } from '@/lib/build-info';
 import { useDataCache } from '@/lib/data-cache';
+import { refreshServerRelease } from '@/lib/server-release-refresh';
 import { ServerUpdatePanel } from './server-update';
 import { SettingsInset, SettingsPanel } from './settings-panel';
 
@@ -84,7 +85,9 @@ export function AppUpdates() {
   const { currentlyRunning, isUpdatePending, isDownloading, downloadProgress } = Updates.useUpdates();
   const release = useServerRelease();
   const { schema, serverUpdateAdds } = useModules();
-  const standingLabel = appStandingLabel(appStanding(Updates.runtimeVersion, release));
+  const standing = appStanding(Updates.runtimeVersion, release);
+  const standingLabel = appStandingLabel(standing);
+  const newApk = standing.kind === 'update' || standing.kind === 'too-old';
   const [checkState, setCheckState] = React.useState<CheckState>('idle');
   const [error, setError] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
@@ -114,8 +117,11 @@ export function AppUpdates() {
     setError(null);
     setCheckState('checking');
     setBusy(true);
+    // A newer APK is a different question from a newer OTA: ask the server too.
+    const releaseCheck = refreshServerRelease();
     try {
       const result = await Updates.checkForUpdateAsync();
+      await releaseCheck;
       if (!result.isAvailable) {
         setCheckState('no-update');
         return;
@@ -182,7 +188,7 @@ export function AppUpdates() {
                   : 'Check for updates'}
               </Text>
             </Button>
-            {checkState === 'no-update' && (
+            {checkState === 'no-update' && !newApk && (
               <Text className="text-body text-muted-foreground">You&apos;re on the latest version.</Text>
             )}
           </>

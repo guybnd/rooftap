@@ -44,6 +44,7 @@ import {
   useServerUpdate,
 } from '@homeup/core';
 import { fetchServerUpdate } from '@/features/settings/server-update-api';
+import { refreshServerReleaseIfStale } from '@/lib/server-release-refresh';
 import { useDataCache } from './data-cache';
 import { nativeStoreEnvironment } from './legend/environment';
 import { buildCommit } from './build-info';
@@ -107,6 +108,15 @@ export function useUpdateToasts(): void {
       Updates.checkForUpdateAsync()
         .then((result) => (result.isAvailable ? Updates.fetchUpdateAsync() : undefined))
         .catch(() => {});
+    });
+    return () => sub.remove();
+  }, []);
+
+  // A new APK published while the app sat in the background: ask the server
+  // again on resume, so the release notice below can show without a cold start.
+  React.useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') refreshServerReleaseIfStale();
     });
     return () => sub.remove();
   }, []);
