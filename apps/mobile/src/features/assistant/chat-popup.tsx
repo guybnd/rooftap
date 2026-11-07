@@ -15,6 +15,7 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withTiming,
+  type SharedValue,
 } from 'react-native-reanimated';
 import { useSafeAreaFrame, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePathname } from 'expo-router';
@@ -125,6 +126,14 @@ function PopupThread({
 
   // The header's chats button swaps the thread for the list of chats; picking one opens it here.
   const [showChats, setShowChats] = React.useState(false);
+  // How far the chat (or the chats list) is scrolled: a drag down anywhere closes the card only from the top.
+  const scrollY = useSharedValue(0);
+  const onScrollY = React.useCallback((y: number) => {
+    scrollY.value = y;
+  }, [scrollY]);
+  React.useEffect(() => {
+    scrollY.value = 0;
+  }, [showChats, scrollY]);
   const pick = (id: string) => {
     setShowChats(false);
     if (id !== conversation?.id) openAssistantPopup({ conversationId: id });
@@ -150,6 +159,7 @@ function PopupThread({
       open={open}
       pace={thread.thinking ? 'thinking' : listening ? 'listening' : 'rest'}
       onMinimize={onMinimize}
+      scrollY={scrollY}
       header={
         <View className="flex-row items-center gap-1 pb-2 pl-3.5 pr-1.5">
           {!showChats && <RooftapTile size="md" working={thread.thinking} />}
@@ -197,10 +207,10 @@ function PopupThread({
       }
     >
       {showChats ? (
-        <PopupChats currentId={conversation?.id ?? null} onPick={pick} onAll={allChats} />
+        <PopupChats currentId={conversation?.id ?? null} onPick={pick} onAll={allChats} onScrollY={onScrollY} />
       ) : (
         <>
-          <ThreadMessages thread={thread} offline={!isOnline} />
+          <ThreadMessages thread={thread} offline={!isOnline} onScrollY={onScrollY} />
           <ThreadFooter thread={thread} offline={!isOnline} autoFocus={open && target.id === 'new' && !ask} onFresh={onFresh} band lookingAt={pathname} onListening={setListening} />
         </>
       )}
@@ -213,10 +223,26 @@ function PopupThread({
  * asks and the latest closed ones, the same rows as the Assistant space.
  * Paints from the device's cache at once and refreshes from the server.
  */
-function PopupChats({ currentId, onPick, onAll }: { currentId: string | null; onPick: (id: string) => void; onAll: () => void }) {
+function PopupChats({
+  currentId,
+  onPick,
+  onAll,
+  onScrollY,
+}: {
+  currentId: string | null;
+  onPick: (id: string) => void;
+  onAll: () => void;
+  onScrollY: (y: number) => void;
+}) {
   const { sections, error } = usePopupChats(assistantApi);
   return (
-    <ScrollView className="flex-1" contentContainerClassName="gap-4 px-4 py-3" keyboardShouldPersistTaps="handled">
+    <ScrollView
+      className="flex-1"
+      contentContainerClassName="gap-4 px-4 py-3"
+      keyboardShouldPersistTaps="handled"
+      scrollEventThrottle={16}
+      onScroll={(e) => onScrollY(e.nativeEvent.contentOffset.y)}
+    >
       {error && <Text className="px-1 text-sm text-muted-foreground">{error}</Text>}
       {sections.length === 0 && !error && (
         <Text className="px-1 py-10 text-center text-sm text-muted-foreground">No chats yet. Ask something and it shows here.</Text>
@@ -248,10 +274,13 @@ function PopupSurface({
   open,
   pace,
   onMinimize,
+  scrollY,
   header,
   children,
 }: {
   open: boolean;
+  /** How far the body is scrolled; a drag down on the body closes the card only from the top. */
+  scrollY: SharedValue<number>;
   /** How busy Rooftap is: the spectrum edge turns faster while it works. */
   pace: AssistantEdgePace;
   onMinimize: () => void;
@@ -289,6 +318,37 @@ function PopupSurface({
   const headerDrag = Gesture.Pan()
     .activeOffsetY(10)
     .failOffsetX([-20, 20])
+    .onUpdate((event) => {
+      'worklet';
+      drag.value = Math.max(0, event.translationY);
+    })
+    .onEnd((event) => {
+      'worklet';
+      if (event.translationY > DISMISS_PX || event.velocityY > DISMISS_VELOCITY) runOnJS(onMinimize)();
+      else drag.value = withTiming(0, { duration: MOTION_DURATIONS_MS.base, easing: SWIFT_OUT });
+    });
+
+  // The same drag anywhere on the body, once nothing above is left to scroll
+  // to (an empty ask never scrolls). It decides by hand: down from the top
+  // takes over (the scroll view lets go), anything else is left to the
+  // scroll view and the rows' own swipes.
+  const touchStart = useSharedValue({ x: 0, y: 0 });
+  const bodyDrag = Gesture.Pan()
+    .manualActivation(true)
+    .onTouchesDown((e) => {
+      'worklet';
+      const t = e.allTouches[0];
+      if (t) touchStart.value = { x: t.absoluteX, y: t.absoluteY };
+    })
+    .onTouchesMove((e, state) => {
+      'worklet';
+      const t = e.allTouches[0];
+      if (!t) return;
+      const dx = t.absoluteX - touchStart.value.x;
+      const dy = t.absoluteY - touchStart.value.y;
+      if (scrollY.value > 1 || dy < -8 || Math.abs(dx) > 16) state.fail();
+      else if (dy > 12 && dy > Math.abs(dx) * 1.5) state.activate();
+    })
     .onUpdate((event) => {
       'worklet';
       drag.value = Math.max(0, event.translationY);
@@ -355,7 +415,9 @@ function PopupSurface({
               {header}
             </View>
           </GestureDetector>
-          {children}
+          <GestureDetector gesture={bodyDrag}>
+            <View className="flex-1">{children}</View>
+          </GestureDetector>
           {/* Hidden until the animated style lands: a Modal's first frame can draw before it does. */}
           <Animated.View pointerEvents="none" className="absolute inset-0 bg-primary" style={[{ opacity: 0 }, fabTintStyle]} />
         </Animated.View>

@@ -135,7 +135,18 @@ function LookingAt({ path }: { path: string }) {
   );
 }
 
-export function ThreadMessages({ thread, className, offline = false }: { thread: AssistantThread; className?: string; offline?: boolean }) {
+export function ThreadMessages({
+  thread,
+  className,
+  offline = false,
+  onScrollY,
+}: {
+  thread: AssistantThread;
+  className?: string;
+  offline?: boolean;
+  /** How far the messages are scrolled (the pop-up closes on a drag down only from the top). */
+  onScrollY?: (y: number) => void;
+}) {
   const { loading, loadError, reload, messages, sending, thinking, draft, kind, showCost, deciding, decide, send, blocked } = thread;
   const scrollRef = React.useRef<ScrollView>(null);
   return (
@@ -145,6 +156,8 @@ export function ThreadMessages({ thread, className, offline = false }: { thread:
       contentContainerClassName="gap-5 px-4 py-4"
       keyboardShouldPersistTaps="handled"
       onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: !loading })}
+      scrollEventThrottle={onScrollY ? 16 : undefined}
+      onScroll={onScrollY ? (e) => onScrollY(e.nativeEvent.contentOffset.y) : undefined}
     >
       {loadError && !loading && <LoadFailed message={loadError} onRetry={() => void reload()} />}
       {loading ? (
