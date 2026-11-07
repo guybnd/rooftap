@@ -33,15 +33,21 @@ export const documentsSearchSource: SearchSource = {
     const costsOn = feature('documents.costs');
     const groceriesOn = feature('documents.groceries');
     const fetchFor = active && supabase ? groupId : undefined;
+    // The phone hands a fresh array of the same rows on every render; key the
+    // fetch on what the rows are, not the array, or each fetch's own loading
+    // flip re-renders, refetches and flickers "Searching" forever.
+    const rowsKey = documentStoreRows ? documentStoreRows.map((d) => `${d.id}:${d.updated_at}`).join('|') : null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const rows = useMemo(() => documentStoreRows, [rowsKey]);
 
     useEffect(() => {
       if (!fetchFor || !supabase) return;
       setLoading(true);
-      listUnifiedDocuments(supabase, fetchFor, documentStoreRows, { costs: costsOn, groceries: groceriesOn })
+      listUnifiedDocuments(supabase, fetchFor, rows, { costs: costsOn, groceries: groceriesOn })
         .then(setDocuments)
         .catch(() => {})
         .finally(() => setLoading(false));
-    }, [fetchFor, supabase, documentStoreRows, costsOn, groceriesOn]);
+    }, [fetchFor, supabase, rows, costsOn, groceriesOn]);
 
     return useMemo(() => ({ hits: groupId ? documentsSearchHits(documents) : [], loading }), [groupId, documents, loading]);
   },

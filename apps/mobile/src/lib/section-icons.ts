@@ -35,6 +35,7 @@ import {
   type LucideIcon,
 } from 'lucide-react-native';
 import { getSection, profileSection } from '@homeup/core';
+import { setRowMenuSectionGlyph } from '@homeup/ui';
 import { RooftapGlyph } from '@/components/brand/rooftap-mark';
 
 // HOUP-142: filled out to match apps/web/src/lib/section-icons.ts's full
@@ -80,3 +81,6 @@ export function sectionIconFor(sectionId: string): LucideIcon {
   const section = getSection(sectionId) ?? (sectionId === profileSection.id ? profileSection : undefined);
   return (section && sectionIcons[section.iconId]) ?? LayoutGrid;
 }
+
+// The hold menu's header tile draws the row's section glyph (packages/ui can't import the app's icon map).
+setRowMenuSectionGlyph(sectionIconFor);

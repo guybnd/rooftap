@@ -4,13 +4,15 @@
 // line item opens with a mouse. A row hands useRowContextMenu its RowMenu (core
 // row-actions.ts) and spreads the returned handler; this draws it at the
 // pointer in the shared order (open, main verb, quick settings, share, edit,
-// delete), with the item's name on top. A setting with choices opens a
+// delete), with the item's name on top in a tinted band led by its
+// section's tile (Hearth §13.11). A setting with choices opens a
 // submenu to the side. It works from the keyboard: arrows move, Right or
 // Enter opens a submenu, Left or Escape steps back, a letter jumps to the
 // next item that starts with it. Touch keeps each row's own long-press sheet.
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { usePathname } from "next/navigation";
 import {
   AlarmClock,
   Archive,
@@ -41,7 +43,9 @@ import {
   Wallet,
   type LucideIcon,
 } from "lucide-react";
-import { arrangeRowActions, type RowAction, type RowActionIcon, type RowMenu } from "@homeup/core";
+import { arrangeRowActions, getSectionByPath, type RowAction, type RowActionIcon, type RowMenu } from "@homeup/core";
+import { LeadingTile } from "@/components/ui/leading-tile";
+import { sectionIconFor } from "@/lib/section-icons";
 import { cn } from "@/lib/utils";
 
 const ICONS: Record<RowActionIcon, LucideIcon> = {
@@ -132,6 +136,7 @@ function RowContextMenu({ at, onClose }: { at: OpenState; onClose: () => void })
   const [active, setActive] = useState(-1);
   const [sub, setSub] = useState<{ index: number; viaKeyboard: boolean } | null>(null);
   const hoverTimer = useRef<number | null>(null);
+  const sectionId = getSectionByPath(usePathname() ?? "/").id;
 
   // Place at the pointer, flipped or nudged to stay on screen.
   useLayoutEffect(() => {
@@ -232,11 +237,14 @@ function RowContextMenu({ at, onClose }: { at: OpenState; onClose: () => void })
         tabIndex={-1}
         onKeyDown={onKeyDown}
         style={{ ...style, pointerEvents: "auto" }}
-        className="row-menu fixed w-64 overflow-hidden rounded-2xl border border-border/70 bg-popover/95 py-1.5 text-popover-foreground shadow-2xl shadow-black/40 backdrop-blur-xl focus:outline-none"
+        className="row-menu fixed w-64 overflow-hidden rounded-2xl border border-border/70 bg-popover/95 pb-1.5 text-popover-foreground shadow-2xl shadow-black/40 backdrop-blur-xl focus:outline-none"
       >
-        <div className="px-3.5 pb-1.5 pt-1">
-          <p className="truncate text-[13px] font-semibold">{at.menu.title}</p>
-          {at.menu.kind && <p className="text-[11px] text-muted-foreground">{at.menu.kind}</p>}
+        <div className="mb-1 flex items-center gap-2.5 border-b border-border/70 bg-muted/40 px-3 py-2.5">
+          <LeadingTile sectionId={sectionId} Icon={sectionIconFor(sectionId)} size="sm" />
+          <div className="min-w-0 flex-1">
+            <p className="line-clamp-2 text-[13px] font-semibold leading-snug">{at.menu.title}</p>
+            {at.menu.kind && <p className="text-[11px] text-muted-foreground">{at.menu.kind}</p>}
+          </div>
         </div>
         {flat.map(({ action, group }, i) => {
           const Icon = action.icon ? ICONS[action.icon] : null;
@@ -244,7 +252,7 @@ function RowContextMenu({ at, onClose }: { at: OpenState; onClose: () => void })
           const subOpen = sub?.index === i;
           return (
             <div key={action.id}>
-              {(i === 0 || flat[i - 1].group !== group) && <div role="separator" className="mx-2.5 my-1 h-px bg-border/70" />}
+              {i > 0 && flat[i - 1].group !== group && <div role="separator" className="mx-2.5 my-1 h-px bg-border/70" />}
               <button
                 ref={(el) => {
                   itemRefs.current[i] = el;
