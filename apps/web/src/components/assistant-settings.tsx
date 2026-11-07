@@ -200,15 +200,20 @@ export function AssistantSettings() {
           <SettingsInset>
             {memories.map((m) => (
               <div key={m.id} className="flex min-h-[48px] items-center gap-3 px-3.5 py-2">
-                <p className="min-w-0 flex-1 text-sm text-foreground">{m.text}</p>
-                <button
-                  type="button"
-                  aria-label="Remove memory"
-                  onClick={() => void removeMemory(m.id)}
-                  className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-destructive"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm text-foreground">{m.text}</p>
+                  {m.onlyYou && <p className="text-xs text-muted-foreground">Only you</p>}
+                </div>
+                {m.canRemove !== false && (
+                  <button
+                    type="button"
+                    aria-label="Remove memory"
+                    onClick={() => void removeMemory(m.id)}
+                    className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
               </div>
             ))}
           </SettingsInset>

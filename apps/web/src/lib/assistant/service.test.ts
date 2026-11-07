@@ -4,7 +4,7 @@ vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
 vi.mock("@/lib/supabase/session", () => ({ getSessionUser: vi.fn() }));
 
 import { DEFAULT_ASSISTANT_SETTINGS, PLUS_ASSISTANT_ALLOWANCE_CENTS } from "@homeup/core";
-import { FOLD_BATCH, billingMode, budgetFor, foldOlderMessages, toHistory, toMessage, turnCost, type AssistantContext } from "./service";
+import { FOLD_BATCH, billingMode, budgetFor, foldOlderMessages, memoryOwner, toHistory, toMessage, turnCost, type AssistantContext } from "./service";
 import type { LlmClient } from "./llm";
 
 const row = (over: Record<string, unknown>) =>
@@ -257,5 +257,13 @@ describe("toHistory with photos", () => {
   it("shows a photo as a link on the message, or none once it is gone", () => {
     const m = toMessage(row({ role: "user", content: "", photos: [path, "gone.jpg"] }), new Map(), undefined, new Map([[path, "https://x/signed"]]));
     expect(m?.photos).toEqual([{ url: "https://x/signed" }, { url: null }]);
+  });
+});
+
+describe("memoryOwner", () => {
+  it("keeps a memory from a private chat or quick ask with its person, and shares the household thread's", () => {
+    expect(memoryOwner({ userId: "u1" }, "chat")).toBe("u1");
+    expect(memoryOwner({ userId: "u1" }, "quick")).toBe("u1");
+    expect(memoryOwner({ userId: "u1" }, "household")).toBeNull();
   });
 });

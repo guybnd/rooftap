@@ -204,15 +204,20 @@ export function AssistantSettings() {
           <SettingsInset>
             {memories.map((m) => (
               <View key={m.id} className="min-h-[48px] flex-row items-center gap-3 px-3.5 py-2">
-                <Text className="min-w-0 flex-1 text-sm text-foreground">{m.text}</Text>
-                <Pressable
-                  onPress={() => void removeMemory(m.id)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Remove memory"
-                  className="size-11 items-center justify-center rounded-lg"
-                >
-                  <Trash2 size={16} className="text-muted-foreground" />
-                </Pressable>
+                <View className="min-w-0 flex-1">
+                  <Text className="text-sm text-foreground">{m.text}</Text>
+                  {m.onlyYou && <Text className="text-xs text-muted-foreground">Only you</Text>}
+                </View>
+                {m.canRemove !== false && (
+                  <Pressable
+                    onPress={() => void removeMemory(m.id)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Remove memory"
+                    className="size-11 items-center justify-center rounded-lg"
+                  >
+                    <Trash2 size={16} className="text-muted-foreground" />
+                  </Pressable>
+                )}
               </View>
             ))}
           </SettingsInset>

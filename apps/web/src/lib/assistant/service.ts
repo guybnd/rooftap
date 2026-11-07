@@ -157,6 +157,7 @@ async function turnTools(
     homeAssistant,
     web: web.tools.length ? { where: web.where, home: web.home } : null,
     webSpentMicros: web.spentMicros,
+    allowLinksFrom: web.allowLinksFrom,
   };
 }
 
@@ -470,6 +471,26 @@ function titleFrom(text: string): string {
   return line.length > 60 ? `${line.slice(0, 57).trimEnd()}...` : line;
 }
 
+/**
+ * Who a memory saved in this kind of chat belongs to. The household thread
+ * saves shared memories (no owner). A private chat or quick ask saves the
+ * person's own, so nothing said there reaches the others.
+ */
+export function memoryOwner(ctx: Pick<AssistantContext, "userId">, kind: ConversationKind): string | null {
+  return kind === "household" ? null : ctx.userId;
+}
+
+/**
+ * The memories a turn reads. The household thread reads only shared ones,
+ * because everyone reads its replies. A private chat or quick ask also reads
+ * the person's own.
+ */
+function memoriesFor(ctx: AssistantContext, kind: ConversationKind) {
+  const query = ctx.admin.from("assistant_memories").select("text").eq("group_id", ctx.groupId).eq("deleted", false);
+  const scoped = kind === "household" ? query.is("owner_id", null) : query.or(`owner_id.is.null,owner_id.eq.${ctx.userId}`);
+  return scoped.order("created_at").limit(60);
+}
+
 async function startConversation(ctx: AssistantContext, kind: Exclude<ConversationKind, "household">, text: string, idleMinutes: number) {
   const now = new Date();
   const { data, error } = await ctx.admin
@@ -721,7 +742,7 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
       .eq("conversation_id", conversation.id)
       .order("created_at", { ascending: false })
       .limit(settings.contextMessages * 3),
-    ctx.admin.from("assistant_memories").select("text").eq("group_id", ctx.groupId).eq("deleted", false).order("created_at").limit(60),
+    memoriesFor(ctx, conversation.kind),
     memberNames(ctx.admin, ctx.groupId),
     userTimeZone(ctx.admin, ctx.userId),
     input.cook && ctx.enabled.has("recipes") ? cookingContext(ctx, input.cook, now.getTime()) : Promise.resolve(null),
@@ -749,7 +770,11 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
   );
 
   const contextMs = Date.now() - started - readMs;
-  const { tools, homeAssistant, web, webSpentMicros, ms: toolsMs } = await gathering;
+  const { tools, homeAssistant, web, webSpentMicros, allowLinksFrom, ms: toolsMs } = await gathering;
+  // read_page opens the links people sent in this chat, never one the model
+  // read somewhere else (web-tools.ts).
+  for (const row of rows) if (row.role === "user" && row.content) allowLinksFrom(row.content);
+  if (text) allowLinksFrom(text);
   const reachable = [...new Set(tools.map((t) => t.module))].filter((m): m is ModuleId => m !== HOME_ASSISTANT_SCOPE);
   const system = buildAssistantSystemPrompt({
     now: formatNow(timeZone, now),
@@ -899,7 +924,15 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
     turn.memories.length
       ? ctx.admin
           .from("assistant_memories")
-          .insert(turn.memories.map((m) => ({ group_id: ctx.groupId, text: m.slice(0, 500), source: "agent", created_by: ctx.userId })))
+          .insert(
+            turn.memories.map((m) => ({
+              group_id: ctx.groupId,
+              text: m.slice(0, 500),
+              source: "agent",
+              created_by: ctx.userId,
+              owner_id: memoryOwner(ctx, conversation.kind),
+            }))
+          )
       : null,
     ctx.admin.rpc("assistant_record_usage", {
       p_group_id: ctx.groupId,

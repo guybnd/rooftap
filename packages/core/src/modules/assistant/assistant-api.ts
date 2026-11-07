@@ -127,6 +127,10 @@ export interface AssistantMemory {
   text: string;
   source: 'agent' | 'manual';
   created_at: string;
+  /** Saved in your own chat, so only you see it. Missing from older servers. */
+  onlyYou?: boolean;
+  /** Whether you may remove it. Missing from older servers, which allow it. */
+  canRemove?: boolean;
 }
 
 export interface AssistantStatus {
