@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireOwner } from "@/lib/admin-auth";
+import { isServerOperator, requireOwner } from "@/lib/admin-auth";
 
 // Owner-only group member management: create a household member account
 // directly (no SMTP invite round-trip) and manage existing members.
@@ -18,6 +18,21 @@ type MemberProfile = { id: string; email: string; display_name: string; avatar_u
 function normalizeIdentifier(identifier: string): string {
   const trimmed = identifier.trim();
   return trimmed.includes("@") ? trimmed : `${trimmed}@homeup.local`;
+}
+
+// A username account (name@homeup.local) belongs to nobody outside this
+// server, so any owner may make one. An account for a real email address is
+// different: it is made already confirmed, with a password the owner picks,
+// and a later Google sign-in with that email joins it. On a server with open
+// sign-up (the hosted one) that would let anyone take over a stranger's
+// account before they sign up, so real emails need
+// ROOFTAP_MEMBER_EMAIL_ACCOUNTS=on, which the self-host compose file sets.
+function memberEmailAccountsAllowed(): boolean {
+  return process.env.ROOFTAP_MEMBER_EMAIL_ACCOUNTS?.trim().toLowerCase() === "on";
+}
+
+function isUsernameEmail(email: string): boolean {
+  return email.toLowerCase().endsWith("@homeup.local");
 }
 
 export async function GET() {
@@ -77,6 +92,17 @@ export async function POST(request: Request) {
 
   const email = normalizeIdentifier(identifier);
   const name = displayName?.trim() || identifier.trim();
+
+  if (!isUsernameEmail(email) && !memberEmailAccountsAllowed()) {
+    return NextResponse.json(
+      { error: "On this server you can make username accounts only. To add someone with an email address, invite them from Household." },
+      { status: 403 }
+    );
+  }
+  // Never mint an account that would carry server operator rights.
+  if (isServerOperator({ email } as Parameters<typeof isServerOperator>[0])) {
+    return NextResponse.json({ error: "A user with that username or email already exists" }, { status: 409 });
+  }
 
   const { data: existing } = await admin.auth.admin.listUsers();
   if (existing?.users?.some((u) => u.email === email)) {

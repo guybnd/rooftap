@@ -20,7 +20,7 @@ The browser and the phone app get the anon key. The anon key is public by design
 
 - **A visitor with no account** sees the login page and the public config (`/api/public-config`). Registration is closed after the first account.
 - **A household member** reads and changes the rows of their own household. Postgres enforces this with row-level security on every table in the `public` schema. A private task, event, grocery item or card is visible only to the person who owns it.
-- **A household owner** also invites people, removes members and changes household settings. An invitation needs the invited person to accept it. An owner cannot add a person to a household directly.
+- **A household owner** also invites people, removes members and changes household settings. An invitation needs the invited person to accept it. An owner cannot add a person to a household directly. An owner can make a username account in Settings > Users. An account for a real email address needs `ROOFTAP_MEMBER_EMAIL_ACCOUNTS=on`, which the compose file sets. Keep it on only while sign-up is closed, because the owner picks the password of that account.
 - **A server operator** is a person whose email is in `SERVER_OPERATOR_EMAILS`. Only operators see the server-wide panels (API keys, AI providers, parsing provider). Only `.env` sets this list.
 - **The service role** bypasses row-level security. Only the `app` container, the `migrate` job and the edge functions hold this key.
 

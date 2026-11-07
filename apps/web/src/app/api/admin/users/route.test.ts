@@ -12,6 +12,8 @@ const { requireOwnerMock } = vi.hoisted(() => ({
 
 vi.mock("@/lib/admin-auth", () => ({
   requireOwner: requireOwnerMock,
+  isServerOperator: (user: { email?: string }) =>
+    (process.env.SERVER_OPERATOR_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase()).includes(user.email?.toLowerCase() ?? "-"),
 }));
 
 function req(body: unknown, method: string): Request {
@@ -142,6 +144,39 @@ describe("POST /api/admin/users", () => {
     // Scoped to the brand-new user's own group, and explicitly not the
     // household the caller is adding them to.
     expect(admin.groupDeletes).toEqual([{ created_by: "new-user-id", not_id: "group-1" }]);
+  });
+
+  it("refuses an account for a real email unless ROOFTAP_MEMBER_EMAIL_ACCOUNTS is on", async () => {
+    // Open sign-up (the hosted server): a confirmed account for someone else's
+    // email would be taken over when they later sign in with Google.
+    const admin = adminStub({});
+    const createSpy = vi.spyOn(admin.auth.admin, "createUser");
+    requireOwnerMock.mockResolvedValue({ user: { id: "u1" }, admin, groupId: "group-1" });
+    const { POST } = await import("./route");
+
+    vi.stubEnv("ROOFTAP_MEMBER_EMAIL_ACCOUNTS", "");
+    const refused = await POST(req({ groupId: "group-1", identifier: "victim@example.com", password: "sixchars" }, "POST"));
+    expect(refused.status).toBe(403);
+    expect(createSpy).not.toHaveBeenCalled();
+
+    vi.stubEnv("ROOFTAP_MEMBER_EMAIL_ACCOUNTS", "on");
+    const made = await POST(req({ groupId: "group-1", identifier: "kid@example.com", password: "sixchars" }, "POST"));
+    expect(made.status).toBe(200);
+    vi.unstubAllEnvs();
+  });
+
+  it("never makes an account for a server operator's email", async () => {
+    const admin = adminStub({});
+    const createSpy = vi.spyOn(admin.auth.admin, "createUser");
+    requireOwnerMock.mockResolvedValue({ user: { id: "u1" }, admin, groupId: "group-1" });
+    const { POST } = await import("./route");
+
+    vi.stubEnv("ROOFTAP_MEMBER_EMAIL_ACCOUNTS", "on");
+    vi.stubEnv("SERVER_OPERATOR_EMAILS", "ops@example.com");
+    const res = await POST(req({ groupId: "group-1", identifier: "OPS@example.com", password: "sixchars" }, "POST"));
+    expect(res.status).toBe(409);
+    expect(createSpy).not.toHaveBeenCalled();
+    vi.unstubAllEnvs();
   });
 
   it("still creates the account when the personal-group cleanup fails", async () => {

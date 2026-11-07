@@ -377,6 +377,9 @@ services:
       # Emails allowed to manage server-wide settings (the API keys panel).
       # Unset = nobody; see .env.example.
       SERVER_OPERATOR_EMAILS: ${SERVER_OPERATOR_EMAILS:-}
+      # Lets household owners make accounts for real email addresses in
+      # Settings > Users. Safe while sign-up is closed (the default here).
+      ROOFTAP_MEMBER_EMAIL_ACCOUNTS: ${ROOFTAP_MEMBER_EMAIL_ACCOUNTS:-on}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
