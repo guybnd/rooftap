@@ -7,12 +7,18 @@ import * as React from 'react';
 import { Modal, Pressable, View } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Sparkles } from 'lucide-react-native';
+import { ChevronRight, Sparkles } from 'lucide-react-native';
 import {
   BottomSheet,
   BottomSheetScrollView,
   Button,
   LeadingTile,
+  ListGroup,
+  ListItem,
+  ListItemContent,
+  ListItemMeta,
+  ListItemTitle,
+  ListItemTrailing,
   SectionGlow,
   SectionProvider,
   Text,
@@ -68,13 +74,33 @@ function Spotlight({
             </Pressable>
           </View>
 
-          <View className="flex-1 gap-3.5 rounded-[28px] border border-border bg-card p-6">
+          {/* Hearth §13.13: on the ground under the module's glow, no card; the
+              way in is a "Show me" row, not a second button. */}
+          <View className="flex-1 justify-center gap-3.5 px-1">
             <LeadingTile sectionId={entry.module} Icon={Icon} size="xl" />
             {label && <Text className="text-micro-label uppercase text-muted-foreground">New in {label}</Text>}
             <Text accessibilityRole="header" className="text-display text-foreground">
               {entry.title}
             </Text>
             <Text className="text-body leading-relaxed text-foreground/85">{entry.body}</Text>
+            {onTry && (
+              <ListGroup className="mt-3">
+                <ListItem className="items-center gap-3" onPress={onTry} accessibilityRole="button">
+                  <LeadingTile sectionId={entry.module} Icon={Icon} size="md" />
+                  <ListItemContent>
+                    <ListItemTitle>Show me</ListItemTitle>
+                    {label && (
+                      <ListItemMeta>
+                        <Text className="text-caption text-muted-foreground">Opens {label}</Text>
+                      </ListItemMeta>
+                    )}
+                  </ListItemContent>
+                  <ListItemTrailing className="mt-0">
+                    <ChevronRight size={16} className="text-muted-foreground" />
+                  </ListItemTrailing>
+                </ListItem>
+              </ListGroup>
+            )}
           </View>
 
           {count > 1 && (
@@ -86,11 +112,6 @@ function Spotlight({
           )}
 
           <View className="flex-row gap-2.5">
-            {onTry && (
-              <Button variant="secondary" size="lg" className="h-[50px] flex-1 rounded-2xl" onPress={onTry}>
-                Try it
-              </Button>
-            )}
             <Button size="lg" className="h-[50px] flex-1 rounded-2xl" onPress={onNext}>
               {last ? 'Done' : 'Next'}
             </Button>

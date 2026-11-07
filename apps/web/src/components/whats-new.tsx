@@ -179,13 +179,37 @@ function Spotlight({
             Skip
           </button>
         </div>
-        <div className="flex flex-1 flex-col gap-3.5 rounded-[28px] border border-border bg-card p-6">
+        {/* Hearth §13.13: on the ground under the module's glow, no card; the
+            way in is a "Show me" row, not a second button. */}
+        <div className="flex flex-1 flex-col justify-center gap-3.5 px-1">
           <LeadingTile sectionId={sectionId} Icon={Icon} size="xl" />
           {label && <span className={MICRO_LABEL.replace("px-1 pb-1.5 ", "")}>New in {label}</span>}
           <DialogPrimitive.Title className="font-heading text-2xl font-bold tracking-[-0.02em] text-foreground">
             {entry.title}
           </DialogPrimitive.Title>
           <DialogPrimitive.Description className="text-sm leading-relaxed text-foreground/85">{entry.body}</DialogPrimitive.Description>
+          {onTry && (
+            <ListGroup className="mt-3">
+              <ListItem asChild>
+                <button type="button" onClick={onTry} className="w-full items-center text-left hover:bg-muted/60">
+                  <ListItemLeading className="mt-0">
+                    <LeadingTile sectionId={sectionId} Icon={Icon} size="md" />
+                  </ListItemLeading>
+                  <ListItemContent>
+                    <ListItemTitle>Show me</ListItemTitle>
+                    {label && (
+                      <ListItemMeta>
+                        <span className="text-xs text-muted-foreground">Opens {label}</span>
+                      </ListItemMeta>
+                    )}
+                  </ListItemContent>
+                  <ListItemTrailing className="mt-0">
+                    <ChevronRight className="size-4 text-muted-foreground" />
+                  </ListItemTrailing>
+                </button>
+              </ListItem>
+            </ListGroup>
+          )}
         </div>
         {count > 1 && (
           <div aria-hidden className="flex items-center justify-center gap-1.5">
@@ -195,11 +219,6 @@ function Spotlight({
           </div>
         )}
         <div className="flex gap-2.5">
-          {onTry && (
-            <Button variant="secondary" className="h-[50px] flex-1 rounded-2xl text-[15px]" onClick={onTry}>
-              Try it
-            </Button>
-          )}
           <Button className="h-[50px] flex-1 rounded-2xl text-[15px]" onClick={onNext}>
             {index === count - 1 ? "Done" : "Next"}
           </Button>

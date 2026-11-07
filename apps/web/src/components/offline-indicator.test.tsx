@@ -58,8 +58,8 @@ describe("OfflineIndicator", () => {
 
     await renderIndicator();
 
-    expect(container.textContent).toContain("Offline mode");
-    expect(container.textContent).toContain("3 pending");
+    expect(container.textContent).toContain("Offline");
+    expect(container.textContent).toContain("3 to sync");
   });
 
   it("shows the syncing banner when online with pending changes", async () => {
@@ -67,7 +67,7 @@ describe("OfflineIndicator", () => {
 
     await renderIndicator();
 
-    expect(container.textContent).toContain("Syncing 2 pending changes");
+    expect(container.textContent).toContain("Syncing 2");
   });
 
   it("shows a brief Synced pill after draining to 0 while online, then clears after the confirmation window", async () => {
@@ -76,11 +76,11 @@ describe("OfflineIndicator", () => {
     dataCacheState.current = { isOnline: false, lastSyncedAt: null };
     pendingState.current = 3;
     await renderIndicator();
-    expect(container.textContent).toContain("Offline mode");
+    expect(container.textContent).toContain("Offline");
 
     dataCacheState.current = { isOnline: true, lastSyncedAt: null };
     await renderIndicator();
-    expect(container.textContent).toContain("Syncing 3 pending changes");
+    expect(container.textContent).toContain("Syncing 3");
 
     pendingState.current = 0;
     await renderIndicator();
@@ -102,7 +102,7 @@ describe("OfflineIndicator", () => {
 
     await renderIndicator();
 
-    expect(container.textContent).toContain("Syncing 1 pending change...");
+    expect(container.textContent).toContain("Syncing 1");
   });
 
   it("shows a refused write instead of syncing forever, and Dismiss clears it", async () => {

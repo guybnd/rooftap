@@ -11,7 +11,7 @@
 // reports to, so a report that can't be sent isn't kept for later.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { RefreshCw } from "lucide-react";
+import { ChevronDown, ChevronUp, RotateCcw, RotateCw, type LucideIcon } from "lucide-react";
 import {
   buildCrashReport,
   crashReceiptNote,
@@ -23,6 +23,8 @@ import {
   type CrashSender,
 } from "@homeup/core";
 import { Button } from "@/components/ui/button";
+import { ListGroup, ListItem, ListItemContent, ListItemLeading, ListItemMeta, ListItemTitle, ListItemTrailing } from "@/components/ui/list-item";
+import { RooftapTile } from "@/components/brand/rooftap-mark";
 
 /** The browser and OS by family only, e.g. "Firefox on Windows". */
 function browserName(ua: string): string {
@@ -94,31 +96,32 @@ export default function ErrorScreen({ error, reset }: { error: Error & { digest?
 
   return (
     <div className="flex min-h-[70vh] flex-col items-center justify-center gap-6 px-8 py-12">
-      <div className="flex size-14 items-center justify-center rounded-full bg-muted">
-        <RefreshCw className="size-6 text-muted-foreground" />
-      </div>
+      <RooftapTile size="xl" />
       <div className="space-y-1.5 text-center">
-        <h1 className="font-heading text-2xl font-semibold">This screen didn&apos;t load</h1>
-        <p className="max-w-sm text-sm text-muted-foreground">
-          Something in the app tripped up. Reload the page, or try again.
-        </p>
+        <h1 className="font-heading text-2xl font-semibold">This screen tripped</h1>
+        <p className="max-w-sm text-sm text-muted-foreground">Your data is safe. Reload the page to get the newest version, or try again.</p>
       </div>
-      <div className="flex w-full max-w-xs flex-col gap-2">
-        <Button size="lg" className="h-11" onClick={() => window.location.reload()}>
-          Reload the page
-        </Button>
-        <Button size="lg" variant="ghost" className="h-11" onClick={() => reset()}>
-          Try again
-        </Button>
+      <div className="w-full max-w-sm">
+        <ListGroup>
+          <ActionRow Icon={RotateCw} title="Reload the page" meta="Gets the newest version" primary onClick={() => window.location.reload()} />
+          <ActionRow Icon={RotateCcw} title="Try again" onClick={() => reset()} />
+          <ListItem asChild>
+            <button type="button" aria-expanded={showDetails} onClick={() => setShowDetails((v) => !v)} className="w-full items-center text-left hover:bg-muted/60">
+              <ListItemContent>
+                <ListItemTitle>What we sent</ListItemTitle>
+                <ListItemMeta>
+                  <span className="text-xs text-muted-foreground">
+                    {sentNote ?? (outcome === null ? "Sending a report" : outcome === "off" ? "Reports are off in this browser" : "See what the report holds")}
+                  </span>
+                </ListItemMeta>
+              </ListItemContent>
+              <ListItemTrailing className="mt-0">
+                {showDetails ? <ChevronUp className="size-4 text-muted-foreground" /> : <ChevronDown className="size-4 text-muted-foreground" />}
+              </ListItemTrailing>
+            </button>
+          </ListItem>
+        </ListGroup>
       </div>
-      {sentNote && <p className="text-center text-xs text-muted-foreground">{sentNote}</p>}
-      <button
-        type="button"
-        className="text-xs text-muted-foreground underline underline-offset-2"
-        onClick={() => setShowDetails((v) => !v)}
-      >
-        {showDetails ? "Hide details" : "Show details"}
-      </button>
       {showDetails && (
         <div className="flex w-full max-w-md flex-col gap-3">
           <div className="space-y-1 rounded-xl bg-muted p-3 font-mono text-xs">
@@ -142,5 +145,28 @@ export default function ErrorScreen({ error, reset }: { error: Error & { digest?
         </div>
       )}
     </div>
+  );
+}
+
+/** One action on the crash screen: a neutral tile, a title, an optional line. */
+function ActionRow({ Icon, title, meta, primary = false, onClick }: { Icon: LucideIcon; title: string; meta?: string; primary?: boolean; onClick: () => void }) {
+  return (
+    <ListItem asChild>
+      <button type="button" onClick={onClick} className="w-full items-center text-left hover:bg-muted/60">
+        <ListItemLeading className="mt-0">
+          <span className="flex size-9 items-center justify-center rounded-[11px] bg-muted">
+            <Icon className="size-[18px] text-foreground" />
+          </span>
+        </ListItemLeading>
+        <ListItemContent>
+          <ListItemTitle className={primary ? "text-primary" : undefined}>{title}</ListItemTitle>
+          {meta && (
+            <ListItemMeta>
+              <span className="text-xs text-muted-foreground">{meta}</span>
+            </ListItemMeta>
+          )}
+        </ListItemContent>
+      </button>
+    </ListItem>
   );
 }

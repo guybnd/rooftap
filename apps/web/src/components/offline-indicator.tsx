@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useDataCache } from "@/lib/data-cache";
 import { useLegendPendingCount } from "@/lib/legend/sync-status";
 import { dismissWriteFailures, useWriteFailures, type WriteFailure } from "@homeup/core";
-import { WifiOffIcon, CloudIcon, Loader2Icon, CheckIcon, AlertCircleIcon } from "lucide-react";
+import { WifiOffIcon, Loader2Icon, CheckIcon, AlertCircleIcon } from "lucide-react";
 
 // How long the brief "synced" confirmation stays up once pending drains to 0.
 const SYNCED_CONFIRMATION_MS = 2500;
@@ -56,42 +56,50 @@ export function OfflineIndicator() {
     return d.toLocaleDateString();
   };
 
+  // Hearth §13.13: a small chip at the top right, not a band. The app works
+  // offline, so it says so quietly; it takes no room, so nothing below moves.
   if (!isOnline) {
     return (
-      <div className="mx-4 mt-2 flex items-center gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning md:mx-6">
-        <WifiOffIcon className="h-3.5 w-3.5 shrink-0" />
-        <span className="flex-1">
-          Offline mode: changes saved locally
-          {lastSyncedAt && <span className="ml-1 opacity-70">(last sync: {formatLastSync(lastSyncedAt)})</span>}
+      <SyncChip label={lastSyncedAt ? `Offline. Last synced ${formatLastSync(lastSyncedAt)}` : "Offline"}>
+        <WifiOffIcon className="size-3.5 shrink-0 text-warning" />
+        <span>
+          Offline{totalPending > 0 ? ` · ${totalPending} to sync` : " · saved here"}
         </span>
-        {totalPending > 0 && (
-          <span className="rounded-full bg-warning/20 px-2 py-0.5 text-[10px] font-medium">
-            {totalPending} pending
-          </span>
-        )}
-      </div>
+      </SyncChip>
     );
   }
 
   // Online with pending sync items (failed retries or still draining).
   if (totalPending > 0) {
     return (
-      <div className="mx-4 mt-2 flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-xs text-primary md:mx-6">
-        <Loader2Icon className="h-3.5 w-3.5 shrink-0 animate-spin" />
-        <span className="flex-1">
-          Syncing {totalPending} pending {totalPending === 1 ? "change" : "changes"}...
-        </span>
-        <CloudIcon className="h-3.5 w-3.5 shrink-0" />
-      </div>
+      <SyncChip label={`Syncing ${totalPending} ${totalPending === 1 ? "change" : "changes"}`}>
+        <Loader2Icon className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
+        <span>Syncing {totalPending}</span>
+      </SyncChip>
     );
   }
 
-  // Brief confirmation once pending drains to 0 — distinct from "offline" and
-  // "syncing" so a user who was offline can tell their edits actually landed.
+  // Brief confirmation once pending drains to 0, so a person who was offline
+  // can tell their edits actually landed.
   return (
-    <div className="mx-4 mt-2 flex items-center gap-2 rounded-lg border border-success/30 bg-success/10 px-3 py-2 text-xs text-success md:mx-6">
-      <CheckIcon className="h-3.5 w-3.5 shrink-0" />
-      <span className="flex-1">Synced</span>
+    <SyncChip label="Synced">
+      <CheckIcon className="size-3.5 shrink-0 text-success" />
+      <span>Synced</span>
+    </SyncChip>
+  );
+}
+
+function SyncChip({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="pointer-events-none sticky top-2 z-20 flex h-0 justify-end overflow-visible px-4 md:px-6">
+      <span
+        role="status"
+        title={label}
+        aria-label={label}
+        className="pointer-events-auto inline-flex h-7 items-center gap-1.5 rounded-full border border-border bg-card/95 px-2.5 text-xs font-medium text-foreground shadow-sm backdrop-blur"
+      >
+        {children}
+      </span>
     </div>
   );
 }

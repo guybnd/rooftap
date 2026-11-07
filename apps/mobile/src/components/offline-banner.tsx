@@ -1,16 +1,9 @@
-// HOUP-138: global offline indicator, mounted once in the root layout — the
-// mobile-scoped counterpart of apps/web/src/components/offline-indicator.tsx.
-// Native has no Legend-State sync-outbox visibility yet (that's web's
-// pending-count/"Synced" half — see apps/web/src/lib/legend/sync-status.tsx;
-// HOUP-70's native sync engine doesn't exist yet), so this is deliberately
-// narrower: it only reflects useDataCache().isOnline. Copy reuses web's
-// shared "Requires connection" phrase (apps/web/src/components/offline-hint.tsx's
-// OFFLINE_REASON) so the wording matches wherever a Rooftap surface explains
-// why something needs a connection.
-// HOUP-160: absolutely positioned so it overlays instead of reflowing the
-// Stack below it — screens already pad their own insets.top, so an in-flow
-// banner stacked its insets.top+8 on top of that (double gap) and caused a
-// layout jump whenever connectivity toggled.
+// HOUP-138: global offline indicator, mounted once in the root layout. The
+// counterpart of apps/web/src/components/offline-indicator.tsx. The phone has
+// no sync-outbox count yet, so it only reflects useDataCache().isOnline.
+// Hearth §13.13: a small chip at the top, not a band across every screen.
+// The app works offline, so it says so quietly. It overlays (absolute, no
+// reflow) and ignores touches, so nothing below moves or gets blocked.
 import { View } from 'react-native';
 import { Text } from '@homeup/ui';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,12 +16,16 @@ export function OfflineBanner() {
   if (isOnline) return null;
 
   return (
-    <View
-      className="absolute left-0 right-0 top-0 z-20 flex-row items-center gap-2 border-b border-warning/30 bg-warning/10 px-4 pb-2"
-      style={{ paddingTop: insets.top + 8 }}
-    >
-      <WifiOff size={14} className="shrink-0 text-warning" />
-      <Text className="flex-1 text-caption text-warning">Offline: requires connection to sync</Text>
+    <View pointerEvents="none" className="absolute left-0 right-0 top-0 z-20 items-center" style={{ paddingTop: insets.top + 4 }}>
+      <View
+        accessibilityRole="text"
+        accessibilityLiveRegion="polite"
+        accessibilityLabel="Offline. Changes sync when you are back online."
+        className="flex-row items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 shadow-sm"
+      >
+        <WifiOff size={13} className="text-warning" />
+        <Text className="text-caption font-medium text-foreground">Offline</Text>
+      </View>
     </View>
   );
 }

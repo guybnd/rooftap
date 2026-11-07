@@ -13,10 +13,10 @@
 // About & updates. "Show details" shows exactly what was sent; with reports
 // off, a button there sends it by hand.
 import * as React from 'react';
-import { Pressable, ScrollView, useColorScheme, View } from 'react-native';
+import { ScrollView, useColorScheme, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Updates from 'expo-updates';
-import { RefreshCw } from 'lucide-react-native';
+import { ChevronDown, ChevronUp, Download, RotateCcw } from 'lucide-react-native';
 import {
   DEFAULT_THEME_PREFERENCE,
   buildCrashReport,
@@ -26,13 +26,14 @@ import {
   resolveThemePreference,
   type CrashOutcome,
 } from '@homeup/core';
-import { Text, Button, ThemeProvider } from '@homeup/ui';
+import { Text, Button, ListGroup, ListItem, ListItemContent, ListItemMeta, ListItemTitle, ListItemTrailing, ThemeProvider } from '@homeup/ui';
+import { RooftapTile } from '@/components/brand/rooftap-mark';
 import { crashContext, sendCrash } from '@/lib/crash-reports';
 
 type FixState = 'idle' | 'checking' | 'downloading' | 'restarting' | 'latest' | 'offline';
 
 const FIX_LABEL: Record<FixState, string> = {
-  idle: 'Check for a fix',
+  idle: 'Get the fix',
   checking: 'Checking…',
   downloading: 'Downloading the fix…',
   restarting: 'Restarting…',
@@ -41,6 +42,10 @@ const FIX_LABEL: Record<FixState, string> = {
 };
 
 const FIX_NOTE: Partial<Record<FixState, string>> = {
+  idle: 'Checks for an update now',
+  checking: 'Looking for an update',
+  downloading: 'Getting the update',
+  restarting: 'Opening the app again',
   latest: "You're on the newest version. A fix may not be out yet.",
   offline: "Couldn't reach the update server. Check your connection.",
 };
@@ -115,34 +120,47 @@ function ErrorScreen({ error, retry }: { error: Error; retry: () => Promise<void
       contentContainerClassName="flex-grow items-center justify-center gap-6 px-8"
       contentContainerStyle={{ paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 }}
     >
-      <View className="h-14 w-14 items-center justify-center rounded-full bg-muted">
-        <RefreshCw size={24} className="text-muted-foreground" />
-      </View>
+      <RooftapTile size="xl" />
       <View className="items-center gap-1.5">
-        <Text className="text-center font-heading text-title font-semibold text-foreground">
-          This screen didn&apos;t load
-        </Text>
-        <Text className="text-center text-body text-muted-foreground">
-          Something in the app tripped up. A fix may already be out, so check for one, or try again.
+        <Text className="text-center font-heading text-title font-semibold text-foreground">This screen tripped</Text>
+        <Text className="max-w-xs text-center text-body text-muted-foreground">
+          Your data is safe. A fix usually comes as an update, so check for one, or try again.
         </Text>
       </View>
-      <View className="w-full max-w-xs gap-2">
-        {Updates.isEnabled && (
-          <Button size="lg" className="h-11" disabled={busy} onPress={checkForFix}>
-            <Text className="text-body font-medium text-primary-foreground">{FIX_LABEL[fix]}</Text>
-          </Button>
-        )}
-        <Button size="lg" variant="ghost" className="h-11" disabled={busy} onPress={() => retry()}>
-          <Text className="text-body font-medium text-foreground">Try again</Text>
-        </Button>
-        {note && <Text className="text-center text-caption text-muted-foreground">{note}</Text>}
+      <View className="w-full max-w-sm">
+        <ListGroup>
+          {Updates.isEnabled && (
+            <ListItem className="items-center gap-3" disabled={busy} onPress={checkForFix} accessibilityRole="button">
+              <Tile Icon={Download} />
+              <ListItemContent>
+                <ListItemTitle className="text-primary">{FIX_LABEL[fix]}</ListItemTitle>
+                {note && (
+                  <ListItemMeta>
+                    <Text className="text-caption text-muted-foreground">{note}</Text>
+                  </ListItemMeta>
+                )}
+              </ListItemContent>
+            </ListItem>
+          )}
+          <ListItem className="items-center gap-3" disabled={busy} onPress={() => retry()} accessibilityRole="button">
+            <Tile Icon={RotateCcw} />
+            <ListItemContent>
+              <ListItemTitle>Try again</ListItemTitle>
+            </ListItemContent>
+          </ListItem>
+          <ListItem className="items-center gap-3" onPress={() => setShowDetails((v) => !v)} accessibilityRole="button" accessibilityState={{ expanded: showDetails }}>
+            <ListItemContent>
+              <ListItemTitle>What we sent</ListItemTitle>
+              <ListItemMeta>
+                <Text className="text-caption text-muted-foreground">{sentNote ?? (outcome === null ? 'Sending a report' : outcome === 'off' ? 'Reports are off on this phone' : 'See what the report holds')}</Text>
+              </ListItemMeta>
+            </ListItemContent>
+            <ListItemTrailing className="mt-0">
+              {showDetails ? <ChevronUp size={16} className="text-muted-foreground" /> : <ChevronDown size={16} className="text-muted-foreground" />}
+            </ListItemTrailing>
+          </ListItem>
+        </ListGroup>
       </View>
-      {sentNote && <Text className="text-center text-caption text-muted-foreground">{sentNote}</Text>}
-      <Pressable hitSlop={12} onPress={() => setShowDetails((v) => !v)} accessibilityRole="button">
-        <Text className="text-caption text-muted-foreground underline">
-          {showDetails ? 'Hide details' : 'Show details'}
-        </Text>
-      </Pressable>
       {showDetails && (
         <View className="w-full max-w-sm gap-3">
           <View className="gap-1 rounded-xl bg-muted p-3">
@@ -166,5 +184,14 @@ function ErrorScreen({ error, retry }: { error: Error; retry: () => Promise<void
         </View>
       )}
     </ScrollView>
+  );
+}
+
+/** A row's small neutral icon tile. */
+function Tile({ Icon }: { Icon: React.ComponentType<{ size?: number; className?: string }> }) {
+  return (
+    <View className="size-9 items-center justify-center rounded-[11px] bg-muted">
+      <Icon size={18} className="text-foreground" />
+    </View>
   );
 }
