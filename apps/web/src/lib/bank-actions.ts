@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   addBankMatch,
   bankAmountsVary,
+  bankRowVisible,
   bankLineAmount,
   costCategoryFromUp,
   guessCadence,
@@ -15,6 +16,7 @@ import {
 import {
   applyBankLinks,
   bankLinkRows,
+  bankSharing,
   visibleBankTransactions,
 } from "@/lib/up-bank";
 
@@ -120,6 +122,7 @@ export async function changeBankTransaction(
       .from("bank_transactions")
       .update(shared)
       .eq("group_id", c.groupId)
+      .eq("source", row.source)
       .eq("external_id", row.external_id)
       .neq("id", id);
 
@@ -241,6 +244,7 @@ export async function makeCostFromPayment(
     .from("bank_transactions")
     .update({ cost_item_id: item.id, link_kind: "manual" })
     .eq("group_id", c.groupId)
+    .eq("source", t!.source)
     .eq("external_id", t!.external_id);
   if (input.linkPayee) {
     const linked = await setBankLinkRule(
@@ -439,7 +443,10 @@ type ShopRow = Pick<
   BankTransaction,
   | "id"
   | "user_id"
+  | "source"
   | "external_id"
+  | "account_id"
+  | "account_name"
   | "description"
   | "amount_cents"
   | "occurred_at"
@@ -448,13 +455,18 @@ type ShopRow = Pick<
   | "cost_category"
 >;
 
-/** The household's payments at one shop (the payee as the bank shows it) over the last year or so. */
+/**
+ * The household's payments at one shop (the payee as the bank shows it) over
+ * the last year or so, as far as the caller may see them: their own, and the
+ * ones other people share with them (bank_feed_settings visibility).
+ */
 async function shopRows(c: BankCaller, vendor: string): Promise<ShopRow[]> {
   const key = squashVendor(vendor.replace(/[\\\s]+$/, ""));
+  const sharing = await bankSharing(c.admin, c.userId, c.groupId);
   const { data } = await c.admin
     .from("bank_transactions")
     .select(
-      "id, user_id, external_id, description, amount_cents, occurred_at, is_transfer, cost_item_id, cost_category",
+      "id, user_id, source, external_id, account_id, account_name, description, amount_cents, occurred_at, is_transfer, cost_item_id, cost_category",
     )
     .eq("group_id", c.groupId)
     .eq("is_transfer", false)
@@ -462,7 +474,9 @@ async function shopRows(c: BankCaller, vendor: string): Promise<ShopRow[]> {
     .order("occurred_at", { ascending: false })
     .limit(5000);
   return ((data ?? []) as ShopRow[]).filter(
-    (r) => squashVendor(r.description.replace(/[\\\s]+$/, "")) === key,
+    (r) =>
+      bankRowVisible(r, sharing, "all") &&
+      squashVendor(r.description.replace(/[\\\s]+$/, "")) === key,
   );
 }
 
@@ -567,11 +581,11 @@ export async function hideShopPayments(
   input: { vendor: string; from: string; to: string } | { ids: string[] },
   hidden: boolean,
 ): Promise<BankResult<{ costItemId: null; ids: string[] }>> {
-  let mine: Pick<ShopRow, "id" | "user_id" | "external_id" | "occurred_at">[];
+  let mine: Pick<ShopRow, "id" | "user_id" | "source" | "external_id" | "occurred_at">[];
   if ("ids" in input) {
     const { data } = await c.admin
       .from("bank_transactions")
-      .select("id, user_id, external_id, occurred_at")
+      .select("id, user_id, source, external_id, occurred_at")
       .eq("group_id", c.groupId)
       .in("id", input.ids.slice(0, 500));
     mine = (data ?? []) as typeof mine;
@@ -588,14 +602,25 @@ export async function hideShopPayments(
   mine = mine.filter((r) => r.user_id === c.userId);
   if (!mine.length)
     return { error: "Only the person who connected the account can hide its payments.", status: 403 };
-  const externals = [...new Set(mine.map((r) => r.external_id))];
-  const { data: changed, error } = await c.admin
-    .from("bank_transactions")
-    .update({ hidden, updated_at: new Date().toISOString() })
-    .eq("group_id", c.groupId)
-    .in("external_id", externals)
-    .select("id");
-  if (error) return { error: error.message, status: 500 };
+  // A joint payment's copies share its source and the bank's id for it.
+  const bySource = new Map<string, Set<string>>();
+  for (const r of mine) {
+    const ids = bySource.get(r.source) ?? new Set<string>();
+    ids.add(r.external_id);
+    bySource.set(r.source, ids);
+  }
+  const changedIds: string[] = [];
+  for (const [source, externals] of bySource) {
+    const { data: changed, error } = await c.admin
+      .from("bank_transactions")
+      .update({ hidden, updated_at: new Date().toISOString() })
+      .eq("group_id", c.groupId)
+      .eq("source", source)
+      .in("external_id", [...externals])
+      .select("id");
+    if (error) return { error: error.message, status: 500 };
+    changedIds.push(...((changed ?? []) as { id: string }[]).map((r) => r.id));
+  }
   await applyBankLinks(c.admin, c.groupId, { userId: c.userId });
-  return { ok: { costItemId: null, ids: ((changed ?? []) as { id: string }[]).map((r) => r.id) } };
+  return { ok: { costItemId: null, ids: changedIds } };
 }

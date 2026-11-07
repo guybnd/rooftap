@@ -24,6 +24,7 @@ const PLATFORM_TABLES: Record<string, Reach> = {
   groups: { none: 'The household itself. Tools read its region and currency as they need them.' },
   group_members: { none: 'Members are named in the prompt; changing membership stays in Settings.' },
   group_invitations: { none: ACCOUNT },
+  email_lookup_hits: { none: 'A daily count of invite email lookups, kept by the server.' },
   group_modules: { none: 'Which modules are on. The prompt names them; switching them stays with owners in Settings.' },
   group_entitlements: { none: ACCOUNT },
   user_settings: { none: 'Personal settings. Tools read the time zone and Costs goal from it.' },

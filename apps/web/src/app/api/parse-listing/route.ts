@@ -151,11 +151,20 @@ export async function POST(request: Request) {
           await recordAiRead(aiKey);
           if (pdfImages.length > 0) {
             const supabase = createServiceClient();
+            // Kept in the household's folder, so only its members can read
+            // them (storage policy, 20261107140000_pdf_extract_photos.sql).
+            const { data: membership } = await supabase
+              .from("group_members")
+              .select("group_id")
+              .eq("user_id", user.id)
+              .limit(1)
+              .maybeSingle();
+            const folder = membership?.group_id ? `pdf-extracts/${membership.group_id}` : `${user.id}/pdf-extracts`;
             const uploadedUrls: string[] = [];
             for (const dataUrl of pdfImages) {
               const base64 = dataUrl.split(",")[1];
               const buf = Buffer.from(base64, "base64");
-              const path = `pdf-extracts/${crypto.randomUUID()}.jpg`;
+              const path = `${folder}/${crypto.randomUUID()}.jpg`;
               const { error } = await supabase.storage
                 .from("apartment-photos")
                 .upload(path, buf, { contentType: "image/jpeg" });

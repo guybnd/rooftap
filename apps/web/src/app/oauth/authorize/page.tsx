@@ -36,14 +36,28 @@ export default async function AuthorizePage({
     );
   }
 
-  const appName = check.client.client_name ?? "An app";
+  // Any app can register itself under any name (dynamic client
+  // registration), so the name is the app's own claim. The return address
+  // is what Rooftap can vouch for: the code only ever goes there.
+  const claimedName = check.client.client_name?.trim() || null;
+  const returnHost = new URL(check.request.redirectUri).host;
   const enabled = await getEnabledModules(admin, await resolveGroupId(admin, user.id));
   const mcpOn = enabled.has("mcp");
 
   return (
-    <Shell title={`Connect ${appName} to Rooftap?`}>
+    <Shell title="Connect an app to Rooftap?">
+      <div className="rounded-xl bg-muted/50 px-3.5 py-3">
+        <p className="text-xs text-muted-foreground">The app will get access at</p>
+        <p className="break-all font-mono text-base text-foreground">{returnHost}</p>
+        {claimedName && (
+          <p className="pt-1 text-xs text-muted-foreground">
+            It calls itself <span className="text-foreground">{claimedName}</span>. Rooftap can&apos;t check that name, so
+            go by the address above.
+          </p>
+        )}
+      </div>
       <p className="text-sm text-muted-foreground">
-        {appName} will be able to use your household through Rooftap&apos;s MCP server, as{" "}
+        It will be able to use your household through Rooftap&apos;s MCP server, as{" "}
         <span className="text-foreground">{user.email ?? "you"}</span>. It gets the tools allowed in Settings, under
         MCP server, and you can disconnect it there at any time.
       </p>
@@ -54,8 +68,7 @@ export default async function AuthorizePage({
         </p>
       )}
       <p className="text-xs text-muted-foreground">
-        Only connect apps you trust. You&apos;ll go back to{" "}
-        <span className="font-mono">{new URL(check.request.redirectUri).host}</span>.
+        Only connect apps you trust. If you didn&apos;t just start this from an app you use, press Cancel.
       </p>
       <form method="post" action="/api/oauth/authorize" className="space-y-4 pt-2">
         <input type="hidden" name="client_id" value={check.request.clientId} />
