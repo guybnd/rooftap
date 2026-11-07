@@ -22,6 +22,7 @@ import {
   useWindowDimensions,
   View,
   type KeyboardEvent,
+  type LayoutChangeEvent,
 } from 'react-native';
 import { ChevronRight, CircleAlert, Ellipsis, ArrowUp, X, type LucideIcon } from 'lucide-react-native';
 import Animated, {
@@ -33,6 +34,9 @@ import Animated, {
 import {
   dialog,
   dueQuickChoices,
+  newWordPops,
+  wordPopKey,
+  wordPopKeys,
   TIME_QUICK_CHOICES,
   timeChoiceLabel,
   todayISO,
@@ -52,6 +56,7 @@ import { ListGroup, ListItem, ListItemBody, ListItemContent, ListItemLeading, Li
 import { MonthDatePicker } from './month-date-picker';
 import { Text } from './text';
 import { TimeScrollField } from './time-scroll-field';
+import { WordPop } from './word-pop';
 
 /** Body's resting cap in list mode, as a fraction of the window. */
 const BODY_REST_FRACTION = 0.62;
@@ -59,6 +64,22 @@ const BODY_MIN_HEIGHT = 180;
 /** Tray height before the keyboard has ever been seen this session. */
 const DEFAULT_TRAY_HEIGHT = 280;
 let lastKeyboardHeight = DEFAULT_TRAY_HEIGHT;
+/** The title's padding (px-4 pt-1): where its first letter sits in the field. */
+const TITLE_PAD_X = 16;
+const TITLE_PAD_TOP = 4;
+/** The title's type: the field, and the copies a word pop measures and draws. */
+const TITLE_TEXT = 'font-heading text-display';
+let nextPopId = 0;
+
+/** A title word popping as it lights (Hearth §8 "Word pop"), with the title as it was then. */
+interface TitlePopShot {
+  id: number;
+  /** The word's key (core wordPopKey): its twin in the field hides while it pops. */
+  key: string;
+  title: string;
+  start: number;
+  end: number;
+}
 
 /** A chip on the quick line. Its editor opens in the tray. */
 export interface ItemSheetQuickField {
@@ -154,6 +175,30 @@ export function ItemSheet({
   const titleRef = React.useRef<TextInput>(null);
   const { height: windowHeight } = useWindowDimensions();
   const still = useStillMotion();
+
+  // Words that start setting a field pop as they light (Hearth §8 "Word
+  // pop"): tick() always, the rainbow fill and pop unless motion is still. Words already
+  // lit when the sheet opens (a kept draft) stay quiet.
+  const [pops, setPops] = React.useState<TitlePopShot[]>([]);
+  const [titleWidth, setTitleWidth] = React.useState(0);
+  const popKeys = React.useRef<string[] | null>(null);
+  React.useEffect(() => {
+    if (!open) {
+      popKeys.current = null;
+      setPops([]);
+      return;
+    }
+    const marks = titleMarks ?? [];
+    const before = popKeys.current;
+    popKeys.current = wordPopKeys(title, marks);
+    if (before === null) return;
+    const fresh = newWordPops(before, title, marks);
+    if (!fresh.length) return;
+    tick();
+    if (still) return;
+    setPops((now) => [...now, ...fresh.map((m) => ({ id: ++nextPopId, key: wordPopKey(title, m), title, start: m.start, end: m.end }))]);
+  }, [open, title, titleMarks, still]);
+  const popDone = React.useCallback((id: number) => setPops((now) => now.filter((p) => p.id !== id)), []);
 
   // Remember the keyboard's height so the tray can take its exact place.
   const keyboardUp = React.useRef(false);
@@ -298,6 +343,7 @@ export function ItemSheet({
               </Pressable>
             )}
           </View>
+          <View onLayout={(e: LayoutChangeEvent) => setTitleWidth(e.nativeEvent.layout.width)}>
           <TextInput
             ref={titleRef}
             // The text comes as spans (not `value`) so title words can light
@@ -313,8 +359,12 @@ export function ItemSheet({
             onFocus={() => setTray(null)}
             className="px-4 pb-3 pt-1 font-heading text-display text-foreground placeholder:text-muted-foreground"
           >
-            <TitleSpans title={title} marks={titleMarks ?? []} />
+            <TitleSpans title={title} marks={titleMarks ?? []} popping={pops} />
           </TextInput>
+          {/* Over the title: each popping word's copy, while its twin in the field hides. */}
+          {titleWidth > 0 &&
+            pops.map((p) => <TitlePop key={p.id} shot={p} fieldWidth={titleWidth} onDone={popDone} />)}
+          </View>
           {!!titleError && (
             <View className="flex-row items-center gap-1.5 px-4 pb-3" accessibilityLiveRegion="polite">
               <CircleAlert size={14} className="text-destructive" />
@@ -386,7 +436,17 @@ export function ItemSheet({
 }
 
 /** The title as spans, with the matched words lit like their chip. */
-function TitleSpans({ title, marks }: { title: string; marks: readonly ItemSheetTitleMark[] }) {
+function TitleSpans({
+  title,
+  marks,
+  popping,
+}: {
+  title: string;
+  marks: readonly ItemSheetTitleMark[];
+  /** Words popping over the field right now: drawn clear here so only the copy shows. */
+  popping: readonly { key: string }[];
+}) {
+  const hidden = new Set(popping.map((p) => p.key));
   const spans: React.ReactNode[] = [];
   let at = 0;
   [...marks]
@@ -395,7 +455,7 @@ function TitleSpans({ title, marks }: { title: string; marks: readonly ItemSheet
       if (m.start < at) return;
       if (m.start > at) spans.push(title.slice(at, m.start));
       spans.push(
-        <RNText key={i} className="bg-primary/15 text-primary">
+        <RNText key={i} className={hidden.has(wordPopKey(title, m)) ? 'text-transparent' : 'bg-primary/15 text-primary'}>
           {title.slice(m.start, m.end)}
         </RNText>
       );
@@ -403,6 +463,65 @@ function TitleSpans({ title, marks }: { title: string; marks: readonly ItemSheet
     });
   if (at < title.length) spans.push(title.slice(at));
   return <>{spans}</>;
+}
+
+/**
+ * One word's pop. A TextInput can't say where its words sit, so this first
+ * measures the title up to the word's end, the word and the whole title in
+ * hidden text of the same type, then draws the popping copy right over the word. The
+ * field shows its end while you type, so a title wider than the field is
+ * read as scrolled to its end.
+ */
+function TitlePop({ shot, fieldWidth, onDone }: { shot: TitlePopShot; fieldWidth: number; onDone: (id: number) => void }) {
+  const [size, setSize] = React.useState<{ upTo?: number; word?: number; height?: number; full?: number }>({});
+  const parts = [
+    ['upTo', shot.title.slice(0, shot.end)],
+    ['word', shot.title.slice(shot.start, shot.end)],
+    ['full', shot.title],
+  ] as const;
+  const { upTo, word, height, full } = size;
+  if (upTo === undefined || word === undefined || height === undefined || full === undefined) {
+    return (
+      <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, width: 4000, opacity: 0 }} importantForAccessibility="no-hide-descendants">
+        {parts.map(([key, text]) => (
+          <View key={key} style={{ flexDirection: 'row' }}>
+            <RNText
+              numberOfLines={1}
+              className={TITLE_TEXT}
+              onLayout={(e: LayoutChangeEvent) => {
+                const { width, height: h } = e.nativeEvent.layout;
+                setSize((now) => ({ ...now, [key]: width, ...(key === 'word' ? { height: h } : null) }));
+              }}
+            >
+              {text}
+            </RNText>
+          </View>
+        ))}
+      </View>
+    );
+  }
+  const scrolled = Math.max(0, full - (fieldWidth - TITLE_PAD_X * 2));
+  const x = TITLE_PAD_X + upTo - word - scrolled;
+  // Partly scrolled out of the field: let it just light.
+  if (x < TITLE_PAD_X - 1 || x + word > fieldWidth - TITLE_PAD_X + 1) {
+    return <PopSkip onSkip={() => onDone(shot.id)} />;
+  }
+  return (
+    <WordPop
+      text={shot.title.slice(shot.start, shot.end)}
+      x={x}
+      y={TITLE_PAD_TOP}
+      width={word}
+      height={height}
+      textClassName={TITLE_TEXT}
+      onDone={() => onDone(shot.id)}
+    />
+  );
+}
+
+function PopSkip({ onSkip }: { onSkip: () => void }) {
+  React.useEffect(() => onSkip(), [onSkip]);
+  return null;
 }
 
 function Chip({

@@ -18,6 +18,13 @@ import { ArrowUp, ChevronRight, CircleAlert, Ellipsis, X, type LucideIcon } from
 import {
   dialog,
   dueQuickChoices,
+  newWordPops,
+  WORD_POP_FILL_MS,
+  WORD_POP_PILL_KEYS,
+  WORD_POP_PILL_MS,
+  wordPopKey,
+  wordPopWobbleFrames,
+  wordPopKeys,
   TIME_QUICK_CHOICES,
   timeChoiceLabel,
   todayISO,
@@ -30,12 +37,28 @@ import {
 import { cn } from "@/lib/utils";
 import { commit, tick, warn } from "@/lib/haptics";
 import { useKeyboardInset } from "@/hooks/use-keyboard-inset";
+import { prefersStillMotion } from "@/lib/still-motion";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { Button } from "@/components/ui/button";
 import { LeadingTile } from "@/components/ui/leading-tile";
 import { ListGroup, ListItem, ListItemBody, ListItemContent, ListItemLeading, ListItemTrailing } from "@/components/ui/list-item";
 import { MonthDatePicker } from "@/components/month-date-picker";
 import { TimeScrollField } from "@/components/time-scroll-field";
+
+let nextPopId = 0;
+
+/** A title word popping as it lights (Hearth §8 "Word pop"), by its key (core wordPopKey). */
+interface TitlePopShot {
+  id: number;
+  key: string;
+  /** Filling with the roof colours, then popping into its pill. */
+  stage: "fill" | "pill";
+}
+
+/** The wobble while the word fills (core wordPopWobble). */
+const WOBBLE_FRAMES = wordPopWobbleFrames();
+/** The pop into the pill: drop, swell, settle. */
+const PILL_FRAMES = WORD_POP_PILL_KEYS.at.map((offset, i) => ({ transform: `scale(${WORD_POP_PILL_KEYS.scale[i]})`, offset }));
 
 type SectionIcon = React.ComponentType<{ className?: string; strokeWidth?: number }>;
 
@@ -126,6 +149,49 @@ export function ItemSheet({
     }
     wasOpen.current = open;
   }, [open, hasQuick]);
+
+  // Words that start setting a field pop as they light (Hearth §8 "Word
+  // pop"): tick() always, and unless motion is still the word fills with the
+  // roof colours and wobbles, then pops into its pill. Words already lit when
+  // the sheet opens (a kept draft) stay quiet. The input can't move one of
+  // its words, so while a word pops the mirror under it draws the title and
+  // the input's own text goes clear (its caret stays).
+  const [pops, setPops] = React.useState<TitlePopShot[]>([]);
+  const popKeys = React.useRef<string[] | null>(null);
+  const popTimers = React.useRef<ReturnType<typeof setTimeout>[]>([]);
+  React.useEffect(() => () => popTimers.current.forEach(clearTimeout), []);
+  React.useEffect(() => {
+    if (!open) {
+      popKeys.current = null;
+      setPops([]);
+      return;
+    }
+    const marks = titleMarks ?? [];
+    const before = popKeys.current;
+    popKeys.current = wordPopKeys(title, marks);
+    if (before === null) return;
+    const fresh = newWordPops(before, title, marks);
+    if (!fresh.length) return;
+    tick();
+    if (prefersStillMotion()) return;
+    const shots = fresh.map((m) => ({ id: ++nextPopId, key: wordPopKey(title, m), stage: "fill" as const }));
+    setPops((now) => [...now.filter((p) => !shots.some((s) => s.key === p.key)), ...shots]);
+    for (const shot of shots) {
+      const word = () => mirrorRef.current?.querySelector<HTMLElement>(`[data-word-pop="${shot.key.replace(/["\\]/g, "\\$&")}"]`);
+      // The mark renders with this state, so look for it a frame later.
+      requestAnimationFrame(() => word()?.animate?.(WOBBLE_FRAMES, { duration: WORD_POP_FILL_MS, easing: "linear" }));
+      popTimers.current.push(
+        setTimeout(() => {
+          setPops((now) => now.map((p) => (p.id === shot.id ? { ...p, stage: "pill" } : p)));
+          requestAnimationFrame(() =>
+            word()?.animate?.(PILL_FRAMES, { duration: WORD_POP_PILL_MS, easing: "cubic-bezier(0.16, 1, 0.3, 1)" })
+          );
+        }, WORD_POP_FILL_MS),
+        setTimeout(() => setPops((now) => now.filter((p) => p.id !== shot.id)), WORD_POP_FILL_MS + WORD_POP_PILL_MS)
+      );
+    }
+  }, [open, title, titleMarks]);
+  const popping = pops.length > 0;
 
   // A failed add nudges the band and fires warn().
   const lastNudge = React.useRef(nudge);
@@ -242,9 +308,12 @@ export function ItemSheet({
               <div
                 ref={mirrorRef}
                 aria-hidden
-                className="pointer-events-none absolute inset-0 overflow-hidden whitespace-pre px-4 pb-3 pt-1 font-heading text-2xl font-bold leading-tight text-transparent"
+                className={cn(
+                  "pointer-events-none absolute inset-0 overflow-hidden whitespace-pre px-4 pb-3 pt-1 font-heading text-2xl font-bold leading-tight",
+                  popping ? "text-foreground" : "text-transparent"
+                )}
               >
-                <TitleSpans title={title} marks={titleMarks} />
+                <TitleSpans title={title} marks={titleMarks} pops={pops} />
               </div>
             )}
             <input
@@ -267,7 +336,10 @@ export function ItemSheet({
                 }
               }}
               onFocus={() => setTray(null)}
-              className="relative w-full bg-transparent px-4 pb-3 pt-1 font-heading text-2xl font-bold leading-tight text-foreground outline-none placeholder:text-muted-foreground/80"
+              className={cn(
+                "relative w-full bg-transparent px-4 pb-3 pt-1 font-heading text-2xl font-bold leading-tight outline-none placeholder:text-muted-foreground/80",
+                popping ? "text-transparent caret-foreground" : "text-foreground"
+              )}
             />
             </div>
             {titleError && (
@@ -349,7 +421,16 @@ function Kbd({ children }: { children: React.ReactNode }) {
 }
 
 /** The title with the matched words marked, for the mirror under the input. */
-function TitleSpans({ title, marks }: { title: string; marks: readonly ItemSheetTitleMark[] }) {
+function TitleSpans({
+  title,
+  marks,
+  pops = [],
+}: {
+  title: string;
+  marks: readonly ItemSheetTitleMark[];
+  /** Words popping now: drawn filling, then popping into the pill. */
+  pops?: readonly TitlePopShot[];
+}) {
   const spans: React.ReactNode[] = [];
   let at = 0;
   [...marks]
@@ -358,14 +439,28 @@ function TitleSpans({ title, marks }: { title: string; marks: readonly ItemSheet
       if (m.start < at) return;
       if (m.start > at) spans.push(title.slice(at, m.start));
       spans.push(
-        <mark key={i} data-title-word className="rounded-md bg-primary/15 text-transparent">
-          {title.slice(m.start, m.end)}
-        </mark>
+        <TitleMark key={i} text={title.slice(m.start, m.end)} pop={pops.find((p) => p.key === wordPopKey(title, m))} />
       );
       at = m.end;
     });
   if (at < title.length) spans.push(title.slice(at));
   return <>{spans}</>;
+}
+
+function TitleMark({ text, pop }: { text: string; pop?: TitlePopShot }) {
+  return (
+    <mark
+      data-title-word
+      data-word-pop={pop?.key}
+      className={cn(
+        "rounded-md",
+        pop ? "inline-block will-change-transform" : null,
+        pop?.stage === "fill" ? "word-pop-fill" : "bg-primary/15 text-inherit"
+      )}
+    >
+      {text}
+    </mark>
+  );
 }
 
 function Chip({

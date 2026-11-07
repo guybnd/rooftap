@@ -71,3 +71,4 @@ export * from './components/now-card';
 export * from './components/tab-glide';
 export * from './components/moment';
 export * from './components/no-group-state';
+export * from './components/word-pop';

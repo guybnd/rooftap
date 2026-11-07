@@ -85,4 +85,26 @@ describe("ItemSheet", () => {
     const marks = Array.from(document.querySelectorAll("[data-title-word]"));
     expect(marks.map((m) => m.textContent)).toEqual(["tomorrow"]);
   });
+
+  it("pops a word that lights while typing, then settles it into its pill", async () => {
+    vi.useFakeTimers();
+    try {
+      await render("add", vi.fn(), "Bins out");
+      await render("add", vi.fn(), "Bins out tomorrow");
+      const mark = () => document.querySelector("[data-title-word]")!;
+      expect(mark().className).toContain("word-pop-fill");
+      expect(document.querySelector("input")!.className).toContain("text-transparent");
+      await act(async () => vi.advanceTimersByTime(1000));
+      expect(mark().className).not.toContain("word-pop-fill");
+      expect(mark().className).toContain("bg-primary/15");
+      expect(document.querySelector("input")!.className).not.toContain("text-transparent");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not pop words already lit when the sheet opens", async () => {
+    await render("add", vi.fn(), "Bins out tomorrow");
+    expect(document.querySelector("[data-title-word]")!.className).not.toContain("word-pop-fill");
+  });
 });

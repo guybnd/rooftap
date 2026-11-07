@@ -1143,6 +1143,24 @@
     .voice-bar { animation: none; height: 14px; }
   }
 
+  /* Hearth §8 "Word pop": a title word that starts setting a field fills
+     with the roof colours (core ROOFTAP_SPECTRUM, twice over so it runs left
+     to right) while it wobbles, then pops into its pill (core word-pop.ts;
+     the wobble and the pill's scale run from script). Over slow + fast; the
+     --motion-* tokens go to 0ms under still motion. */
+  .word-pop-fill {
+    background-image: linear-gradient(90deg, #FF7A5C, #FFC93D, #5FE0B0, #7CB8FF, #9C8BFF, #FF7AB8, #FF7A5C, #FFC93D, #5FE0B0, #7CB8FF, #9C8BFF, #FF7AB8);
+    background-size: 300% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: word-pop-fill calc(var(--motion-slow) + var(--motion-fast)) linear both;
+  }
+  @keyframes word-pop-fill {
+    from { background-position: 0% 0; }
+    to { background-position: 100% 0; }
+  }
+
   /* Hearth §8 "Pop out, pop in": a tapped suggestion chip swells (fast,
      swift-out) then vanishes (fast, ease-in) before the item is re-added
      (core POP_OUT_*), and the item's row pops into its aisle (from 0.94 past
