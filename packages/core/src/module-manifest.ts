@@ -89,12 +89,23 @@ export interface ManifestTool {
   kind: 'read' | 'write';
 }
 
+/** One of a module's Ask sheet suggestions: the words it sends, and any other modules it needs. */
+export type AskStarterDef = string | { text: string; with: readonly string[] };
+
 export interface ModuleManifest {
   /** Kebab-case id, also the folder name and the `group_modules.module_id`. */
   id: string;
   label: string;
   /** One line for the Settings > Modules row. Hearth copy rules apply. */
   description: string;
+  /**
+   * Asks the empty Ask Rooftap sheet offers while this module is on (core
+   * askStarters). Short, in the person's own words, and worth asking: a plan,
+   * a change or something that joins modules, never a lookup Home already
+   * shows. `with` names other modules the ask needs; it shows only while
+   * they are on too. Hearth copy rules apply.
+   */
+  askStarters?: readonly AskStarterDef[];
   /** Lucide icon name, resolved per platform. */
   iconId: string;
   /** On for a new household with no `group_modules` row for this module. */

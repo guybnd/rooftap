@@ -3,9 +3,10 @@
 // coral tap dot (public/icon.svg).
 // Native twin: apps/mobile/src/components/brand/rooftap-mark.tsx.
 import { useId } from "react";
-import { ROOFTAP_MARK } from "@homeup/core";
+import { ROOFTAP_MARK, ROOFTAP_SPECTRUM, ROOFTAP_TILE } from "@homeup/core";
+import { cn } from "@/lib/utils";
 
-const SPECTRUM = ["#FF7A5C", "#FFC93D", "#5FE0B0", "#7CB8FF", "#9C8BFF", "#FF7AB8"];
+const SPECTRUM = ROOFTAP_SPECTRUM;
 
 export function RooftapMark({ className, spectrum = false }: { className?: string; spectrum?: boolean }) {
   const id = `rooftap-spectrum-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
@@ -23,5 +24,25 @@ export function RooftapMark({ className, spectrum = false }: { className?: strin
       <path d={ROOFTAP_MARK.roof} fill="none" stroke={spectrum ? `url(#${id})` : "currentColor"} strokeWidth={ROOFTAP_MARK.roofStroke} strokeLinecap="round" strokeLinejoin="round" />
       <circle cx={ROOFTAP_MARK.dot.cx} cy={ROOFTAP_MARK.dot.cy} r={ROOFTAP_MARK.dot.r} fill={spectrum ? SPECTRUM[0] : "currentColor"} />
     </svg>
+  );
+}
+
+const TILE = { sm: "h-7 w-7 rounded-[9px] [&_svg]:h-5 [&_svg]:w-5", md: "h-9 w-9 rounded-[11px] [&_svg]:h-[26px] [&_svg]:w-[26px]" } as const;
+
+/**
+ * Rooftap's avatar: the app icon in small, the spectrum roof and coral tap
+ * dot on the icon's dark tile. `working` makes the dot hop over the roof
+ * while Rooftap is thinking (.rooftap-working in globals.css; reduced motion
+ * keeps it still). Native twin: RooftapTile in apps/mobile.
+ */
+export function RooftapTile({ size = "md", working = false, className }: { size?: keyof typeof TILE; working?: boolean; className?: string }) {
+  return (
+    <span
+      aria-hidden
+      className={cn("inline-flex shrink-0 items-center justify-center", TILE[size], working && "rooftap-working", className)}
+      style={{ backgroundColor: ROOFTAP_TILE }}
+    >
+      <RooftapMark spectrum />
+    </span>
   );
 }

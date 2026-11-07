@@ -6,6 +6,7 @@ export const costsModule = defineModule({
   id: 'costs',
   label: 'Costs & Budget',
   description: 'Bills, recurring costs and a monthly budget.',
+  askStarters: ["Which subscriptions could we cancel?", "Why was last month higher than usual?"],
   iconId: 'wallet',
   defaultEnabled: false,
   enhances: ['setup', 'groceries', 'search'],

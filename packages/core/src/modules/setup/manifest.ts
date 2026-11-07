@@ -4,6 +4,7 @@ export const setupModule = defineModule({
   id: 'setup',
   label: 'Home Setup',
   description: 'Rooms, purchases and the moving checklist for a new home.',
+  askStarters: ["Plan our first week in the new place"],
   iconId: 'home',
   defaultEnabled: false,
   enhances: ['search', 'costs'],

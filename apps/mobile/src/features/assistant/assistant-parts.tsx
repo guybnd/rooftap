@@ -18,7 +18,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useRouter, type Href } from 'expo-router';
-import { ArrowUp, AtSign, Camera, Check, ChevronRight, ImageOff, ImagePlus, Images, Sparkles, X } from 'lucide-react-native';
+import { ArrowUp, AtSign, Camera, Check, ChevronRight, ImageOff, ImagePlus, Images, Mic, Sparkles, X } from 'lucide-react-native';
 import {
   BottomSheet,
   ListGroup,
@@ -47,6 +47,7 @@ import {
   type MentionOption,
   MAX_ASSISTANT_PHOTOS,
   useComposerPhotos,
+  useVoiceInput,
   useProposalPicks,
   useReplyItems,
   type ReplyItemRow,
@@ -65,6 +66,8 @@ import { sectionIconFor } from '@/lib/section-icons';
 import { useDataCache } from '@/lib/data-cache';
 import { getBoundSupabaseClient } from '@/lib/supabase-client';
 import { assistantApi } from './assistant-api';
+import { RooftapTile } from '@/components/brand/rooftap-mark';
+import { ListeningBar, phoneVoiceEngine } from './voice-input';
 
 function Spans({ spans }: { spans: ReplySpan[] }) {
   const router = useRouter();
@@ -131,7 +134,7 @@ export function ProposalCard({
   const pending = proposal.state === 'pending';
   const { choices, ticks, keptCount } = pick;
   return (
-    <View className="mt-2 overflow-hidden rounded-2xl bg-muted/40">
+    <View className="mt-2 overflow-hidden rounded-2xl border border-border bg-card">
       {pending
         ? choices.map((c, i) => {
             const off = pick.isLeft(c.key);
@@ -193,7 +196,7 @@ export function ProposalCard({
               <Text className="min-w-0 flex-1 text-sm text-foreground">{item.summary}</Text>
             </View>
           ))}
-      <View className="flex-row items-center justify-end gap-2 px-3 pb-3 pt-1">
+      <View className="flex-row items-center justify-end gap-2 border-t border-border/60 px-3 py-2">
         {pending ? (
           <>
             <Pressable
@@ -249,29 +252,43 @@ export function MessageBubble({
   // Older servers don't say whose a message is: every user message was the viewer's.
   const mine = user && (message.mine ?? true);
   // In the household thread members are named, and so is Rooftap, so a reply reads apart from the chat.
-  const author = !showAuthor || mine ? null : user ? message.author : 'Rooftap';
+  const author = !showAuthor || mine || !user ? null : message.author;
+  const meta = (
+    <Text className="mt-1 px-1 text-[11px] text-muted-foreground" style={{ fontVariant: ['tabular-nums'] }}>
+      {timeAgo(message.created_at)}
+      {message.channel === 'telegram' ? ' · Telegram' : ''}
+      {showCost && message.cost_micros != null ? ` · ${formatMicros(message.cost_micros)}` : ''}
+    </Text>
+  );
+  if (!user) {
+    // Rooftap's reply: its indigo tile and name, so a long answer never reads as loose text.
+    return (
+      <View className="flex-row items-start gap-2.5">
+        <RooftapTile size="sm" />
+        <View className="min-w-0 flex-1">
+          <Text className="mb-0.5 text-xs font-semibold text-muted-foreground">Rooftap</Text>
+          {message.photos?.length ? <MessagePhotos photos={message.photos} spaced={!!message.content} /> : null}
+          {message.content ? <ReplyText text={message.content} /> : null}
+          {message.content ? <ReplyItems text={message.content} /> : null}
+          <ProposalCard message={message} busy={busy} onDecide={(d, picks) => onDecide(message.id, d, picks)} />
+          {meta}
+        </View>
+      </View>
+    );
+  }
   return (
     <View className={cn(mine ? 'items-end' : 'items-start')}>
       {author && <Text className="mb-1 px-1 text-[11px] font-medium text-muted-foreground">{author}</Text>}
       <View
         className={cn(
-          mine
-            ? 'max-w-[88%] rounded-2xl rounded-br-md bg-muted px-3.5 py-2.5'
-            : user
-              ? 'max-w-[88%] rounded-2xl rounded-bl-md bg-muted/50 px-3.5 py-2.5'
-              : 'w-full px-1'
+          'max-w-[88%] rounded-2xl border border-border px-3.5 py-2.5',
+          mine ? 'rounded-br-md bg-muted' : 'rounded-bl-md bg-card'
         )}
       >
         {message.photos?.length ? <MessagePhotos photos={message.photos} spaced={!!message.content} /> : null}
         {message.content ? <ReplyText text={message.content} /> : null}
-        {!user && message.content ? <ReplyItems text={message.content} /> : null}
-        {!user && <ProposalCard message={message} busy={busy} onDecide={(d, picks) => onDecide(message.id, d, picks)} />}
       </View>
-      <Text className="mt-1 px-1 text-[11px] text-muted-foreground" style={{ fontVariant: ['tabular-nums'] }}>
-        {timeAgo(message.created_at)}
-        {message.channel === 'telegram' ? ' · Telegram' : ''}
-        {showCost && message.cost_micros != null ? ` · ${formatMicros(message.cost_micros)}` : ''}
-      </Text>
+      {meta}
     </View>
   );
 }
@@ -333,20 +350,26 @@ export function Thinking({ draft }: { draft?: AssistantDraft | null }) {
   const still = useStillMotion();
   const text = draft?.text.trimStart() ?? '';
   // HOUP-509 (Hearth §8 "Streamed reply"): the answer replaces the lines as it is written.
-  if (text) {
-    return (
-      <View className="w-full px-1" accessibilityLiveRegion="polite">
-        <ReplyText text={text} />
-        {draft?.status ? <Text className="mt-1.5 text-[13px] text-muted-foreground">{draft.status}</Text> : null}
-      </View>
-    );
-  }
+  // Rooftap's tile leads its reply as it will once it lands; the tap dot hops while it works.
   return (
-    <View className="w-full gap-2 px-1 py-1.5" accessibilityLabel="Rooftap is thinking" accessibilityRole="progressbar">
-      {GHOST_REPLY_LINES.map((width, i) => (
-        <GhostLine key={i} index={i} width={width} still={still} />
-      ))}
-      {draft?.status ? <Text className="pt-1 text-[13px] text-muted-foreground">{draft.status}</Text> : null}
+    <View className="flex-row items-start gap-2.5">
+      <RooftapTile size="sm" working={!text} />
+      <View className="min-w-0 flex-1">
+        <Text className="mb-0.5 text-xs font-semibold text-muted-foreground">Rooftap</Text>
+        {text ? (
+          <View accessibilityLiveRegion="polite">
+            <ReplyText text={text} />
+            {draft?.status ? <Text className="mt-1.5 text-[13px] text-muted-foreground">{draft.status}</Text> : null}
+          </View>
+        ) : (
+          <View className="gap-2 py-1.5" accessibilityLabel="Rooftap is thinking" accessibilityRole="progressbar">
+            {GHOST_REPLY_LINES.map((width, i) => (
+              <GhostLine key={i} index={i} width={width} still={still} />
+            ))}
+            {draft?.status ? <Text className="pt-1 text-[13px] text-muted-foreground">{draft.status}</Text> : null}
+          </View>
+        )}
+      </View>
     </View>
   );
 }
@@ -496,6 +519,8 @@ export function Composer({
   maxLength = 4000,
   photos: allowPhotos = false,
   mentions,
+  voice: allowVoice = false,
+  onListening,
   onSend,
 }: {
   placeholder: string;
@@ -503,6 +528,10 @@ export function Composer({
   busy?: boolean;
   autoFocus?: boolean;
   maxLength?: number;
+  /** Offer the mic (voice-input.tsx) while the box is empty. */
+  voice?: boolean;
+  /** Listening started or stopped (the pop-up's edge turns faster while it listens). */
+  onListening?: (on: boolean) => void;
   /** Offer to attach photos, when the household's model can look at them. */
   photos?: boolean;
   /** Who `@` offers to tag (the household thread): Rooftap and the other members. */
@@ -543,6 +572,18 @@ export function Composer({
     }
   };
 
+  const voice = useVoiceInput(
+    phoneVoiceEngine(),
+    (heard) => {
+      if (disabled || busy) return;
+      void Promise.resolve(onSend(heard, [])).then((ok) => {
+        if (!ok) setText(heard);
+      });
+    },
+    { onListening, onError: (m) => toast.error(m), onTick: () => haptics.tick() }
+  );
+  const showMic = allowVoice && voice.available && !text.trim() && tray.photos.length === 0;
+
   const pick = async (source: 'camera' | 'library') => {
     try {
       const picked = await pickPhotos(source, MAX_ASSISTANT_PHOTOS - tray.photos.length);
@@ -551,6 +592,8 @@ export function Composer({
       toast.error(err instanceof Error ? err.message : 'Could not open the photos.');
     }
   };
+
+  if (voice.listening) return <ListeningBar voice={voice} />;
 
   return (
     <View className={cn('rounded-3xl border border-border/60 bg-card p-1.5', !allowPhotos && 'pl-4')}>
@@ -606,6 +649,17 @@ export function Composer({
           accessibilityLabel={placeholder}
           className="max-h-40 min-h-10 flex-1 py-2 text-body text-foreground placeholder:text-muted-foreground"
         />
+        {showMic && (
+          <Pressable
+            onPress={() => void voice.start()}
+            disabled={disabled || busy}
+            accessibilityRole="button"
+            accessibilityLabel="Ask by voice"
+            className={cn('size-10 items-center justify-center rounded-full', (disabled || busy) && 'opacity-40')}
+          >
+            <Mic size={20} className="text-muted-foreground" />
+          </Pressable>
+        )}
         <Pressable
           onPress={() => void submit()}
           disabled={!canSend}

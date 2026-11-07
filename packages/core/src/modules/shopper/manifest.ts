@@ -4,6 +4,7 @@ export const shopperModule = defineModule({
   id: 'shopper',
   label: 'Shopper',
   description: 'Things you want to buy, with price tracking and a deal rating.',
+  askStarters: ["Watch the price of a robot vacuum for me"],
   iconId: 'shopping-bag',
   defaultEnabled: false,
   enhances: ['household', 'costs'],

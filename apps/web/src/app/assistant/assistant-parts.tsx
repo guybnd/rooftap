@@ -8,7 +8,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowUp, AtSign, Check, ChevronRight, ImageOff, ImagePlus, Loader2, Sparkles, X } from 'lucide-react';
+import { ArrowUp, AtSign, Check, ChevronRight, ImageOff, ImagePlus, Loader2, Mic, Sparkles, X } from 'lucide-react';
 import {
   GHOST_REPLY_GROW_MS,
   GHOST_REPLY_LINES,
@@ -21,6 +21,8 @@ import {
   type MentionOption,
   timeAgo,
   useComposerPhotos,
+  useVoiceInput,
+  type VoiceEngine,
   useProposalPicks,
   useReplyItems,
   type ReplyItemRow,
@@ -43,6 +45,11 @@ import { useDataCache } from '@/lib/data-cache';
 import { toast } from 'sonner';
 import { assistantApi } from '@/lib/assistant-client';
 import { createClient } from '@/lib/supabase/client';
+import { RooftapTile } from '@/components/brand/rooftap-mark';
+import { ListeningBar, browserVoiceEngine } from './voice-input';
+
+/** No recognizer: the mic stays hidden (the server render, a browser without speech input). */
+const NO_VOICE: VoiceEngine = { available: false, requestPermission: async () => false, start: () => {}, stop: () => {}, abort: () => {} };
 
 function Spans({ spans }: { spans: ReplySpan[] }) {
   return (
@@ -112,7 +119,7 @@ export function ProposalCard({
   const pending = proposal.state === 'pending';
   const { choices, ticks, keptCount } = pick;
   return (
-    <div className="mt-2 overflow-hidden rounded-2xl bg-muted/40">
+    <div className="mt-2 overflow-hidden rounded-2xl border border-border bg-card">
       {pending ? (
         <div>
           {choices.map((c, i) => {
@@ -188,7 +195,7 @@ export function ProposalCard({
           })}
         </div>
       )}
-      <div className="flex items-center justify-end gap-2 px-3 pb-3 pt-1">
+      <div className="flex items-center justify-end gap-2 border-t border-border/60 px-3 py-2">
         {pending ? (
           <>
             <button
@@ -237,26 +244,43 @@ export function MessageBubble({
   // Older servers don't say whose a message is: every user message was the viewer's.
   const mine = user && (message.mine ?? true);
   // In the household thread members are named, and so is Rooftap, so a reply reads apart from the chat.
-  const author = !showAuthor || mine ? null : user ? message.author : 'Rooftap';
+  const author = !showAuthor || mine || !user ? null : message.author;
+  const meta = (
+    <p className="mt-1 px-1 text-[11px] text-muted-foreground tabular-nums">
+      {timeAgo(message.created_at)}
+      {message.channel === 'telegram' ? ' · Telegram' : ''}
+      {showCost && message.cost_micros != null ? ` · ${formatMicros(message.cost_micros)}` : ''}
+    </p>
+  );
+  if (!user) {
+    // Rooftap's reply: its tile and name, so a long answer never reads as loose text.
+    return (
+      <div className="flex items-start gap-2.5">
+        <RooftapTile size="sm" />
+        <div className="min-w-0 flex-1 text-[15px] leading-relaxed text-foreground">
+          <p className="mb-0.5 text-xs font-semibold text-muted-foreground">Rooftap</p>
+          {message.photos?.length ? <MessagePhotos photos={message.photos} spaced={!!message.content} /> : null}
+          {message.content ? <ReplyText text={message.content} /> : null}
+          {message.content ? <ReplyItems text={message.content} /> : null}
+          <ProposalCard message={message} busy={busy} onDecide={(d, picks) => onDecide(message.id, d, picks)} />
+          {meta}
+        </div>
+      </div>
+    );
+  }
   return (
     <div className={cn('flex flex-col', mine ? 'items-end' : 'items-start')}>
       {author && <p className="mb-1 px-1 text-[11px] font-medium text-muted-foreground">{author}</p>}
       <div
         className={cn(
-          'max-w-[88%] text-[15px] leading-relaxed text-foreground',
-          mine ? 'rounded-2xl rounded-br-md bg-muted px-3.5 py-2.5' : user ? 'rounded-2xl rounded-bl-md bg-muted/50 px-3.5 py-2.5' : 'w-full px-1'
+          'max-w-[88%] rounded-2xl border border-border px-3.5 py-2.5 text-[15px] leading-relaxed text-foreground',
+          mine ? 'rounded-br-md bg-muted' : 'rounded-bl-md bg-card'
         )}
       >
         {message.photos?.length ? <MessagePhotos photos={message.photos} spaced={!!message.content} /> : null}
         {message.content ? <ReplyText text={message.content} /> : null}
-        {!user && message.content ? <ReplyItems text={message.content} /> : null}
-        {!user && <ProposalCard message={message} busy={busy} onDecide={(d, picks) => onDecide(message.id, d, picks)} />}
       </div>
-      <p className="mt-1 px-1 text-[11px] text-muted-foreground tabular-nums">
-        {timeAgo(message.created_at)}
-        {message.channel === 'telegram' ? ' · Telegram' : ''}
-        {showCost && message.cost_micros != null ? ` · ${formatMicros(message.cost_micros)}` : ''}
-      </p>
+      {meta}
     </div>
   );
 }
@@ -349,25 +373,31 @@ function MessagePhotos({ photos, spaced }: { photos: AssistantPhoto[]; spaced: b
  */
 export function Thinking({ draft }: { draft?: AssistantDraft | null }) {
   const text = draft?.text.trimStart() ?? '';
-  if (text) {
-    return (
-      <div className="w-full px-1 text-[15px] leading-relaxed text-foreground" aria-live="polite" aria-busy="true">
-        <ReplyText text={text} />
-        {draft?.status && <p className="mt-1.5 text-[13px] text-muted-foreground">{draft.status}</p>}
-      </div>
-    );
-  }
+  // Rooftap's tile leads its reply as it will once it lands; the tap dot hops while it works.
   return (
-    <div className="w-full space-y-2 px-1 py-1.5" aria-label="Rooftap is thinking" role="status">
-      {GHOST_REPLY_LINES.map((width, i) => (
-        <div key={i} style={{ width: `${width * 100}%` }}>
-          <div
-            className="ghost-line h-3 rounded-full bg-muted-foreground/15"
-            style={{ '--ghost-delay': `${i * GHOST_REPLY_STAGGER_MS}ms`, '--ghost-grow': `${GHOST_REPLY_GROW_MS}ms` } as CSSProperties}
-          />
-        </div>
-      ))}
-      {draft?.status && <p className="pt-1 text-[13px] text-muted-foreground">{draft.status}</p>}
+    <div className="flex items-start gap-2.5">
+      <RooftapTile size="sm" working={!text} />
+      <div className="min-w-0 flex-1">
+        <p className="mb-0.5 text-xs font-semibold text-muted-foreground">Rooftap</p>
+        {text ? (
+          <div className="text-[15px] leading-relaxed text-foreground" aria-live="polite" aria-busy="true">
+            <ReplyText text={text} />
+            {draft?.status && <p className="mt-1.5 text-[13px] text-muted-foreground">{draft.status}</p>}
+          </div>
+        ) : (
+          <div className="space-y-2 py-1.5" aria-label="Rooftap is thinking" role="status">
+            {GHOST_REPLY_LINES.map((width, i) => (
+              <div key={i} style={{ width: `${width * 100}%` }}>
+                <div
+                  className="ghost-line h-3 rounded-full bg-muted-foreground/15"
+                  style={{ '--ghost-delay': `${i * GHOST_REPLY_STAGGER_MS}ms`, '--ghost-grow': `${GHOST_REPLY_GROW_MS}ms` } as CSSProperties}
+                />
+              </div>
+            ))}
+            {draft?.status && <p className="pt-1 text-[13px] text-muted-foreground">{draft.status}</p>}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -417,6 +447,8 @@ export function Composer({
   maxLength = 4000,
   photos: allowPhotos = false,
   mentions,
+  voice: allowVoice = false,
+  onListening,
   onSend,
 }: {
   placeholder: string;
@@ -424,6 +456,10 @@ export function Composer({
   busy?: boolean;
   autoFocus?: boolean;
   maxLength?: number;
+  /** Offer the mic (voice-input.tsx) while the box is empty and the browser can listen. */
+  voice?: boolean;
+  /** Listening started or stopped (the pop-up's edge turns faster while it listens). */
+  onListening?: (on: boolean) => void;
   /** Offer to attach photos (pick, paste or drop), when the household's model can look at them. */
   photos?: boolean;
   /** Who `@` offers to tag (the household thread): Rooftap and the other members. */
@@ -483,10 +519,27 @@ export function Composer({
     }
   };
 
+  // Made after mount: the server render has no browser to ask.
+  const [voiceEngine, setVoiceEngine] = useState<VoiceEngine>(NO_VOICE);
+  useEffect(() => setVoiceEngine(browserVoiceEngine()), []);
+  const voice = useVoiceInput(
+    voiceEngine,
+    (heard) => {
+      if (disabled || busy) return;
+      void Promise.resolve(onSend(heard, [])).then((ok) => {
+        if (!ok) setText(heard);
+      });
+    },
+    { onListening, onError: (m) => toast.error(m) }
+  );
+  const showMic = allowVoice && voice.available && !text.trim() && tray.photos.length === 0;
+
   const attach = (files: File[]) => {
     if (!allowPhotos || disabled || files.length === 0) return;
     tray.add(files.map(pickedFrom));
   };
+
+  if (voice.listening) return <ListeningBar voice={voice} />;
 
   return (
     <form
@@ -611,6 +664,17 @@ export function Composer({
           }}
           className="min-h-10 flex-1 resize-none bg-transparent py-2 text-[15px] text-foreground outline-none placeholder:text-muted-foreground disabled:opacity-50"
         />
+        {showMic && (
+          <button
+            type="button"
+            onClick={voice.start}
+            disabled={disabled || busy}
+            aria-label="Ask by voice"
+            className="inline-flex size-10 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40"
+          >
+            <Mic className="h-5 w-5" />
+          </button>
+        )}
         <button
           type="submit"
           aria-label="Send"

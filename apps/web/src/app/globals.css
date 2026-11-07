@@ -1087,6 +1087,62 @@
     .ghost-line { animation: none; }
   }
 
+  /* Hearth §13 "Living edge": the Rooftap spectrum round the Assistant's
+     chat. A conic gradient masked to a ring over the card's edge, so its
+     width can change without moving the content. useSpectrumEdge
+     (components/spectrum-edge.ts) turns it and sets its width each frame
+     from core ASSISTANT_EDGE_*; reduced motion holds it still. */
+  .spectrum-edge::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    border-radius: inherit;
+    padding: var(--edge-w, 1.5px);
+    background: conic-gradient(from var(--edge-angle, 0deg), #ff7a5c, #ffc93d, #5fe0b0, #7cb8ff, #9c8bff, #ff7ab8, #ff7a5c);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+    pointer-events: none;
+  }
+  [data-theme="e-ink"] .spectrum-edge::before {
+    background: currentColor;
+  }
+
+  /* Rooftap's tile while it works: the tap dot hops over the roof. */
+  .rooftap-working circle {
+    transform-box: fill-box;
+    transform-origin: center bottom;
+    animation: rooftap-hop 840ms cubic-bezier(0.33, 0, 0.67, 1) infinite;
+  }
+  @keyframes rooftap-hop {
+    50% { transform: translateY(-150%); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .rooftap-working circle { animation: none; }
+  }
+
+  /* The empty Ask sheet's blocks rise in one after another (Hearth §8.1
+     Arrive timings: core ARRIVE, the delay set inline from arriveDelayMs). */
+  .ask-arrive {
+    animation: stagger-fade-in 260ms var(--motion-ease-out) var(--arrive-delay, 0ms) both;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .ask-arrive { animation: none; }
+  }
+
+  /* The listening meter: each bar rises and falls a beat after the last. */
+  .voice-bar {
+    height: 8px;
+    animation: voice-level 900ms ease-in-out var(--bar-delay, 0ms) infinite alternate;
+  }
+  @keyframes voice-level {
+    to { height: 24px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .voice-bar { animation: none; height: 14px; }
+  }
+
   /* Hearth §8 "Pop out, pop in": a tapped suggestion chip swells (fast,
      swift-out) then vanishes (fast, ease-in) before the item is re-added
      (core POP_OUT_*), and the item's row pops into its aisle (from 0.94 past

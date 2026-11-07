@@ -4,6 +4,7 @@ export const calendarModule = defineModule({
   id: 'calendar',
   label: 'Calendar',
   description: 'Household events and everything with a date, in one view.',
+  askStarters: ["Find a free evening for dinner with friends", "Block out Saturday morning for the garden"],
   iconId: 'calendar-days',
   defaultEnabled: true,
   enhances: ['household', 'search'],

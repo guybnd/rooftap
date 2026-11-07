@@ -126,7 +126,7 @@ export default function AssistantThreadPage() {
         )}
       </div>
 
-      <ThreadMessages thread={thread} className="flex-1" />
+      <ThreadMessages thread={thread} offline={!isOnline} className="flex-1" />
 
       <ThreadFooter thread={thread} offline={!isOnline} autoFocus={isNew && !search.get('ask')} onFresh={() => router.replace('/assistant/new?kind=quick')} className="sticky bottom-20 md:bottom-4" />
     </div>

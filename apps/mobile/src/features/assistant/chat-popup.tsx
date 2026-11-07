@@ -23,6 +23,7 @@ import {
   MOTION_DURATIONS_MS,
   deleteConversation,
   openAssistantPopup,
+  popupStatus,
   popupTitle,
   useAssistantPopupState,
   usePopupChats,
@@ -30,9 +31,10 @@ import {
   useAssistantThread,
   useModules,
   type AssistantConversation,
+  type AssistantEdgePace,
   type ThreadTarget,
 } from '@homeup/core';
-import { Button, ListGroup, Text, toast, useKeyboardOffset, useThemeMaterial, useStillMotion } from '@homeup/ui';
+import { Button, ListGroup, SpectrumEdge, Text, toast, useKeyboardOffset, useThemeMaterial, useStillMotion } from '@homeup/ui';
 import { useDataCache } from '@/lib/data-cache';
 import { useOpenRoute } from '@/lib/tab-routes';
 import { assistantApi } from './assistant-api';
@@ -40,6 +42,7 @@ import { archiveToast } from '@/lib/archive-toast';
 import { ConversationRow } from './conversation-row';
 import { ThreadFooter, ThreadMessages } from './thread-body';
 import { devicePosition } from '@/lib/device-position';
+import { RooftapTile } from '@/components/brand/rooftap-mark';
 
 const SWIFT_OUT = Easing.bezier(0.16, 1, 0.3, 1);
 const EASE_IN = Easing.bezier(0.42, 0, 1, 1);
@@ -132,16 +135,34 @@ function PopupThread({
   };
 
   const title = popupTitle(showChats, conversation, target.id);
+  const [listening, setListening] = React.useState(false);
+  // Re-read each minute so a quick ask's "more min" counts down while the pop-up is open.
+  const [, tick] = React.useReducer((n: number) => n + 1, 0);
+  React.useEffect(() => {
+    if (!open || conversation?.kind !== 'quick') return;
+    const timer = setInterval(tick, 60_000);
+    return () => clearInterval(timer);
+  }, [open, conversation?.kind]);
+  const status = showChats ? null : listening ? 'Listening' : popupStatus(conversation, target.id);
 
   return (
     <PopupSurface
       open={open}
+      pace={thread.thinking ? 'thinking' : listening ? 'listening' : 'rest'}
       onMinimize={onMinimize}
       header={
-        <View className="flex-row items-center gap-1 pl-4 pr-1.5">
-          <Text numberOfLines={1} className="min-w-0 flex-1 text-micro-label uppercase text-muted-foreground">
-            {title}
-          </Text>
+        <View className="flex-row items-center gap-1 pb-2 pl-3.5 pr-1.5">
+          {!showChats && <RooftapTile size="md" working={thread.thinking} />}
+          <View className={showChats ? 'min-w-0 flex-1 pl-0.5' : 'min-w-0 flex-1 pl-2'}>
+            <Text numberOfLines={1} className="text-body font-semibold text-foreground">
+              {title}
+            </Text>
+            {status && (
+              <Text numberOfLines={1} className="text-xs text-muted-foreground" style={{ fontVariant: ['tabular-nums'] }}>
+                {status}
+              </Text>
+            )}
+          </View>
           <Pressable
             onPress={() => setShowChats((v) => !v)}
             accessibilityRole="button"
@@ -179,8 +200,8 @@ function PopupThread({
         <PopupChats currentId={conversation?.id ?? null} onPick={pick} onAll={allChats} />
       ) : (
         <>
-          <ThreadMessages thread={thread} />
-          <ThreadFooter thread={thread} offline={!isOnline} autoFocus={open && target.id === 'new' && !ask} onFresh={onFresh} />
+          <ThreadMessages thread={thread} offline={!isOnline} />
+          <ThreadFooter thread={thread} offline={!isOnline} autoFocus={open && target.id === 'new' && !ask} onFresh={onFresh} band lookingAt={pathname} onListening={setListening} />
         </>
       )}
     </PopupSurface>
@@ -225,11 +246,14 @@ function PopupChats({ currentId, onPick, onAll }: { currentId: string | null; on
  */
 function PopupSurface({
   open,
+  pace,
   onMinimize,
   header,
   children,
 }: {
   open: boolean;
+  /** How busy Rooftap is: the spectrum edge turns faster while it works. */
+  pace: AssistantEdgePace;
   onMinimize: () => void;
   /** The title row; it drags down to minimise along with the handle. */
   header: React.ReactNode;
@@ -316,15 +340,15 @@ function PopupSurface({
               right: CARD_GAP,
               bottom: insets.bottom + CARD_GAP,
               transformOrigin: 'bottom',
-              backgroundColor: material.glassBg,
-              borderColor: material.glassBorder,
               boxShadow: material.cardShadow,
             },
           ]}
-          className="overflow-hidden rounded-[28px] border"
+          className="overflow-hidden rounded-[28px]"
         >
+          {/* Hearth §13 "Living edge": the Rooftap spectrum round the card, turning faster while Rooftap works. */}
+          <SpectrumEdge pace={pace} active={visible} radius={28} fill={material.glassBg} />
           <GestureDetector gesture={headerDrag}>
-            <View>
+            <View className="border-b border-border">
               <View className="items-center pb-1 pt-2.5">
                 <View className="h-1.5 w-10 rounded-full bg-foreground/20" />
               </View>

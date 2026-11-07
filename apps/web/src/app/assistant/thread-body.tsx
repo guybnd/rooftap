@@ -4,8 +4,21 @@
 // chat page (assistant/[id]/page.tsx) and the pop-up chat that grows out of
 // the + (components/assistant-chat-popup.tsx). State comes from core's
 // useAssistantThread. Native twin: apps/mobile/src/features/assistant/thread-body.tsx.
-import { useEffect, useMemo, useRef } from 'react';
-import { mentionOptions, minutesLeft, type AssistantThread } from '@homeup/core';
+import { useEffect, useMemo, useRef, type CSSProperties } from 'react';
+import { ChevronRight } from 'lucide-react';
+import {
+  arriveDelayMs,
+  askGreeting,
+  askStarters,
+  getSectionByPath,
+  mentionOptions,
+  minutesLeft,
+  useModules,
+  type AssistantThread,
+} from '@homeup/core';
+import { LeadingTile } from '@/components/ui/leading-tile';
+import { ListGroup, ListItem, ListItemContent, ListItemMeta, ListItemTitle, ListItemTrailing } from '@/components/ui/list-item';
+import { sectionIconFor } from '@/lib/section-icons';
 import { useDataCache } from '@/lib/data-cache';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -38,8 +51,74 @@ function LoadFailed({ message, onRetry }: { message: string; onRetry: () => void
   );
 }
 
-export function ThreadMessages({ thread, className }: { thread: AssistantThread; className?: string }) {
-  const { loading, loadError, reload, messages, sending, thinking, draft, kind, showCost, deciding, decide } = thread;
+const arrive = (i: number) => ({ '--arrive-delay': `${arriveDelayMs(i)}ms` }) as CSSProperties;
+
+/**
+ * A new ask with nothing said yet (Hearth §13 "Ask sheet"): a greeting, then
+ * asks worth asking from the household's enabled modules as a list (core
+ * askStarters: plans and changes, never what Home already shows). Blocks
+ * rise in one after another (Arrive); a click sends the ask as it is.
+ */
+function AskEmpty({ onAsk, disabled }: { onAsk: (text: string) => void; disabled: boolean }) {
+  const modules = useModules();
+  const { memberProfiles, currentUserId } = useDataCache();
+  const starters = useMemo(() => askStarters((id) => modules.isEnabled(id)), [modules]);
+  const name = currentUserId ? memberProfiles[currentUserId]?.name : null;
+  return (
+    <div className="space-y-3">
+      <div className="ask-arrive space-y-1.5 px-0.5 pt-1" style={arrive(0)}>
+        <h2 className="font-heading text-[26px] font-bold leading-tight text-foreground">{askGreeting(name)}</h2>
+        <p className="text-sm leading-snug text-muted-foreground">I can plan, add and sort things across the house. I check with you before I change anything.</p>
+      </div>
+      {starters.length > 0 && (
+        <div className="space-y-2 pt-1">
+          <p className="ask-arrive px-1 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground" style={arrive(1)}>
+            Try asking
+          </p>
+          <ListGroup className="ask-arrive" style={arrive(2)}>
+            {starters.map((s) => (
+              <ListItem key={s.module} asChild>
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => onAsk(s.text)}
+                  aria-label={`Ask: ${s.text}`}
+                  className="flex w-full items-center gap-3 text-left disabled:opacity-50"
+                >
+                  <LeadingTile sectionId={s.module} Icon={sectionIconFor(s.module)} size="md" />
+                  <ListItemContent>
+                    <ListItemTitle>
+                      <span className="text-foreground">{s.text}</span>
+                    </ListItemTitle>
+                    <ListItemMeta>{s.touches}</ListItemMeta>
+                  </ListItemContent>
+                  <ListItemTrailing>
+                    <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden />
+                  </ListItemTrailing>
+                </button>
+              </ListItem>
+            ))}
+          </ListGroup>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** What the chat can see behind it ("Looking at Groceries"), so "this" in an ask makes sense. */
+function LookingAt({ path }: { path: string }) {
+  const section = getSectionByPath(path);
+  const Icon = sectionIconFor(section.id);
+  return (
+    <span className="inline-flex items-center gap-1.5 self-start rounded-full border border-border bg-card py-1 pl-1.5 pr-2.5 text-xs text-muted-foreground">
+      <Icon className="h-3 w-3" aria-hidden />
+      Looking at {section.shortLabel}
+    </span>
+  );
+}
+
+export function ThreadMessages({ thread, className, offline = false }: { thread: AssistantThread; className?: string; offline?: boolean }) {
+  const { loading, loadError, reload, messages, sending, thinking, draft, kind, showCost, deciding, decide, send, blocked } = thread;
   const endRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'end' });
@@ -50,11 +129,13 @@ export function ThreadMessages({ thread, className }: { thread: AssistantThread;
       {loading ? (
         <ThreadLoading />
       ) : loadError && messages.length === 0 ? null : messages.length === 0 && !sending ? (
-        <p className="px-1 py-10 text-center text-sm text-muted-foreground">
-          {kind === 'household'
-            ? 'The household chat. Talk to each other here, and tag @Rooftap when you want it to look something up or make a change.'
-            : 'Ask about tasks, the calendar, the budget, groceries, recipes or your lists. Rooftap asks before it changes anything.'}
-        </p>
+        kind === 'household' ? (
+          <p className="px-1 py-10 text-center text-sm text-muted-foreground">
+            The household chat. Talk to each other here, and tag @Rooftap when you want it to look something up or make a change.
+          </p>
+        ) : (
+          <AskEmpty onAsk={(text) => void send(text)} disabled={offline || !!blocked} />
+        )
       ) : (
         messages.map((m) => (
           <MessageBubble
@@ -97,6 +178,9 @@ export function ThreadFooter({
   offline,
   autoFocus,
   onFresh,
+  band = false,
+  lookingAt,
+  onListening,
   className,
 }: {
   thread: AssistantThread;
@@ -104,6 +188,12 @@ export function ThreadFooter({
   autoFocus?: boolean;
   /** Starts a new quick ask (offered when this one has closed). */
   onFresh?: () => void;
+  /** The pop-up: the composer sits on its own tinted band under a hairline, and the header says how long a quick ask stays open. */
+  band?: boolean;
+  /** The route behind the pop-up: shown above the composer while nothing has been said. */
+  lookingAt?: string;
+  /** Voice input started or stopped. */
+  onListening?: (on: boolean) => void;
   className?: string;
 }) {
   const { conversation, kind, blocked, sending, send, closed, resume } = thread;
@@ -114,12 +204,13 @@ export function ThreadFooter({
     [kind, groupMembers, memberProfiles, currentUserId]
   );
   return (
-    <div className={cn('space-y-2', className)}>
+    <div className={cn('flex flex-col gap-2', band && 'border-t border-border bg-muted/40 pt-2.5', className)}>
       {blocked && blocked !== 'assistant_conversation_closed' && <AssistantNotice code={blocked} />}
       {closed || blocked === 'assistant_conversation_closed' ? (
         <ClosedFooter onContinue={resume} onFresh={onFresh} />
       ) : (
         <>
+          {lookingAt && !thread.messages.length && !thread.loading && <LookingAt path={lookingAt} />}
           <Composer
             placeholder={kind === 'household' ? 'Message the household, tag @Rooftap to ask it' : conversation ? 'Ask a follow-up' : 'Ask Rooftap anything'}
             disabled={offline || blocked === 'assistant_requires_plus' || (blocked === 'assistant_not_configured' && kind !== 'household')}
@@ -127,9 +218,11 @@ export function ThreadFooter({
             autoFocus={autoFocus || thread.resumed}
             photos={thread.photos}
             mentions={mentions}
+            voice
+            onListening={onListening}
             onSend={send}
           />
-          {left != null && left > 0 && (
+          {!band && left != null && left > 0 && (
             <p className="px-2 text-[11px] text-muted-foreground">Takes follow-ups for {left} more min. Pin it to keep it as a chat.</p>
           )}
         </>

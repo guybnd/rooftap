@@ -15,6 +15,7 @@ import { ChevronDown, Maximize2, MessagesSquare, SquarePen, Trash2 } from "lucid
 import {
   deleteConversation,
   openAssistantPopup,
+  popupStatus,
   popupTitle,
   useAssistantPopupState,
   usePopupChats,
@@ -23,6 +24,7 @@ import {
   useAssistantThread,
   useModules,
   type AssistantConversation,
+  type AssistantEdgePace,
   type ThreadTarget,
 } from "@homeup/core";
 import { cn } from "@/lib/utils";
@@ -37,6 +39,8 @@ import { ListGroup } from "@/components/ui/list-item";
 import { Button } from "@/components/ui/button";
 import { PromptBadge } from "@/components/ui/prompt-badge";
 import { devicePosition } from "@/lib/device-position";
+import { RooftapTile } from "@/components/brand/rooftap-mark";
+import { useSpectrumEdge } from "@/components/spectrum-edge";
 
 const popupToast = { error: (m: string) => toast.error(m), message: (m: string) => toast(m) };
 
@@ -121,13 +125,26 @@ function PopupThread({
   };
 
   const title = popupTitle(showChats, conversation, target.id);
+  const [listening, setListening] = useState(false);
+  // Re-read each minute so a quick ask's "more min" counts down while the pop-up is open.
+  const [, setMinute] = useState(0);
+  useEffect(() => {
+    if (!open || conversation?.kind !== "quick") return;
+    const timer = setInterval(() => setMinute((n) => n + 1), 60_000);
+    return () => clearInterval(timer);
+  }, [open, conversation?.kind]);
+  const status = showChats ? null : listening ? "Listening" : popupStatus(conversation, target.id);
   const iconButton =
     "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground";
 
   return (
-    <PopupSurface open={open} onMinimize={onMinimize} title={title || "Rooftap"}>
-      <div className="flex items-center gap-1 pl-4 pr-1.5">
-        <p className="min-w-0 flex-1 truncate text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">{title}</p>
+    <PopupSurface open={open} pace={thread.thinking ? "thinking" : listening ? "listening" : "rest"} onMinimize={onMinimize} title={title || "Rooftap"}>
+      <div className="flex items-center gap-1 border-b border-border pb-2 pl-3.5 pr-1.5 md:pt-2">
+        {!showChats && <RooftapTile working={thread.thinking} />}
+        <div className={cn("min-w-0 flex-1", showChats ? "pl-0.5" : "pl-2")}>
+          <p className="truncate text-[15px] font-semibold text-foreground">{title}</p>
+          {status && <p className="truncate text-xs text-muted-foreground tabular-nums">{status}</p>}
+        </div>
         <button
           type="button"
           onClick={() => setShowChats((v) => !v)}
@@ -165,8 +182,17 @@ function PopupThread({
         <PopupChats currentId={conversation?.id ?? null} onPick={pick} onAll={allChats} />
       ) : (
         <>
-          <ThreadMessages thread={thread} className="min-h-0 flex-1 overflow-y-auto px-4" />
-          <ThreadFooter thread={thread} offline={!isOnline} autoFocus={target.id === "new" && !ask} onFresh={onFresh} className="px-3 pb-3" />
+          <ThreadMessages thread={thread} offline={!isOnline} className="min-h-0 flex-1 overflow-y-auto px-4" />
+          <ThreadFooter
+            thread={thread}
+            offline={!isOnline}
+            autoFocus={target.id === "new" && !ask}
+            onFresh={onFresh}
+            band
+            lookingAt={pathname}
+            onListening={setListening}
+            className="px-3 pb-3"
+          />
         </>
       )}
     </PopupSurface>
@@ -211,9 +237,24 @@ function PopupChats({ currentId, onPick, onAll }: { currentId: string | null; on
  * bottom right instead. Lifts over the on-screen keyboard like the capture
  * sheet (use-keyboard-inset).
  */
-function PopupSurface({ open, onMinimize, title, children }: { open: boolean; onMinimize: () => void; title: string; children: ReactNode }) {
+function PopupSurface({
+  open,
+  pace,
+  onMinimize,
+  title,
+  children,
+}: {
+  open: boolean;
+  /** How busy Rooftap is: the spectrum edge turns faster while it works. */
+  pace: AssistantEdgePace;
+  onMinimize: () => void;
+  title: string;
+  children: ReactNode;
+}) {
   const [mounted, setMounted] = useState(open);
   const [shown, setShown] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
+  useSpectrumEdge(cardRef, pace, mounted);
   const keyboardInset = useKeyboardInset(open);
   // Docked (md and up) the page behind stays usable, so the card is not modal.
   const docked = useMediaQuery("(min-width: 768px)");
@@ -256,6 +297,7 @@ function PopupSurface({ open, onMinimize, title, children }: { open: boolean; on
         )}
       />
       <div
+        ref={cardRef}
         role="dialog"
         aria-modal={!docked}
         aria-label={title}
@@ -269,7 +311,7 @@ function PopupSurface({ open, onMinimize, title, children }: { open: boolean; on
           maxHeight: keyboardInset > 0 ? `calc(100dvh - ${keyboardInset}px - 2rem)` : undefined,
         }}
         className={cn(
-          "pointer-events-auto absolute inset-x-2.5 bottom-[calc(env(safe-area-inset-bottom)+0.625rem)] flex h-[min(74dvh,680px)] flex-col overflow-hidden rounded-[28px] border border-border/60 bg-popover shadow-[var(--card-shadow)]",
+          "spectrum-edge pointer-events-auto absolute inset-x-2.5 bottom-[calc(env(safe-area-inset-bottom)+0.625rem)] flex h-[min(74dvh,680px)] flex-col overflow-hidden rounded-[28px] bg-popover shadow-[var(--card-shadow)]",
           // Its own view-transition layer: a page change slides under it, not over it.
           "origin-bottom md:inset-x-auto md:bottom-24 md:right-6 md:h-[min(78dvh,720px)] md:w-[420px] md:origin-bottom-right [view-transition-name:chat-dock]",
           "transition-[translate,scale,opacity] will-change-transform",

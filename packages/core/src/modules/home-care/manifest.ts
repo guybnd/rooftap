@@ -4,6 +4,7 @@ export const homeCareModule = defineModule({
   id: 'home-care',
   label: 'Home care',
   description: 'Upkeep on a schedule you choose, from smoke alarms to gutters, in Home Setup.',
+  askStarters: ["Get the house ready for winter"],
   iconId: 'wrench',
   // Lives in Home Setup as its Care view, so it needs Setup on.
   defaultEnabled: false,

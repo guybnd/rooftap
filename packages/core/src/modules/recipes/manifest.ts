@@ -4,6 +4,7 @@ export const recipesModule = defineModule({
   id: 'recipes',
   label: 'Recipes',
   description: 'Your household recipes, with a cooking view.',
+  askStarters: ["Something quick with chicken and rice", "A vegetarian dinner we haven't had lately"],
   iconId: 'chef-hat',
   defaultEnabled: false,
   enhances: ['groceries'],

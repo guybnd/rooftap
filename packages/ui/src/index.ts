@@ -59,6 +59,7 @@ export * from './components/pulse-tile';
 export * from './components/toast';
 export * from './components/dialog-host';
 export * from './components/section-glow';
+export * from './components/spectrum-edge';
 export * from './components/pop';
 export * from './components/leading-tile';
 export * from './components/grocery-glyph';

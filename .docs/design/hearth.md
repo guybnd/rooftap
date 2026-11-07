@@ -137,7 +137,7 @@ The shared hold-to-edit menu (`TaskQuickMenuBody` in `task-row.tsx`, shared per 
 
 ## 8. Motion (MO)
 
-Tokens (CSS variables on web, `MOTION_DURATIONS_MS`/`MOTION_EASE` in `packages/core/src/tokens.ts` on native; `transform`/`opacity` only; nothing loops except skeletons; `prefers-reduced-motion` collapses to instant):
+Tokens (CSS variables on web, `MOTION_DURATIONS_MS`/`MOTION_EASE` in `packages/core/src/tokens.ts` on native; `transform`/`opacity` only; nothing loops except skeletons and the Assistant's working signs in §13.8; `prefers-reduced-motion` collapses to instant):
 
 | Token | Value | Use |
 |---|---|---|
@@ -343,3 +343,12 @@ From the `lg` width up, pages lay out as boards (`useWideLayout`): wider contain
 Right-click on a row opens its hold menu at the pointer (`PopMenu` anchors to the last right-click inside its row).
 
 Settings > Appearance > "Layout on wide screens" switches a browser back to the classic sidebar with one-column pages (`lib/desktop-layout.ts`, mirrored on `<html data-layout>` before first paint). Phones and the native app are unchanged: the Expo app ships for portrait phones, so the desktop shell has no native twin.
+
+### 13.8 The Ask sheet (Guy, 2026-11-07)
+The Assistant's pop-up chat has three parts with a hairline between each: the header, the conversation and the composer band (`--muted` at 40%).
+
+- **Rooftap's tile.** Rooftap shows up as the app icon in small: the spectrum roof and the coral tap dot on the icon's dark tile (core `ROOFTAP_SPECTRUM`, `ROOFTAP_TILE`). It leads the header and every reply, with the name "Rooftap" above the reply. People's messages are bubbles with one edge.
+- **Header.** The chat's name, and under it what it is: "New quick ask", "Pinned chat", "Everyone in the home", the minutes a quick ask stays open, or "Listening" (core `popupStatus`).
+- **Empty sheet.** A greeting by the time of day, one line on what Rooftap does, then "Try asking": four asks from the enabled modules as line items. Each module declares its asks in its manifest (`askStarters`). An ask must plan, change or join things, never repeat what Home shows. An ask that needs another module names it (`with`) and shows only while that module is on. The meta line names the modules it touches. The four change each day (core `askStarters`). A "Looking at" chip over the composer names the screen behind the chat.
+- **Living edge.** A ring of the roof's colours runs round the sheet's edge and turns. One turn takes 14s at rest, 5s while listening and 1.4s while Rooftap works. While it works the ring also thickens from 1.5px to 3.5px and its width wobbles by 1.25px every 700ms. Paces ease into each other over 600ms (core `ASSISTANT_EDGE_*`; `SpectrumEdge` in packages/ui, `.spectrum-edge` and `useSpectrumEdge` on web). This loop and the tap dot's hop over the roof while Rooftap works are the sanctioned exceptions to "nothing loops". Reduced motion stops both and keeps the ring's width.
+- **Voice.** A mic sits in the composer while the box is empty. Listening, the composer becomes a level meter in the roof's six colours, the words so far and a stop square (hold to cancel). The ask sends when the person stops talking. A tick haptic marks the start and the end. The phone uses its own speech recognizer; web uses the browser's, and hides the mic where there is none (core `useVoiceInput` with a platform `VoiceEngine`).

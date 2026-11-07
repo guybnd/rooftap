@@ -8,6 +8,7 @@ import type { AssistantConversation, AssistantStatus } from './assistant-api';
 import { timeAgo } from '../../relative-time';
 import { MCP_TOOLS } from '../../mcp-tools';
 import { getModule, type ModuleId } from '../../modules';
+import { ALL_MANIFESTS } from '../../module-manifests';
 
 /** Modules the assistant has tools for, in tool order, that are switched on. */
 export function assistantModules(enabled: ReadonlySet<string>): { id: ModuleId; label: string; readOnly: boolean }[] {
@@ -206,4 +207,95 @@ export function popupChatSections(groups: ConversationGroups): { label: string; 
 /** The pop-up's header: "Chats" over the list, the conversation's name, or "Ask Rooftap" for a new ask. */
 export function popupTitle(showChats: boolean, conversation: AssistantConversation | null, targetId: string): string {
   return showChats ? 'Chats' : conversation ? conversationTitle(conversation) : targetId === 'new' ? 'Ask Rooftap' : '';
+}
+
+/** An ask the empty Ask sheet offers: the module it belongs to, the sections it touches (by short name) and the words it sends. */
+export interface AskStarter {
+  module: ModuleId;
+  /** The section short names it touches, its own first: "Recipes, Groceries". */
+  touches: string;
+  text: string;
+}
+
+/** Days since the epoch in local time, so the asks change once a day, not on every open. */
+function localDay(now: Date): number {
+  return Math.floor((now.getTime() - now.getTimezoneOffset() * 60_000) / 86_400_000);
+}
+
+function shortName(id: string): string {
+  const m = getModule(id);
+  const manifest = ALL_MANIFESTS.find((x) => x.id === id);
+  return manifest?.section?.shortLabel ?? m?.label ?? id;
+}
+
+/**
+ * The empty Ask sheet's suggestions: one ask from each of `count` enabled
+ * modules that declare `askStarters` in their manifest, skipping an ask whose
+ * `with` modules are off. Which modules, and which of a module's asks, move
+ * on each day, so a household with many modules sees them all over a week.
+ * Shown in manifest order.
+ */
+export function askStarters(isEnabled: (id: ModuleId) => boolean, count = 4, now: Date = new Date()): AskStarter[] {
+  if (count <= 0) return [];
+  const day = localDay(now);
+  const offered = ALL_MANIFESTS.flatMap((m) => {
+    if (!isEnabled(m.id as ModuleId)) return [];
+    const usable = (m.askStarters ?? [])
+      .map((d) => (typeof d === 'string' ? { text: d, with: [] as readonly string[] } : d))
+      .filter((d) => d.with.every((id) => isEnabled(id as ModuleId)));
+    if (usable.length === 0) return [];
+    const pick = usable[day % usable.length];
+    return [{ module: m.id as ModuleId, touches: [m.id, ...pick.with].map(shortName).join(', '), text: pick.text }];
+  });
+  const take = Math.min(count, offered.length);
+  const start = offered.length > take ? (day * take) % offered.length : 0;
+  const picked = new Set(Array.from({ length: take }, (_, i) => (start + i) % offered.length));
+  return offered.filter((_, i) => picked.has(i));
+}
+
+/** The empty Ask sheet's greeting: by the hour, with the person's first name when there is one. */
+export function askGreeting(name: string | null | undefined, now: Date = new Date()): string {
+  const h = now.getHours();
+  const part = h < 5 ? 'Evening' : h < 12 ? 'Morning' : h < 18 ? 'Afternoon' : 'Evening';
+  const first = name?.trim().split(/\s+/)[0];
+  return first ? `${part}, ${first}.` : `Good ${part.toLowerCase()}.`;
+}
+
+/** The pop-up header's second line: what kind of conversation this is and, for a quick ask, how long it stays open. */
+export function popupStatus(conversation: AssistantConversation | null, targetId: string, now: Date = new Date()): string | null {
+  if (!conversation) return targetId === 'new' ? 'New quick ask' : null;
+  if (conversation.kind === 'household') return 'Everyone in the home';
+  if (conversation.kind === 'chat' || conversation.pinned) return 'Pinned chat';
+  const left = minutesLeft(conversation, now);
+  return left != null && left > 0 ? `Takes follow-ups for ${left} more min` : 'Closed after a quiet spell';
+}
+
+/**
+ * What to tell the person when voice input stops with an error (Web Speech
+ * error codes, which the phone's recognizer reuses). Null when there is
+ * nothing to say: they stopped it, or said nothing.
+ */
+export function voiceErrorText(code: string): string | null {
+  switch (code) {
+    case 'aborted':
+    case 'no-speech':
+    case 'speech-timeout':
+      return null;
+    case 'not-allowed':
+      return 'Rooftap needs the microphone to hear you. Allow it in your settings.';
+    case 'service-not-allowed':
+    case 'language-not-supported':
+      return 'Voice input is not available on this device.';
+    case 'network':
+      return 'Voice input needs a connection. Try again when you are online.';
+    case 'busy':
+      return 'The microphone is busy. Try again in a moment.';
+    default:
+      return 'Could not hear that. Try again.';
+  }
+}
+
+/** The recognizer's input level (about -2 to 10) as 0 to 1, for the listening meter. */
+export function voiceLevel(volume: number): number {
+  return Math.max(0, Math.min(1, volume / 10));
 }

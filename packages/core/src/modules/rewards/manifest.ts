@@ -4,6 +4,7 @@ export const rewardsModule = defineModule({
   id: 'rewards',
   label: 'Rewards',
   description: 'Loyalty cards and memberships, the stores they work at, and what they get you there.',
+  askStarters: ["Add a movie night reward for 50 points"],
   iconId: 'wallet-cards',
   defaultEnabled: false,
   enhances: ['groceries'],

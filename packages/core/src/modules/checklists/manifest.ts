@@ -4,6 +4,7 @@ export const checklistsModule = defineModule({
   id: 'checklists',
   label: 'Checklists',
   description: 'Reusable lists and templates, from packing to cleaning.',
+  askStarters: ["Make a packing list for a weekend away"],
   iconId: 'list-todo',
   defaultEnabled: true,
   enhances: ['household'],

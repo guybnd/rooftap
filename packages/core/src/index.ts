@@ -243,6 +243,7 @@ export * from './brand-mark';
 export * from './row-actions';
 export * from './modules/assistant/assistant-thread';
 export * from './modules/assistant/use-composer-photos';
+export * from './modules/assistant/use-voice-input';
 export * from './modules/assistant/use-assistant-screens';
 export * from './archive-undo';
 export * from './glow-blend';

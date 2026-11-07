@@ -4,6 +4,7 @@ export const documentsModule = defineModule({
   id: 'documents',
   label: 'Documents',
   description: 'Warranties, receipts and paperwork, filed in folders.',
+  askStarters: ["When does the car insurance renew?"],
   iconId: 'folder-open',
   defaultEnabled: true,
   enhances: ['costs', 'setup', 'groceries'],

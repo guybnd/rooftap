@@ -4,6 +4,7 @@ export const mealsModule = defineModule({
   id: 'meals',
   label: 'Meal plan',
   description: 'Plan the week\'s dinners from your recipes, and add what\'s missing to Groceries.',
+  askStarters: [{ text: 'Plan dinners around our busy nights', with: ['calendar'] }, "Plan next week's dinners"],
   iconId: 'utensils',
   // A tab inside Recipes ("This week"), not a section of its own. Like
   // Money insights it needs no switch of its own to lock Recipes on: with

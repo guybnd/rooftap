@@ -73,7 +73,7 @@ const config: ExpoConfig = {
   ...(IS_DEV
     ? {}
     : {
-        runtimeVersion: '57.6',
+        runtimeVersion: '57.7',
         updates: {
           url: 'https://u.expo.dev/4a9e9340-0bd0-451a-bfbf-593a88495d82',
           checkAutomatically: 'ON_LOAD',
@@ -99,6 +99,16 @@ const config: ExpoConfig = {
       },
     ],
     'expo-sharing',
+    // Voice input for the Assistant (the mic in its composer): the phone's own
+    // speech recognizer, asked for only when the person taps the mic.
+    [
+      'expo-speech-recognition',
+      {
+        microphonePermission: 'Rooftap uses the microphone when you tap the mic to ask the Assistant something.',
+        speechRecognitionPermission: 'Rooftap turns what you say into text when you tap the mic to ask the Assistant.',
+        androidSpeechServicePackages: ['com.google.android.googlequicksearchbox', 'com.google.android.as'],
+      },
+    ],
     // The Assistant asks where the phone is for one "near me" question at a
     // time, only while the app is open. No background location.
     [
