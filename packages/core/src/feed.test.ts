@@ -6,6 +6,8 @@ import {
   feedDayLabel,
   feedRowWhen,
   groupFeedItems,
+  heroItemEndsAt,
+  heroItemEnded,
   heroItemEventDetails,
   heroItemOpenTarget,
   heroItemSectionId,
@@ -17,7 +19,7 @@ import {
   weekBoardColumns,
 } from "./feed";
 import type { HeroItem } from "./hero";
-import type { Appointment, GoogleCalendarEventWithAttribution, HouseholdTask } from "./types";
+import type { Appointment, GoogleCalendarEventWithAttribution, GroupEvent, HouseholdTask } from "./types";
 
 const TODAY = "2026-10-18"; // a Sunday
 
@@ -155,6 +157,56 @@ describe("pickNowQueue", () => {
 
   it("is empty when nothing can take the card", () => {
     expect(pickNowQueue([item({ dueDate: null }), item({ done: true }), item({ dueDate: "2026-10-19" })], TODAY)).toEqual([]);
+  });
+});
+describe("finished events", () => {
+  // Local wall-clock times on TODAY, so the tests hold in any time zone.
+  const at = (hhmm: string) => new Date(`${TODAY}T${hhmm}:00`);
+  const groupEvent = (starts: string, ends: string | null, allDay = false) =>
+    item({
+      id: `ev-${starts}-${ends}`,
+      type: "event",
+      dueTime: allDay ? null : starts,
+      groupEvent: { starts_at: at(starts).toISOString(), ends_at: ends ? at(ends).toISOString() : null, is_all_day: allDay } as GroupEvent,
+    });
+
+  it("ends at its end time, or an hour after it starts when it has none", () => {
+    expect(heroItemEndsAt(groupEvent("10:00", "17:00"))?.getTime()).toBe(at("17:00").getTime());
+    expect(heroItemEndsAt(groupEvent("10:00", null))?.getTime()).toBe(at("11:00").getTime());
+    expect(heroItemEndsAt(groupEvent("10:00", "09:00"))?.getTime()).toBe(at("11:00").getTime());
+  });
+
+  it("never ends a to-do or an all-day event", () => {
+    expect(heroItemEndsAt(item({ dueTime: "10:00" }))).toBeNull();
+    expect(heroItemEndsAt(groupEvent("00:00", null, true))).toBeNull();
+  });
+
+  it("ends pulled calendar events and viewings too", () => {
+    const gcal = item({
+      type: "calendar",
+      dueTime: "10:00",
+      googleEvent: { starts_at: at("10:00").toISOString(), ends_at: at("12:30").toISOString(), is_all_day: false } as GoogleCalendarEventWithAttribution,
+    });
+    expect(heroItemEnded(gcal, at("12:29"))).toBe(false);
+    expect(heroItemEnded(gcal, at("12:30"))).toBe(true);
+    const viewing = item({ type: "appointment", dueTime: "10:00", appointment: { scheduled_at: at("10:00").toISOString() } as Appointment });
+    expect(heroItemEnded(viewing, at("11:05"))).toBe(true);
+  });
+
+  it("leaves the Now card once over, while a running one and a late to-do stay", () => {
+    const over = groupEvent("10:00", "17:00");
+    const running = groupEvent("21:00", "22:00");
+    const lateTodo = item({ id: "todo", dueTime: "09:00" });
+    const queue = pickNowQueue([over, running, lateTodo], TODAY, undefined, at("21:40"));
+    expect(queue.map((i) => i.id)).toEqual(["todo", running.id]);
+    // Without a time the card keeps its old behaviour.
+    expect(pickNowQueue([over], TODAY)).toHaveLength(1);
+  });
+
+  it("counts as done in today's progress", () => {
+    const items = [groupEvent("10:00", "17:00"), item({ id: "todo" })];
+    expect(todayProgress(items, at("21:40"))).toEqual({ left: 1, done: 1, total: 2 });
+    expect(todayProgress(items, at("12:00"))).toEqual({ left: 2, done: 0, total: 2 });
   });
 });
 

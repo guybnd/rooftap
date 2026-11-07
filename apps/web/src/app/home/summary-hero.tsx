@@ -42,6 +42,7 @@ import {
   unassignedCount,
   whosOnHookBuckets,
   type HeroModuleGroup,
+  useMinuteClock,
 } from '@homeup/core';
 import { cn } from '@/lib/utils';
 import { memberLabel } from '@/app/setup/member-label';
@@ -151,6 +152,8 @@ export function SummaryHero({
   const isOn = (key: string) => isModuleShown(key, config, modules.feature);
 
   const costMonth = useCurrentCostMonth(costItems);
+  // Ticks each minute, so a finished event leaves the Now card on its own.
+  const now = useMinuteClock();
   const ctx: HeroModuleContext = {
     todayCount,
     weather,
@@ -158,7 +161,7 @@ export function SummaryHero({
     memberProfiles,
     currentUserId,
     tasks,
-    now: new Date(),
+    now,
     budgetCents,
     costItems,
     costMonth,
@@ -200,8 +203,9 @@ export function SummaryHero({
   // Hearth v2: the lede is the Hero count (core todayProgress); the Now card
   // pages through the next few things (core pickNowQueue).
   const countEnabled = isOn('count');
-  const progress = todayProgress(ctx.todayItems);
-  const nowQueue = isOn('nextUp') ? pickNowQueue(ctx.todayItems, today) : [];
+  // A finished event counts as done and leaves the Now card (core heroItemEnded).
+  const progress = todayProgress(ctx.todayItems, ctx.now);
+  const nowQueue = isOn('nextUp') ? pickNowQueue(ctx.todayItems, today, undefined, ctx.now) : [];
 
   const { assigneeIds, countFor } = whosOnHookBuckets(ctx.todayItems, ctx.currentUserId, ctx.memberProfiles);
   const showWhosOnHook = isOn('whosOnHook') && assigneeIds.length > 0;

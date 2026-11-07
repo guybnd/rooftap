@@ -111,12 +111,49 @@ export interface TodayProgress {
   total: number;
 }
 
-/** Home's lede numbers: "3 of 7 left today". Takes the today-scoped hero items. */
-export function todayProgress(todayItems: HeroItem[]): TodayProgress {
+/** How long a timed event with no end time counts as running. */
+export const EVENT_DEFAULT_MINUTES = 60;
+
+/**
+ * When a timed event, pulled calendar event or viewing is over. Null for
+ * to-dos (they go overdue instead, never "over"), module items and all-day
+ * events (they last the whole day). An event saved with no end, or an end
+ * at or before its start, runs EVENT_DEFAULT_MINUTES.
+ */
+export function heroItemEndsAt(item: HeroItem): Date | null {
+  const source = item.groupEvent ?? item.googleEvent;
+  let startISO: string | null = null;
+  let endISO: string | null = null;
+  if (source && (item.type === 'event' || item.type === 'calendar')) {
+    if (source.is_all_day) return null;
+    startISO = source.starts_at;
+    endISO = source.ends_at;
+  } else if (item.appointment && item.type === 'appointment') {
+    startISO = item.appointment.scheduled_at;
+  } else {
+    return null;
+  }
+  const start = new Date(startISO).getTime();
+  if (Number.isNaN(start)) return null;
+  const end = endISO ? new Date(endISO).getTime() : NaN;
+  return new Date(Number.isNaN(end) || end <= start ? start + EVENT_DEFAULT_MINUTES * 60_000 : end);
+}
+
+/** True once a timed event (or viewing) has finished: it leaves the Now card and counts as done. */
+export function heroItemEnded(item: HeroItem, now: Date): boolean {
+  const end = heroItemEndsAt(item);
+  return end !== null && end.getTime() <= now.getTime();
+}
+
+/**
+ * Home's lede numbers: "3 of 7 left today". Takes the today-scoped hero items.
+ * With `now`, an event that is already over counts as done, not left.
+ */
+export function todayProgress(todayItems: HeroItem[], now?: Date): TodayProgress {
   let left = 0;
   let done = 0;
   for (const item of todayItems) {
-    if (item.done) done += 1;
+    if (item.done || (now && heroItemEnded(item, now))) done += 1;
     else left += 1;
   }
   return { left, done, total: left + done };
@@ -129,10 +166,11 @@ export const NOW_QUEUE_MAX = 8;
  * What the Now card pages through, in order: timed open items soonest first,
  * then overdue to-dos, then open to-dos due today (each in the caller's
  * order), at most `max`. Undated to-dos never take the card (they have no
- * "now"); an empty queue means the card hides. The head is pickNowItem.
+ * "now"); with `now`, events that are already over leave it too. An empty
+ * queue means the card hides. The head is pickNowItem.
  */
-export function pickNowQueue(todayItems: HeroItem[], todayISO: string, max = NOW_QUEUE_MAX): HeroItem[] {
-  const open = todayItems.filter((i) => !i.done);
+export function pickNowQueue(todayItems: HeroItem[], todayISO: string, max = NOW_QUEUE_MAX, now?: Date): HeroItem[] {
+  const open = todayItems.filter((i) => !i.done && !(now && heroItemEnded(i, now)));
   const timed = open
     .filter((i) => i.dueTime && (i.dueDate === null || i.dueDate <= todayISO))
     .sort((a, b) => (a.dueDate ?? '').localeCompare(b.dueDate ?? '') || a.dueTime!.localeCompare(b.dueTime!));
@@ -153,8 +191,8 @@ export function pickNowQueue(todayItems: HeroItem[], todayISO: string, max = NOW
  * overdue to-do, else the first open to-do due today; null means the card
  * hides. The head of pickNowQueue.
  */
-export function pickNowItem(todayItems: HeroItem[], todayISO: string): HeroItem | null {
-  return pickNowQueue(todayItems, todayISO, 1)[0] ?? null;
+export function pickNowItem(todayItems: HeroItem[], todayISO: string, now?: Date): HeroItem | null {
+  return pickNowQueue(todayItems, todayISO, 1, now)[0] ?? null;
 }
 
 /**

@@ -114,6 +114,7 @@ import {
   heroItemOpenTarget,
   heroItemSectionId,
   pickNowQueue,
+  useMinuteClock,
   nowCardTiming,
   useHomeData,
   todayProgress,
@@ -414,7 +415,10 @@ function HomeSectionBody() {
   // gated on the count module) and the Now card pages through the next few
   // things to do (gated on the nextUp module), both from core feed.ts so web
   // agrees.
-  const progress = React.useMemo(() => todayProgress(todayItems), [todayItems]);
+  // Ticks each minute: a finished event counts as done and leaves the Now
+  // card while the screen stays open (core heroItemEnded).
+  const clock = useMinuteClock();
+  const progress = React.useMemo(() => todayProgress(todayItems, clock), [todayItems, clock]);
 
   // Hearth v2 (day ribbon): the sky block beside the Hero and its hourly
   // ribbon (features/home/sky.tsx); open/closed is remembered per device.
@@ -441,8 +445,8 @@ function HomeSectionBody() {
     [sky, todayItems, todayISOStr],
   );
   const nowQueue = React.useMemo(
-    () => (nextUpEnabled ? pickNowQueue(todayItems, todayISOStr) : []),
-    [nextUpEnabled, todayItems, todayISOStr]
+    () => (nextUpEnabled ? pickNowQueue(todayItems, todayISOStr, undefined, clock) : []),
+    [nextUpEnabled, todayItems, todayISOStr, clock]
   );
 
   // Hearth v2 moment: finishing today's last open item shows All clear,

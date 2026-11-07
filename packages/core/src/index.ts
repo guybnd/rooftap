@@ -185,6 +185,7 @@ export * from './weather-tips';
 export * from './home-lens';
 export * from './home/hero-modules';
 export * from './home/use-weather';
+export * from './home/use-minute-clock';
 export * from './home/use-hero-module-config';
 export * from './home/use-home-data';
 export * from './home/home-groceries';
