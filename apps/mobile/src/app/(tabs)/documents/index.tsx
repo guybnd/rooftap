@@ -35,6 +35,7 @@ import { CaptureFlow } from '@/components/documents/capture-flow';
 import { DocumentEditSheet } from '@/components/documents/document-edit-sheet';
 import { DocumentPreview, isPdfFilename, openDocumentExternally } from '@/components/documents/document-preview';
 import { DocumentsListHeader } from '@/components/documents/list-header';
+import { FirstSteps } from '@/components/first-steps';
 
 /** A document or folder being filed, with where it sits now and its name. */
 type MoveTarget = { kind: 'document' | 'folder'; id: string; from: string | null; name: string };
@@ -838,11 +839,9 @@ export default function DocumentsSectionScreen() {
   ) : folderId !== null ? (
     <EmptyState icon={FolderOpen} title="This folder is empty" description="File a document here with Move to folder in its menu." />
   ) : (
-    <EmptyState
-      icon={FileText}
-      title="No documents yet"
-      description="Tap Add to keep receipts, warranties, IDs and leases in one place."
-    />
+    <EmptyState icon={FileText} title="No documents yet" description="Keep receipts, warranties, IDs and leases in one place, and find them when you need them.">
+      <FirstSteps moduleId="documents" add={{ label: 'Scan or add a document', meta: 'A photo, a PDF or a file', onPress: () => setCaptureOpen(true) }} />
+    </EmptyState>
   );
 
   if (cacheLoading || (!storeLoaded && docs.length === 0 && loading)) {

@@ -37,6 +37,7 @@ import { toastUndoAction } from '@/lib/undo-toast';
 import { useWideLayout } from '@/lib/desktop-layout';
 import { cn } from '@/lib/utils';
 import { BinSetupSheet } from './setup-sheet';
+import { FirstSteps } from '@/components/first-steps';
 
 const MICRO = 'px-1 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground';
 
@@ -87,8 +88,9 @@ export default function BinsPage() {
           icon={Trash2}
           title="No bin days yet"
           description="Tell Rooftap which bins go out on which day, or let it read your council's calendar. You get a nudge the night before."
-          action={{ label: 'Set up bin night', onClick: () => setSetupOpen(true), icon: <Pencil className="h-4 w-4" /> }}
-        />
+        >
+          <FirstSteps moduleId="bins" add={{ label: 'Set up bin night', onClick: () => setSetupOpen(true), icon: Pencil }} />
+        </EmptyState>
       ) : (
         <div className={cn(wide ? 'grid grid-cols-2 items-start gap-5' : 'space-y-4')}>
           <div className="space-y-4">

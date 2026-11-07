@@ -49,6 +49,7 @@ import { CardSheet } from '@/features/rewards/card-sheet';
 import { CardFormSheet } from '@/features/rewards/card-form-sheet';
 import { SchemeSheet } from '@/features/rewards/scheme-sheet';
 import { Chip } from '@/features/rewards/chip';
+import { FirstSteps } from '@/components/first-steps';
 
 /**
  * One sheet's mount and open state, kept apart so its exit animation can play
@@ -146,8 +147,9 @@ export default function RewardsScreen() {
             icon={WalletCards}
             title="No cards yet"
             description="Add your loyalty cards and memberships, and the stores they work at. Then look up any store to see which card to use."
-            action={{ label: 'Add a card', onPress: () => formSheet.show({ id: null }), icon: <Plus size={14} className="text-primary-foreground" /> }}
-          />
+          >
+            <FirstSteps moduleId="rewards" add={{ label: 'Add a card', onPress: () => formSheet.show({ id: null }) }} />
+          </EmptyState>
         ) : (
           <>
             <SegmentedControl accessibilityLabel="Show" value={tab} onChange={setTab} options={REWARDS_TABS} />

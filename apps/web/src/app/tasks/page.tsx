@@ -22,6 +22,7 @@ import {
   ChevronDown,
   ChevronRight,
   Settings as SettingsIcon,
+  ListChecks,
 } from 'lucide-react';
 import { useModuleSettingsSheet } from '@/components/module-settings-sheet';
 import { HouseholdTaskModal } from './household-task-modal';
@@ -43,6 +44,8 @@ import { toastUndoDelete } from '@/lib/undo-toast';
 import { useTaskSnoozeUndo } from './use-task-snooze-undo';
 import { useWideLayout } from '@/lib/desktop-layout';
 import { cn } from '@/lib/utils';
+import { FirstSteps } from '@/components/first-steps';
+import { EmptyState } from '@/components/ui/empty-state';
 
 // FLUX-60: Household tasks & reminders — generic recurring tasks + moving template
 // FLUX-64: Mobile-first UX pass — overflow menus, pill filters, group-by, undo toasts
@@ -588,25 +591,16 @@ export default function TasksPage() {
 
       {/* Sections */}
       {visibleTasks.length === 0 ? (
-        <div className="rounded-lg border border-border bg-muted/40 p-10 text-center space-y-3">
-          <p className="text-muted-foreground">
-            {tasks.length > 0
-              ? 'No tasks match the current filters.'
-              : movingActive
-                ? 'No tasks yet. Add one above, or generate the moving checklist to get started.'
-                : 'No tasks yet. Add one above.'}
-          </p>
-          {tasks.length === 0 && movingActive && (
-            <button
-              onClick={handleGenerate}
-              disabled={isGenerating}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-muted border border-border px-3.5 py-2 text-sm text-foreground hover:bg-accent disabled:opacity-50 transition-colors"
-            >
-              <Sparkles className="h-4 w-4" />
-              {isGenerating ? 'Generating…' : 'Generate moving tasks'}
-            </button>
-          )}
-        </div>
+        tasks.length > 0 ? (
+          <p className="px-1 py-8 text-center text-sm text-muted-foreground">No tasks match the current filters.</p>
+        ) : (
+          <EmptyState icon={ListChecks} title="Nothing to do yet" description="Jobs for the house land here, with who is on them and when they are due. Type one in the box above.">
+            <FirstSteps
+              moduleId="household"
+              add={movingActive ? { label: isGenerating ? 'Generating…' : 'Add the moving-in jobs', meta: 'A starter list for your move', icon: Sparkles, onClick: handleGenerate, disabled: isGenerating } : undefined}
+            />
+          </EmptyState>
+        )
       ) : groupBy === 'person' ? (
         <div className={wide ? 'grid grid-cols-2 items-start gap-5 xl:grid-cols-3' : 'space-y-5'}>
           {renderSection('Just added', justAdded, 'text-primary')}

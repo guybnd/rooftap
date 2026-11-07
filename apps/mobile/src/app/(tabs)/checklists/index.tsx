@@ -48,6 +48,7 @@ import {
 import { useDataCache } from '@/lib/data-cache';
 import { NoGroupScreen } from '@/components/no-group-screen';
 import { ChecklistRow } from '@/features/checklists/checklist-row';
+import { FirstSteps } from '@/components/first-steps';
 
 export default function ChecklistsSectionScreen() {
   const insets = useSafeAreaInsets();
@@ -159,13 +160,10 @@ export default function ChecklistsSectionScreen() {
         <EmptyState
           icon={ListChecks}
           title="No checklists yet"
-          description="Create one from scratch or a template."
-          action={{
-            label: 'New checklist',
-            onPress: () => router.push('/checklists/new' as Href),
-            icon: <Plus size={14} className="text-primary-foreground" />,
-          }}
-        />
+          description="Lists you work through together: packing, hosting, moving in."
+        >
+          <FirstSteps moduleId="checklists" add={{ label: 'New checklist', onPress: () => router.push('/checklists/new' as Href) }} />
+        </EmptyState>
       )}
     </View>
   );

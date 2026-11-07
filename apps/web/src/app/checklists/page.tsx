@@ -24,6 +24,8 @@ import { ChecklistRow } from './checklist-row';
 import { useWideLayout } from '@/lib/desktop-layout';
 import { WideList } from '@/components/wide-list';
 import { cn } from '@/lib/utils';
+import { FirstSteps } from '@/components/first-steps';
+import { EmptyState } from '@/components/ui/empty-state';
 
 export default function ChecklistsPage() {
   const router = useRouter();
@@ -123,17 +125,9 @@ export default function ChecklistsPage() {
       </div>
 
       {lists.length === 0 ? (
-        // Hearth §11 empty state: centered, one headline, one line, one CTA
-        // (the header's New checklist stays the path; no second button here).
-        <div className="flex flex-col items-center gap-3 px-6 py-12 text-center">
-          <div className="rounded-2xl bg-primary/10 p-5">
-            <ListChecks className="h-7 w-7 text-primary" />
-          </div>
-          <div className="space-y-1">
-            <h2 className="text-base font-semibold text-foreground">No checklists yet</h2>
-            <p className="max-w-[280px] text-sm text-muted-foreground">Create one from scratch or a template.</p>
-          </div>
-        </div>
+        <EmptyState icon={ListChecks} title="No checklists yet" description="Lists you work through together: packing, hosting, moving in.">
+          <FirstSteps moduleId="checklists" add={{ label: 'New checklist', onClick: () => router.push('/checklists/new') }} />
+        </EmptyState>
       ) : (
         <>
           <WideList>

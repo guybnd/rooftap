@@ -53,6 +53,7 @@ import { IdeaCard } from '@/features/occasions/idea-card';
 import { IdeaFormSheet } from '@/features/occasions/idea-form-sheet';
 import { OccasionFormSheet } from '@/features/occasions/occasion-form-sheet';
 import { WishFormSheet } from '@/features/occasions/wish-form-sheet';
+import { FirstSteps } from '@/components/first-steps';
 
 type MemberProfiles = Record<string, { email: string; name: string | null; avatar: string | null }>;
 type Previews = ReturnType<typeof useListPreviews>;
@@ -144,8 +145,9 @@ export default function OccasionsScreen() {
             icon={Gift}
             title="No occasions yet"
             description="Add birthdays and other days to plan gifts for. A gift idea can be kept from the person it's for, so the surprise holds."
-            action={{ label: 'Add an occasion', onPress: () => occasionSheet.show({ id: null }), icon: <Plus size={14} className="text-primary-foreground" /> }}
-          />
+          >
+            <FirstSteps moduleId="occasions" add={{ label: 'Add an occasion', onPress: () => occasionSheet.show({ id: null }) }} />
+          </EmptyState>
         ) : (
           <>
             {focus && (

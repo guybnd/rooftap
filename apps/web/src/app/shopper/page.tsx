@@ -51,6 +51,7 @@ import { ScoutRunRow } from './scout-run-row';
 import { useWideLayout } from '@/lib/desktop-layout';
 import { WideList } from '@/components/wide-list';
 import { cn } from '@/lib/utils';
+import { FirstSteps } from '@/components/first-steps';
 
 const TABS: { value: ShopperWantStatus; label: string }[] = [
   { value: 'watching', label: 'Watching' },
@@ -217,8 +218,9 @@ export default function ShopperPage() {
           icon={ShoppingBag}
           title="Nothing on the list yet"
           description="Add something you want to buy. Rooftap watches the price and tells you when it's a good deal."
-          action={{ label: 'Add something', onClick: () => setAdding(true), icon: <Plus className="h-4 w-4" /> }}
-        />
+        >
+          <FirstSteps moduleId="shopper" add={{ label: 'Add something', onClick: () => setAdding(true) }} />
+        </EmptyState>
       ) : (
         <div className="space-y-3">
           <div className={cn(wide && 'max-w-xl')}>

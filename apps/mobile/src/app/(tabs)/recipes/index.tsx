@@ -70,6 +70,7 @@ import { ScanMatchSheet } from '@/features/recipes/scan-match-sheet';
 import { RecipeRow } from '@/features/recipes/recipe-row';
 import { captureRecipeFromPhoto, discardRecipeDraftPhoto, type CaptureSource } from '@/features/recipes/recipe-capture';
 import { MealWeek } from '@/features/recipes/meal-week';
+import { FirstSteps } from '@/components/first-steps';
 
 export default function RecipesSectionScreen() {
   const insets = useSafeAreaInsets();
@@ -559,14 +560,12 @@ export default function RecipesSectionScreen() {
               ? 'Scan a photo or create one to track its ingredients against your groceries.'
               : 'Scan a photo or create one.'
           }
-          action={{
-            label: 'Scan a recipe',
-            onPress: () => void handleScan('camera'),
-            icon: scanning ? <ActivityIndicator size="small" /> : <Camera size={14} className="text-primary-foreground" />,
-            disabled: scanning || !isOnline,
-          }}
-          secondaryAction={{ label: 'New recipe', onPress: openNew }}
-        />
+        >
+          <FirstSteps
+            moduleId="recipes"
+            add={{ label: scanning ? 'Scanning…' : 'Scan a recipe', meta: 'From a photo of a page or a card', icon: Camera, onPress: () => void handleScan('camera'), disabled: scanning || !isOnline }}
+          />
+        </EmptyState>
       )}
       {toTryOnly && toTry.length === 0 && (
         <Text className="px-1 py-8 text-center text-sm text-muted-foreground">

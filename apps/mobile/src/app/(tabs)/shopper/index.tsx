@@ -60,6 +60,7 @@ import { ScoutBriefSheet } from '@/features/shopper/scout-brief-sheet';
 import { ScoutRunRow } from '@/features/shopper/scout-run-row';
 import { lookupWhenSynced, shopperSources } from '@/features/shopper/shopper-api';
 import { ModuleSettingsButton } from '@/features/settings/module-settings-sheet';
+import { FirstSteps } from '@/components/first-steps';
 
 const TABS: { value: ShopperWantStatus; label: string }[] = [
   { value: 'watching', label: 'Watching' },
@@ -248,8 +249,9 @@ export default function ShopperScreen() {
           icon={ShoppingBag}
           title="Nothing on the list yet"
           description="Add something you want to buy. Rooftap watches the price and tells you when it's a good deal."
-          action={{ label: 'Add something', onPress: openAdd, icon: <Plus size={14} className="text-primary-foreground" /> }}
-        />
+        >
+          <FirstSteps moduleId="shopper" add={{ label: 'Add something', onPress: openAdd }} />
+        </EmptyState>
       ) : (
         <>
           <SegmentedControl accessibilityLabel="Show" value={tab} onChange={setTab} options={TABS} />

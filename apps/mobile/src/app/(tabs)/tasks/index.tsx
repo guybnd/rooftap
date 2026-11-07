@@ -43,6 +43,7 @@ import {
   CalendarDays,
   ChevronDown,
   ChevronRight,
+  ListChecks,
   MoreHorizontal,
   Plus,
   Search,
@@ -54,6 +55,7 @@ import {
   Text,
   Button,
   Card,
+  EmptyState,
   LeadingTile,
   HeroLede,
   Input,
@@ -115,6 +117,7 @@ import { createHouseholdTaskModalCallbacks } from '@/features/tasks/deferred-she
 import { createUndoToastPresenter } from '@/lib/undo-toast';
 import { useTaskSnoozeUndo } from '@/features/tasks/use-task-snooze-undo';
 import { flattenGroups, groupFrameClass, rowSpacingClassName, type SectionRow, type SectionTone } from '@homeup/ui';
+import { FirstSteps } from '@/components/first-steps';
 
 // FLUX-193 parity: the move-in countdown is one-time info once you've moved
 // in — dismissible, persisted per move-in date (a new date re-shows it).
@@ -888,29 +891,16 @@ export default function TasksSectionScreen() {
 
   const emptyComponent = React.useMemo(
     () => (
-      <Card>
-        <View className="items-center gap-3 px-4 py-2">
-          <Text className="text-center text-body text-muted-foreground">
-            {tasks.length > 0
-              ? 'No tasks match the current filters.'
-              : movingActive
-                ? 'No tasks yet. Add one above, or generate the moving checklist to get started.'
-                : 'No tasks yet. Add one above.'}
-          </Text>
-          {tasks.length === 0 && movingActive && (
-            <Pressable
-              onPress={handleGenerate}
-              disabled={isGenerating}
-              accessibilityRole="button"
-              className="flex-row items-center gap-1.5 rounded-lg border border-border bg-muted px-3.5 py-2"
-              style={isGenerating ? { opacity: 0.5 } : undefined}
-            >
-              <Sparkles size={16} className="text-foreground" />
-              <Text className="text-sm text-foreground">{isGenerating ? 'Generating…' : 'Generate moving tasks'}</Text>
-            </Pressable>
-          )}
-        </View>
-      </Card>
+      tasks.length > 0 ? (
+        <Text className="px-1 py-8 text-center text-sm text-muted-foreground">No tasks match the current filters.</Text>
+      ) : (
+        <EmptyState icon={ListChecks} title="Nothing to do yet" description="Jobs for the house land here, with who is on them and when they are due. Type one in the box above.">
+          <FirstSteps
+            moduleId="household"
+            add={movingActive ? { label: isGenerating ? 'Generating…' : 'Add the moving-in jobs', meta: 'A starter list for your move', icon: Sparkles, onPress: handleGenerate, disabled: isGenerating } : undefined}
+          />
+        </EmptyState>
+      )
     ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [tasks.length, isGenerating, movingActive]

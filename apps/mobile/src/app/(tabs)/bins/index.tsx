@@ -46,6 +46,7 @@ import { useDataCache } from '@/lib/data-cache';
 import { NoGroupScreen } from '@/components/no-group-screen';
 import { BinLidMark, BinLids } from '@/features/bins/bin-lids';
 import { BinSetupSheet } from '@/features/bins/setup-sheet';
+import { FirstSteps } from '@/components/first-steps';
 
 type MemberProfiles = Record<string, { email: string; name: string | null; avatar: string | null }>;
 
@@ -123,8 +124,9 @@ export default function BinsScreen() {
             icon={Trash2}
             title="No bin days yet"
             description="Tell Rooftap which bins go out on which day, or let it read your council's calendar. You get a nudge the night before."
-            action={{ label: 'Set up bin night', onPress: openSetup, icon: <Pencil size={14} className="text-primary-foreground" /> }}
-          />
+          >
+            <FirstSteps moduleId="bins" add={{ label: 'Set up bin night', onPress: openSetup, icon: Pencil }} />
+          </EmptyState>
         ) : (
           <>
             {collection && night.tonight && (

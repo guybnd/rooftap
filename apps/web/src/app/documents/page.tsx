@@ -59,6 +59,7 @@ import { ArrowDown, ChevronDown, ChevronRight, FileText, FolderInput, FolderOpen
 import { DocumentCard, DOC_TABLE_COLUMNS } from './document-card';
 import { DOC_DRAG_TYPE, FolderTableRow, FolderTree, type ExplorerView } from '@/components/documents/folder-tree';
 import { DocumentInspector } from '@/components/documents/document-inspector';
+import { FirstSteps } from '@/components/first-steps';
 const EXPIRY_OPTIONS: SegmentOption<'all' | 'soon' | 'expired'>[] = [
   { value: 'all', label: 'All' },
   { value: 'soon', label: 'Expiring' },
@@ -976,8 +977,9 @@ function DocumentsView() {
               icon={FileText}
               title="No documents yet"
               description="Keep receipts, warranties, IDs and leases in one place. Drop files here to add them."
-              action={{ label: 'Add files', icon: <Plus className="h-4 w-4" />, onClick: () => fileInputRef.current?.click() }}
-            />
+            >
+              <FirstSteps moduleId="documents" add={{ label: 'Add files', meta: 'Or drop them on this page', onClick: () => fileInputRef.current?.click() }} />
+            </EmptyState>
           ) : filtered ? (
             <EmptyState
               icon={SearchX}
@@ -1195,8 +1197,9 @@ function DocumentsView() {
             icon={FileText}
             title="No documents yet"
             description="Keep receipts, warranties, IDs and leases in one place."
-            action={{ label: 'Add a document', icon: <Plus className="h-4 w-4" />, onClick: openCapture }}
-          />
+          >
+            <FirstSteps moduleId="documents" add={{ label: 'Scan or add a document', meta: 'A photo, a PDF or a file', onClick: openCapture }} />
+          </EmptyState>
         ) : !browsing ? (
           <EmptyState
             icon={SearchX}

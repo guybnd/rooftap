@@ -44,6 +44,7 @@ import { CardFormSheet } from './card-form-sheet';
 import { SchemeSheet } from './scheme-sheet';
 import { useWideLayout } from '@/lib/desktop-layout';
 import { cn } from '@/lib/utils';
+import { FirstSteps } from '@/components/first-steps';
 
 const MICRO = 'px-1 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground';
 
@@ -115,8 +116,9 @@ export default function RewardsPage() {
           icon={WalletCards}
           title="No cards yet"
           description="Add your loyalty cards and memberships, and the stores they work at. Then look up any store to see which card to use."
-          action={{ label: 'Add a card', onClick: () => setEditing({ id: null }), icon: <Plus className="h-4 w-4" /> }}
-        />
+        >
+          <FirstSteps moduleId="rewards" add={{ label: 'Add a card', onClick: () => setEditing({ id: null }) }} />
+        </EmptyState>
       ) : (
         <div className="space-y-3">
           <div className={cn(wide && 'max-w-xl')}>

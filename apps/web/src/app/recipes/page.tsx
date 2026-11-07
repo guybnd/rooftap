@@ -44,6 +44,8 @@ import { useWideLayout } from '@/lib/desktop-layout';
 import { WideList } from '@/components/wide-list';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { MealWeek } from './meal-week';
+import { FirstSteps } from '@/components/first-steps';
+import { EmptyState } from '@/components/ui/empty-state';
 
 export default function RecipesPage() {
   const { group, currentUserId, isOnline, loading: cacheLoading, memberProfiles, groupMembers } = useDataCache();
@@ -469,37 +471,20 @@ export default function RecipesPage() {
           Nothing to try yet. Ask the Assistant to save a recipe you want to try, or open a recipe and choose Move to To try.
         </p>
       ) : !toTryOnly && recipes.length === 0 ? (
-        // Hearth §11 empty state, mirroring mobile's EmptyState: one headline,
-        // one line, one CTA (scan) plus New recipe as a quiet text link.
-        <div className="flex flex-col items-center gap-3 px-6 py-12 text-center">
-          <div className="rounded-2xl bg-primary/10 p-5">
-            <ChefHat className="h-7 w-7 text-primary" />
-          </div>
-          <div className="space-y-1">
-            <h2 className="text-base font-semibold text-foreground">No recipes yet</h2>
-            <p className="max-w-[280px] text-sm text-muted-foreground">
-              {groceriesLinked
-                ? 'Scan a photo or create one to track its ingredients against your groceries.'
-                : 'Scan a photo or create one.'}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => cameraInputRef.current?.click()}
-            disabled={scanning || !isOnline}
-            className="mt-1 inline-flex h-11 items-center gap-1.5 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/80 disabled:opacity-50"
-          >
-            {scanning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
-            Scan a recipe
-          </button>
-          <button
-            type="button"
-            onClick={openNew}
-            className="inline-flex min-h-11 items-center text-sm font-medium text-primary underline underline-offset-2 hover:text-primary/80"
-          >
-            New recipe
-          </button>
-        </div>
+        <EmptyState
+          icon={ChefHat}
+          title="No recipes yet"
+          description={
+            groceriesLinked
+              ? 'Scan a photo or create one to track its ingredients against your groceries.'
+              : 'Scan a photo or create one.'
+          }
+        >
+          <FirstSteps
+            moduleId="recipes"
+            add={{ label: scanning ? 'Scanning…' : 'Scan a recipe', meta: 'From a photo of a page or a card', icon: Camera, onClick: () => cameraInputRef.current?.click(), disabled: scanning || !isOnline }}
+          />
+        </EmptyState>
       ) : filtered.length === 0 ? (
         <p className="px-1 py-8 text-center text-sm text-muted-foreground">
           {hasFilters || search.trim() ? 'No recipes match your filters.' : 'No recipes yet.'}

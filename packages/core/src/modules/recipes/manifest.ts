@@ -5,6 +5,7 @@ export const recipesModule = defineModule({
   label: 'Recipes',
   description: 'Your household recipes, with a cooking view.',
   askStarters: ["Something quick with chicken and rice", "A vegetarian dinner we haven't had lately"],
+  firstSteps: [{ label: 'Write a recipe in', meta: 'Ingredients and steps by hand', href: '/recipes/new' }],
   iconId: 'chef-hat',
   defaultEnabled: false,
   enhances: ['groceries'],

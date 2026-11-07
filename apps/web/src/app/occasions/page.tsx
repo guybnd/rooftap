@@ -45,6 +45,7 @@ import { IdeaCard } from './idea-card';
 import { IdeaFormSheet } from './idea-form-sheet';
 import { OccasionFormSheet } from './occasion-form-sheet';
 import { WishFormSheet } from './wish-form-sheet';
+import { FirstSteps } from '@/components/first-steps';
 
 const MICRO = 'px-1 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground';
 
@@ -103,8 +104,9 @@ export default function OccasionsPage() {
           icon={Gift}
           title="No occasions yet"
           description="Add birthdays and other days to plan gifts for. A gift idea can be kept from the person it's for, so the surprise holds."
-          action={{ label: 'Add an occasion', onClick: () => setEditingOccasion({ id: null }), icon: <Plus className="h-4 w-4" /> }}
-        />
+        >
+          <FirstSteps moduleId="occasions" add={{ label: 'Add an occasion', onClick: () => setEditingOccasion({ id: null }) }} />
+        </EmptyState>
       ) : (
         <div className={cn(wide ? 'grid grid-cols-2 items-start gap-6' : 'space-y-5')}>
           <div className="space-y-5">

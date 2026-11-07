@@ -92,6 +92,23 @@ export interface ManifestTool {
 /** One of a module's Ask sheet suggestions: the words it sends, and any other modules it needs. */
 export type AskStarterDef = string | { text: string; with: readonly string[] };
 
+/**
+ * A way to start an empty screen that lives on another screen (Hearth §13.9
+ * "Empty screens"): "Start from a template", "Scan a recipe". The screen's own
+ * add comes first and Rooftap's ask last, so they are not declared here.
+ * `module` names the module whose screen it opens (its tile leads the row);
+ * the step shows only while that module is on. Hearth copy rules apply.
+ */
+export interface FirstStepDef {
+  label: string;
+  /** One short line under the label. */
+  meta?: string;
+  /** The route it opens; it must exist on web and the phone. */
+  href: string;
+  /** Whose screen it opens, when not this module's own. */
+  module?: string;
+}
+
 export interface ModuleManifest {
   /** Kebab-case id, also the folder name and the `group_modules.module_id`. */
   id: string;
@@ -106,6 +123,8 @@ export interface ModuleManifest {
    * they are on too. Hearth copy rules apply.
    */
   askStarters?: readonly AskStarterDef[];
+  /** Extra first steps the module's empty screen offers (core `emptyFirstSteps`). */
+  firstSteps?: readonly FirstStepDef[];
   /** Lucide icon name, resolved per platform. */
   iconId: string;
   /** On for a new household with no `group_modules` row for this module. */
