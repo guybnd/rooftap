@@ -1,13 +1,23 @@
 // Voice input for the Assistant's composer on the phone: the phone's own
 // speech recognizer (expo-speech-recognition, Android SpeechRecognizer, on
 // device where the phone offers it) as core's VoiceEngine, and the bar the
-// composer turns into while it listens. Needs the native module, so on an
+// composer turns into while it listens. On Android 13 and later it listens
+// through pauses and joins the phrases (core voiceSegments). Needs the native module, so on an
 // app build from before it the mic stays hidden.
 // Web twin: apps/web/src/app/assistant/voice-input.tsx.
 import * as React from 'react';
-import { Pressable, View } from 'react-native';
+import { Platform, Pressable, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
-import { ROOFTAP_SPECTRUM, voiceLevel, type VoiceEngine, type VoiceInput } from '@homeup/core';
+import {
+  ROOFTAP_SPECTRUM,
+  VOICE_FIRST_WORDS_MS,
+  VOICE_MAX_MS,
+  VOICE_PAUSE_MS,
+  voiceLevel,
+  voiceSegments,
+  type VoiceEngine,
+  type VoiceInput,
+} from '@homeup/core';
 import { Text, useStillMotion } from '@homeup/ui';
 
 type SpeechModule = typeof import('expo-speech-recognition');
@@ -25,6 +35,10 @@ function loadSpeech(): SpeechModule | null {
 
 let engine: VoiceEngine | null = null;
 
+// Android 13 and later can listen through pauses (a segmented session). Older
+// phones stop at the recognizer's own pause, which can cut an ask short.
+const SEGMENTED = Platform.OS === 'android' && typeof Platform.Version === 'number' && Platform.Version >= 33;
+
 /** The phone's recognizer, made once. */
 export function phoneVoiceEngine(): VoiceEngine {
   if (engine) return engine;
@@ -35,18 +49,46 @@ export function phoneVoiceEngine(): VoiceEngine {
   }
   const m = mod.ExpoSpeechRecognitionModule;
   let subs: { remove: () => void }[] = [];
+  let timers: ReturnType<typeof setTimeout>[] = [];
+  const clearTimers = () => {
+    timers.forEach(clearTimeout);
+    timers = [];
+  };
+  const later = (ms: number, fn: () => void) => timers.push(setTimeout(fn, ms));
   const clear = () => {
     subs.forEach((s) => s.remove());
     subs = [];
+    clearTimers();
+  };
+  // Ends the session keeping every word: by now each phrase has its final
+  // text, and the hook sends what it heard when the session ends.
+  const end = () => {
+    clearTimers();
+    m.abort();
   };
   engine = {
     available: true,
     requestPermission: async () => (await m.requestPermissionsAsync()).granted,
     start: (h) => {
       clear();
+      const words = voiceSegments();
+      let heard = false;
       subs = [
         m.addListener('start', h.onStart),
-        m.addListener('result', (e) => h.onText(e.results[0]?.transcript ?? '', e.isFinal)),
+        m.addListener('result', (e) => {
+          const text = e.results[0]?.transcript ?? '';
+          if (!SEGMENTED) {
+            h.onText(text, e.isFinal);
+            return;
+          }
+          // Phrases arrive one by one; the ask ends after a pause past a
+          // finished phrase (or a tap on stop), never at the first pause.
+          heard = heard || !!text.trim();
+          h.onText(words.add(text, e.isFinal), false);
+          clearTimers();
+          later(VOICE_MAX_MS, end);
+          if (e.isFinal) later(VOICE_PAUSE_MS, end);
+        }),
         m.addListener('volumechange', (e) => h.onLevel(voiceLevel(e.value))),
         m.addListener('error', (e) => h.onError(e.error)),
         m.addListener('end', () => {
@@ -54,16 +96,25 @@ export function phoneVoiceEngine(): VoiceEngine {
           h.onEnd();
         }),
       ];
+      if (SEGMENTED) later(VOICE_FIRST_WORDS_MS, () => !heard && end());
       m.start({
         interimResults: true,
-        continuous: false,
+        continuous: SEGMENTED,
         addsPunctuation: true,
         volumeChangeEventOptions: { enabled: true, intervalMillis: 90 },
-        androidIntentOptions: { EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS: 1500 },
+        androidIntentOptions: { EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS: 2000 },
       });
     },
-    stop: () => m.stop(),
-    abort: () => m.abort(),
+    // Stop keeps the phrase being spoken: the recognizer finishes it first.
+    // A session that does not end on its own soon after is ended here.
+    stop: () => {
+      m.stop();
+      later(1500, end);
+    },
+    abort: () => {
+      clear();
+      m.abort();
+    },
   };
   return engine;
 }

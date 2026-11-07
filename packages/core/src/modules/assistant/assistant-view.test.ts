@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AssistantConversation } from './assistant-api';
-import { voiceErrorText, voiceLevel, askGreeting, askStarters, assistantModules, popupStatus, conversationTitle, formatCents, formatMicros, groupConversations, looksLikeQuestion, minutesLeft, parseReply, replyPreview } from './assistant-view';
+import { voiceErrorText, voiceLevel, voiceSegments, askGreeting, askStarters, assistantModules, popupStatus, conversationTitle, formatCents, formatMicros, groupConversations, looksLikeQuestion, minutesLeft, parseReply, replyPreview } from './assistant-view';
 
 const NOW = new Date('2026-10-21T10:00:00Z');
 const conv = (id: string, extra: Partial<AssistantConversation>): AssistantConversation => ({
@@ -188,5 +188,22 @@ describe('voice helpers', () => {
     expect(voiceLevel(-2)).toBe(0);
     expect(voiceLevel(5)).toBe(0.5);
     expect(voiceLevel(12)).toBe(1);
+  });
+});
+
+describe('voiceSegments', () => {
+  it('keeps the words before a pause', () => {
+    const v = voiceSegments();
+    expect(v.add('remind me to cancel', false)).toBe('remind me to cancel');
+    expect(v.add('remind me to cancel Uber One', true)).toBe('remind me to cancel Uber One');
+    expect(v.add('in 3 months', false)).toBe('remind me to cancel Uber One in 3 months');
+    expect(v.add('in 3 months and two weeks', true)).toBe('remind me to cancel Uber One in 3 months and two weeks');
+    expect(v.text()).toBe('remind me to cancel Uber One in 3 months and two weeks');
+  });
+
+  it('ignores an empty final phrase', () => {
+    const v = voiceSegments();
+    v.add('milk', true);
+    expect(v.add('', true)).toBe('milk');
   });
 });

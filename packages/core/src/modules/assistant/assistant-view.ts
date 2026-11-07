@@ -299,3 +299,35 @@ export function voiceErrorText(code: string): string | null {
 export function voiceLevel(volume: number): number {
   return Math.max(0, Math.min(1, volume / 10));
 }
+
+/**
+ * Joins the segments of one spoken ask. A recognizer that listens through
+ * pauses (Android's segmented session) reports each phrase on its own: a
+ * phrase's partial results, then its final text, then the next phrase from
+ * empty. Done phrases are kept here so the words before a pause survive.
+ */
+export function voiceSegments() {
+  let done = '';
+  let current = '';
+  const join = () => [done, current].filter(Boolean).join(' ');
+  return {
+    /** A result for the phrase being spoken; `final` closes it. Returns the whole ask so far. */
+    add(text: string, final: boolean): string {
+      const t = text.trim();
+      if (final) {
+        if (t) done = done ? `${done} ${t}` : t;
+        current = '';
+      } else {
+        current = t;
+      }
+      return join();
+    },
+    text: join,
+  };
+}
+
+/** How long a pause after a finished phrase ends the ask, and the longest one ask may run. */
+export const VOICE_PAUSE_MS = 2200;
+export const VOICE_MAX_MS = 60000;
+/** How long to wait for any speech before giving up. */
+export const VOICE_FIRST_WORDS_MS = 8000;
