@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CHEER_BURST_MS, cheerSparks, heroNumber, heroRollDirection, isFreshReply, justCleared, roofDots } from './touches';
+import { CHEER_BURST_MS, DROP_IN_DOT_MS, DROP_IN_POP_MS, cheerSparks, takeDropIn, heroNumber, heroRollDirection, isFreshReply, justCleared, roofDots } from './touches';
 
 describe('heroNumber', () => {
   it('reads counts and amounts', () => {
@@ -72,5 +72,18 @@ describe('cheerSparks', () => {
 
   it('takes slow + base', () => {
     expect(CHEER_BURST_MS).toBe(500);
+  });
+});
+
+describe('takeDropIn', () => {
+  it('drops each row in once', () => {
+    expect(takeDropIn('a1')).toBe(true);
+    expect(takeDropIn('a1')).toBe(false);
+    expect(takeDropIn('b2')).toBe(true);
+  });
+
+  it('takes slow, then fast + base', () => {
+    expect(DROP_IN_DOT_MS).toBe(300);
+    expect(DROP_IN_POP_MS).toBe(350);
   });
 });

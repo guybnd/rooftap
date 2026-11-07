@@ -46,6 +46,7 @@ import { useWideLayout } from '@/lib/desktop-layout';
 import { cn } from '@/lib/utils';
 import { FirstSteps } from '@/components/first-steps';
 import { EmptyState } from '@/components/ui/empty-state';
+import { DropIn } from '@/components/ui/drop-in';
 
 // FLUX-60: Household tasks & reminders — generic recurring tasks + moving template
 // FLUX-64: Mobile-first UX pass — overflow menus, pill filters, group-by, undo toasts
@@ -372,7 +373,9 @@ export default function TasksPage() {
         </h2>
         <ListGroup>
           {items.map((task) => (
-            <TaskRow key={task.id} task={task} focused={task.id === focusId} {...cardProps} />
+            <DropIn key={task.id} id={task.id} when={newSet.has(task.id)}>
+              <TaskRow task={task} focused={task.id === focusId} {...cardProps} />
+            </DropIn>
           ))}
         </ListGroup>
       </div>
@@ -655,6 +658,8 @@ export default function TasksPage() {
         }}
         onSave={(task) => {
           writeRow(task);
+          // A new one waits under Just added for a beat and drops in (phone parity).
+          if (!editingTask) pinNewTask(task.id);
           setIsModalOpen(false);
           setEditingTask(undefined);
         }}

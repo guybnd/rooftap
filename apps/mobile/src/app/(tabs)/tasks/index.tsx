@@ -116,7 +116,7 @@ import { isFlagParamSet } from '@/lib/route-params';
 import { createHouseholdTaskModalCallbacks } from '@/features/tasks/deferred-sheet-close';
 import { createUndoToastPresenter } from '@/lib/undo-toast';
 import { useTaskSnoozeUndo } from '@/features/tasks/use-task-snooze-undo';
-import { flattenGroups, groupFrameClass, rowSpacingClassName, type SectionRow, type SectionTone } from '@homeup/ui';
+import { DropIn, flattenGroups, groupFrameClass, rowSpacingClassName, type SectionRow, type SectionTone } from '@homeup/ui';
 import { FirstSteps } from '@/components/first-steps';
 
 // FLUX-193 parity: the move-in countdown is one-time info once you've moved
@@ -811,7 +811,7 @@ export default function TasksSectionScreen() {
       }
       const task = item.item;
       return (
-        <View className={cn(groupFrameClass(item.pos), spacing)}>
+        <DropIn id={task.id} when={newTaskIds.includes(task.id)} className={cn(groupFrameClass(item.pos), spacing)}>
           <TaskRow
             task={task}
             groupMembers={groupMembers}
@@ -832,12 +832,13 @@ export default function TasksSectionScreen() {
             commentCount={taskCommentCounts.counts[task.id] ?? 0}
             onCommentsChanged={taskCommentCounts.refresh}
           />
-        </View>
+        </DropIn>
       );
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       flatData,
+      newTaskIds,
       focusId,
       effectiveShowLater,
       groupMembers,

@@ -164,3 +164,36 @@ export function cheerSparks(width: number, height: number, count = 10, reach = 2
     };
   });
 }
+
+// ── Drop in ───────────────────────────────────────────────────────────────
+// A row just added from the item sheet arrives with a coral dot that falls
+// into its leading slot, then the row pops in where it landed.
+
+/** The dot's fall (slow), ease-in. */
+export const DROP_IN_DOT_MS = MOTION_DURATIONS_MS.slow;
+/** The row's pop once the dot lands (fast + base). */
+export const DROP_IN_POP_MS = MOTION_DURATIONS_MS.fast + MOTION_DURATIONS_MS.base;
+/** How far above its landing the dot starts, in px. */
+export const DROP_IN_FALL = 28;
+/** Where the dot lands: this far in from the row's leading edge, in px (the check). */
+export const DROP_IN_LAND_X = 28;
+/** The dot's diameter, in px. */
+export const DROP_IN_DOT = 10;
+/** The row's pop keys: share of time, scale and opacity. */
+export const DROP_IN_KEYS = {
+  at: [0, 0.43, 1],
+  scale: [0.94, 1.015, 1],
+  opacity: [0, 1, 1],
+} as const;
+
+const dropped = new Set<string>();
+
+/**
+ * Whether a just-added row `id` should drop in now: true once per id, so a
+ * list that re-renders or recycles the row does not play it again.
+ */
+export function takeDropIn(id: string): boolean {
+  if (dropped.has(id)) return false;
+  dropped.add(id);
+  return true;
+}
