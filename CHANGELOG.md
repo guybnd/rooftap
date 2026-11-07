@@ -8,6 +8,36 @@ Each change people would notice gets a `whats-new/` entry (see `whats-new/README
 
 ## Unreleased
 
+## 1.2.0 (2026-11-07)
+
+This release ships a new APK: ask the Assistant by voice with the phone's own speech recognition. It installs over 1.1.1 to 1.1.3.
+
+- A fresh look for Ask Rooftap. The chat now greets you and suggests things worth asking, like planning dinners or adding everything for a recipe. Its edge glows in Rooftap's colours and spins faster while it thinks. Tap the mic to ask by voice.
+- Connect a shared speaker safely. When you connect an app by signing in, you can now mark it as a shared device. Use it for a speaker the whole home can hear. It then leaves out gift plans, surprises and anything kept from someone.
+- One cost line for each shop. A new payment from your bank sometimes made two cost lines for the same shop. The extra line was empty, but the Assistant could count it as a second payment. Each shop now gets one line, and the empty copies are removed.
+- Deleted to-dos stay gone. Once a day, Home could show a list of blank to-dos with no title under No date. These were to-dos that you deleted. They no longer come back.
+- A shorter Version card. About & updates now shows the app and the server on two rows, with the build details on one small line. The line names the update you run again, and you can long-press it to copy it.
+- Bin days always save. Save in the bin days sheet now works while a council calendar or Home Assistant read is still running. A read that fails now shows a message, and the sheet does not stay stuck on "Reading".
+- Checklists open again on the phone. A checklist with checked items could show "This screen didn't load" on the phone. It now opens, and checked items stay newest first.
+- Crashes report themselves. When a screen does not load, the app now tells the people who run your server what broke. Reports never hold your name, household or items, and you can turn them off.
+- Update your own server with one tap. If you run your own Rooftap server, About & updates can now install a new release for you. It backs up first and goes back to the old version if anything fails.
+- Repeat a to-do on real calendar dates. A to-do can now repeat on the 1st of every month, the first Sunday, the last day, chosen weekdays or yearly. It can also stop on a date. Pick it from the Repeat list. The Assistant knows these repeats too.
+- Save works on a home server without https. On a server you open by its local address over plain http, Save and Add did nothing in many sheets, such as bin days. They now work.
+- Assistant tools listed by module. Settings now lists the tools an AI assistant can use module by module, in the same order as your modules.
+- Import a bank statement. Any bank now works with Costs. Export a CSV statement from your bank and import it in Settings, Connectors. Your payments show in Costs next to your bills, and a newer statement adds only the new payments.
+- Checklists from a template save every item. A new checklist from a template sometimes lost its items and showed a save error. Now the items save as soon as the checklist does. The date spinner arrows on a checklist work again.
+- Click a checklist on Home to open it. On the web, a click on a checklist to-do in Upcoming now opens its items under the row, and a second click closes them. Long checklist items now show in full instead of being cut off.
+- Deleted costs no longer come back. A cost you deleted on one device could still show on another and count twice in the month total. The app now checks for deleted items as soon as it opens.
+- Home opens with your budget and names right away. Home now shows the budget you saw last time straight away, then updates it once your bank payments load. Names on Home also show at once, so they no longer read Former member while the app starts.
+- Cleaner birthday rows on Home. Birthdays and other occasions on Home no longer show a blank person badge.
+- Birthdays on Home. Birthdays and other occasions now show in Home's feed on their day, and on the home screen widget. An occasion you keep off the Calendar stays off Home too.
+- Recent spending says when it leaves bills out. Today on the Costs Latest card no longer reads $0 with no reason when you paid a bill. A line under the totals now shows how much in bills it did not count.
+- Search finds events, occasions and rewards. Search now finds your household's calendar events, your occasions and your rewards schemes. Type a store name to find the scheme that works there.
+- Know when your server can update. If you run your own Rooftap server, the app now tells you when a newer release is out. About & updates shows what changed and how to update.
+- Shopper opens on the web again. Shopper on the web no longer stays on Loading. Recipes in cook mode also stay saved in the browser between visits.
+- Bin night on the widget. The home screen widget now shows "Bins out tonight" on bin night, next to your tasks. Tap it to open Bins.
+- Widget ticks show at once. When you tick a task on the home screen widget, the tick now shows straight away. A quick second tap no longer undoes it, and the Undo line goes away after a few seconds.
+
 ## 1.1.3 (2026-10-26)
 
 This release ships a new APK: the home screen widget now stays in place in launchers such as Nova Launcher. It installs over 1.1.1 and 1.1.2.
