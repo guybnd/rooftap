@@ -133,52 +133,150 @@ export function personInitial(name: string | null | undefined): string {
 }
 
 // ── Title words ──────────────────────────────────────────────────────────
-// Typing "tomorrow", "friday", "5pm" or "@sam" into a title sets Due, Time
-// or Who and takes the words out of the title. A word counts once something
-// follows it (a space or a comma), or when the sheet saves (`final`), so
-// "Mon" never fires on the way to "Monitor".
+// Dates, times and "@name" in a title set Due, Time and Who while the words
+// stay in the title, lit (Hearth §13.14). Adding takes them out. Words a
+// person overrides by picking a value by hand stay plain text.
 
-/** One set of words the title gave a field. */
+/** Words in a title that set a field, with where they sit in the title. */
 export interface TitleMatch {
   kind: 'due' | 'time' | 'who';
   /** The words as typed, "next friday". */
   raw: string;
   /** YYYY-MM-DD for due, HH:MM for time, a person id for who. */
   value: string;
+  /** Index of the first character in the title. */
+  start: number;
+  /** Index after the last character. */
+  end: number;
 }
 
 export interface TitleWordsOptions {
   today: string;
   people?: readonly { id: string; name: string }[];
-  /** The sheet is saving: a word at the very end counts too. */
-  final?: boolean;
-  /** Words (lowercase) someone took back; they stay text. */
+  /** Words (lowercase) that stay text. */
   ignore?: readonly string[];
 }
 
 const DAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 const DAY_SHORT: Record<string, number> = { sun: 0, mon: 1, tue: 2, tues: 2, wed: 3, thu: 4, thur: 4, thurs: 4, fri: 5, sat: 6 };
-const LEAD = '(?:(?:due|by)\\s+)?';
-const END = '(?=[\\s,.;!?]|$)';
+const MONTH_NAMES = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+const MONTH_SHORT: Record<string, number> = {
+  jan: 0, feb: 1, mar: 2, apr: 3, jun: 5, jul: 6, aug: 7, sep: 8, sept: 8, oct: 9, nov: 10, dec: 11,
+};
+const MONTH = `(${[...MONTH_NAMES, ...Object.keys(MONTH_SHORT)].join('|')})\\.?`;
+const ORD = '(?:st|nd|rd|th)?';
+const COUNT_WORDS: Record<string, number> = {
+  a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12,
+};
+const LEAD = '(?:(?:due|by|on|for)\\s+)?';
+
+function monthIndex(word: string): number {
+  const w = word.toLowerCase().replace(/\.$/, '');
+  const full = MONTH_NAMES.indexOf(w);
+  return full >= 0 ? full : MONTH_SHORT[w];
+}
+
+function isoOf(y: number, m: number, d: number): string | null {
+  const date = new Date(y, m, d);
+  if (date.getFullYear() !== y || date.getMonth() !== m || date.getDate() !== d) return null;
+  return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
+function parts(iso: string): [number, number, number] {
+  const [y, m, d] = iso.split('-').map(Number);
+  return [y, m - 1, d];
+}
+
+/** The same day `months` later, on the month's last day when it is shorter. */
+function addMonthsISO(iso: string, months: number): string {
+  const [y, m, d] = parts(iso);
+  const first = new Date(y, m + months, 1);
+  const last = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
+  return isoOf(first.getFullYear(), first.getMonth(), Math.min(d, last))!;
+}
+
+/** A day and month with no year: this year, or next year once it has passed. */
+function nextDate(today: string, m: number, d: number, year?: string): string | null {
+  if (year) return isoOf(Number(year), m, d);
+  const [y] = parts(today);
+  const iso = isoOf(y, m, d);
+  if (iso && iso >= today) return iso;
+  return isoOf(y + 1, m, d);
+}
 
 function nextWeekday(today: string, dow: number): string {
   const ahead = (dow - weekday(today) + 7) % 7;
   return addDaysISO(today, ahead === 0 ? 7 : ahead);
 }
 
+function count(word: string): number {
+  return /^\d+$/.test(word) ? Number(word) : COUNT_WORDS[word.toLowerCase()];
+}
+
 interface Rule {
   kind: TitleMatch['kind'];
-  re: RegExp;
+  src: string;
   value: (m: RegExpExecArray, o: TitleWordsOptions) => string | null;
 }
 
+// Most specific first: "oct 8 2027" before "the 8th" before "8pm".
 const RULES: Rule[] = [
-  { kind: 'due', re: new RegExp(`${LEAD}(?:today|tonight)${END}`, 'i'), value: (_m, o) => o.today },
-  { kind: 'due', re: new RegExp(`${LEAD}(?:tomorrow|tmrw|tmr)${END}`, 'i'), value: (_m, o) => addDaysISO(o.today, 1) },
-  { kind: 'due', re: new RegExp(`${LEAD}next\\s+week${END}`, 'i'), value: (_m, o) => addDaysISO(o.today, 7) },
+  { kind: 'due', src: `(\\d{4})-(\\d{2})-(\\d{2})`, value: (m) => isoOf(Number(m[1]), Number(m[2]) - 1, Number(m[3])) },
   {
     kind: 'due',
-    re: new RegExp(`${LEAD}(this|next|on\\s+the|at\\s+the)\\s+weekend${END}`, 'i'),
+    src: `${LEAD}${MONTH}\\s+(\\d{1,2})${ORD}(?:,?\\s+(\\d{4}))?`,
+    value: (m, o) => nextDate(o.today, monthIndex(m[1]), Number(m[2]), m[3]),
+  },
+  {
+    kind: 'due',
+    src: `${LEAD}(?:the\\s+)?(\\d{1,2})${ORD}\\s+(?:of\\s+)?${MONTH}(?:,?\\s+(\\d{4}))?`,
+    value: (m, o) => nextDate(o.today, monthIndex(m[2]), Number(m[1]), m[3]),
+  },
+  {
+    // A month alone needs "in" or a year: "in March", "March 2027". "may" stays a word.
+    kind: 'due',
+    src: `(?:in\\s+${MONTH}(?:\\s+(\\d{4}))?|${MONTH}\\s+(\\d{4}))`,
+    value: (m, o) => {
+      const month = monthIndex(m[1] ?? m[3]);
+      const year = m[2] ?? m[4];
+      return year ? isoOf(Number(year), month, 1) : nextDate(o.today, month, 1);
+    },
+  },
+  {
+    kind: 'due',
+    src: `${LEAD}the\\s+(\\d{1,2})(?:st|nd|rd|th)`,
+    value: (m, o) => {
+      const day = Number(m[1]);
+      const [y, mo] = parts(o.today);
+      for (let i = 0; i < 12; i++) {
+        const first = new Date(y, mo + i, 1);
+        const iso = isoOf(first.getFullYear(), first.getMonth(), day);
+        if (iso && iso >= o.today) return iso;
+      }
+      return null;
+    },
+  },
+  {
+    kind: 'due',
+    src: `in\\s+(\\d{1,3}|${Object.keys(COUNT_WORDS).join('|')})\\s+(days?|weeks?|months?|years?)`,
+    value: (m, o) => {
+      const n = count(m[1]);
+      const unit = m[2].toLowerCase().replace(/s$/, '');
+      if (!n) return null;
+      if (unit === 'day') return addDaysISO(o.today, n);
+      if (unit === 'week') return addDaysISO(o.today, n * 7);
+      return addMonthsISO(o.today, unit === 'month' ? n : n * 12);
+    },
+  },
+  { kind: 'due', src: `${LEAD}(?:the\\s+)?day\\s+after\\s+tomorrow`, value: (_m, o) => addDaysISO(o.today, 2) },
+  { kind: 'due', src: `${LEAD}(?:today|tonight)`, value: (_m, o) => o.today },
+  { kind: 'due', src: `${LEAD}(?:tomorrow|tmrw|tmr)`, value: (_m, o) => addDaysISO(o.today, 1) },
+  { kind: 'due', src: `${LEAD}next\\s+week`, value: (_m, o) => addDaysISO(o.today, 7) },
+  { kind: 'due', src: `${LEAD}next\\s+month`, value: (_m, o) => addMonthsISO(o.today, 1) },
+  { kind: 'due', src: `${LEAD}next\\s+year`, value: (_m, o) => addMonthsISO(o.today, 12) },
+  {
+    kind: 'due',
+    src: `${LEAD}(this|next|on\\s+the|at\\s+the)\\s+weekend`,
     value: (m, o) => {
       const coming = weekday(o.today) === 6 ? o.today : nextWeekday(o.today, 6);
       return m[1].toLowerCase() === 'next' ? addDaysISO(coming, 7) : coming;
@@ -186,18 +284,18 @@ const RULES: Rule[] = [
   },
   {
     kind: 'due',
-    re: new RegExp(`${LEAD}(?:(?:on|this|next)\\s+)?(${DAY_NAMES.join('|')})${END}`, 'i'),
+    src: `${LEAD}(?:(?:this|next)\\s+)?(${DAY_NAMES.join('|')})`,
     value: (m, o) => nextWeekday(o.today, DAY_NAMES.indexOf(m[1].toLowerCase())),
   },
   {
     // Short day names need "on", "this" or "next": "sat down" stays text.
     kind: 'due',
-    re: new RegExp(`${LEAD}(?:on|this|next)\\s+(${Object.keys(DAY_SHORT).join('|')})${END}`, 'i'),
+    src: `(?:due\\s+|by\\s+)?(?:on|this|next)\\s+(${Object.keys(DAY_SHORT).join('|')})`,
     value: (m, o) => nextWeekday(o.today, DAY_SHORT[m[1].toLowerCase()]),
   },
   {
     kind: 'time',
-    re: new RegExp(`(?:at\\s+)?(\\d{1,2})(?::([0-5]\\d))?\\s?(am|pm)${END}`, 'i'),
+    src: `(?:at\\s+)?(\\d{1,2})(?::([0-5]\\d))?\\s?(am|pm)`,
     value: (m) => {
       const h = Number(m[1]);
       if (h < 1 || h > 12) return null;
@@ -205,14 +303,11 @@ const RULES: Rule[] = [
       return `${String(h24).padStart(2, '0')}:${m[2] ?? '00'}`;
     },
   },
-  {
-    kind: 'time',
-    re: new RegExp(`at\\s+([01]?\\d|2[0-3]):([0-5]\\d)${END}`, 'i'),
-    value: (m) => `${m[1].padStart(2, '0')}:${m[2]}`,
-  },
+  { kind: 'time', src: `(?:at\\s+)?([01]?\\d|2[0-3]):([0-5]\\d)`, value: (m) => `${m[1].padStart(2, '0')}:${m[2]}` },
+  { kind: 'time', src: `(?:at\\s+)?noon`, value: () => '12:00' },
   {
     kind: 'who',
-    re: new RegExp(`@([\\p{L}\\d._-]+)${END}`, 'iu'),
+    src: `@([\\p{L}\\d._-]+)`,
     value: (m, o) => {
       const typed = m[1].toLowerCase();
       const hit = (o.people ?? []).find((p) => p.id && p.name.toLowerCase().startsWith(typed));
@@ -221,43 +316,52 @@ const RULES: Rule[] = [
   },
 ];
 
+const END = '(?=[\\s,.;!?)]|$)';
+const COMPILED = RULES.map((rule) => ({
+  rule,
+  scan: new RegExp(`(^|[\\s(,])(${rule.src})${END}`, 'giu'),
+  whole: new RegExp(`^(?:${rule.src})$`, 'iu'),
+}));
+
 /**
- * Finds date, time and person words in a title. Returns the title without
- * them and what each set of words means, or no matches when there is none.
- * "tonight" also gives Evening. One match per field.
+ * The dates, times and people a title names, at most one of each, in title
+ * order. "tonight" also gives Evening. Words in `ignore` stay text.
  */
-export function matchTitleWords(title: string, options: TitleWordsOptions): { title: string; matches: TitleMatch[] } {
+export function matchTitleWords(title: string, options: TitleWordsOptions): TitleMatch[] {
   const ignore = new Set((options.ignore ?? []).map((w) => w.toLowerCase()));
-  const matches: TitleMatch[] = [];
-  let text = title;
-  for (const rule of RULES) {
-    if (matches.some((m) => m.kind === rule.kind)) continue;
-    const re = new RegExp(`(^|\\s)(${rule.re.source})`, rule.re.flags.includes('g') ? rule.re.flags : rule.re.flags + 'g');
+  const found: TitleMatch[] = [];
+  const free = (start: number, end: number) => found.every((f) => end <= f.start || start >= f.end);
+  for (const { rule, scan, whole } of COMPILED) {
+    if (found.some((f) => f.kind === rule.kind)) continue;
+    scan.lastIndex = 0;
     let m: RegExpExecArray | null;
-    while ((m = re.exec(text))) {
+    while ((m = scan.exec(title))) {
       const raw = m[2];
       const start = m.index + m[1].length;
       const end = start + raw.length;
-      if (end === text.length && !options.final) break;
-      if (ignore.has(raw.toLowerCase())) continue;
-      const inner = rule.re.exec(raw);
+      if (!free(start, end) || ignore.has(raw.toLowerCase())) continue;
+      const inner = whole.exec(raw);
       const value = inner ? rule.value(inner, options) : null;
       if (!value) continue;
-      matches.push({ kind: rule.kind, raw, value });
-      if (rule.kind === 'due' && /tonight/i.test(raw) && !matches.some((x) => x.kind === 'time')) {
-        matches.push({ kind: 'time', raw, value: '18:00' });
+      found.push({ kind: rule.kind, raw, value, start, end });
+      if (rule.kind === 'due' && /tonight/i.test(raw) && !found.some((x) => x.kind === 'time')) {
+        found.push({ kind: 'time', raw, value: '18:00', start, end });
       }
-      text = text.slice(0, m.index) + text.slice(end);
       break;
     }
   }
-  if (!matches.length) return { title, matches };
-  let cleaned = text.replace(/\s{2,}/g, ' ').replace(/^\s+/, '').replace(/\s+([,.;!?])/g, '$1');
-  cleaned = options.final ? cleaned.trim() : cleaned;
-  return { title: cleaned, matches };
+  return found.sort((a, b) => a.start - b.start);
 }
 
-/** What a recognised word chip says: "Tomorrow", "5:00 PM", "Sam". */
+/** The title with the matched words taken out: "Cancel Uber One tomorrow" to "Cancel Uber One". */
+export function stripTitleWords(title: string, matches: readonly TitleMatch[]): string {
+  let text = title;
+  const ranges = [...new Map(matches.map((m) => [`${m.start}:${m.end}`, m])).values()].sort((a, b) => b.start - a.start);
+  for (const m of ranges) text = text.slice(0, m.start) + text.slice(m.end);
+  return text.replace(/\s{2,}/g, ' ').replace(/\s+([,.;!?])/g, '$1').replace(/^[\s,]+|[\s,]+$/g, '');
+}
+
+/** What a word's field shows: "Tomorrow", "5:00 PM", "Sam". */
 export function titleMatchLabel(match: TitleMatch, today: string, people: readonly { id: string; name: string }[] = []): string {
   if (match.kind === 'due') return dueValueLabel(match.value, today);
   if (match.kind === 'time') return timeValueLabel(match.value);

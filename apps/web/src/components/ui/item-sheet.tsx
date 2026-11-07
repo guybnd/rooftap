@@ -14,7 +14,7 @@
 
 import * as React from "react";
 import { Dialog as SheetPrimitive } from "@base-ui/react/dialog";
-import { ArrowUp, Check, ChevronRight, CircleAlert, Ellipsis, X, type LucideIcon } from "lucide-react";
+import { ArrowUp, ChevronRight, CircleAlert, Ellipsis, X, type LucideIcon } from "lucide-react";
 import {
   dialog,
   dueQuickChoices,
@@ -45,21 +45,16 @@ export interface ItemSheetQuickField {
   label: string;
   icon?: React.ReactNode;
   set?: boolean;
+  /** Words in the title set this value: the chip lights with them. */
+  lit?: boolean;
   trayLabel: string;
   editor: React.ReactNode;
 }
 
-/**
- * Words in the title that mean a field ("tomorrow" means Due). Pending: still
- * being typed, a click sets it now. Set: the words left the title, a click
- * puts them back.
- */
-export interface ItemSheetTitleMatch {
-  id: string;
-  label: string;
-  icon?: React.ReactNode;
-  pending?: boolean;
-  onPress: () => void;
+/** Words in the title that set a field: lit in place (core matchTitleWords). */
+export interface ItemSheetTitleMark {
+  start: number;
+  end: number;
 }
 
 export interface ItemSheetProps {
@@ -76,7 +71,7 @@ export interface ItemSheetProps {
   titleError?: string | null;
   nudge?: number;
   bandExtra?: React.ReactNode;
-  titleMatches?: ItemSheetTitleMatch[];
+  titleMarks?: readonly ItemSheetTitleMark[];
   quickFields?: ItemSheetQuickField[];
   children: React.ReactNode;
   onSubmit: () => void;
@@ -103,7 +98,7 @@ export function ItemSheet({
   titleError,
   nudge = 0,
   bandExtra,
-  titleMatches,
+  titleMarks,
   quickFields,
   children,
   onSubmit,
@@ -119,6 +114,7 @@ export function ItemSheet({
   const [tray, setTray] = React.useState<string | null>(null);
   const [shaking, setShaking] = React.useState(false);
   const titleRef = React.useRef<HTMLInputElement>(null);
+  const mirrorRef = React.useRef<HTMLDivElement>(null);
   const keyboardInset = useKeyboardInset(open);
 
   // A new open starts on the quick line again.
@@ -240,8 +236,22 @@ export function ItemSheet({
                 </Button>
               )}
             </div>
+            <div className="relative">
+            {/* A mirror under the input draws the lit words; the input on top stays a plain field. */}
+            {!!titleMarks?.length && (
+              <div
+                ref={mirrorRef}
+                aria-hidden
+                className="pointer-events-none absolute inset-0 overflow-hidden whitespace-pre px-4 pb-3 pt-1 font-heading text-2xl font-bold leading-tight text-transparent"
+              >
+                <TitleSpans title={title} marks={titleMarks} />
+              </div>
+            )}
             <input
               ref={titleRef}
+              onScroll={(e) => {
+                if (mirrorRef.current) mirrorRef.current.scrollLeft = e.currentTarget.scrollLeft;
+              }}
               value={title}
               onChange={(e) => onTitleChange(e.target.value)}
               placeholder={titlePlaceholder}
@@ -257,38 +267,14 @@ export function ItemSheet({
                 }
               }}
               onFocus={() => setTray(null)}
-              className="w-full bg-transparent px-4 pb-3 pt-1 font-heading text-2xl font-bold leading-tight text-foreground outline-none placeholder:text-muted-foreground/80"
+              className="relative w-full bg-transparent px-4 pb-3 pt-1 font-heading text-2xl font-bold leading-tight text-foreground outline-none placeholder:text-muted-foreground/80"
             />
+            </div>
             {titleError && (
               <p id="item-sheet-title-error" role="alert" className="flex items-center gap-1.5 px-4 pb-3 text-xs font-medium text-destructive">
                 <CircleAlert className="size-3.5" />
                 {titleError}
               </p>
-            )}
-            {!!titleMatches?.length && (
-              <div className="flex flex-wrap gap-1.5 px-4 pb-3" aria-live="polite">
-                {titleMatches.map((m) => (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => {
-                      tick();
-                      m.onPress();
-                      titleRef.current?.focus();
-                    }}
-                    title={m.pending ? "Take the words out of the title" : "Put the words back in the title"}
-                    aria-label={m.pending ? `Set ${m.label}` : `${m.label}, from the title. Put the words back`}
-                    className={cn(
-                      "inline-flex h-7 items-center gap-1.5 rounded-full pl-2.5 pr-2 text-xs font-medium text-primary outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-                      m.pending ? "border border-dashed border-primary/60" : "bg-primary/10"
-                    )}
-                  >
-                    {m.icon}
-                    {m.label}
-                    {m.pending ? <Check className="size-3" /> : <X className="size-3" />}
-                  </button>
-                ))}
-              </div>
             )}
             {bandExtra}
           </div>
@@ -298,7 +284,7 @@ export function ItemSheet({
               <div className="flex shrink-0 items-center gap-1.5 px-3 py-2">
                 <div className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto [scrollbar-width:none]">
                   {quickFields!.map((f) => (
-                    <Chip key={f.id} label={f.label} icon={f.icon} on={tray === f.id} onClick={() => openTray(f.id)} />
+                    <Chip key={f.id} label={f.label} icon={f.icon} on={tray === f.id} lit={f.lit} onClick={() => openTray(f.id)} />
                   ))}
                   <Chip label="More" icon={<Ellipsis className="size-3.5 text-muted-foreground" />} ghost onClick={grow} title="Show every field" />
                 </div>
@@ -362,10 +348,31 @@ function Kbd({ children }: { children: React.ReactNode }) {
   );
 }
 
+/** The title with the matched words marked, for the mirror under the input. */
+function TitleSpans({ title, marks }: { title: string; marks: readonly ItemSheetTitleMark[] }) {
+  const spans: React.ReactNode[] = [];
+  let at = 0;
+  [...marks]
+    .sort((a, b) => a.start - b.start)
+    .forEach((m, i) => {
+      if (m.start < at) return;
+      if (m.start > at) spans.push(title.slice(at, m.start));
+      spans.push(
+        <mark key={i} data-title-word className="rounded-md bg-primary/15 text-transparent">
+          {title.slice(m.start, m.end)}
+        </mark>
+      );
+      at = m.end;
+    });
+  if (at < title.length) spans.push(title.slice(at));
+  return <>{spans}</>;
+}
+
 function Chip({
   label,
   icon,
   on,
+  lit,
   ghost,
   onClick,
   title,
@@ -373,6 +380,7 @@ function Chip({
   label: string;
   icon?: React.ReactNode;
   on?: boolean;
+  lit?: boolean;
   ghost?: boolean;
   onClick: () => void;
   title?: string;
@@ -385,7 +393,7 @@ function Chip({
       onClick={onClick}
       className={cn(
         "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-medium outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50",
-        on ? "border-primary/45 bg-primary/10 text-primary" : "border-border bg-card text-foreground hover:bg-muted/60",
+        on || lit ? "border-primary/45 bg-primary/10 text-primary" : "border-border bg-card text-foreground hover:bg-muted/60",
         ghost && "border-dashed text-muted-foreground"
       )}
     >

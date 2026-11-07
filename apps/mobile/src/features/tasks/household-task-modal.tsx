@@ -20,7 +20,6 @@ import {
   TimeEditor,
   useClosePropertyRow,
   type ItemSheetQuickField,
-  type ItemSheetTitleMatch,
   type PersonOption,
 } from '@homeup/ui';
 import {
@@ -28,13 +27,13 @@ import {
   itemSheetDrafts,
   itemTitleError,
   matchTitleWords,
+  stripTitleWords,
   personFirstName,
   repeatFollowDue,
   repeatSaveFields,
   repeatValueLabel,
   taskRepeatFields,
   timeValueLabel,
-  titleMatchLabel,
   todayISO,
   useModules,
   type GroupMember,
@@ -67,12 +66,6 @@ interface Draft {
   assignedTo: string | null;
   repeat: TaskRepeatFields;
   notes: string;
-}
-
-/** Words the title gave a field, and what that field held before. */
-interface TakenWords {
-  match: TitleMatch;
-  before: Partial<Draft>;
 }
 
 interface HouseholdTaskModalProps {
@@ -145,100 +138,56 @@ export function HouseholdTaskModal({
 
   const set = (patch: Partial<Draft>) => setForm((f) => ({ ...f, ...patch }));
 
-  // Title words: "tomorrow", "friday", "5pm" or "@sam" in the title set Due,
-  // Time or Who, leave the title, and show as a chip that puts them back.
-  const [taken, setTaken] = React.useState<TakenWords[]>([]);
+  // Title words (Hearth §13.14): a date, time or "@sam" in the title sets
+  // Due, Time or Who while it stays in the title, lit, and Add takes it out.
+  // Picking that field by hand turns the word back into plain text.
   const [ignored, setIgnored] = React.useState<string[]>([]);
   const wordPeople = React.useMemo(
     () => groupMembers.map((m) => ({ id: m.user_id, name: personFirstName(memberLabel(m.user_id, memberProfiles)) })),
     [groupMembers, memberProfiles]
   );
-  const takeWords = (f: Draft, raw: string, final: boolean): { next: Draft; found: TakenWords[] } => {
-    const { title, matches } = matchTitleWords(raw, { today, people: wordPeople, final, ignore: ignored });
-    let next: Draft = { ...f, title };
-    const found: TakenWords[] = [];
-    for (const match of matches) {
-      if (match.kind === 'due') {
-        found.push({ match, before: { dueDate: next.dueDate, repeat: next.repeat } });
-        next = { ...next, dueDate: match.value, repeat: repeatFollowDue(next.repeat, next.dueDate || null, match.value, today, rules) };
-      } else if (match.kind === 'time') {
-        found.push({ match, before: { dueTime: next.dueTime, dueDate: next.dueDate } });
-        next = { ...next, dueTime: match.value, dueDate: next.dueDate || today };
-      } else {
-        found.push({ match, before: { assignedTo: next.assignedTo } });
-        next = { ...next, assignedTo: match.value };
-      }
+  const words =
+    form.title !== initial.current.title ? matchTitleWords(form.title, { today, people: wordPeople, ignore: ignored }) : [];
+  const withWords = (f: Draft): Draft => {
+    let next: Draft = words.length ? { ...f, title: stripTitleWords(f.title, words) } : f;
+    for (const w of words) {
+      if (w.kind === 'due') {
+        next = { ...next, dueDate: w.value, repeat: repeatFollowDue(next.repeat, next.dueDate || null, w.value, today, rules) };
+      } else if (w.kind === 'time') next = { ...next, dueTime: w.value, dueDate: next.dueDate || today };
+      else next = { ...next, assignedTo: w.value };
     }
-    return { next, found };
+    return next;
   };
-  const onTitleChange = (raw: string) => {
-    const { next, found } = takeWords(form, raw, false);
-    setForm(next);
-    if (found.length) setTaken((t) => [...t.filter((x) => !found.some((n) => n.match.kind === x.match.kind)), ...found]);
+  // What the rows and chips show: the form with the title's words applied.
+  const view = withWords(form);
+  const lit = (kind: TitleMatch['kind']) => words.some((w) => w.kind === kind);
+  const keepAsText = (kind: TitleMatch['kind']) => {
+    const raws = words.filter((w) => w.kind === kind).map((w) => w.raw.toLowerCase());
+    if (raws.length) setIgnored((i) => [...i, ...raws]);
   };
-  const putWordsBack = (raw: string) => {
-    const back = taken.filter((t) => t.match.raw === raw);
-    setForm((f) => {
-      let next = { ...f, title: `${f.title.trimEnd()} ${raw}`.trimStart() };
-      for (const t of back) next = { ...next, ...t.before };
-      return next;
-    });
-    setIgnored((i) => [...i, raw.toLowerCase()]);
-    setTaken((t) => t.filter((x) => x.match.raw !== raw));
+  const pickTime = (dueTime: string) => {
+    keepAsText('time');
+    setForm((f) => ({ ...f, dueTime, dueDate: view.dueDate }));
   };
-  const titleMatches: ItemSheetTitleMatch[] = taken
-    .filter((t, i) => taken.findIndex((x) => x.match.raw === t.match.raw) === i)
-    .map((t) => ({
-      id: t.match.raw,
-      label: taken
-        .filter((x) => x.match.raw === t.match.raw)
-        .map((x) => titleMatchLabel(x.match, today, wordPeople))
-        .join(', '),
-      icon:
-        t.match.kind === 'who' ? (
-          <Avatar userId={t.match.value} profiles={memberProfiles} size={18} />
-        ) : t.match.kind === 'time' ? (
-          <Clock size={13} className="text-primary" />
-        ) : (
-          <CalendarDays size={13} className="text-primary" />
-        ),
-      onPress: () => putWordsBack(t.match.raw),
-    }));
-  // Words still being typed at the end of a changed title: shown dashed, and
-  // a tap (or a space, or saving) sets them.
-  const pendingWords =
-    form.title !== initial.current.title
-      ? matchTitleWords(form.title, { today, people: wordPeople, final: true, ignore: ignored }).matches
-      : [];
-  if (pendingWords.length) {
-    titleMatches.push({
-      id: 'pending',
-      label: pendingWords.map((m) => titleMatchLabel(m, today, wordPeople)).join(', '),
-      icon: pendingWords[0].kind === 'who' ? (
-        <Avatar userId={pendingWords[0].value} profiles={memberProfiles} size={18} />
-      ) : pendingWords[0].kind === 'time' ? (
-        <Clock size={13} className="text-primary" />
-      ) : (
-        <CalendarDays size={13} className="text-primary" />
-      ),
-      pending: true,
-      onPress: () => {
-        const { next, found } = takeWords(form, form.title, true);
-        setForm({ ...next, title: next.title ? `${next.title} ` : '' });
-        setTaken((t) => [...t.filter((x) => !found.some((n) => n.match.kind === x.match.kind)), ...found]);
-      },
-    });
-  }
+  const pickWho = (assignedTo: string | null) => {
+    keepAsText('who');
+    set({ assignedTo });
+  };
+  // A repeat picked while a date word is lit keeps that date.
+  const pickRepeat = (repeat: TaskRepeatFields) => setForm((f) => ({ ...f, repeat, dueDate: view.dueDate }));
+
   // Moving the date keeps a picked repeat on the same pattern ("Weekly on
   // Sunday" becomes "Weekly on Monday"); a custom rule stays as it is.
   // Clearing the date clears the time too.
-  const setDue = (next: string) =>
+  const setDue = (next: string) => {
+    keepAsText('due');
     setForm((f) => ({
       ...f,
       dueDate: next,
-      dueTime: next ? f.dueTime : '',
-      repeat: repeatFollowDue(f.repeat, f.dueDate || null, next || null, today, rules),
+      dueTime: next ? view.dueTime : '',
+      repeat: repeatFollowDue(view.repeat, view.dueDate || null, next || null, today, rules),
     }));
+  };
 
   const build = (f: Draft): HouseholdTask => {
     // A repeating task with no date starts on its rule's first day.
@@ -275,8 +224,8 @@ export function HouseholdTaskModal({
   };
 
   const submit = () => {
-    // Words still at the end of a changed title count as it saves.
-    const final = form.title !== initial.current.title ? takeWords(form, form.title, true).next : form;
+    // The title's words leave it as it saves.
+    const final = view;
     if (task) {
       // Editing saves as it closes. An emptied title keeps the old one.
       const f = final.title.trim() ? final : { ...final, title: task.title };
@@ -312,26 +261,28 @@ export function HouseholdTaskModal({
     ],
     [groupMembers, memberProfiles]
   );
-  const whoLabel = form.assignedTo ? personFirstName(memberLabel(form.assignedTo, memberProfiles)) : 'Anyone';
+  const whoLabel = view.assignedTo ? personFirstName(memberLabel(view.assignedTo, memberProfiles)) : 'Anyone';
   const whoFace = (size: number) =>
-    form.assignedTo ? <Avatar userId={form.assignedTo} profiles={memberProfiles} size={size} /> : <AnyoneFace size={size} />;
+    view.assignedTo ? <Avatar userId={view.assignedTo} profiles={memberProfiles} size={size} /> : <AnyoneFace size={size} />;
 
   const quickFields: ItemSheetQuickField[] = [
     {
       id: 'due',
-      label: dueValueLabel(form.dueDate, today),
+      label: dueValueLabel(view.dueDate, today),
       icon: <CalendarDays size={14} className="text-muted-foreground" />,
-      set: !!form.dueDate,
+      set: !!view.dueDate,
+      lit: lit('due') || lit('time'),
       trayLabel: 'Due',
-      editor: <DueEditor value={form.dueDate} onChange={setDue} />,
+      editor: <DueEditor value={view.dueDate} onChange={setDue} />,
     },
     {
       id: 'who',
       label: whoLabel,
       icon: whoFace(18),
-      set: !!form.assignedTo,
+      set: !!view.assignedTo,
+      lit: lit('who'),
       trayLabel: 'Who',
-      editor: <WhoEditor people={people} value={form.assignedTo ?? ''} onChange={(id) => set({ assignedTo: id || null })} />,
+      editor: <WhoEditor people={people} value={view.assignedTo ?? ''} onChange={(id) => pickWho(id || null)} />,
     },
   ];
 
@@ -348,8 +299,8 @@ export function HouseholdTaskModal({
       heading={task ? 'To-do' : 'New to-do'}
       caption="Household"
       title={form.title}
-      onTitleChange={onTitleChange}
-      titleMatches={titleMatches}
+      onTitleChange={(title) => set({ title })}
+      titleMarks={words}
       titlePlaceholder="What needs doing?"
       titleError={itemTitleError(form.title, attempted)}
       nudge={nudge}
@@ -363,25 +314,25 @@ export function HouseholdTaskModal({
     >
       <PropertyRows>
         <PropertyGroup>
-          <PropertyRow id="due" leading={<PropertyIcon Icon={CalendarDays} />} label="Due" value={dueValueLabel(form.dueDate, today)} valueSet={!!form.dueDate}>
-            <DueEditor value={form.dueDate} onChange={setDue} />
+          <PropertyRow id="due" leading={<PropertyIcon Icon={CalendarDays} />} label="Due" value={dueValueLabel(view.dueDate, today)} valueSet={!!view.dueDate}>
+            <DueEditor value={view.dueDate} onChange={setDue} />
           </PropertyRow>
-          {!!form.dueDate && (
-            <PropertyRow id="time" leading={<PropertyIcon Icon={Clock} />} label="Time" value={timeValueLabel(form.dueTime)} valueSet={!!form.dueTime}>
-              <TimeEditor value={form.dueTime} onChange={(dueTime) => set({ dueTime })} />
+          {!!view.dueDate && (
+            <PropertyRow id="time" leading={<PropertyIcon Icon={Clock} />} label="Time" value={timeValueLabel(view.dueTime)} valueSet={!!view.dueTime}>
+              <TimeEditor value={view.dueTime} onChange={(dueTime) => pickTime(dueTime)} />
             </PropertyRow>
           )}
-          <PropertyRow id="who" leading={whoFace(28)} label="Who" value={whoLabel} valueSet={!!form.assignedTo}>
-            <WhoEditor people={people} value={form.assignedTo ?? ''} onChange={(id) => set({ assignedTo: id || null })} />
+          <PropertyRow id="who" leading={whoFace(28)} label="Who" value={whoLabel} valueSet={!!view.assignedTo}>
+            <WhoEditor people={people} value={view.assignedTo ?? ''} onChange={(id) => pickWho(id || null)} />
           </PropertyRow>
           <PropertyRow
             id="repeat"
             leading={<PropertyIcon Icon={Repeat} />}
             label="Repeat"
-            value={repeatValueLabel(form.repeat)}
-            valueSet={!!form.repeat.recurrence_days}
+            value={repeatValueLabel(view.repeat)}
+            valueSet={!!view.repeat.recurrence_days}
           >
-            <RepeatField inline value={form.repeat} dueDate={form.dueDate || null} rules={rules} onChange={(repeat) => set({ repeat })} />
+            <RepeatField inline value={view.repeat} dueDate={view.dueDate || null} rules={rules} onChange={pickRepeat} />
           </PropertyRow>
           <PropertyRow
             id="priority"

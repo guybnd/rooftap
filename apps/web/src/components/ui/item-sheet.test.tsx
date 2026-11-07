@@ -23,7 +23,7 @@ describe("ItemSheet", () => {
   const button = (name: string) =>
     Array.from(document.querySelectorAll("button")).find((b) => (b.getAttribute("aria-label") ?? b.textContent) === name);
 
-  async function render(mode: "add" | "edit", onSubmit = vi.fn(), onUndo = vi.fn()) {
+  async function render(mode: "add" | "edit", onSubmit = vi.fn(), titleText = "") {
     await act(async () => {
       root.render(
         <ItemSheet
@@ -31,9 +31,9 @@ describe("ItemSheet", () => {
           onOpenChange={() => {}}
           mode={mode}
           heading="New to-do"
-          title=""
           onTitleChange={() => {}}
-          titleMatches={[{ id: "tomorrow", label: "Tomorrow", onPress: onUndo }, { id: "friday", label: "Fri", pending: true, onPress: onUndo }]}
+          title={titleText}
+          titleMarks={titleText ? [{ start: 9, end: 17 }] : undefined}
           titlePlaceholder="What needs doing?"
           quickFields={[{ id: "due", label: "Today", trayLabel: "Due", editor: <p>due editor</p> }]}
           onSubmit={onSubmit}
@@ -80,12 +80,9 @@ describe("ItemSheet", () => {
     expect(onSubmit).toHaveBeenCalledTimes(1);
   });
 
-  it("shows words the title set or is about to set", async () => {
-    const onUndo = vi.fn();
-    await render("add", vi.fn(), onUndo);
-    await act(async () => button("Tomorrow, from the title. Put the words back")!.click());
-    expect(onUndo).toHaveBeenCalledTimes(1);
-    await act(async () => button("Set Fri")!.click());
-    expect(onUndo).toHaveBeenCalledTimes(2);
+  it("lights the words in the title that set a field", async () => {
+    await render("add", vi.fn(), "Bins out tomorrow");
+    const marks = Array.from(document.querySelectorAll("[data-title-word]"));
+    expect(marks.map((m) => m.textContent)).toEqual(["tomorrow"]);
   });
 });

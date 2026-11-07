@@ -17,12 +17,13 @@ import {
   Keyboard,
   Pressable,
   ScrollView,
+  Text as RNText,
   TextInput,
   useWindowDimensions,
   View,
   type KeyboardEvent,
 } from 'react-native';
-import { Check, ChevronRight, CircleAlert, Ellipsis, ArrowUp, X, type LucideIcon } from 'lucide-react-native';
+import { ChevronRight, CircleAlert, Ellipsis, ArrowUp, X, type LucideIcon } from 'lucide-react-native';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -68,24 +69,17 @@ export interface ItemSheetQuickField {
   icon?: React.ReactNode;
   /** The value differs from "nothing set" (draws the chip in its set state). */
   set?: boolean;
+  /** Words in the title set this value: the chip lights with them. */
+  lit?: boolean;
   /** The tray's heading ("Due"). */
   trayLabel: string;
   editor: React.ReactNode;
 }
 
-/**
- * Words in the title that mean a field ("tomorrow" means Due), shown under
- * the title. A pending match is still being typed (no space after it yet):
- * tapping sets it now. A set match took its words out of the title: tapping
- * puts them back.
- */
-export interface ItemSheetTitleMatch {
-  id: string;
-  /** "Tomorrow". */
-  label: string;
-  icon?: React.ReactNode;
-  pending?: boolean;
-  onPress: () => void;
+/** Words in the title that set a field: lit in place (core matchTitleWords). */
+export interface ItemSheetTitleMark {
+  start: number;
+  end: number;
 }
 
 export interface ItemSheetProps {
@@ -111,7 +105,8 @@ export interface ItemSheetProps {
   /** Extra band content under the title (a Hero amount, a count). */
   bandExtra?: React.ReactNode;
   /** Fields the title's words set (core matchTitleWords). */
-  titleMatches?: ItemSheetTitleMatch[];
+  /** Words in the title that set a field, drawn lit on the words themselves. */
+  titleMarks?: readonly ItemSheetTitleMark[];
   /** The quick line's chips. Without them an add opens on the list. */
   quickFields?: ItemSheetQuickField[];
   /** The list: PropertyGroups. */
@@ -141,7 +136,7 @@ export function ItemSheet({
   titleError,
   nudge = 0,
   bandExtra,
-  titleMatches,
+  titleMarks,
   quickFields,
   children,
   onSubmit,
@@ -305,7 +300,8 @@ export function ItemSheet({
           </View>
           <TextInput
             ref={titleRef}
-            value={title}
+            // The text comes as spans (not `value`) so title words can light
+            // up; always spans, so the field never swaps modes mid-typing.
             onChangeText={onTitleChange}
             placeholder={titlePlaceholder}
             accessibilityLabel={heading}
@@ -316,43 +312,14 @@ export function ItemSheet({
             onSubmitEditing={editing ? undefined : submit}
             onFocus={() => setTray(null)}
             className="px-4 pb-3 pt-1 font-heading text-display text-foreground placeholder:text-muted-foreground"
-          />
+          >
+            <TitleSpans title={title} marks={titleMarks ?? []} />
+          </TextInput>
           {!!titleError && (
             <View className="flex-row items-center gap-1.5 px-4 pb-3" accessibilityLiveRegion="polite">
               <CircleAlert size={14} className="text-destructive" />
               <Text className="text-caption font-medium text-destructive">{titleError}</Text>
             </View>
-          )}
-          {!!titleMatches?.length && (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-              contentContainerClassName="gap-1.5 px-4 pb-3"
-              accessibilityLiveRegion="polite"
-            >
-              {titleMatches.map((m) => (
-                <Pressable
-                  key={m.id}
-                  accessibilityRole="button"
-                  accessibilityLabel={m.pending ? `Set ${m.label}` : `${m.label}, from the title`}
-                  accessibilityHint={m.pending ? 'Takes the words out of the title' : 'Puts the words back in the title'}
-                  onPress={() => {
-                    tick();
-                    m.onPress();
-                  }}
-                  hitSlop={{ top: 6, bottom: 6 }}
-                  className={cn(
-                    'h-8 flex-row items-center gap-1.5 rounded-full pl-2.5 pr-2',
-                    m.pending ? 'border border-dashed border-primary/60' : 'bg-primary/10'
-                  )}
-                >
-                  {m.icon}
-                  <Text className="text-caption font-medium text-primary">{m.label}</Text>
-                  {m.pending ? <Check size={13} className="text-primary" /> : <X size={13} className="text-primary" />}
-                </Pressable>
-              ))}
-            </ScrollView>
           )}
           {bandExtra}
         </Animated.View>
@@ -363,7 +330,7 @@ export function ItemSheet({
             <View className="flex-row items-center gap-1.5 px-3 py-2">
               <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerClassName="gap-1.5 pr-2">
                 {quickFields!.map((f) => (
-                  <Chip key={f.id} label={f.label} icon={f.icon} on={tray === f.id} set={f.set} onPress={() => openTray(f.id)} />
+                  <Chip key={f.id} label={f.label} icon={f.icon} on={tray === f.id} lit={f.lit} set={f.set} onPress={() => openTray(f.id)} />
                 ))}
                 <Chip label="More" icon={<Ellipsis size={14} className="text-muted-foreground" />} ghost onPress={grow} accessibilityHint="Shows every field" />
               </ScrollView>
@@ -418,10 +385,31 @@ export function ItemSheet({
   );
 }
 
+/** The title as spans, with the matched words lit like their chip. */
+function TitleSpans({ title, marks }: { title: string; marks: readonly ItemSheetTitleMark[] }) {
+  const spans: React.ReactNode[] = [];
+  let at = 0;
+  [...marks]
+    .sort((a, b) => a.start - b.start)
+    .forEach((m, i) => {
+      if (m.start < at) return;
+      if (m.start > at) spans.push(title.slice(at, m.start));
+      spans.push(
+        <RNText key={i} className="bg-primary/15 text-primary">
+          {title.slice(m.start, m.end)}
+        </RNText>
+      );
+      at = m.end;
+    });
+  if (at < title.length) spans.push(title.slice(at));
+  return <>{spans}</>;
+}
+
 function Chip({
   label,
   icon,
   on,
+  lit,
   set,
   ghost,
   onPress,
@@ -430,6 +418,7 @@ function Chip({
   label: string;
   icon?: React.ReactNode;
   on?: boolean;
+  lit?: boolean;
   set?: boolean;
   ghost?: boolean;
   onPress: () => void;
@@ -444,14 +433,14 @@ function Chip({
       hitSlop={{ top: 6, bottom: 6 }}
       className={cn(
         'h-9 flex-row items-center gap-1.5 rounded-full border px-3',
-        on ? 'border-primary/45 bg-primary/10' : 'border-border bg-card',
+        on || lit ? 'border-primary/45 bg-primary/10' : 'border-border bg-card',
         ghost && 'border-dashed'
       )}
     >
       {icon}
       <Text
         numberOfLines={1}
-        className={cn('text-caption font-medium', on ? 'text-primary' : set || !ghost ? 'text-foreground' : 'text-muted-foreground')}
+        className={cn('text-caption font-medium', on || lit ? 'text-primary' : set || !ghost ? 'text-foreground' : 'text-muted-foreground')}
       >
         {label}
       </Text>
