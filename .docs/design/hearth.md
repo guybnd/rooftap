@@ -370,3 +370,15 @@ The sign-in, server and no-household screens open with the Rooftap mark on its d
 
 ### 13.13 Big launches, crashes and offline (Guy, 2026-11-07)
 A big-launch card in What's new sits on the ground under the module's glow, with no card around it: the module's tile, "New in" the module, the title and the body. When the entry has a link, a "Show me" row led by the module's tile opens it. Next stays the one button. The crash screen leads with the Rooftap tile, says the person's data is safe, and keeps its actions in one group: get the fix (or reload on web), try again, and "What we sent", which opens the report. Offline is a small chip at the top of the screen, never a band: it takes no room, so nothing below moves. On web the same chip counts the changes waiting to sync, then says Synced once they land. A change the server refused still shows as an alert, since that one needs the person.
+
+### 13.14 The item sheet (Guy, 2026-11-07)
+Every add and edit sheet is one component, `ItemSheet` (packages/ui on the phone, `components/ui/item-sheet.tsx` on web). Its logic is core's `item-sheet.ts`. It follows E1-E4.
+
+- **Band.** The top of the sheet is a band in `--muted` at 50%. It holds the section tile, the heading ("New to-do", "To-do") with one caption line, and the title in the Display step. The title is the sheet's lede (H1). A Hero amount or a count can sit under the title.
+- **Quick line.** An add opens on the quick line: the title, and two or three chips on the keyboard for the fields people set most. A chip swaps the keyboard for its editor, in a tray the same height as the keyboard. "More" grows the sheet into the list. Return adds.
+- **List.** One `ListGroup` of `PropertyRow`s. A row shows its value on the right (E2) and opens its editor under itself on a muted inset (E3). One row is open at a time. A three-way choice sits in the row as a segment and never opens. Property rows lead with a neutral tile, because section hues are identity (H2).
+- **Editors.** Due: quick dates, a week strip with Earlier, Later and Month. Time: named times, then the wheel. Who: faces to tap. Repeat: the repeat choices as chips, then Custom. Picks fire `tick()`. A pick that is final, such as a person, closes the row.
+- **Saving.** An add needs Add. An edit has no Save: Done, Esc, the backdrop, a drag and Back all save the changes. An emptied title keeps the old one.
+- **Problems.** The Add button stays live. With no title, Add fires `warn()`, nudges the band once (reduced motion: no nudge), draws its bottom edge in `--destructive` and says "Give it a name first" under the title. The message goes as soon as there is text.
+- **Drafts.** An add sheet that closes with a title keeps it as a draft for the session, and the next blank add brings it back. No dialog asks first.
+- **Desktop.** At 1024px and wider the sheet docks on the right as a panel, and the board stays in view. A line at the foot says which keys add and close.

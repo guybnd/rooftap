@@ -9,7 +9,7 @@ import { memberLabel, memberAvatar, isFormerMember } from './member-label';
 
 type MemberProfiles = Record<string, { email: string; name: string | null; avatar: string | null }>;
 
-function Avatar({
+export function Avatar({
   userId,
   profiles,
   size = 24,

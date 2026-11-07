@@ -1,32 +1,37 @@
-// HOUP-120: native add/edit sheet for a household task, brought to parity
-// with apps/web/src/app/tasks/household-task-modal.tsx — refactored onto
-// `ItemFormSheet` (gets the live preview header + a consistent
-// delete/cancel/save footer for free instead of a hand-rolled one), the
-// Repeat field (./repeat-field: Google Calendar style rules), assignee reassignment via the new
-// `AssigneePicker` (needs `groupMembers`/`memberProfiles`, both now exposed
-// by `useDataCache()`), and a destructive-confirm on Delete (Hearth M4:
-// "center dialogs only for destructive confirms" — `dialog.alert` is this
-// codebase's established native confirm surface, see
-// apps/mobile/src/app/(tabs)/documents/index.tsx's delete flow).
+// The to-do sheet on the phone, on the shared ItemSheet (Hearth §7): adding
+// opens the quick line (title, Due and Who chips on the keyboard, More for
+// the rest); editing opens the list and saves as it closes. Web twin:
+// apps/web/src/app/tasks/household-task-modal.tsx. The Repeat field
+// (./repeat-field) keeps its Google Calendar style rules.
 import * as React from 'react';
-import { View } from 'react-native';
+import { TextInput, View } from 'react-native';
+import { StickyNote, CalendarDays, Clock, Flag, Repeat, UserRound } from 'lucide-react-native';
 import {
-  Text,
-  AssigneePicker,
-  Button,
-  DateScrollField,
-  FieldRow,
-  Input,
-  ItemFormSheet,
+  Avatar,
+  DueEditor,
+  ItemSheet,
+  memberLabel,
+  PeoplePicker,
+  PropertyGroup,
+  PropertyIcon,
+  PropertyRow,
+  PropertyRows,
   SegmentedControl,
-  TimeScrollField,
+  TimeEditor,
+  useClosePropertyRow,
+  type ItemSheetQuickField,
+  type PersonOption,
 } from '@homeup/ui';
 import {
-  addDaysISO,
-  dueDayLabel,
+  dueValueLabel,
+  itemSheetDrafts,
+  itemTitleError,
+  personFirstName,
   repeatFollowDue,
   repeatSaveFields,
+  repeatValueLabel,
   taskRepeatFields,
+  timeValueLabel,
   todayISO,
   useModules,
   type GroupMember,
@@ -37,26 +42,28 @@ import { RepeatField } from './repeat-field';
 import { randomUUID } from '@/lib/uuid';
 import { sectionIconFor } from '@/lib/section-icons';
 
-// Hearth v2 (E1): the sheet header wears the section's identity tile.
+// Hearth v2 (E1): the sheet's band wears the section's identity tile.
 const HOUSEHOLD_SECTION = { id: 'household', Icon: sectionIconFor('household') };
+const DRAFT_KEY = 'household-task';
 
 type Priority = 'low' | 'medium' | 'high';
 type MemberProfiles = Record<string, { email: string; name: string | null; avatar: string | null }>;
 
 const PRIORITY_OPTIONS: { value: Priority; label: string }[] = [
   { value: 'low', label: 'Low' },
-  { value: 'medium', label: 'Med' },
+  { value: 'medium', label: 'Normal' },
   { value: 'high', label: 'High' },
 ];
-const PRIORITY_LABEL: Record<Priority, string> = { low: 'Low', medium: 'Med', high: 'High' };
 
-// Live preview of the priority in the sheet header: a tinted word like the
-// row's meta, never a filled pill (Hearth §6). Mirrors web.
-const PRIORITY_WORD: Record<Priority, string> = {
-  low: 'text-muted-foreground',
-  medium: 'text-warning',
-  high: 'text-destructive',
-};
+interface Draft {
+  title: string;
+  dueDate: string;
+  dueTime: string;
+  priority: Priority;
+  assignedTo: string | null;
+  repeat: TaskRepeatFields;
+  notes: string;
+}
 
 interface HouseholdTaskModalProps {
   open: boolean;
@@ -89,199 +96,240 @@ export function HouseholdTaskModal({
   onSave,
   onDelete,
 }: HouseholdTaskModalProps) {
-  // The caller remounts this component on `task?.id ?? 'new'` (mirrors
-  // apps/mobile/src/app/costs/cost-modal.tsx), so these initializers alone
-  // are enough to re-seed the form — no resync effect needed.
-  const [title, setTitle] = React.useState(task?.title ?? defaultTitle ?? '');
-  // A new to-do starts due today (matches the web modal); Clear still leaves
-  // it undated. An edited task keeps its saved date, including none.
-  const [dueDate, setDueDate] = React.useState(task ? task.due_date ?? '' : initialDueDate || todayISO());
-  const [dueTime, setDueTime] = React.useState(task?.due_time?.slice(0, 5) ?? initialDueTime ?? '');
-  const [priority, setPriority] = React.useState<Priority>((task?.priority ?? 'medium') as Priority);
-  // Only default to self when creating — an edited task that's explicitly
-  // Unassigned (assigned_to === null) must stay Unassigned (mirrors the web
-  // modal's `isNew` gate at apps/web/src/app/tasks/household-task-modal.tsx:82).
-  const [assignedTo, setAssignedTo] = React.useState<string | null>(
-    task?.assigned_to ?? (task ? null : currentUserId ?? null)
-  );
-  // FLUX-182/HOUP-189: "Does not repeat" unless the task already repeats.
-  // repeat_rule rides along only when the row has it, so an older server never sees it.
   const rules = useModules().server('tasks.repeat-rules');
-  const [repeat, setRepeat] = React.useState<TaskRepeatFields>(() =>
-    task ? taskRepeatFields(task) : { recurrence_days: null }
-  );
+  const today = todayISO();
+
+  // The caller remounts this component on `task?.id ?? 'new'`, so the
+  // initializer alone seeds the form. A blank add picks up a kept draft.
+  const [form, setForm] = React.useState<Draft>(() => {
+    if (task) {
+      return {
+        title: task.title,
+        dueDate: task.due_date ?? '',
+        dueTime: task.due_time?.slice(0, 5) ?? '',
+        priority: (task.priority ?? 'medium') as Priority,
+        // An edited task that is Unassigned stays Unassigned.
+        assignedTo: task.assigned_to ?? null,
+        repeat: taskRepeatFields(task),
+        notes: task.notes ?? '',
+      };
+    }
+    const prefilled = defaultTitle != null || initialDueDate != null || initialDueTime != null;
+    const kept = prefilled ? undefined : itemSheetDrafts.get<Draft>(DRAFT_KEY);
+    return (
+      kept ?? {
+        title: defaultTitle ?? '',
+        // A new to-do starts due today, for whoever opened it.
+        dueDate: initialDueDate || today,
+        dueTime: initialDueTime ?? '',
+        priority: 'medium',
+        assignedTo: currentUserId ?? null,
+        repeat: { recurrence_days: null },
+        notes: '',
+      }
+    );
+  });
+  const initial = React.useRef(form);
+  const [attempted, setAttempted] = React.useState(false);
+  const [nudge, setNudge] = React.useState(0);
+
+  const set = (patch: Partial<Draft>) => setForm((f) => ({ ...f, ...patch }));
   // Moving the date keeps a picked repeat on the same pattern ("Weekly on
   // Sunday" becomes "Weekly on Monday"); a custom rule stays as it is.
-  const changeDue = (next: string) => {
-    setRepeat((r) => repeatFollowDue(r, dueDate || null, next || null, todayISO(), rules));
-    setDueDate(next);
-  };
-  const [notes, setNotes] = React.useState(task?.notes ?? '');
+  // Clearing the date clears the time too.
+  const setDue = (next: string) =>
+    setForm((f) => ({
+      ...f,
+      dueDate: next,
+      dueTime: next ? f.dueTime : '',
+      repeat: repeatFollowDue(f.repeat, f.dueDate || null, next || null, today, rules),
+    }));
 
-  const canSave = title.trim().length > 0;
-
-  const save = () => {
-    if (!canSave) return;
+  const build = (f: Draft): HouseholdTask => {
     // A repeating task with no date starts on its rule's first day.
-    const { due_date: finalDueDate, ...repeatFields } = repeatSaveFields(repeat, dueDate || null, todayISO());
-    const finalDueTime = finalDueDate ? dueTime || null : null;
-    // Detach from the moving template when the date changed by hand — it's
-    // now the user's own date (mirrors the web modal's same rule).
-    const detach = !!task?.template_key && task.offset_days != null && finalDueDate !== task.due_date;
-
+    const { due_date, ...repeatFields } = repeatSaveFields(f.repeat, f.dueDate || null, today);
+    const due_time = due_date ? f.dueTime || null : null;
+    const fields = {
+      title: f.title.trim(),
+      due_date,
+      due_time,
+      priority: f.priority,
+      assigned_to: f.assignedTo,
+      ...repeatFields,
+      notes: f.notes.trim() || null,
+    };
     if (task) {
-      onSave({
-        ...task,
-        title: title.trim(),
-        due_date: finalDueDate,
-        due_time: finalDueTime,
-        priority,
-        assigned_to: assignedTo,
-        ...repeatFields,
-        notes: notes.trim() || null,
-        ...(detach ? { template_key: null, offset_days: null } : {}),
-      });
-    } else {
-      onSave({
-        id: randomUUID(),
-        group_id: groupId,
-        title: title.trim(),
-        due_date: finalDueDate,
-        due_time: finalDueTime,
-        offset_days: null,
-        ...repeatFields,
-        done: false,
-        completed_at: null,
-        assigned_to: assignedTo,
-        private: false,
-        template_key: null,
-        notes: notes.trim() || null,
-        sort_order: 0,
-        priority,
-        deleted: false,
-        created_at: null as unknown as string,
-        updated_at: null as unknown as string,
-      });
+      // Detach from the moving template when the date changed by hand.
+      const detach = !!task.template_key && task.offset_days != null && due_date !== task.due_date;
+      return { ...task, ...fields, ...(detach ? { template_key: null, offset_days: null } : {}) };
     }
+    return {
+      id: randomUUID(),
+      group_id: groupId,
+      ...fields,
+      offset_days: null,
+      done: false,
+      completed_at: null,
+      private: false,
+      template_key: null,
+      sort_order: 0,
+      deleted: false,
+      created_at: null as unknown as string,
+      updated_at: null as unknown as string,
+    };
   };
 
-  const requestDelete = () => {
-    if (!task || !onDelete) return;
-    onDelete(task.id);
+  const submit = () => {
+    if (task) {
+      // Editing saves as it closes. An emptied title keeps the old one.
+      const f = form.title.trim() ? form : { ...form, title: task.title };
+      if (JSON.stringify(f) === JSON.stringify(initial.current)) onClose();
+      else onSave(build(f));
+      return;
+    }
+    if (!form.title.trim()) {
+      setAttempted(true);
+      setNudge((n) => n + 1);
+      return;
+    }
+    itemSheetDrafts.clear(DRAFT_KEY);
+    onSave(build(form));
+  };
+
+  const closeAdd = () => {
+    // Typing is never lost to a stray swipe: the draft waits for the next add.
+    const touched = JSON.stringify(form) !== JSON.stringify(initial.current);
+    if (form.title.trim() && touched) itemSheetDrafts.set(DRAFT_KEY, form);
+    else if (!form.title.trim()) itemSheetDrafts.clear(DRAFT_KEY);
     onClose();
   };
 
+  const people = React.useMemo<PersonOption[]>(
+    () => [
+      { id: '', name: 'Anyone', face: <AnyoneFace /> },
+      ...groupMembers.map((m) => ({
+        id: m.user_id,
+        name: personFirstName(memberLabel(m.user_id, memberProfiles)),
+        face: <Avatar userId={m.user_id} profiles={memberProfiles} size={34} />,
+      })),
+    ],
+    [groupMembers, memberProfiles]
+  );
+  const whoLabel = form.assignedTo ? personFirstName(memberLabel(form.assignedTo, memberProfiles)) : 'Anyone';
+  const whoFace = (size: number) =>
+    form.assignedTo ? <Avatar userId={form.assignedTo} profiles={memberProfiles} size={size} /> : <AnyoneFace size={size} />;
+
+  const quickFields: ItemSheetQuickField[] = [
+    {
+      id: 'due',
+      label: dueValueLabel(form.dueDate, today),
+      icon: <CalendarDays size={14} className="text-muted-foreground" />,
+      set: !!form.dueDate,
+      trayLabel: 'Due',
+      editor: <DueEditor value={form.dueDate} onChange={setDue} />,
+    },
+    {
+      id: 'who',
+      label: whoLabel,
+      icon: whoFace(18),
+      set: !!form.assignedTo,
+      trayLabel: 'Who',
+      editor: <WhoEditor people={people} value={form.assignedTo ?? ''} onChange={(id) => set({ assignedTo: id || null })} />,
+    },
+  ];
+
+  const firstNoteLine = form.notes.trim().split('\n')[0];
+
   return (
-    <ItemFormSheet
-      section={HOUSEHOLD_SECTION}
+    <ItemSheet
       open={open}
-      onOpenChange={(next) => { if (!next) onClose(); }}
-      title={task ? 'Edit task' : 'Add to-do'}
-      previewContent={
-        <>
-          <Text numberOfLines={1} className="min-w-0 flex-1 text-sm font-medium text-foreground">
-            {title.trim() || (task ? 'Edit task' : 'Add to-do')}
-          </Text>
-          {!!dueDate && <Text className="shrink-0 text-xs text-muted-foreground">{dueDayLabel(dueDate)}</Text>}
-          <Text className={`shrink-0 text-xs font-medium ${PRIORITY_WORD[priority]}`}>{PRIORITY_LABEL[priority]}</Text>
-        </>
-      }
-      onSubmit={save}
-      canSubmit={canSave}
-      onDelete={task && onDelete ? requestDelete : undefined}
+      onOpenChange={(next) => {
+        if (!next) closeAdd();
+      }}
+      mode={task ? 'edit' : 'add'}
+      section={HOUSEHOLD_SECTION}
+      heading={task ? 'To-do' : 'New to-do'}
+      caption="Household"
+      title={form.title}
+      onTitleChange={(title) => set({ title })}
+      titlePlaceholder="What needs doing?"
+      titleError={itemTitleError(form.title, attempted)}
+      nudge={nudge}
+      quickFields={quickFields}
+      onSubmit={submit}
+      submitLabel="Add to-do"
+      onDelete={task && onDelete ? () => { onDelete(task.id); onClose(); } : undefined}
+      deleteLabel="Delete to-do"
       deleteConfirmTitle={task ? `Delete "${task.title}"?` : undefined}
       deleteConfirmMessage="This removes it from the list."
     >
-      <FieldRow label="Task">
-        <Input value={title} onChangeText={setTitle} placeholder="e.g., Change electricity over" autoFocus />
-      </FieldRow>
-
-      <FieldRow
-        label="Due date"
-        action={
-          !!dueDate && (
-            <Button variant="ghost" size="xs" onPress={() => { changeDue(''); setDueTime(''); }}>
-              Clear
-            </Button>
-          )
-        }
-      >
-        <View className="gap-1.5">
-          <View className="flex-row flex-wrap gap-1.5">
-            {[
-              { label: 'Today', value: todayISO() },
-              { label: 'Tomorrow', value: addDaysISO(todayISO(), 1) },
-              { label: 'Next week', value: addDaysISO(todayISO(), 7) },
-            ].map((chip) => (
-              <Button
-                key={chip.label}
-                variant={dueDate === chip.value ? 'default' : 'outline'}
-                size="xs"
-                onPress={() => changeDue(chip.value)}
-              >
-                {chip.label}
-              </Button>
-            ))}
-          </View>
-          <View className="rounded-lg border border-border bg-muted/30 py-2">
-            <DateScrollField value={dueDate} onChange={changeDue} />
-          </View>
-        </View>
-      </FieldRow>
-
-      {!!dueDate && (
-        <FieldRow
-          label="Time"
-          action={
-            !!dueTime && (
-              <Button variant="ghost" size="xs" onPress={() => setDueTime('')}>
-                Clear time
-              </Button>
-            )
-          }
-        >
-          {dueTime ? (
-            <View className="rounded-lg border border-border bg-muted/30 py-2">
-              <TimeScrollField value={dueTime} onChange={setDueTime} />
-            </View>
-          ) : (
-            <Button variant="outline" onPress={() => setDueTime('09:00')}>
-              + Add a time
-            </Button>
+      <PropertyRows>
+        <PropertyGroup>
+          <PropertyRow id="due" leading={<PropertyIcon Icon={CalendarDays} />} label="Due" value={dueValueLabel(form.dueDate, today)} valueSet={!!form.dueDate}>
+            <DueEditor value={form.dueDate} onChange={setDue} />
+          </PropertyRow>
+          {!!form.dueDate && (
+            <PropertyRow id="time" leading={<PropertyIcon Icon={Clock} />} label="Time" value={timeValueLabel(form.dueTime)} valueSet={!!form.dueTime}>
+              <TimeEditor value={form.dueTime} onChange={(dueTime) => set({ dueTime })} />
+            </PropertyRow>
           )}
-        </FieldRow>
-      )}
-
-      <FieldRow label="Assignee">
-        <AssigneePicker
-          value={assignedTo}
-          groupMembers={groupMembers}
-          memberProfiles={memberProfiles}
-          currentUserId={currentUserId}
-          onChange={(userId) => setAssignedTo(userId || null)}
-          showLabel
-        />
-      </FieldRow>
-
-      <FieldRow label="Priority">
-        <SegmentedControl options={PRIORITY_OPTIONS} value={priority} onChange={setPriority} />
-      </FieldRow>
-
-      <FieldRow label="Repeat">
-        <RepeatField value={repeat} dueDate={dueDate || null} rules={rules} onChange={setRepeat} />
-      </FieldRow>
-
-      <FieldRow label="Notes">
-        <Input
-          value={notes}
-          onChangeText={setNotes}
-          placeholder="Any additional details..."
-          multiline
-          numberOfLines={3}
-          className="h-20 py-2"
-          textAlignVertical="top"
-        />
-      </FieldRow>
-    </ItemFormSheet>
+          <PropertyRow id="who" leading={whoFace(28)} label="Who" value={whoLabel} valueSet={!!form.assignedTo}>
+            <WhoEditor people={people} value={form.assignedTo ?? ''} onChange={(id) => set({ assignedTo: id || null })} />
+          </PropertyRow>
+          <PropertyRow
+            id="repeat"
+            leading={<PropertyIcon Icon={Repeat} />}
+            label="Repeat"
+            value={repeatValueLabel(form.repeat)}
+            valueSet={!!form.repeat.recurrence_days}
+          >
+            <RepeatField inline value={form.repeat} dueDate={form.dueDate || null} rules={rules} onChange={(repeat) => set({ repeat })} />
+          </PropertyRow>
+          <PropertyRow
+            id="priority"
+            leading={<PropertyIcon Icon={Flag} />}
+            label="Priority"
+            control={
+              <SegmentedControl options={PRIORITY_OPTIONS} value={form.priority} onChange={(priority) => set({ priority })} size="sm" accessibilityLabel="Priority" />
+            }
+          />
+          <PropertyRow id="notes" leading={<PropertyIcon Icon={StickyNote} />} label="Notes" value={firstNoteLine || 'None'} valueSet={!!firstNoteLine}>
+            <TextInput
+              value={form.notes}
+              onChangeText={(notes) => set({ notes })}
+              placeholder="Anything to remember"
+              multiline
+              autoFocus
+              textAlignVertical="top"
+              className="min-h-20 rounded-xl bg-card px-3 py-2 text-body text-foreground placeholder:text-muted-foreground"
+            />
+          </PropertyRow>
+        </PropertyGroup>
+      </PropertyRows>
+    </ItemSheet>
   );
 }
+
+/** Who: faces to tap. A pick is final, so the row (or tray) closes. */
+function WhoEditor({ people, value, onChange }: { people: PersonOption[]; value: string; onChange: (id: string) => void }) {
+  const close = useClosePropertyRow();
+  return (
+    <PeoplePicker
+      people={people}
+      value={value}
+      onChange={(id) => {
+        onChange(id);
+        close();
+      }}
+    />
+  );
+}
+
+function AnyoneFace({ size = 34 }: { size?: number }) {
+  return (
+    <View style={{ width: size, height: size, borderRadius: size / 2 }} className="items-center justify-center bg-muted">
+      <UserRound size={size * 0.5} className="text-muted-foreground" />
+    </View>
+  );
+}
+

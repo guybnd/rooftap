@@ -52,6 +52,7 @@ export * from './components/date-scroll-field';
 export * from './components/time-scroll-field';
 export * from './components/month-date-picker';
 export * from './components/item-form-sheet';
+export * from './components/item-sheet';
 export * from './components/searchable-picker';
 export * from './components/ingredient-name-input';
 export * from './components/tag-input';

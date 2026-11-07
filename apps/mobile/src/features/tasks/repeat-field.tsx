@@ -6,7 +6,7 @@
 import * as React from 'react';
 import { Pressable, View } from 'react-native';
 import { Check, ChevronDown, ChevronRight } from 'lucide-react-native';
-import { Text, DateScrollField, DragNumberField, SegmentedControl, cn, haptics } from '@homeup/ui';
+import { Text, ChoiceChips, DateScrollField, DragNumberField, SegmentedControl, cn, haptics } from '@homeup/ui';
 import {
   REPEAT_END_OPTIONS,
   REPEAT_UNIT_OPTIONS,
@@ -31,9 +31,15 @@ interface RepeatFieldProps {
   /** False on a server without calendar rules: the old day-count list, no Custom. */
   rules: boolean;
   onChange: (value: TaskRepeatFields) => void;
+  /**
+   * The item sheet's Repeat row: the choices show as chips at once (the row
+   * itself is the trigger and already states the value), then the Custom
+   * builder and the "Next:" line.
+   */
+  inline?: boolean;
 }
 
-export function RepeatField({ value, dueDate, rules, onChange }: RepeatFieldProps) {
+export function RepeatField({ value, dueDate, rules, onChange, inline = false }: RepeatFieldProps) {
   const today = todayISO();
   const [open, setOpen] = React.useState(false);
   const [draft, setDraft] = React.useState<RepeatDraft | null>(null);
@@ -61,6 +67,38 @@ export function RepeatField({ value, dueDate, rules, onChange }: RepeatFieldProp
     setDraft(next);
     onChange(rulePatch(repeatRuleFromDraft(next, dueDate, today)));
   };
+
+  if (inline) {
+    const CUSTOM = '__custom';
+    const options = [...choices.map((c) => ({ value: c.id, label: c.label })), ...(rules ? [{ value: CUSTOM, label: 'Custom' }] : [])];
+    const current = draft || custom ? CUSTOM : selected;
+    return (
+      <View className="gap-3">
+        <ChoiceChips
+          options={options}
+          value={current}
+          accessibilityLabel="Repeat"
+          onChange={(id) => {
+            if (id === CUSTOM) {
+              if (!draft) openCustom();
+              return;
+            }
+            const choice = choices.find((c) => c.id === id);
+            if (choice) {
+              onChange(choice.patch);
+              setDraft(null);
+            }
+          }}
+        />
+        {draft && <CustomBuilder draft={draft} dueDate={dueDate} today={today} onChange={editDraft} />}
+        {preview.length > 0 && (
+          <Text className="text-xs text-muted-foreground" style={{ fontVariant: ['tabular-nums'] }}>
+            Next: {preview.map((d) => repeatDateLabel(d, today)).join(', ')}
+          </Text>
+        )}
+      </View>
+    );
+  }
 
   return (
     <View className="gap-2">

@@ -1417,3 +1417,12 @@ html:not([data-layout="classic"]) .desk-classic {
     transition: none;
   }
 }
+
+/* Item sheet (Hearth §7): a failed add nudges the title band sideways once.
+   Used through `motion-safe:`, so reduced motion keeps it still. */
+@keyframes item-sheet-nudge {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  50% { transform: translateX(6px); }
+  75% { transform: translateX(-3px); }
+}
