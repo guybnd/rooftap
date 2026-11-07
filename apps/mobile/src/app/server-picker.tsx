@@ -9,18 +9,23 @@ import { View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Check, Server } from 'lucide-react-native';
 import {
   Text,
   BottomSheet,
   Button,
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
   Input,
+  ListGroup,
+  ListItem,
+  ListItemContent,
+  ListItemMeta,
+  ListItemTitle,
+  ListItemTrailing,
   ScreenBackground,
-  SegmentedControl,
+  haptics,
 } from '@homeup/ui';
+import { RooftapTile } from '@/components/brand/rooftap-mark';
+import { FieldGroup, FirstRunHeader } from '@/components/first-run';
 import {
   OFFICIAL_SERVER_LABEL,
   OFFICIAL_SERVER_URL,
@@ -109,69 +114,82 @@ export default function ServerPickerScreen() {
     <ScreenBackground>
       <KeyboardAwareScrollView
         className="flex-1"
-        contentContainerClassName="gap-4 p-4"
+        contentContainerClassName="gap-5 px-6 py-4"
         contentContainerStyle={{ paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 }}
       >
-        <View className="gap-1">
-          <Text className="text-display font-semibold text-foreground">Choose your server</Text>
-          <Text className="text-body text-muted-foreground">
-            Rooftap can connect to the official service or a server you host yourself.
-          </Text>
-        </View>
-  
-        <SegmentedControl
-          accessibilityLabel="Server type"
-          value={mode}
-          onChange={setMode}
-          options={[
-            { value: 'official', label: OFFICIAL_SERVER_LABEL },
-            { value: 'self-host', label: 'Use my own server' },
-          ]}
-        />
-  
-        {mode === 'official' && !OFFICIAL_SERVER_URL && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Official server unavailable</CardTitle>
-              <CardDescription>
-                This build wasn&apos;t configured with an official server address. Use your own server below.
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        )}
-  
+        <FirstRunHeader title="Choose your server" lede="Use the official Rooftap service, or a server you host yourself." />
+
+        <ListGroup>
+          {(
+            [
+              {
+                value: 'official',
+                title: OFFICIAL_SERVER_LABEL,
+                meta: OFFICIAL_SERVER_URL ? 'Hosted for you, nothing to set up' : 'Not set up in this build',
+                lead: <RooftapTile size="sm" />,
+                disabled: !OFFICIAL_SERVER_URL,
+              },
+              {
+                value: 'self-host',
+                title: 'Your own server',
+                meta: 'A Rooftap server you or a friend run',
+                lead: (
+                  <View className="size-7 items-center justify-center rounded-[9px] bg-muted">
+                    <Server size={15} className="text-muted-foreground" />
+                  </View>
+                ),
+                disabled: false,
+              },
+            ] as const
+          ).map((o) => (
+            <ListItem
+              key={o.value}
+              disabled={o.disabled}
+              className={o.disabled ? 'items-center gap-3 opacity-50' : 'items-center gap-3'}
+              onPress={() => {
+                haptics.select();
+                setMode(o.value);
+              }}
+              accessibilityRole="radio"
+              accessibilityState={{ selected: mode === o.value, disabled: o.disabled }}
+            >
+              {o.lead}
+              <ListItemContent>
+                <ListItemTitle>{o.title}</ListItemTitle>
+                <ListItemMeta>
+                  <Text className="text-caption text-muted-foreground">{o.meta}</Text>
+                </ListItemMeta>
+              </ListItemContent>
+              <ListItemTrailing className="mt-0">{mode === o.value && <Check size={18} className="text-primary" />}</ListItemTrailing>
+            </ListItem>
+          ))}
+        </ListGroup>
+
         {mode === 'self-host' && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Server address</CardTitle>
-              <CardDescription>Enter the address of your self-hosted Rooftap instance.</CardDescription>
-            </CardHeader>
-            <View className="px-4">
-              <Input
-                value={customUrl}
-                onChangeText={setCustomUrl}
-                placeholder="example.com or https://example.com"
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="url"
-              />
-            </View>
-          </Card>
+          <FieldGroup>
+            <Input
+              value={customUrl}
+              onChangeText={setCustomUrl}
+              placeholder="Server address, like example.com"
+              accessibilityLabel="Server address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+              autoFocus
+              className={FieldGroup.input}
+            />
+          </FieldGroup>
         )}
-  
-        {error && (
-          <View className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3">
-            <Text className="text-body text-destructive">{error}</Text>
-          </View>
-        )}
-  
+
+        {error && <Text className="px-1 text-caption text-destructive">{error}</Text>}
+
         <View className="flex-row gap-2">
           {isSwitching && (
-            <Button variant="outline" onPress={() => router.back()} className="flex-1">
+            <Button variant="outline" size="lg" onPress={() => router.back()} className="h-12 flex-1">
               Cancel
             </Button>
           )}
-          <Button onPress={handleContinue} disabled={loading} className="flex-1">
+          <Button size="lg" onPress={handleContinue} disabled={loading} className="h-12 flex-1">
             {loading ? 'Checking...' : 'Continue'}
           </Button>
         </View>

@@ -1,6 +1,6 @@
 "use client";
 
-import type { ComponentType } from "react";
+import type { ComponentType, ReactNode } from "react";
 import { useDataCache } from "@/lib/data-cache";
 import SettingsLoading from "./loading";
 
@@ -14,7 +14,10 @@ export function SettingsContent({
   panels,
   emptyLabel,
   gateOnDataCache = true,
+  lede,
 }: {
+  /** Drawn above the panels (the Global page's household header). */
+  lede?: ReactNode;
   panels: ComponentType[];
   emptyLabel?: string;
   /**
@@ -46,6 +49,7 @@ export function SettingsContent({
 
   return (
     <main className="p-4 sm:p-8 max-w-3xl mx-auto space-y-6">
+      {lede}
       {panels.map((Panel, i) => (
         <Panel key={i} />
       ))}

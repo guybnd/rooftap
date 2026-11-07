@@ -10,7 +10,7 @@
 // perf benefit. Mirrors apartment-grid.tsx's own stated rationale for staying
 // off FlashList (small, bounded row counts).
 import * as React from 'react';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import * as Notifications from 'expo-notifications';
 import * as SecureStore from 'expo-secure-store';
@@ -41,9 +41,10 @@ import {
   ListItemTrailing,
   LeadingTile,
   SectionScreen,
+  Avatar,
   haptics,
 } from '@homeup/ui';
-import { getEnabledSections, settingsMenuHue, useModules, dialog, hasModuleSettings } from '@homeup/core';
+import { firstName, getEnabledSections, householdPeopleLine, settingsMenuHue, useModules, dialog, hasModuleSettings } from '@homeup/core';
 import { OFFICIAL_SERVER_LABEL, getStoredServer, type ServerSelection } from '@/lib/server-config';
 import { sectionIcons } from '@/lib/section-icons';
 import { signOut } from '@/lib/supabase-client';
@@ -82,6 +83,54 @@ function IconSquare({ icon: Icon, tint = 'bg-muted', tone = 'text-muted-foregrou
     <View className={`h-7 w-7 items-center justify-center rounded-lg ${tint}`}>
       <Icon size={16} className={tone} />
     </View>
+  );
+}
+
+/**
+ * Hearth §13.12: the hub's lede. The household's name, where it lives and
+ * the app version, then its people as faces and first names with Invite.
+ * Tapping it opens Users, so the list doesn't need a Users row.
+ */
+function HouseholdHeader({ serverLabel, version, onOpen }: { serverLabel: string | null; version: string | null; onOpen: () => void }) {
+  const { group, groupMembers, memberProfiles, currentUserId } = useDataCache();
+  const others = groupMembers.filter((m) => m.user_id !== currentUserId);
+  const faces = [currentUserId, ...others.map((m) => m.user_id)].filter((id): id is string => !!id).slice(0, 4);
+  const line = householdPeopleLine(others.map((m) => firstName(memberProfiles[m.user_id]?.name, memberProfiles[m.user_id]?.email)));
+  const where = [serverLabel, version ? `Rooftap ${version}` : null].filter(Boolean).join(' · ');
+  return (
+    <Pressable
+      onPress={() => {
+        haptics.select();
+        onOpen();
+      }}
+      accessibilityRole="button"
+      accessibilityLabel={`${group?.name ?? 'Your household'}. ${line}. Open people and invites`}
+      className="gap-3 rounded-2xl border border-border bg-card px-4 py-4 active:bg-accent/30"
+    >
+      <View className="gap-0.5">
+        <Text className="font-heading text-title font-semibold text-foreground" numberOfLines={1}>
+          {group?.name ?? 'Your household'}
+        </Text>
+        {!!where && (
+          <Text className="text-caption text-muted-foreground" numberOfLines={1}>
+            {where}
+          </Text>
+        )}
+      </View>
+      <View className="flex-row items-center gap-3">
+        <View className="flex-row">
+          {faces.map((id, i) => (
+            <View key={id} style={{ marginLeft: i === 0 ? 0 : -8 }}>
+              <Avatar userId={id} profiles={memberProfiles} size={28} ringed />
+            </View>
+          ))}
+        </View>
+        <Text className="min-w-0 flex-1 text-body text-foreground" numberOfLines={1}>
+          {line}
+        </Text>
+        <Text className="text-body font-medium text-primary">Invite</Text>
+      </View>
+    </Pressable>
   );
 }
 
@@ -170,10 +219,16 @@ export default function SettingsScreen() {
       lede={<Text className="px-1 text-display font-semibold text-foreground">Settings</Text>}
       bottomClearance={24}
     >
+      <HouseholdHeader
+        serverLabel={server ? (server.isOfficial ? OFFICIAL_SERVER_LABEL : server.origin) : null}
+        version={Application.nativeApplicationVersion ? `v${Application.nativeApplicationVersion}` : null}
+        onOpen={() => router.push({ pathname: '/settings/[key]', params: { key: 'users' } })}
+      />
+
       <View className="gap-2">
         <GroupLabel>General</GroupLabel>
         <ListGroup>
-          {globalMenus.map((menu) => {
+          {globalMenus.filter((menu) => menu.key !== 'users').map((menu) => {
             const Icon = GLOBAL_MENU_ICONS[menu.key] ?? SlidersHorizontal;
             const value = GLOBAL_MENU_VALUES[menu.key];
             return (

@@ -41,7 +41,7 @@ export function RooftapGlyph({ className, style }: { className?: string; style?:
   );
 }
 
-const TILE = { sm: "h-7 w-7 rounded-[9px] [&_svg]:h-5 [&_svg]:w-5", md: "h-9 w-9 rounded-[11px] [&_svg]:h-[26px] [&_svg]:w-[26px]" } as const;
+const TILE = { sm: "h-7 w-7 rounded-[9px] [&_svg]:h-5 [&_svg]:w-5", md: "h-9 w-9 rounded-[11px] [&_svg]:h-[26px] [&_svg]:w-[26px]", xl: "h-14 w-14 rounded-[17px] [&_svg]:h-10 [&_svg]:w-10" } as const;
 
 /**
  * Rooftap's avatar: the app icon in small, the spectrum roof and coral tap
@@ -58,5 +58,25 @@ export function RooftapTile({ size = "md", working = false, className }: { size?
     >
       <RooftapMark spectrum />
     </span>
+  );
+}
+
+/**
+ * The first-run lede (Hearth §13.12): the app icon at full tile size over a
+ * soft wash of the roof's spectrum, for the sign-in and first-user screens.
+ * Still: no motion of its own. Native twin: RooftapHero in apps/mobile.
+ */
+export function RooftapHero({ className }: { className?: string }) {
+  const [a, , , b, c] = SPECTRUM;
+  return (
+    <div aria-hidden className={cn("relative mx-auto flex h-[120px] w-[200px] items-center justify-center", className)}>
+      <div
+        className="absolute inset-0"
+        style={{
+          background: `radial-gradient(32% 48% at 30% 50%, ${a}52, transparent), radial-gradient(32% 48% at 50% 50%, ${b}52, transparent), radial-gradient(32% 48% at 70% 50%, ${c}52, transparent)`,
+        }}
+      />
+      <RooftapTile size="xl" className="relative" />
+    </div>
   );
 }

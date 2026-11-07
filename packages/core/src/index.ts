@@ -19,6 +19,7 @@ export * from './server-origin';
 export * from './date-utils';
 export * from './geometry';
 export * from './capture-launcher';
+export * from './household-people';
 export * from './empty-steps';
 
 export * from './modules/checklists/checklists';

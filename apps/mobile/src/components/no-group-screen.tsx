@@ -9,6 +9,7 @@ import * as React from 'react';
 import { NoGroupState, ScreenBackground } from '@homeup/ui';
 import type { GroupInvitation } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
+import { RooftapHero } from '@/components/brand/rooftap-mark';
 import { AcceptInvitationDialog } from '@/features/settings/panels/accept-invitation-dialog';
 
 export function NoGroupScreen() {
@@ -29,6 +30,7 @@ export function NoGroupScreen() {
         creating={creating}
         onCreateHousehold={handleCreateHousehold}
         onReviewInvite={setReviewingInvite}
+        mark={<RooftapHero />}
       />
       {reviewingInvite && (
         <AcceptInvitationDialog

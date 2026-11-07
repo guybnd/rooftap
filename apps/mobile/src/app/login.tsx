@@ -11,6 +11,7 @@ import { makeRedirectUri } from 'expo-auth-session';
 import { getQueryParams } from 'expo-auth-session/build/QueryParams';
 import { normalizeIdentifier } from '@homeup/core';
 import { Text, Button, Input, ScreenBackground } from '@homeup/ui';
+import { FieldGroup, FirstRunHeader, ServerChip } from '@/components/first-run';
 import { getStoredServer, type ServerSelection } from '@/lib/server-config';
 import { getSupabaseClient } from '@/lib/supabase-client';
 import { completeOAuthRedirect } from '@/lib/oauth-redirect';
@@ -116,44 +117,40 @@ export default function LoginScreen() {
   }
 
   return (
-    <ScreenBackground
-      className="items-center justify-center gap-8 px-8"
-      style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}
-    >
-      <View className="w-full max-w-sm gap-8">
-        <View className="items-center gap-1">
-          <Text className="text-display font-semibold text-foreground">Sign in to Rooftap</Text>
-          <Text className="text-center text-body text-muted-foreground">
-            {server.isOfficial ? 'Official server' : server.origin}
-          </Text>
-        </View>
+    <ScreenBackground className="items-center justify-center px-6" style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}>
+      <View className="w-full max-w-sm gap-6">
+        <FirstRunHeader title="Welcome home" lede="Sign in to see your household's day.">
+          <ServerChip label={server.isOfficial ? 'Official server' : server.origin} onChange={() => router.push('/server-picker?mode=switch')} />
+        </FirstRunHeader>
 
-        <Button variant="outline" onPress={handleGoogleSignIn} disabled={loading}>
+        <Button variant="outline" size="lg" className="h-12" onPress={handleGoogleSignIn} disabled={loading}>
           Continue with Google
         </Button>
 
         <View className="flex-row items-center gap-3">
-          <View className="h-px flex-1 bg-border/50" />
-          <Text className="text-caption text-muted-foreground/70">or</Text>
-          <View className="h-px flex-1 bg-border/50" />
+          <View className="h-px flex-1 bg-border/60" />
+          <Text className="text-caption text-muted-foreground">or with email</Text>
+          <View className="h-px flex-1 bg-border/60" />
         </View>
 
-        <View className="gap-3">
-          <Input
-            value={identifier}
-            onChangeText={setIdentifier}
-            placeholder="Email or username"
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          <Input value={password} onChangeText={setPassword} placeholder="Password" secureTextEntry />
-
-          {error && <Text className="text-body text-destructive">{error}</Text>}
-
-          <Button onPress={handlePasswordSignIn} disabled={loading}>
-            {loading ? 'Signing in...' : 'Sign in'}
-          </Button>
+        <View className="gap-2">
+          <FieldGroup>
+            <Input
+              value={identifier}
+              onChangeText={setIdentifier}
+              placeholder="Email or username"
+              autoCapitalize="none"
+              autoCorrect={false}
+              className={FieldGroup.input}
+            />
+            <Input value={password} onChangeText={setPassword} placeholder="Password" secureTextEntry className={FieldGroup.input} />
+          </FieldGroup>
+          {error && <Text className="px-1 text-caption text-destructive">{error}</Text>}
         </View>
+
+        <Button size="lg" className="h-12" onPress={handlePasswordSignIn} disabled={loading}>
+          {loading ? 'Signing in...' : 'Sign in'}
+        </Button>
       </View>
     </ScreenBackground>
   );

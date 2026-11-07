@@ -5,7 +5,7 @@
 // apps/web/src/components/brand/rooftap-mark.tsx.
 import * as React from 'react';
 import { View } from 'react-native';
-import Svg, { Circle, Defs, LinearGradient, Path, Stop } from 'react-native-svg';
+import Svg, { Circle, Defs, Ellipse, LinearGradient, Path, RadialGradient, Stop } from 'react-native-svg';
 import Animated, { Easing, cancelAnimation, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 import { cssInterop } from 'nativewind';
 import { ROOFTAP_MARK, ROOFTAP_SPECTRUM, ROOFTAP_TILE } from '@homeup/core';
@@ -94,6 +94,42 @@ export function RooftapTile({ size = 'md', working = false }: { size?: keyof typ
           dotStyle,
         ]}
       />
+    </View>
+  );
+}
+
+/** Where the glow's three washes sit, as [spectrum index, centre x share]. */
+const GLOW = [
+  [0, 0.3],
+  [3, 0.5],
+  [4, 0.7],
+] as const;
+
+/**
+ * The first-run lede (Hearth §13.12): the app icon at full tile size over a
+ * soft wash of the roof's spectrum, for the sign-in, server and
+ * no-household screens. Still: no motion of its own.
+ */
+export function RooftapHero() {
+  const id = React.useId().replace(/[^a-zA-Z0-9]/g, '');
+  const w = 200;
+  const h = 120;
+  return (
+    <View className="items-center justify-center self-center" style={{ width: w, height: h }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      <Svg width={w} height={h} style={{ position: 'absolute', left: 0, top: 0 }}>
+        <Defs>
+          {GLOW.map(([c]) => (
+            <RadialGradient key={c} id={`glow${id}${c}`} cx="50%" cy="50%" r="50%">
+              <Stop offset="0" stopColor={ROOFTAP_SPECTRUM[c]} stopOpacity={0.32} />
+              <Stop offset="1" stopColor={ROOFTAP_SPECTRUM[c]} stopOpacity={0} />
+            </RadialGradient>
+          ))}
+        </Defs>
+        {GLOW.map(([c, x]) => (
+          <Ellipse key={c} cx={w * x} cy={h / 2} rx={w * 0.32} ry={h * 0.48} fill={`url(#glow${id}${c})`} />
+        ))}
+      </Svg>
+      <RooftapTile size="xl" />
     </View>
   );
 }

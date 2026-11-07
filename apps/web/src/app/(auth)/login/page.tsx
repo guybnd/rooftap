@@ -1,5 +1,6 @@
 "use client";
 
+import { FIELD_IN_GROUP, FieldGroup, FirstRunHeader, OrRule } from "@/components/first-run";
 import { createClient } from "@/lib/supabase/client";
 import { normalizeIdentifier } from '@homeup/core';
 import { safeNextPath, NEXT_PATH_COOKIE } from "@/lib/next-path";
@@ -94,16 +95,8 @@ function LoginContent() {
 
   return (
     <main className="flex min-h-dvh items-center justify-center p-8">
-      <div className="w-full max-w-sm space-y-8">
-        <div className="text-center">
-          <div className="size-12 rounded-2xl bg-primary/20 flex items-center justify-center mx-auto mb-4">
-            <span className="text-primary font-bold text-xl">H</span>
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight">Sign in to Rooftap</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Welcome home. One calm app for the whole household.
-          </p>
-        </div>
+      <div className="w-full max-w-sm space-y-6">
+        <FirstRunHeader title="Welcome home" lede="Sign in to see your household's day." />
 
         {error === "unauthorized" && (
           <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
@@ -122,25 +115,22 @@ function LoginContent() {
 
         <button
           onClick={signInWithGoogle}
-          className="w-full rounded-xl border border-border bg-card px-4 py-3 text-sm font-medium hover:bg-accent transition-colors"
+          className="h-12 w-full rounded-xl border border-border bg-card px-4 text-sm font-medium hover:bg-accent transition-colors"
         >
           Continue with Google
         </button>
 
-        <div className="flex items-center gap-3">
-          <div className="h-px flex-1 bg-border/50" />
-          <span className="text-xs text-muted-foreground/70">or</span>
-          <div className="h-px flex-1 bg-border/50" />
-        </div>
+        <OrRule label="or with email" />
 
-        <form onSubmit={handlePasswordAuth} className="space-y-3">
+        <form onSubmit={handlePasswordAuth} className="space-y-4">
+          <FieldGroup>
           <input
             type="text"
             placeholder="Email or username"
             required
             value={identifier}
             onChange={(e) => setIdentifier(e.target.value)}
-            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-ring/50"
+            className={FIELD_IN_GROUP}
           />
           <input
             type="password"
@@ -148,19 +138,16 @@ function LoginContent() {
             required
             value={pwdFieldValue}
             onChange={(e) => setPwdFieldValue(e.target.value)}
-            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-ring/50"
+            className={FIELD_IN_GROUP}
           />
+          </FieldGroup>
 
-          {authError && (
-            <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-              {authError}
-            </div>
-          )}
+          {authError && <p role="alert" className="-mt-2 px-1 text-xs text-destructive">{authError}</p>}
 
           <button
             type="submit"
             disabled={authLoading}
-            className="w-full rounded-xl bg-primary px-4 py-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+            className="h-12 w-full rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
           >
             {authLoading ? "Signing in..." : "Sign in"}
           </button>
