@@ -129,6 +129,7 @@ export * from './modules/costs/cost-row-actions';
 export * from './modules/costs/to-sort';
 export * from './modules/costs/cost-month';
 export * from './modules/costs/cost-month-view';
+export * from './modules/costs/under-goal-cheer';
 export * from './modules/costs/use-money-view';
 export * from './modules/costs/cost-form';
 export * from './modules/costs/cost-dates';

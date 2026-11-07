@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { heroNumber, heroRollDirection, isFreshReply, justCleared, roofDots } from './touches';
+import { CHEER_BURST_MS, cheerSparks, heroNumber, heroRollDirection, isFreshReply, justCleared, roofDots } from './touches';
 
 describe('heroNumber', () => {
   it('reads counts and amounts', () => {
@@ -56,5 +56,21 @@ describe('isFreshReply', () => {
     expect(isFreshReply('2026-11-07T10:00:20Z', now)).toBe(true);
     expect(isFreshReply('2026-11-07T09:59:00Z', now)).toBe(false);
     expect(isFreshReply(null, now)).toBe(false);
+  });
+});
+
+describe('cheerSparks', () => {
+  it('rings the thing with coral and roof colours in turn', () => {
+    const sparks = cheerSparks(120, 60);
+    expect(sparks).toHaveLength(10);
+    expect(sparks.filter((s) => s.coral)).toHaveLength(5);
+    for (const s of sparks) {
+      const r = Math.hypot(s.x / (60 + 26), s.y / (30 + 26));
+      expect(r).toBeCloseTo(1, 1);
+    }
+  });
+
+  it('takes slow + base', () => {
+    expect(CHEER_BURST_MS).toBe(500);
   });
 });

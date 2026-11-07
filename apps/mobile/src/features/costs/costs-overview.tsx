@@ -13,7 +13,7 @@
 import * as React from 'react';
 import { Pressable, View } from 'react-native';
 import { Archive, ArrowRight, ChevronDown, ChevronRight, EyeOff, FileText, Landmark, MessageSquare, MoreHorizontal, PenLine, Plus, Repeat, Settings, Sparkles, Wallet, List, type LucideIcon } from 'lucide-react-native';
-import { BottomSheet, SwipeActions, Text, cn, haptics, toast } from '@homeup/ui';
+import { BottomSheet, Cheer, CheerGlow, SwipeActions, Text, cn, haptics, toast } from '@homeup/ui';
 import {
   CADENCE_LABEL,
   bankDayLabel,
@@ -33,6 +33,7 @@ import {
   monthLongName,
   monthShortName,
   goalStatus,
+  useUnderGoalCheer,
   moneyFlow,
   signedMoney,
   type CostCategory,
@@ -430,13 +431,17 @@ function Hero({
   const pct = (v: number) => `${Math.min(100, (v / max) * 100)}%` as const;
   const status = goalStatus(month, goalCents);
   const flow = moneyFlow(month);
+  // Hearth §8 "Cheer burst": a finished month under its goal cheers once per device.
+  const cheer = useUnderGoalCheer(month, goalCents);
   return (
     <View className="gap-2">
       <Text className={LABEL}>{month.when === 'future' ? `Expected in ${name}` : `Spent in ${name}`}</Text>
       <Pressable accessibilityRole="button" accessibilityLabel="Change the monthly goal" disabled={!onEditGoal} onPress={onEditGoal ?? undefined} className="flex-row items-baseline gap-2">
-        <Text className="text-hero-section text-foreground" style={TABULAR}>
-          {formatMoney(month.when === 'future' ? month.expectedCents : month.paidCents)}
-        </Text>
+        <Cheer play={cheer}>
+          <Text className="text-hero-section text-foreground" style={TABULAR}>
+            {formatMoney(month.when === 'future' ? month.expectedCents : month.paidCents)}
+          </Text>
+        </Cheer>
         <Text className="text-title text-muted-foreground" style={TABULAR}>
           {goalCents ? `of ${formatMoney(goalCents)}` : 'Set a goal'}
         </Text>
@@ -462,6 +467,7 @@ function Hero({
             );
           })}
         </View>
+        <CheerGlow play={cheer} className="rounded-full" />
         {goalCents ? <View pointerEvents="none" className="absolute -bottom-1 -top-1 w-0.5 rounded bg-foreground" style={{ left: pct(goalCents) }} /> : null}
       </View>
       <GoalStatusLines lines={status} />

@@ -123,3 +123,44 @@ export function isFreshReply(createdAt: string | null | undefined, now = Date.no
 export const TIMER_DONE_TURN_MS = 1_400;
 /** The pulse swells to this and back once per turn. */
 export const TIMER_DONE_PULSE = 1.06;
+
+// ── Cheer burst ───────────────────────────────────────────────────────────
+// The coral burst from slide-to-finish, around a thing that earned it: a
+// ring that swells off its edge and sparks that fly out. The Costs Hero
+// gets it the first time you open a month that finished under its goal,
+// with a swell of the number and one mint glow of the meter.
+
+/** The burst (slow + base), swift-out. */
+export const CHEER_BURST_MS = MOTION_DURATIONS_MS.slow + MOTION_DURATIONS_MS.base;
+/** The number swells to this and back while the sparks fly. */
+export const CHEER_SWELL = 1.08;
+/** The meter's mint glow, at its strongest. */
+export const CHEER_GLOW_ALPHA = 0.6;
+
+export interface CheerSpark {
+  /** Where the spark ends, from the centre of the thing, in px (y grows down). */
+  x: number;
+  y: number;
+  /** Diameter in px. */
+  size: number;
+  /** Coral (true) or the roof colour at `hue` (0 to 5). */
+  coral: boolean;
+  hue: number;
+}
+
+/**
+ * `count` sparks round a thing `width` by `height`, each ending `reach` px
+ * past its edge: coral and roof colours in turn, big and small in turn.
+ */
+export function cheerSparks(width: number, height: number, count = 10, reach = 26): CheerSpark[] {
+  return Array.from({ length: count }, (_, i) => {
+    const angle = (i / count) * Math.PI * 2 + 0.4;
+    return {
+      x: Math.round(Math.cos(angle) * (width / 2 + reach) * 10) / 10,
+      y: Math.round(Math.sin(angle) * (height / 2 + reach) * 10) / 10,
+      size: i % 2 ? 5 : 7,
+      coral: i % 2 === 1,
+      hue: Math.floor(i / 2) % 6,
+    };
+  });
+}

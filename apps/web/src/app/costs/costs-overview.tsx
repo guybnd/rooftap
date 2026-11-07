@@ -37,6 +37,7 @@ import {
   monthLongName,
   monthShortName,
   goalStatus,
+  useUnderGoalCheer,
   moneyFlow,
   signedMoney,
   type CostCategory,
@@ -71,6 +72,7 @@ import { TransactionSheet } from './money-view';
 import { CategoryPickerSheet, type CategoryPick } from './category-picker';
 import { CostRowShell, CostRowSheet, type CostRowSheetState } from './cost-row-sheet';
 import { commit, success } from '@/lib/haptics';
+import { Cheer, CheerGlow } from '@/components/ui/cheer-burst';
 
 const LABEL = 'text-[10.5px] font-medium uppercase tracking-[0.1em] text-muted-foreground';
 const CARD = 'overflow-hidden rounded-3xl border border-border/60 bg-card shadow-[var(--card-shadow)]';
@@ -467,13 +469,17 @@ function Hero({
   const pct = (v: number) => `${Math.min(100, (v / max) * 100)}%`;
   const status = goalStatus(month, goalCents);
   const flow = moneyFlow(month);
+  // Hearth §8 "Cheer burst": a finished month under its goal cheers once per device.
+  const cheer = useUnderGoalCheer(month, goalCents);
   return (
     <div className="space-y-2">
       <p className={LABEL}>{month.when === 'future' ? `Expected in ${name}` : `Spent in ${name}`}</p>
       <button type="button" aria-label="Change the monthly goal" disabled={!onEditGoal} onClick={onEditGoal ?? undefined} className="flex items-baseline gap-2 text-left">
-        <span className="text-5xl font-extrabold tabular-nums tracking-tight text-foreground">
-          {formatMoney(month.when === 'future' ? month.expectedCents : month.paidCents)}
-        </span>
+        <Cheer play={cheer}>
+          <span className="text-5xl font-extrabold tabular-nums tracking-tight text-foreground">
+            {formatMoney(month.when === 'future' ? month.expectedCents : month.paidCents)}
+          </span>
+        </Cheer>
         <span className="text-lg tabular-nums text-muted-foreground">{goalCents ? `of ${formatMoney(goalCents)}` : 'Set a goal'}</span>
       </button>
       <div className="relative h-3 rounded-full bg-muted" onMouseLeave={() => setHover(null)}>
@@ -499,6 +505,7 @@ function Hero({
             );
           })}
         </div>
+        <CheerGlow play={cheer} className="rounded-full" />
         {goalCents ? <div className="pointer-events-none absolute -inset-y-1 w-0.5 rounded bg-foreground" style={{ left: pct(goalCents) }} /> : null}
       </div>
       <GoalStatusLines lines={status} hover={hover} />
