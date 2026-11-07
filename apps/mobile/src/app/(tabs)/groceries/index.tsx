@@ -43,7 +43,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { decode } from 'base64-arraybuffer';
 import * as SecureStore from 'expo-secure-store';
 import { ArrowUpDown, BookOpen, ChevronDown, ChevronRight, Plus, Receipt, RotateCcw, Settings, SquareCheck, Trash2, X } from 'lucide-react-native';
-import { Text, ActionMenu, type ActionMenuAnchor, type ActionMenuItem, Button, cn, GroceryGlyph, haptics, Input, PopIn, ReorderableList, ScreenBackground, toast, useArrivals } from '@homeup/ui';
+import { Text, ActionMenu, type ActionMenuAnchor, type ActionMenuItem, Button, cn, GroceryGlyph, haptics, Input, PopIn, ReorderableList, ScreenBackground, SpectrumSweep, toast, useArrivals } from '@homeup/ui';
 import { AISLE_ORDER, CUSTOM_AISLE_COLOR_KEYS, countHave, countNeeded, createPendingActionTracker, getAisleMeta, getRegionProvider, resolveItemDefaults, suggestReAdd, grocerySearchAddOptions, groceryBuyableItems, groceryEstimate, groceryTripTotals, useGrocerySearch, canonicalizeItemName, sortGroceriesFlat, DEFAULT_GROCERY_SORT_MODE, GROCERY_SHOW_KEY, parseGroceryShow, type GroceryShowFilter, todayStr, isBoughtToday, ensureSession, updateSession, closeSession, syncSession, getEnabledModules, isFeatureEnabled, fetchTodaySession, uploadReceipt, applyReceiptLearning, formatMoney, groceryItems$, loyaltyCards$, sortLoyaltyCards, learnItemPrice, MOTION_DURATIONS_MS, usePendingIds, useReconnectSync, useStoreHelpers, useStoreLoaded, type GroceryItem, type GrocerySession, type LoyaltyCard, type GrocerySortMode, POP_IN_HOLD_MS, type SuggestReAddItem, type DocumentUploadInput, dialog } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
 import { NoGroupScreen } from '@/components/no-group-screen';
@@ -159,6 +159,7 @@ export default function GroceriesSectionScreen() {
   const pendingGroceryIds = usePendingIds(groceryLingerTracker);
 
   // Read through a ref so patchGroceryItem stays stable and rows don't re-render on every change.
+  const [clearedSweep, setClearedSweep] = React.useState(0);
   const itemsRef = React.useRef(items);
   itemsRef.current = items;
   const patchGroceryItem = React.useCallback(
@@ -168,7 +169,11 @@ export default function GroceriesSectionScreen() {
       const before = patch.status ? list.find((i) => i.id === id) : undefined;
       if (before && patch.status && before.status !== patch.status) {
         const cleared = patch.status === 'bought' && before.status === 'needed' && !list.some((i) => i.id !== id && i.status === 'needed');
-        if (cleared) haptics.celebrate();
+        if (cleared) {
+          haptics.celebrate();
+          // Hearth §8 "Spectrum sweep": the list is done.
+          setClearedSweep((n) => n + 1);
+        }
         else if (patch.status === 'bought') haptics.success();
         else if (patch.status === 'have') haptics.tick();
         else haptics.select();
@@ -1665,6 +1670,7 @@ export default function GroceriesSectionScreen() {
         onDelete={(card) => softDeleteCard(card.id)}
       />
       <BulkAssignSheet open={bulkAssignOpen} onOpenChange={setBulkAssignOpen} memberProfiles={memberProfiles} onAssign={bulkAssign} />
+      <SpectrumSweep play={clearedSweep} />
     </ScreenBackground>
   );
 }

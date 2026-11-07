@@ -1,6 +1,7 @@
 'use client';
 
 import { HeroLede } from '@/components/ui/hero-lede';
+import { SpectrumSweep } from '@/components/ui/spectrum-sweep';
 import { Fragment, useState, useEffect, useCallback, useRef, useMemo, type ReactNode } from 'react';
 import { use$ } from '@legendapp/state/react';
 import {
@@ -24,7 +25,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { useDataCache } from '@/lib/data-cache';
 import { createClient } from '@/lib/supabase/client';
 import type { GroceryItem, GroceryAisle, GroceryCustomAisle, GrocerySession, GrocerySortMode } from '@homeup/core';
-import { dialog, POP_IN_HOLD_MS } from '@homeup/core';
+import { dialog, justCleared, POP_IN_HOLD_MS } from '@homeup/core';
 import { useArrivals } from '@/hooks/use-arrivals';
 import {
   AISLE_META,
@@ -981,6 +982,10 @@ export default function GroceriesPage() {
   );
   const flatTailStart = flatItems.findIndex((i) => i.status !== 'needed');
 
+  // Hearth §8 "Spectrum sweep": getting the last needed item (the list
+  // clears and a bought count grows) sends the roof colours down the screen.
+  const clearedSweep = useClearedSweep(items);
+
   if ((cacheLoading || loading || !storeLoaded) && items.length === 0)
     return <div className="p-6 text-muted-foreground">Loading…</div>;
   if (!group) return <div className="p-6 text-muted-foreground">No group selected</div>;
@@ -1174,6 +1179,7 @@ export default function GroceriesPage() {
   return (
     // The floating ask or pill reserves room so it never covers the list's end.
     <div className={cn('space-y-5 p-4 md:p-6 mx-auto', wideAisles ? 'max-w-[1400px] lg:px-8' : wide ? 'max-w-[1200px] lg:px-8' : 'max-w-3xl', showTrackPrompt || showShopPill ? 'pb-44' : 'pb-28')}>
+      <SpectrumSweep play={clearedSweep} />
       {/* Collapsed bar: a zero-height sticky anchor (so it never shifts the
           page or re-trips the observer) holding a slim bar that slides in
           once the head has scrolled away. MO: transform + opacity only, base
@@ -1980,4 +1986,18 @@ function splitAisleColumns(aisles: string[], weight: (aisle: string) => number, 
     totals[i] += weight(aisle);
   }
   return columns;
+}
+
+/** Counts each time the last needed item is got, for the Spectrum sweep. */
+function useClearedSweep(items: GroceryItem[]): number {
+  const needed = countNeeded(items);
+  const bought = countBought(items);
+  const last = useRef<{ needed: number; bought: number } | null>(null);
+  const [plays, setPlays] = useState(0);
+  useEffect(() => {
+    const before = last.current;
+    last.current = { needed, bought };
+    if (before && justCleared(before.needed, needed) && bought > before.bought) setPlays((n) => n + 1);
+  }, [needed, bought]);
+  return plays;
 }

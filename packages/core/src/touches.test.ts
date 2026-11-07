@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { heroNumber, heroRollDirection, roofDots } from './touches';
+import { heroNumber, heroRollDirection, justCleared, roofDots } from './touches';
 
 describe('heroNumber', () => {
   it('reads counts and amounts', () => {
@@ -37,5 +37,15 @@ describe('roofDots', () => {
     for (const d of dots) expect(d.y).toBeLessThan(-40);
     expect(dots[2].y).toBeLessThan(dots[1].y);
     expect(dots[0].y).toBe(dots[5].y);
+  });
+});
+
+describe('justCleared', () => {
+  it('fires only when a count drops to nothing', () => {
+    expect(justCleared(1, 0)).toBe(true);
+    expect(justCleared(3, 0)).toBe(true);
+    expect(justCleared(0, 0)).toBe(false);
+    expect(justCleared(undefined, 0)).toBe(false);
+    expect(justCleared(2, 1)).toBe(false);
   });
 });

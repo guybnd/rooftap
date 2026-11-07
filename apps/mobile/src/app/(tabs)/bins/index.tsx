@@ -24,6 +24,7 @@ import {
   Text,
   cn,
   toast,
+  Hop,
 } from '@homeup/ui';
 import {
   BIN_DAY_LETTERS,
@@ -133,7 +134,10 @@ export default function BinsScreen() {
               <ListGroup>
                 <ListItem>
                   <ListItemLeading>
-                    <BinLids lids={collection.streams.map((s) => s.lid)} />
+                    {/* Hearth §8 "Hop": the lids hop as the bins go out. */}
+                    <Hop when={night.out}>
+                      <BinLids lids={collection.streams.map((s) => s.lid)} />
+                    </Hop>
                   </ListItemLeading>
                   <ListItemContent>
                     <ListItemTitle numberOfLines={1}>{night.out ? 'Bins are out' : 'Bins out tonight'}</ListItemTitle>

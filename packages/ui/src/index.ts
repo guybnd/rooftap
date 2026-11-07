@@ -73,3 +73,5 @@ export * from './components/moment';
 export * from './components/no-group-state';
 export * from './components/word-pop';
 export * from './components/roof-dots';
+export * from './components/hop';
+export * from './components/spectrum-sweep';

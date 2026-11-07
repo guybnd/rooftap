@@ -69,3 +69,33 @@ export function roofDots(width: number, height: number, gap = 6): RoofDot[] {
     size: i === 0 || i === along.length - 1 ? 6 : 7,
   }));
 }
+
+// ── Hop ───────────────────────────────────────────────────────────────────
+// A small squash and hop when something is done in one tap (bins out): it
+// squashes, springs up, lands with a little squash and settles.
+
+/** The hop (slow + base). */
+export const HOP_MS = MOTION_DURATIONS_MS.slow + MOTION_DURATIONS_MS.base;
+/** The hop's keys: share of time, lift in px (up is negative), and squash. */
+export const HOP_KEYS = {
+  at: [0, 0.15, 0.45, 0.75, 1],
+  y: [0, 0, -10, 0, 0],
+  scaleX: [1, 1.08, 0.96, 1.05, 1],
+  scaleY: [1, 0.9, 1.06, 0.94, 1],
+} as const;
+
+// ── Spectrum sweep ────────────────────────────────────────────────────────
+// A soft band of the roof colours passes down the screen once, when a whole
+// list is done (the last grocery got).
+
+/** The sweep (slow × 2 + fast), ease-in-out. */
+export const SPECTRUM_SWEEP_MS = MOTION_DURATIONS_MS.slow * 2 + MOTION_DURATIONS_MS.fast;
+/** The band's height, as a share of the screen. */
+export const SPECTRUM_SWEEP_BAND = 0.35;
+/** Each colour's strength in the band. */
+export const SPECTRUM_SWEEP_ALPHA = 0.18;
+
+/** Whether a count that went from `before` to `after` just cleared a list. */
+export function justCleared(before: number | null | undefined, after: number): boolean {
+  return before != null && before > 0 && after === 0;
+}

@@ -29,6 +29,7 @@ import { HeroLede } from '@/components/ui/hero-lede';
 import { ListGroup, ListItem, ListItemContent, ListItemLeading, ListItemMeta, ListItemTitle, ListItemTrailing } from '@/components/ui/list-item';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Button } from '@/components/ui/button';
+import { Hop } from '@/components/ui/hop';
 import { OfflineHint } from '@/components/offline-hint';
 import { BinLids, BinLidMark } from '@/components/bin-lids';
 import { memberLabel } from '@/app/setup/member-label';
@@ -98,7 +99,10 @@ export default function BinsPage() {
               <ListGroup>
                 <ListItem className="gap-3 py-3">
                   <ListItemLeading>
-                    <BinLids lids={collection.streams.map((s) => s.lid)} />
+                    {/* Hearth §8 "Hop": the lids hop as the bins go out. */}
+                    <Hop when={night.out}>
+                      <BinLids lids={collection.streams.map((s) => s.lid)} />
+                    </Hop>
                   </ListItemLeading>
                   <ListItemContent>
                     <ListItemTitle>{night.out ? 'Bins are out' : 'Bins out tonight'}</ListItemTitle>
