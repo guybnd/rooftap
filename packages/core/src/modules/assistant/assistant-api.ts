@@ -67,6 +67,59 @@ export interface AssistantMessage {
   cost_micros: number | null;
   /** Photos sent with a person's message. Missing from servers before chat photos. */
   photos?: AssistantPhoto[];
+  /** Changes this reply made without asking (trust Act), shown as the items' own rows. Missing from servers before inline changes. */
+  changes?: AssistantChange[];
+}
+
+/** One change a reply made: which item, so the app can show its live row. */
+export interface AssistantChange {
+  tool: string;
+  module: AssistantScope;
+  verb: 'added' | 'changed' | 'removed';
+  /** The changed item's id, when the tool said it; null shows the summary line instead of a row. */
+  id: string | null;
+  /** One line for when there is no row to show, e.g. `Add "Milk" to Groceries`. */
+  summary: string;
+}
+
+/** Whether a tool adds, changes or removes, from its name. */
+export function changeVerb(tool: string): AssistantChange['verb'] {
+  if (/^(create|add|save|watch|make)_/.test(tool)) return 'added';
+  if (/^delete_|^remove_/.test(tool)) return 'removed';
+  return 'changed';
+}
+
+/**
+ * The change a write tool made, from its arguments and result: the item id
+ * comes from the result's `id` (creates return the new row) or else an
+ * argument ending in `_id`.
+ */
+export function changeFromRun(tool: string, module: AssistantScope, args: Record<string, unknown>, result?: string): AssistantChange {
+  let id: string | null = null;
+  try {
+    const parsed = result ? (JSON.parse(result) as unknown) : null;
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && typeof (parsed as { id?: unknown }).id === 'string') {
+      id = (parsed as { id: string }).id;
+    }
+  } catch {
+    // Not JSON: no id from the result.
+  }
+  if (!id) {
+    const key = Object.keys(args).find((k) => k.endsWith('_id') && typeof args[k] === 'string');
+    id = key ? (args[key] as string) : null;
+  }
+  return { tool, module, verb: changeVerb(tool), id, summary: describeProposal(tool, module, args) };
+}
+
+const VERB_LABEL: Record<AssistantChange['verb'], string> = { added: 'Added to', changed: 'Changed in', removed: 'Removed from' };
+
+/** The caption over a reply's changes in one module: "Added to Tasks", "3 added to Groceries". */
+export function changeCaption(changes: AssistantChange[], moduleLabel: string): string {
+  const verbs = new Set(changes.map((c) => c.verb));
+  if (verbs.size > 1) return `${changes.length} changes in ${moduleLabel}`;
+  const verb = changes[0]?.verb ?? 'changed';
+  if (changes.length === 1) return `${VERB_LABEL[verb]} ${moduleLabel}`;
+  return `${changes.length} ${verb === 'added' ? 'added to' : verb === 'removed' ? 'removed from' : 'changed in'} ${moduleLabel}`;
 }
 
 export interface AssistantMemory {

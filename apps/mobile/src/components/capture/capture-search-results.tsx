@@ -58,11 +58,8 @@ import { randomUUID } from '@/lib/uuid';
 type MemberProfiles = Record<string, { email: string; name: string | null; avatar: string | null }>;
 type Patch<T> = (id: string, patch: Partial<T>) => void;
 
-export interface CaptureSearchResultsProps {
-  /** The unfiltered cross-section index (core's useGlobalSearchIndex). */
-  index: GlobalHit[];
-  query: string;
-  docsLoading?: boolean;
+/** What a live row needs: the records, the store writes and the editors. */
+export interface LiveRowSources {
   groupId: string | null;
   currentUserId: string | null;
   groupMembers: GroupMember[];
@@ -95,46 +92,71 @@ export interface CaptureSearchResultsProps {
   onEditSetup: (item: SetupItem) => void;
   /** Close the sheet and route (checklist and recipe rows, which open their detail). */
   onNavigate: (href: string) => void;
+}
+
+export interface CaptureSearchResultsProps extends LiveRowSources {
+  /** The unfiltered cross-section index (core's useGlobalSearchIndex). */
+  index: GlobalHit[];
+  query: string;
+  docsLoading?: boolean;
   /** A plain row's tap (core's resolveGlobalHitAction decides nav vs sheet). */
   onHitPress: (hit: GlobalHit) => void;
 }
 
-export function CaptureSearchResults({
-  index,
-  query,
-  docsLoading,
-  groupId,
-  currentUserId,
-  groupMembers,
-  memberProfiles,
-  tasks,
-  groceries,
-  costItems,
-  setupItems,
-  recipes,
-  shopperWants = [],
-  checklists,
-  setupStores,
-  customAisles,
-  libraryPriceFor,
-  writeTask,
-  patchTask,
-  softDeleteTask,
-  patchGrocery,
-  patchCost,
-  softDeleteCost,
-  patchSetup,
-  softDeleteSetup,
-  onEditTask,
-  onEditGrocery,
-  onEditCost,
-  onEditSetup,
-  onNavigate,
-  onHitPress,
-}: CaptureSearchResultsProps) {
+/** An item to draw as its section's own row. */
+export interface LiveRowRef {
+  section: string;
+  id: string;
+}
+
+export function CaptureSearchResults({ index, query, docsLoading, onHitPress, ...sources }: CaptureSearchResultsProps) {
+  const hits = useFuzzySearch(index, query, ['title', 'subtitle', 'keywords']).slice(0, GLOBAL_SEARCH_RESULT_LIMIT);
+  const renderRow = useLiveRowRenderer(sources, hits);
+  return (
+    <GlobalSearchResults hits={hits} query={query} docsLoading={docsLoading} renderRow={renderRow} onHitPress={onHitPress} />
+  );
+}
+
+/**
+ * Draws an item as its section's REAL row, wired to the same store writes as
+ * its own screen: the capture sheet's search results and the changes under an
+ * Assistant reply both use it. Null for a section with no row of its own.
+ * `hits` scopes the batched comment counts.
+ */
+export function useLiveRowRenderer(
+  {
+    groupId,
+    currentUserId,
+    groupMembers,
+    memberProfiles,
+    tasks,
+    groceries,
+    costItems,
+    setupItems,
+    recipes,
+    shopperWants = [],
+    checklists,
+    setupStores,
+    customAisles,
+    libraryPriceFor,
+    writeTask,
+    patchTask,
+    softDeleteTask,
+    patchGrocery,
+    patchCost,
+    softDeleteCost,
+    patchSetup,
+    softDeleteSetup,
+    onEditTask,
+    onEditGrocery,
+    onEditCost,
+    onEditSetup,
+    onNavigate,
+  }: LiveRowSources,
+  hits: readonly LiveRowRef[]
+): (hit: LiveRowRef) => React.ReactNode | null {
   const modules = useModules();
   const currency = useHouseholdCurrency();
-  const hits = useFuzzySearch(index, query, ['title', 'subtitle', 'keywords']).slice(0, GLOBAL_SEARCH_RESULT_LIMIT);
 
   // The bound (non-throwing) client: this only mounts while searching, long
   // after cold boot binds one, and every query below is skipped on no ids.
@@ -225,7 +247,7 @@ export function CaptureSearchResults({
     ]);
   };
 
-  const renderRow = (hit: GlobalHit): React.ReactNode | null => {
+  const renderRow = (hit: LiveRowRef): React.ReactNode | null => {
     switch (hit.section) {
       case 'tasks': {
         const task = tasks.find((t) => t.id === hit.id);
@@ -347,8 +369,5 @@ export function CaptureSearchResults({
         return null;
     }
   };
-
-  return (
-    <GlobalSearchResults hits={hits} query={query} docsLoading={docsLoading} renderRow={renderRow} onHitPress={onHitPress} />
-  );
+  return renderRow;
 }

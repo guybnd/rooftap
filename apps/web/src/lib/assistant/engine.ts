@@ -79,7 +79,7 @@ export interface TurnResult {
   outputTokens: number;
   steps: number;
   /** Tools that ran (not proposals), for the activity line and Undo. */
-  ran: { tool: string; args: Record<string, unknown>; ok: boolean }[];
+  ran: { tool: string; module: string; args: Record<string, unknown>; ok: boolean; write: boolean; result?: string }[];
   /** Where the time went: each model call, and each tool that ran, in milliseconds. */
   timing: { llmMs: number[]; tools: { tool: string; ms: number }[] };
 }
@@ -108,10 +108,11 @@ async function handleCall(
   const started = Date.now();
   try {
     const result = await tool.run(call.args);
-    out.ran.push({ tool: tool.name, args: call.args, ok: !result.isError });
-    return capped(resultText(result));
+    const text = resultText(result);
+    out.ran.push({ tool: tool.name, module: tool.module, args: call.args, ok: !result.isError, write: !tool.lookup, ...(tool.lookup ? {} : { result: text }) });
+    return capped(text);
   } catch (e) {
-    out.ran.push({ tool: tool.name, args: call.args, ok: false });
+    out.ran.push({ tool: tool.name, module: tool.module, args: call.args, ok: false, write: !tool.lookup });
     return JSON.stringify({ error: e instanceof Error ? e.message : "Tool failed" });
   } finally {
     const ms = Date.now() - started;

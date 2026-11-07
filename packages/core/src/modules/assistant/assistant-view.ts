@@ -4,7 +4,7 @@
 // links only), so web and native render the same reply the same way.
 
 import { isConversationOpen } from './assistant';
-import type { AssistantConversation, AssistantStatus } from './assistant-api';
+import type { AssistantChange, AssistantConversation, AssistantStatus } from './assistant-api';
 import { timeAgo } from '../../relative-time';
 import { MCP_TOOLS } from '../../mcp-tools';
 import { getModule, type ModuleId } from '../../modules';
@@ -331,3 +331,52 @@ export const VOICE_PAUSE_MS = 2200;
 export const VOICE_MAX_MS = 60000;
 /** How long to wait for any speech before giving up. */
 export const VOICE_FIRST_WORDS_MS = 8000;
+
+/** The row kind (GlobalHit.section) each module's changed items draw as; a module not here shows its summary line. */
+const CHANGE_ROW: Partial<Record<ModuleId, string>> = {
+  household: 'tasks',
+  groceries: 'groceries',
+  costs: 'costs',
+  setup: 'setup',
+  recipes: 'recipes',
+  checklists: 'checklists',
+  shopper: 'shopper',
+};
+
+/** A reply's changes by module, in the order they happened, each with what its rows need. */
+export interface ChangeGroup {
+  module: ModuleId;
+  /** The module's short name, e.g. "Tasks". */
+  label: string;
+  /** Where the module lives, for a change with no row of its own. */
+  href: string | null;
+  /** The row kind to draw changed items as, or null for summary lines. */
+  rowKind: string | null;
+  changes: AssistantChange[];
+}
+
+export function changeGroups(changes: AssistantChange[] | undefined): ChangeGroup[] {
+  const groups: ChangeGroup[] = [];
+  for (const change of changes ?? []) {
+    const module = change.module as ModuleId;
+    let group = groups.find((g) => g.module === module);
+    if (!group) {
+      const manifest = ALL_MANIFESTS.find((m) => m.id === module);
+      group = {
+        module,
+        label: manifest?.section?.shortLabel ?? manifest?.label ?? 'Rooftap',
+        href: manifest?.section?.basePath ?? null,
+        rowKind: CHANGE_ROW[module] ?? null,
+        changes: [],
+      };
+      groups.push(group);
+    }
+    // One entry per item: changing a task twice in a turn shows it once.
+    if (change.id && group.changes.some((c) => c.id === change.id)) continue;
+    group.changes.push(change);
+  }
+  return groups;
+}
+
+/** How many changed items show in full before the rest fold under "Show all". */
+export const CHANGES_SHOWN = 3;

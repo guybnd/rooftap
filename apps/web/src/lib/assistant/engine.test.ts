@@ -93,7 +93,7 @@ describe("runAssistantTurn", () => {
     expect(get.run).toHaveBeenCalledOnce();
     expect(r.reply).toBe("You need eggs.");
     expect(r.inputTokens).toBe(200);
-    expect(r.ran).toEqual([{ tool: "get_grocery_items", args: {}, ok: true }]);
+    expect(r.ran).toEqual([{ tool: "get_grocery_items", module: "groceries", args: {}, ok: true, write: true, result: '[{"name":"Eggs"}]' }]);
     expect(llm.calls[1].messages.at(-1)).toEqual({ role: "tool", toolCallId: "c1", name: "get_grocery_items", content: '[{"name":"Eggs"}]' });
   });
 

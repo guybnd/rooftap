@@ -64,11 +64,8 @@ const RESULT_LIMIT = 3;
 type MemberProfiles = Record<string, { email: string; name: string | null; avatar: string | null }>;
 type Patch<T> = (id: string, patch: Partial<T>) => void;
 
-export interface CaptureSearchResultsProps {
-  /** The unfiltered cross-section index (core's useGlobalSearchIndex). */
-  index: GlobalHit[];
-  query: string;
-  docsLoading?: boolean;
+/** What a live row needs: the records, the store writes and the editors. */
+export interface LiveRowSources {
   groupId: string;
   currentUserId: string | null;
   groupMembers: GroupMember[];
@@ -102,8 +99,21 @@ export interface CaptureSearchResultsProps {
   onEditSetup: (item: SetupItem) => void;
   /** Close the sheet ahead of a row's own navigation (checklist and recipe rows). */
   onBeforeNavigate: () => void;
+}
+
+export interface CaptureSearchResultsProps extends LiveRowSources {
+  /** The unfiltered cross-section index (core's useGlobalSearchIndex). */
+  index: GlobalHit[];
+  query: string;
+  docsLoading?: boolean;
   /** A plain row's click (core's resolveGlobalHitAction decides nav vs sheet). */
   onHitClick: (hit: GlobalHit) => void;
+}
+
+/** An item to draw as its section's own row. */
+export interface LiveRowRef {
+  section: string;
+  id: string;
 }
 
 /** A hit with no row of its own: section tile, title, one meta line, chevron. */
@@ -134,10 +144,13 @@ function PlainHitRow({ hit, onClick }: { hit: GlobalHit; onClick: () => void }) 
   );
 }
 
-export function CaptureSearchResults({
-  index,
-  query,
-  docsLoading,
+/**
+ * Draws an item as its section's REAL row, wired to the same store writes as
+ * its own page: the capture sheet's search results and the changes under an
+ * Assistant reply both use it. Null for a section with no row of its own.
+ */
+export function useLiveRowRenderer({
+
   groupId,
   currentUserId,
   groupMembers,
@@ -167,12 +180,9 @@ export function CaptureSearchResults({
   onEditCost,
   onEditSetup,
   onBeforeNavigate,
-  onHitClick,
-}: CaptureSearchResultsProps) {
+}: LiveRowSources): (hit: LiveRowRef) => ReactNode | null {
   const modules = useModules();
   const currency = useHouseholdCurrency();
-  const hits = useFuzzySearch(index, query, ["title", "subtitle", "keywords"]).slice(0, RESULT_LIMIT);
-
   // Checklist items back both a task's "Checklist N/M" chip and a checklist
   // hit's meter; recipe ingredients back a recipe hit's have/need line. This
   // only mounts while a search is typed, so the stores wake only then.
@@ -218,7 +228,7 @@ export function CaptureSearchResults({
     });
   };
 
-  const renderRow = (hit: GlobalHit): ReactNode | null => {
+  const renderRow = (hit: LiveRowRef): ReactNode | null => {
     switch (hit.section) {
       case "tasks": {
         const task = tasks.find((t) => t.id === hit.id);
@@ -324,6 +334,13 @@ export function CaptureSearchResults({
         return null;
     }
   };
+
+  return renderRow;
+}
+
+export function CaptureSearchResults({ index, query, docsLoading, onHitClick, ...sources }: CaptureSearchResultsProps) {
+  const hits = useFuzzySearch(index, query, ["title", "subtitle", "keywords"]).slice(0, RESULT_LIMIT);
+  const renderRow = useLiveRowRenderer(sources);
 
   if (hits.length === 0) {
     return (

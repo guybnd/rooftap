@@ -69,6 +69,7 @@ import { getBoundSupabaseClient } from '@/lib/supabase-client';
 import { assistantApi } from './assistant-api';
 import { RooftapTile } from '@/components/brand/rooftap-mark';
 import { ListeningBar, phoneVoiceEngine } from './voice-input';
+import { ChatChanges } from './chat-changes';
 
 function Spans({ spans }: { spans: ReplySpan[] }) {
   const router = useRouter();
@@ -272,6 +273,7 @@ export function MessageBubble({
           {message.content ? <ReplyText text={message.content} /> : null}
           {message.content ? <ReplyItems text={message.content} /> : null}
           <ProposalCard message={message} busy={busy} onDecide={(d, picks) => onDecide(message.id, d, picks)} />
+          <ChatChanges changes={message.changes} />
           {meta}
         </View>
       </View>

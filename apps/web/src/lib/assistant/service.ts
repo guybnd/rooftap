@@ -13,6 +13,8 @@ import {
   costMicros,
   applyProposalPicks,
   describeProposal,
+  changeFromRun,
+  type AssistantChange,
   entitlementTier,
   getModule,
   MCP_TOOLS,
@@ -205,7 +207,8 @@ interface MessageRow {
   role: "user" | "assistant" | "tool";
   content: string;
   tool_calls: unknown;
-  proposal: { items?: (Proposal & { summary?: string })[] } | null;
+  /** Held changes (items), plus the changes the turn made without asking (changes, since inline changes). */
+  proposal: { items?: (Proposal & { summary?: string })[]; changes?: AssistantChange[] } | null;
   proposal_state: ProposalState | null;
   channel: MessageChannel;
   cost_micros: number | null;
@@ -254,6 +257,7 @@ export function toMessage(row: MessageRow, names: Map<string, string>, viewerId?
     channel: row.channel,
     created_at: row.created_at,
     proposal: row.proposal && row.proposal_state ? { items: proposalItems(row), state: row.proposal_state } : null,
+    ...(row.proposal?.changes?.length ? { changes: row.proposal.changes } : {}),
     cost_micros: row.cost_micros,
     ...(row.photos?.length ? { photos: row.photos.map((p) => ({ url: urls?.get(p) ?? null })) } : {}),
   };
@@ -857,6 +861,11 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
   }));
   if (steps.length) await ctx.admin.from("assistant_messages").insert(steps);
   const items = turn.proposals.map((p) => ({ ...p, summary: describeProposal(p.tool, p.module as AssistantScope, p.args) }));
+  // What the turn changed without asking, so the reply can show those items' rows.
+  const changes = turn.ran
+    .filter((r) => r.ok && r.write)
+    .map((r) => changeFromRun(r.tool, r.module as AssistantScope, r.args, r.result))
+    .slice(0, 40);
   const { data: replyRow } = await ctx.admin
     .from("assistant_messages")
     .insert({
@@ -866,7 +875,7 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
       user_id: ctx.userId,
       role: "assistant",
       content: turn.reply,
-      proposal: items.length ? { items } : null,
+      proposal: items.length || changes.length ? { items, ...(changes.length ? { changes } : {}) } : null,
       proposal_state: items.length ? "pending" : null,
       channel,
       model,

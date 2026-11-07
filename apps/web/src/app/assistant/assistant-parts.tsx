@@ -48,6 +48,7 @@ import { assistantApi } from '@/lib/assistant-client';
 import { createClient } from '@/lib/supabase/client';
 import { RooftapTile } from '@/components/brand/rooftap-mark';
 import { ListeningBar, browserVoiceEngine } from './voice-input';
+import { ChatChanges } from './chat-changes';
 
 /** No recognizer: the mic stays hidden (the server render, a browser without speech input). */
 const NO_VOICE: VoiceEngine = { available: false, requestPermission: async () => false, start: () => {}, stop: () => {}, abort: () => {} };
@@ -264,6 +265,7 @@ export function MessageBubble({
           {message.content ? <ReplyText text={message.content} /> : null}
           {message.content ? <ReplyItems text={message.content} /> : null}
           <ProposalCard message={message} busy={busy} onDecide={(d, picks) => onDecide(message.id, d, picks)} />
+          <ChatChanges changes={message.changes} />
           {meta}
         </div>
       </div>
