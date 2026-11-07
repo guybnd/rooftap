@@ -14,7 +14,7 @@
 
 import * as React from "react";
 import { Dialog as SheetPrimitive } from "@base-ui/react/dialog";
-import { ArrowUp, ChevronRight, CircleAlert, Ellipsis, X, type LucideIcon } from "lucide-react";
+import { ArrowUp, Check, ChevronRight, CircleAlert, Ellipsis, X, type LucideIcon } from "lucide-react";
 import {
   dialog,
   dueQuickChoices,
@@ -49,12 +49,17 @@ export interface ItemSheetQuickField {
   editor: React.ReactNode;
 }
 
-/** Words the title gave a field ("tomorrow" set Due), shown with an undo. */
+/**
+ * Words in the title that mean a field ("tomorrow" means Due). Pending: still
+ * being typed, a click sets it now. Set: the words left the title, a click
+ * puts them back.
+ */
 export interface ItemSheetTitleMatch {
   id: string;
   label: string;
   icon?: React.ReactNode;
-  onUndo: () => void;
+  pending?: boolean;
+  onPress: () => void;
 }
 
 export interface ItemSheetProps {
@@ -268,16 +273,19 @@ export function ItemSheet({
                     type="button"
                     onClick={() => {
                       tick();
-                      m.onUndo();
+                      m.onPress();
                       titleRef.current?.focus();
                     }}
-                    title="Put the words back in the title"
-                    aria-label={`${m.label}, from the title. Put the words back`}
-                    className="inline-flex h-7 items-center gap-1.5 rounded-full bg-primary/10 pl-2.5 pr-2 text-xs font-medium text-primary outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                    title={m.pending ? "Take the words out of the title" : "Put the words back in the title"}
+                    aria-label={m.pending ? `Set ${m.label}` : `${m.label}, from the title. Put the words back`}
+                    className={cn(
+                      "inline-flex h-7 items-center gap-1.5 rounded-full pl-2.5 pr-2 text-xs font-medium text-primary outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                      m.pending ? "border border-dashed border-primary/60" : "bg-primary/10"
+                    )}
                   >
                     {m.icon}
                     {m.label}
-                    <X className="size-3" />
+                    {m.pending ? <Check className="size-3" /> : <X className="size-3" />}
                   </button>
                 ))}
               </div>

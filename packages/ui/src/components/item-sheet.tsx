@@ -22,14 +22,13 @@ import {
   View,
   type KeyboardEvent,
 } from 'react-native';
-import { ChevronRight, CircleAlert, Ellipsis, ArrowUp, X, type LucideIcon } from 'lucide-react-native';
+import { Check, ChevronRight, CircleAlert, Ellipsis, ArrowUp, X, type LucideIcon } from 'lucide-react-native';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   dialog,
   dueQuickChoices,
@@ -43,7 +42,6 @@ import {
 } from '@homeup/core';
 import { cn } from '../lib/cn';
 import { commit, select, tick, warn } from '../lib/haptics';
-import { useKeyboardOffset } from '../hooks/use-keyboard-offset';
 import { useStillMotion } from '../theme/theme-provider';
 import { BottomSheet } from './bottom-sheet';
 import { BottomSheetScrollView } from './bottom-sheet-scroll-view';
@@ -75,14 +73,19 @@ export interface ItemSheetQuickField {
   editor: React.ReactNode;
 }
 
-/** Words the title gave a field ("tomorrow" set Due). Shown under the title with an undo. */
+/**
+ * Words in the title that mean a field ("tomorrow" means Due), shown under
+ * the title. A pending match is still being typed (no space after it yet):
+ * tapping sets it now. A set match took its words out of the title: tapping
+ * puts them back.
+ */
 export interface ItemSheetTitleMatch {
   id: string;
-  /** "Due Tomorrow". */
+  /** "Tomorrow". */
   label: string;
   icon?: React.ReactNode;
-  /** Puts the words back in the title and the field back as it was. */
-  onUndo: () => void;
+  pending?: boolean;
+  onPress: () => void;
 }
 
 export interface ItemSheetProps {
@@ -154,21 +157,27 @@ export function ItemSheet({
   const [tray, setTray] = React.useState<string | null>(null);
   const [trayHeight, setTrayHeight] = React.useState(lastKeyboardHeight);
   const titleRef = React.useRef<TextInput>(null);
-  const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
-  const keyboardOffset = useKeyboardOffset(insets.bottom);
   const still = useStillMotion();
 
   // Remember the keyboard's height so the tray can take its exact place.
+  const keyboardUp = React.useRef(false);
   React.useEffect(() => {
-    const sub = Keyboard.addListener('keyboardDidShow', (e: KeyboardEvent) => {
+    const show = Keyboard.addListener('keyboardDidShow', (e: KeyboardEvent) => {
+      keyboardUp.current = true;
       const h = Math.round(e.endCoordinates.height);
       if (h > 120) {
         lastKeyboardHeight = h;
         setTrayHeight(h);
       }
     });
-    return () => sub.remove();
+    const hide = Keyboard.addListener('keyboardDidHide', () => {
+      keyboardUp.current = false;
+    });
+    return () => {
+      show.remove();
+      hide.remove();
+    };
   }, []);
 
   // A failed add nudges the band sideways and fires warn().
@@ -188,14 +197,26 @@ export function ItemSheet({
   }, [nudge, still, shake]);
   const bandStyle = useAnimatedStyle(() => ({ transform: [{ translateX: shake.value }] }));
 
-  const bodyStyle = useAnimatedStyle(() => ({
-    maxHeight: Math.max(BODY_MIN_HEIGHT, windowHeight * BODY_REST_FRACTION - keyboardOffset.value),
-  }));
+  // The list rests at most at 62% of the window. With the keyboard up the
+  // sheet takes the space above it (BottomSheet keyboardGrows) and the list
+  // shrinks to fit under the band, so More shows rows, not one.
+  const bodyStyle = { flexShrink: 1, maxHeight: Math.max(BODY_MIN_HEIGHT, windowHeight * BODY_REST_FRACTION) };
 
   const requestClose = React.useCallback(() => {
     if (editing) onSubmit();
     else onOpenChange(false);
   }, [editing, onSubmit, onOpenChange]);
+
+  // A tap outside first puts the keyboard (or a chip's tray) away and lets
+  // the sheet settle at the bottom. The next tap outside closes it.
+  const backdropPress = () => {
+    if (keyboardUp.current || tray) {
+      Keyboard.dismiss();
+      setTray(null);
+      return;
+    }
+    requestClose();
+  };
 
   const submit = React.useCallback(() => {
     if (!editing) commit();
@@ -242,8 +263,14 @@ export function ItemSheet({
   );
 
   return (
-    <BottomSheet open={open} onOpenChange={(next) => (next ? onOpenChange(true) : requestClose())} className="max-h-[92%]">
-      <View>
+    <BottomSheet
+      open={open}
+      onOpenChange={(next) => (next ? onOpenChange(true) : requestClose())}
+      keyboardGrows
+      onBackdropPress={backdropPress}
+      className="max-h-[92%]"
+    >
+      <View style={{ flexShrink: 1 }}>
         {/* The band: what the item is, and where you type its name. */}
         <Animated.View
           style={bandStyle}
@@ -308,18 +335,21 @@ export function ItemSheet({
                 <Pressable
                   key={m.id}
                   accessibilityRole="button"
-                  accessibilityLabel={`${m.label}, from the title`}
-                  accessibilityHint="Puts the words back in the title"
+                  accessibilityLabel={m.pending ? `Set ${m.label}` : `${m.label}, from the title`}
+                  accessibilityHint={m.pending ? 'Takes the words out of the title' : 'Puts the words back in the title'}
                   onPress={() => {
                     tick();
-                    m.onUndo();
+                    m.onPress();
                   }}
                   hitSlop={{ top: 6, bottom: 6 }}
-                  className="h-8 flex-row items-center gap-1.5 rounded-full bg-primary/10 pl-2.5 pr-2"
+                  className={cn(
+                    'h-8 flex-row items-center gap-1.5 rounded-full pl-2.5 pr-2',
+                    m.pending ? 'border border-dashed border-primary/60' : 'bg-primary/10'
+                  )}
                 >
                   {m.icon}
                   <Text className="text-caption font-medium text-primary">{m.label}</Text>
-                  <X size={13} className="text-primary" />
+                  {m.pending ? <Check size={13} className="text-primary" /> : <X size={13} className="text-primary" />}
                 </Pressable>
               ))}
             </ScrollView>

@@ -125,6 +125,14 @@ export interface BottomSheetProps extends ViewProps {
   overlayClassName?: string;
   /** Float above the keyboard + shrink to fit (HOUP-244). Default true. */
   keyboardAware?: boolean;
+  /**
+   * Content can grow while the keyboard is up (the item sheet's More): cap
+   * at the space above the keyboard, not at the height the sheet rested at
+   * before the keyboard opened. Default false.
+   */
+  keyboardGrows?: boolean;
+  /** Replaces the backdrop tap's close (the item sheet puts the keyboard away first). */
+  onBackdropPress?: () => void;
 }
 
 /** Sheet's resting cap — 88% of the window, absent any keyboard. */
@@ -181,6 +189,8 @@ function SheetBody({
   handleIndicatorClassName,
   overlayClassName,
   keyboardAware = true,
+  keyboardGrows = false,
+  onBackdropPress,
   animateIn,
   onHidden,
   ...props
@@ -324,7 +334,7 @@ function SheetBody({
   const keyboardCapStyle = useAnimatedStyle(() => {
     const offset = keyboardOffset.value;
     if (offset === 0) return { maxHeight: windowHeight };
-    const restingCap = restingHeight.value > 0 ? restingHeight.value : windowHeight * MAX_HEIGHT_FRACTION;
+    const restingCap = !keyboardGrows && restingHeight.value > 0 ? restingHeight.value : windowHeight * MAX_HEIGHT_FRACTION;
     return { maxHeight: Math.min(restingCap, windowHeight - offset - insets.top) };
   });
   const backdropStyle = useAnimatedStyle(() => ({ opacity: scrimOpacity.value }));
@@ -347,7 +357,7 @@ function SheetBody({
       >
         <AnimatedPressable
           accessibilityLabel="Close"
-          onPress={close}
+          onPress={onBackdropPress ?? close}
           style={backdropStyle}
           className={cn('absolute inset-0 bg-black/10', overlayClassName)}
         />

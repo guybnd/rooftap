@@ -202,8 +202,33 @@ export function HouseholdTaskModal({
         ) : (
           <CalendarDays size={13} className="text-primary" />
         ),
-      onUndo: () => putWordsBack(t.match.raw),
+      onPress: () => putWordsBack(t.match.raw),
     }));
+  // Words still being typed at the end of a changed title: shown dashed, and
+  // a tap (or a space, or saving) sets them.
+  const pendingWords =
+    form.title !== initial.current.title
+      ? matchTitleWords(form.title, { today, people: wordPeople, final: true, ignore: ignored }).matches
+      : [];
+  if (pendingWords.length) {
+    titleMatches.push({
+      id: 'pending',
+      label: pendingWords.map((m) => titleMatchLabel(m, today, wordPeople)).join(', '),
+      icon: pendingWords[0].kind === 'who' ? (
+        <Avatar userId={pendingWords[0].value} profiles={memberProfiles} size={18} />
+      ) : pendingWords[0].kind === 'time' ? (
+        <Clock size={13} className="text-primary" />
+      ) : (
+        <CalendarDays size={13} className="text-primary" />
+      ),
+      pending: true,
+      onPress: () => {
+        const { next, found } = takeWords(form, form.title, true);
+        setForm({ ...next, title: next.title ? `${next.title} ` : '' });
+        setTaken((t) => [...t.filter((x) => !found.some((n) => n.match.kind === x.match.kind)), ...found]);
+      },
+    });
+  }
   // Moving the date keeps a picked repeat on the same pattern ("Weekly on
   // Sunday" becomes "Weekly on Monday"); a custom rule stays as it is.
   // Clearing the date clears the time too.

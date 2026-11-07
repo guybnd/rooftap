@@ -207,8 +207,33 @@ export function HouseholdTaskModal({ isOpen, task, groupId, defaultTitle, defaul
         ) : (
           <CalendarDays className="size-3" />
         ),
-      onUndo: () => putWordsBack(t.match.raw),
+      onPress: () => putWordsBack(t.match.raw),
     }));
+  // Words still being typed at the end of a changed title: shown dashed, and
+  // a tap (or a space, or saving) sets them.
+  const pendingWords =
+    form.title !== initial.current.title
+      ? matchTitleWords(form.title, { today, people: wordPeople, final: true, ignore: ignored }).matches
+      : [];
+  if (pendingWords.length) {
+    titleMatches.push({
+      id: 'pending',
+      label: pendingWords.map((m) => titleMatchLabel(m, today, wordPeople)).join(', '),
+      icon: pendingWords[0].kind === 'who' ? (
+        <Avatar userId={pendingWords[0].value} profiles={memberProfiles} size={16} />
+      ) : pendingWords[0].kind === 'time' ? (
+        <Clock className="size-3" />
+      ) : (
+        <CalendarDays className="size-3" />
+      ),
+      pending: true,
+      onPress: () => {
+        const { next, found } = takeWords(form, form.title, true);
+        setForm({ ...next, title: next.title ? `${next.title} ` : '' });
+        setTaken((t) => [...t.filter((x) => !found.some((n) => n.match.kind === x.match.kind)), ...found]);
+      },
+    });
+  }
   // Moving the date keeps a picked repeat on the same pattern; clearing it clears the time.
   const setDue = (next: string) =>
     setForm((f) => ({

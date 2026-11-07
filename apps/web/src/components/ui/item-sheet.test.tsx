@@ -33,7 +33,7 @@ describe("ItemSheet", () => {
           heading="New to-do"
           title=""
           onTitleChange={() => {}}
-          titleMatches={[{ id: "tomorrow", label: "Tomorrow", onUndo }]}
+          titleMatches={[{ id: "tomorrow", label: "Tomorrow", onPress: onUndo }, { id: "friday", label: "Fri", pending: true, onPress: onUndo }]}
           titlePlaceholder="What needs doing?"
           quickFields={[{ id: "due", label: "Today", trayLabel: "Due", editor: <p>due editor</p> }]}
           onSubmit={onSubmit}
@@ -80,10 +80,12 @@ describe("ItemSheet", () => {
     expect(onSubmit).toHaveBeenCalledTimes(1);
   });
 
-  it("shows words the title set, and puts them back", async () => {
+  it("shows words the title set or is about to set", async () => {
     const onUndo = vi.fn();
     await render("add", vi.fn(), onUndo);
     await act(async () => button("Tomorrow, from the title. Put the words back")!.click());
     expect(onUndo).toHaveBeenCalledTimes(1);
+    await act(async () => button("Set Fri")!.click());
+    expect(onUndo).toHaveBeenCalledTimes(2);
   });
 });
