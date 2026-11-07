@@ -246,6 +246,7 @@ export * from './modules/assistant/assistant-answers';
 export * from './modules/assistant/assistant-popup';
 export * from './brand-mark';
 export * from './word-pop';
+export * from './touches';
 export * from './row-actions';
 export * from './modules/assistant/assistant-thread';
 export * from './modules/assistant/use-composer-photos';

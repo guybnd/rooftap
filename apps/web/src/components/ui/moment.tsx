@@ -4,12 +4,16 @@
 // full-bleed coral screen for a real milestone only (today's last item
 // finished), at most once a day, dismissed by a click anywhere or Escape.
 // The only place coral is a ground rather than an interactive colour. No
-// confetti; the check scales in unless reduced motion is on (globals.css
-// collapses the motion tokens to 0ms).
+// confetti: the check scales in, and as it lands six dots fly out of it into
+// the Rooftap roof over it (Hearth §8 "Roof dots", in the ground's own
+// foreground), unless reduced motion is on (globals.css collapses the motion
+// tokens to 0ms).
 
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Check } from "lucide-react";
+import { MOTION_DURATIONS_MS } from "@homeup/core";
+import { RoofDots } from "@/components/ui/roof-dots";
 
 export function Moment({
   open,
@@ -49,8 +53,9 @@ export function Moment({
       className="fixed inset-0 z-[100] flex flex-col justify-between bg-primary px-6 pb-14 pt-28 text-primary-foreground animate-in fade-in duration-[var(--motion-slow)] md:items-center md:justify-center md:gap-16 md:p-10"
     >
       <div className="flex flex-col gap-6 md:items-center md:text-center">
-        <span className="flex size-20 items-center justify-center rounded-full bg-primary-foreground/15 animate-in zoom-in-50 duration-[var(--motion-slow)]">
+        <span className="relative flex size-20 items-center justify-center rounded-full bg-primary-foreground/15 animate-in zoom-in-50 duration-[var(--motion-slow)]">
           <Check className="size-10" strokeWidth={2.6} />
+          <RoofDots width={80} height={80} delay={MOTION_DURATIONS_MS.fast} dotClassName="bg-primary-foreground" />
         </span>
         <div className="flex flex-col gap-3">
           <h2 id="moment-title" className="text-hero-section">

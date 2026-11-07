@@ -4,9 +4,10 @@
 // per surface, and it is the lede: rows and tiles below never restate it.
 import * as React from 'react';
 import { Text, View, type ViewProps } from 'react-native';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
-import { MOTION_DURATIONS_MS, meterSegments } from '@homeup/core';
+import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { HERO_ROLL_MS, MOTION_DURATIONS_MS, heroRollDirection, meterSegments } from '@homeup/core';
 import { cn } from '../lib/cn';
+import { useStillMotion } from '../theme/theme-provider';
 import { ArriveView } from './arrive';
 
 const SWIFT_OUT = Easing.bezier(0.16, 1, 0.3, 1);
@@ -43,13 +44,7 @@ export function HeroLede({ value, label, caption, size = 'section', meter, tone 
     return (
       <ArriveView className={cn('gap-2', className)} {...props}>
         <View className="flex-row items-center gap-2.5">
-          <Text
-            accessibilityRole="header"
-            className={cn(size === 'home' ? 'text-hero' : 'text-hero-section', TONE_CLASS[tone])}
-            style={{ fontVariant: ['tabular-nums'] }}
-          >
-            {value}
-          </Text>
+          <HeroValue value={value} className={cn(size === 'home' ? 'text-hero' : 'text-hero-section', TONE_CLASS[tone])} />
           <View className="min-w-0 flex-1 gap-0.5">
             {label != null && (
               <Text numberOfLines={1} className="text-title text-muted-foreground">
@@ -71,13 +66,7 @@ export function HeroLede({ value, label, caption, size = 'section', meter, tone 
   return (
     <ArriveView className={cn('gap-2', className)} {...props}>
       <View className="flex-row flex-wrap items-end gap-x-2.5">
-        <Text
-          accessibilityRole="header"
-          className={cn(size === 'home' ? 'text-hero' : 'text-hero-section', TONE_CLASS[tone])}
-          style={{ fontVariant: ['tabular-nums'] }}
-        >
-          {value}
-        </Text>
+        <HeroValue value={value} className={cn(size === 'home' ? 'text-hero' : 'text-hero-section', TONE_CLASS[tone])} />
         {label != null && (
           <Text className={cn('text-title text-muted-foreground', size === 'home' ? 'pb-3' : 'pb-2')}>{label}</Text>
         )}
@@ -85,6 +74,60 @@ export function HeroLede({ value, label, caption, size = 'section', meter, tone 
       {meter && <SegmentMeter done={meter.done} total={meter.total} />}
       {caption != null && <Text className="text-caption text-muted-foreground">{caption}</Text>}
     </ArriveView>
+  );
+}
+
+/**
+ * The Hero number. When it changes from one number to another it rolls like
+ * an odometer (Hearth §8 "Hero roll", core heroRollDirection): counting down,
+ * the new number drops in from above and the old one falls away; counting
+ * up, the reverse. Words, the first render and still motion just show.
+ */
+function HeroValue({ value, className }: { value: React.ReactNode; className: string }) {
+  const still = useStillMotion();
+  const [shown, setShown] = React.useState(value);
+  const [leaving, setLeaving] = React.useState<{ value: React.ReactNode; dir: -1 | 1 } | null>(null);
+  const [height, setHeight] = React.useState(0);
+  const roll = useSharedValue(1);
+  const dir = useSharedValue(0);
+  const h = useSharedValue(0);
+  React.useEffect(() => {
+    if (value === shown) return;
+    const d = heroRollDirection(shown, value);
+    setShown(value);
+    if (d === 0 || still || height === 0) {
+      setLeaving(null);
+      return;
+    }
+    setLeaving({ value: shown, dir: d });
+    dir.value = d;
+    h.value = height;
+    roll.value = 0;
+    roll.value = withTiming(1, { duration: HERO_ROLL_MS, easing: SWIFT_OUT }, (finished) => {
+      if (finished) runOnJS(setLeaving)(null);
+    });
+    // Only a new value starts a roll.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+  const inStyle = useAnimatedStyle(() => ({ transform: [{ translateY: (1 - roll.value) * dir.value * h.value }] }));
+  const outStyle = useAnimatedStyle(() => ({ transform: [{ translateY: -roll.value * dir.value * h.value }] }));
+  const text = { fontVariant: ['tabular-nums' as const] };
+  return (
+    <View style={leaving ? { overflow: 'hidden' } : undefined} onLayout={(e) => setHeight(e.nativeEvent.layout.height)}>
+      <Animated.Text accessibilityRole="header" className={className} style={[text, inStyle]}>
+        {shown}
+      </Animated.Text>
+      {leaving && (
+        <Animated.Text
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+          className={className}
+          style={[text, { position: 'absolute', left: 0, top: 0 }, outStyle]}
+        >
+          {leaving.value}
+        </Animated.Text>
+      )}
+    </View>
   );
 }
 

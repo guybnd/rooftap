@@ -1,3 +1,5 @@
+"use client";
+
 // Hearth v2 (Pulse, H1): the Hero lede — web twin of packages/ui's HeroLede.
 // A surface leads with one huge number (`.text-hero` on Home,
 // `.text-hero-section` on a section page) and says what it counts beside it:
@@ -5,8 +7,9 @@
 // `layout="inline"` is the compact head (Groceries redesign): the label and
 // caption stack in a column beside the number instead of under it, and
 // `trailing` (the screen's head actions) sits on the right of the same row.
-import { type ReactNode } from "react";
-import { meterSegments } from "@homeup/core";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { HERO_ROLL_MS, MOTION_EASE, heroRollDirection, meterSegments } from "@homeup/core";
+import { prefersStillMotion } from "@/lib/still-motion";
 import { cn } from "@/lib/utils";
 
 const TONE_CLASS = {
@@ -49,7 +52,7 @@ export function HeroLede({
     return (
       <div className={cn("grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3", className)}>
         <h1 className="contents">
-          <span className={cn("row-span-2 self-center", size === "home" ? "text-hero" : "text-hero-section", TONE_CLASS[tone])}>{value}</span>
+          <HeroValue value={value} className={cn("row-span-2 self-center", size === "home" ? "text-hero" : "text-hero-section", TONE_CLASS[tone])} />
           {label != null && (
             <span className={cn("col-start-2 truncate font-heading text-base font-semibold leading-tight text-muted-foreground", caption == null && "row-span-2")}>
               {label}
@@ -65,12 +68,56 @@ export function HeroLede({
   return (
     <div className={cn("flex flex-col gap-2", className)}>
       <h1 className="flex flex-wrap items-baseline gap-x-2.5">
-        <span className={cn(size === "home" ? "text-hero" : "text-hero-section", TONE_CLASS[tone])}>{value}</span>
+        <HeroValue value={value} className={cn(size === "home" ? "text-hero" : "text-hero-section", TONE_CLASS[tone])} />
         {label != null && <span className="font-heading text-base font-semibold text-muted-foreground">{label}</span>}
       </h1>
       {meter && <SegmentMeter done={meter.done} total={meter.total} />}
       {caption != null && <p className="text-xs text-muted-foreground">{caption}</p>}
     </div>
+  );
+}
+
+/**
+ * The Hero number. When it changes from one number to another it rolls like
+ * an odometer (Hearth §8 "Hero roll", core heroRollDirection): counting down,
+ * the new number drops in from above and the old one falls away; counting
+ * up, the reverse. Words, the first render and still motion just show.
+ */
+function HeroValue({ value, className }: { value: ReactNode; className: string }) {
+  const [shown, setShown] = useState(value);
+  const [leaving, setLeaving] = useState<{ value: ReactNode; dir: -1 | 1; at: number } | null>(null);
+  const inRef = useRef<HTMLSpanElement>(null);
+  const outRef = useRef<HTMLSpanElement>(null);
+  // A new value replaces the shown one in this render; a number to a number rolls.
+  if (value !== shown) {
+    const dir = heroRollDirection(shown, value);
+    setShown(value);
+    setLeaving(dir !== 0 && !prefersStillMotion() ? { value: shown, dir, at: Date.now() } : null);
+  }
+  useLayoutEffect(() => {
+    if (!leaving) return;
+    const opts = { duration: HERO_ROLL_MS, easing: MOTION_EASE.out };
+    const a = inRef.current?.animate?.([{ transform: `translateY(${leaving.dir * 100}%)` }, { transform: "translateY(0)" }], opts);
+    const b = outRef.current?.animate?.([{ transform: "translateY(0)" }, { transform: `translateY(${-leaving.dir * 100}%)` }], { ...opts, fill: "forwards" });
+    const done = () => setLeaving((now) => (now === leaving ? null : now));
+    if (b) b.onfinish = done;
+    else done();
+    return () => {
+      a?.cancel();
+      b?.cancel();
+    };
+  }, [leaving]);
+  return (
+    <span className={cn("relative inline-block tabular-nums", leaving && "overflow-hidden", className)}>
+      <span ref={inRef} className="inline-block">
+        {shown}
+      </span>
+      {leaving && (
+        <span ref={outRef} aria-hidden className="absolute left-0 top-0 inline-block">
+          {leaving.value}
+        </span>
+      )}
+    </span>
   );
 }
 

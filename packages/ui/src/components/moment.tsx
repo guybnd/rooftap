@@ -1,14 +1,17 @@
 // Hearth v2 (Pulse): a moment. A full-bleed coral screen for a real
 // milestone only (today's last item finished), at most once a day, always
 // dismissible with one tap or Back. The only place coral is a ground rather
-// than an interactive colour. No confetti; the check scales in unless the
-// person has asked for reduced motion.
+// than an interactive colour. No confetti: the check scales in, and as it
+// lands six dots fly out of it into the Rooftap roof over it (Hearth §8
+// "Roof dots", in the ground's own foreground), unless the person has asked
+// for reduced motion.
 import * as React from 'react';
 import { AccessibilityInfo, Modal, Pressable, Text, View } from 'react-native';
 import Animated, { FadeIn, ZoomIn } from 'react-native-reanimated';
 import { Check } from 'lucide-react-native';
 import { MOTION_DURATIONS_MS } from '@homeup/core';
 import { useThemeMaterial } from '../theme/theme-provider';
+import { RoofDots } from './roof-dots';
 
 function useReduceMotion(): boolean {
   const [reduceMotion, setReduceMotion] = React.useState(false);
@@ -55,6 +58,7 @@ export function Moment({ open, onDismiss, title, caption, detail, actionLabel = 
             className="h-20 w-20 items-center justify-center rounded-full bg-primary-foreground/15"
           >
             <Check size={40} strokeWidth={2.6} className="text-primary-foreground" />
+            {!reduceMotion && <RoofDots width={80} height={80} delay={MOTION_DURATIONS_MS.fast} dotClassName="bg-primary-foreground" />}
           </Animated.View>
           <Animated.View entering={reduceMotion ? undefined : FadeIn.delay(MOTION_DURATIONS_MS.fast)} className="gap-3">
             <Text className="text-hero-section text-primary-foreground">{title}</Text>
