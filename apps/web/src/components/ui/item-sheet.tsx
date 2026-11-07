@@ -49,6 +49,14 @@ export interface ItemSheetQuickField {
   editor: React.ReactNode;
 }
 
+/** Words the title gave a field ("tomorrow" set Due), shown with an undo. */
+export interface ItemSheetTitleMatch {
+  id: string;
+  label: string;
+  icon?: React.ReactNode;
+  onUndo: () => void;
+}
+
 export interface ItemSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -63,6 +71,7 @@ export interface ItemSheetProps {
   titleError?: string | null;
   nudge?: number;
   bandExtra?: React.ReactNode;
+  titleMatches?: ItemSheetTitleMatch[];
   quickFields?: ItemSheetQuickField[];
   children: React.ReactNode;
   onSubmit: () => void;
@@ -89,6 +98,7 @@ export function ItemSheet({
   titleError,
   nudge = 0,
   bandExtra,
+  titleMatches,
   quickFields,
   children,
   onSubmit,
@@ -160,10 +170,12 @@ export function ItemSheet({
     setTray(id);
   };
 
+  // More keeps you typing: the list grows and focus goes back to the title.
   const grow = () => {
     tick();
     setTray(null);
     setExpanded(true);
+    requestAnimationFrame(() => titleRef.current?.focus());
   };
 
   const requestDelete = async () => {
@@ -247,6 +259,28 @@ export function ItemSheet({
                 <CircleAlert className="size-3.5" />
                 {titleError}
               </p>
+            )}
+            {!!titleMatches?.length && (
+              <div className="flex flex-wrap gap-1.5 px-4 pb-3" aria-live="polite">
+                {titleMatches.map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => {
+                      tick();
+                      m.onUndo();
+                      titleRef.current?.focus();
+                    }}
+                    title="Put the words back in the title"
+                    aria-label={`${m.label}, from the title. Put the words back`}
+                    className="inline-flex h-7 items-center gap-1.5 rounded-full bg-primary/10 pl-2.5 pr-2 text-xs font-medium text-primary outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                  >
+                    {m.icon}
+                    {m.label}
+                    <X className="size-3" />
+                  </button>
+                ))}
+              </div>
             )}
             {bandExtra}
           </div>

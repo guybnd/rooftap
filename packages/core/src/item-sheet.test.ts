@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  matchTitleWords,
+  titleMatchLabel,
   addedToLabel,
   dueQuickChoices,
   dueValueLabel,
@@ -93,5 +95,57 @@ describe('title check and drafts', () => {
     expect(itemSheetDrafts.get<{ title: string }>('todo')?.title).toBe('Gate');
     itemSheetDrafts.clear('todo');
     expect(itemSheetDrafts.get('todo')).toBeUndefined();
+  });
+});
+
+describe('matchTitleWords', () => {
+  // Wednesday 2026-11-04.
+  const today = '2026-11-04';
+  const people = [
+    { id: 'u1', name: 'Sam' },
+    { id: 'u2', name: 'Guy' },
+  ];
+
+  it('takes a date word once something follows it', () => {
+    expect(matchTitleWords('Cancel Uber One tomorrow', { today }).matches).toEqual([]);
+    const r = matchTitleWords('Cancel Uber One tomorrow ', { today });
+    expect(r.title).toBe('Cancel Uber One ');
+    expect(r.matches).toEqual([{ kind: 'due', raw: 'tomorrow', value: '2026-11-05' }]);
+  });
+
+  it('takes a word at the end when saving', () => {
+    const r = matchTitleWords('Cancel Uber One tomorrow', { today, final: true });
+    expect(r.title).toBe('Cancel Uber One');
+    expect(r.matches[0].value).toBe('2026-11-05');
+  });
+
+  it('reads day names, short ones only with on, this or next', () => {
+    expect(matchTitleWords('Bins friday ', { today }).matches[0].value).toBe('2026-11-06');
+    expect(matchTitleWords('Bins next Wed ', { today }).matches[0].value).toBe('2026-11-11');
+    expect(matchTitleWords('Buy sun cream ', { today }).matches).toEqual([]);
+    expect(matchTitleWords('Monitor stand ', { today }).matches).toEqual([]);
+  });
+
+  it('reads times, tonight and people', () => {
+    const r = matchTitleWords('Call mum tomorrow at 5:30pm @sam', { today, people, final: true });
+    expect(r.title).toBe('Call mum');
+    expect(r.matches).toEqual([
+      { kind: 'due', raw: 'tomorrow', value: '2026-11-05' },
+      { kind: 'time', raw: 'at 5:30pm', value: '17:30' },
+      { kind: 'who', raw: '@sam', value: 'u1' },
+    ]);
+    const t = matchTitleWords('Pizza tonight', { today, final: true });
+    expect(t.matches.map((m) => m.value)).toEqual(['2026-11-04', '18:00']);
+    expect(matchTitleWords('Ask @nobody', { today, people, final: true }).matches).toEqual([]);
+  });
+
+  it('leaves words someone took back', () => {
+    expect(matchTitleWords('Watch Tomorrowland tomorrow ', { today, ignore: ['tomorrow'] }).matches).toEqual([]);
+  });
+
+  it('labels a match', () => {
+    expect(titleMatchLabel({ kind: 'due', raw: 'tomorrow', value: '2026-11-05' }, today)).toBe('Tomorrow');
+    expect(titleMatchLabel({ kind: 'time', raw: '5pm', value: '17:00' }, today)).toBe('5:00 PM');
+    expect(titleMatchLabel({ kind: 'who', raw: '@sam', value: 'u1' }, today, people)).toBe('Sam');
   });
 });

@@ -75,6 +75,16 @@ export interface ItemSheetQuickField {
   editor: React.ReactNode;
 }
 
+/** Words the title gave a field ("tomorrow" set Due). Shown under the title with an undo. */
+export interface ItemSheetTitleMatch {
+  id: string;
+  /** "Due Tomorrow". */
+  label: string;
+  icon?: React.ReactNode;
+  /** Puts the words back in the title and the field back as it was. */
+  onUndo: () => void;
+}
+
 export interface ItemSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -97,6 +107,8 @@ export interface ItemSheetProps {
   nudge?: number;
   /** Extra band content under the title (a Hero amount, a count). */
   bandExtra?: React.ReactNode;
+  /** Fields the title's words set (core matchTitleWords). */
+  titleMatches?: ItemSheetTitleMatch[];
   /** The quick line's chips. Without them an add opens on the list. */
   quickFields?: ItemSheetQuickField[];
   /** The list: PropertyGroups. */
@@ -126,6 +138,7 @@ export function ItemSheet({
   titleError,
   nudge = 0,
   bandExtra,
+  titleMatches,
   quickFields,
   children,
   onSubmit,
@@ -200,11 +213,13 @@ export function ItemSheet({
     setTray(id);
   };
 
+  // More keeps you typing: the list grows under the title and the keyboard
+  // stays (or comes back from a tray) on the title.
   const grow = () => {
     select();
-    Keyboard.dismiss();
     setTray(null);
     setExpanded(true);
+    requestAnimationFrame(() => titleRef.current?.focus());
   };
 
   const requestDelete = () => {
@@ -280,6 +295,34 @@ export function ItemSheet({
               <CircleAlert size={14} className="text-destructive" />
               <Text className="text-caption font-medium text-destructive">{titleError}</Text>
             </View>
+          )}
+          {!!titleMatches?.length && (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerClassName="gap-1.5 px-4 pb-3"
+              accessibilityLiveRegion="polite"
+            >
+              {titleMatches.map((m) => (
+                <Pressable
+                  key={m.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${m.label}, from the title`}
+                  accessibilityHint="Puts the words back in the title"
+                  onPress={() => {
+                    tick();
+                    m.onUndo();
+                  }}
+                  hitSlop={{ top: 6, bottom: 6 }}
+                  className="h-8 flex-row items-center gap-1.5 rounded-full bg-primary/10 pl-2.5 pr-2"
+                >
+                  {m.icon}
+                  <Text className="text-caption font-medium text-primary">{m.label}</Text>
+                  <X size={13} className="text-primary" />
+                </Pressable>
+              ))}
+            </ScrollView>
           )}
           {bandExtra}
         </Animated.View>

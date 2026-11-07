@@ -23,7 +23,7 @@ describe("ItemSheet", () => {
   const button = (name: string) =>
     Array.from(document.querySelectorAll("button")).find((b) => (b.getAttribute("aria-label") ?? b.textContent) === name);
 
-  async function render(mode: "add" | "edit", onSubmit = vi.fn()) {
+  async function render(mode: "add" | "edit", onSubmit = vi.fn(), onUndo = vi.fn()) {
     await act(async () => {
       root.render(
         <ItemSheet
@@ -33,6 +33,7 @@ describe("ItemSheet", () => {
           heading="New to-do"
           title=""
           onTitleChange={() => {}}
+          titleMatches={[{ id: "tomorrow", label: "Tomorrow", onUndo }]}
           titlePlaceholder="What needs doing?"
           quickFields={[{ id: "due", label: "Today", trayLabel: "Due", editor: <p>due editor</p> }]}
           onSubmit={onSubmit}
@@ -63,6 +64,8 @@ describe("ItemSheet", () => {
   it("grows into the list with More, and a row opens in place", async () => {
     await render("add");
     await act(async () => button("More")!.click());
+    await act(async () => new Promise<void>((r) => requestAnimationFrame(() => r())));
+    expect(document.activeElement?.getAttribute("aria-label")).toBe("New to-do");
     const row = Array.from(document.querySelectorAll("button")).find((b) => b.textContent?.startsWith("Due"))!;
     expect(row.getAttribute("aria-expanded")).toBe("false");
     await act(async () => row.click());
@@ -75,5 +78,12 @@ describe("ItemSheet", () => {
     expect(button("More")).toBeUndefined();
     await act(async () => button("Done")!.click());
     expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows words the title set, and puts them back", async () => {
+    const onUndo = vi.fn();
+    await render("add", vi.fn(), onUndo);
+    await act(async () => button("Tomorrow, from the title. Put the words back")!.click());
+    expect(onUndo).toHaveBeenCalledTimes(1);
   });
 });

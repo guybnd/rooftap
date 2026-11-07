@@ -14,15 +14,18 @@ import {
   dueValueLabel,
   itemSheetDrafts,
   itemTitleError,
+  matchTitleWords,
   personFirstName,
   repeatFollowDue,
   repeatSaveFields,
   repeatValueLabel,
   timeValueLabel,
+  titleMatchLabel,
   todayISO,
   useModules,
   type HouseholdTask,
   type TaskRepeatFields,
+  type TitleMatch,
 } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
 import { memberLabel } from '../setup/member-label';
@@ -38,6 +41,7 @@ import {
   TimeEditor,
   useClosePropertyRow,
   type ItemSheetQuickField,
+  type ItemSheetTitleMatch,
   type PersonOption,
 } from '@/components/ui/item-sheet';
 import { SegmentedControl } from '@/components/ui/segmented-control';
@@ -54,6 +58,12 @@ const PRIORITY_OPTIONS: { value: Priority; label: string }[] = [
   { value: 'medium', label: 'Normal' },
   { value: 'high', label: 'High' },
 ];
+
+/** Words the title gave a field, and what that field held before. */
+interface TakenWords {
+  match: TitleMatch;
+  before: Partial<Draft>;
+}
 
 interface Draft {
   title: string;
@@ -122,6 +132,8 @@ export function HouseholdTaskModal({ isOpen, task, groupId, defaultTitle, defaul
   const initial = useRef(form);
   const [attempted, setAttempted] = useState(false);
   const [nudge, setNudge] = useState(0);
+  const [taken, setTaken] = useState<TakenWords[]>([]);
+  const [ignored, setIgnored] = useState<string[]>([]);
 
   // FLUX-186: the instance is reused across opens, so re-seed on every
   // closed-to-open change.
@@ -132,11 +144,71 @@ export function HouseholdTaskModal({ isOpen, task, groupId, defaultTitle, defaul
       setForm(next);
       initial.current = next;
       setAttempted(false);
+      setTaken([]);
+      setIgnored([]);
     }
     wasOpen.current = isOpen;
   }, [isOpen, buildInitialForm]);
 
   const set = (patch: Partial<Draft>) => setForm((f) => ({ ...f, ...patch }));
+
+  // Title words: "tomorrow", "friday", "5pm" or "@sam" in the title set Due,
+  // Time or Who, leave the title, and show as a chip that puts them back.
+  const wordPeople = useMemo(
+    () => groupMembers.map((m) => ({ id: m.user_id, name: personFirstName(memberLabel(m.user_id, memberProfiles)) })),
+    [groupMembers, memberProfiles]
+  );
+  const takeWords = (f: Draft, raw: string, final: boolean): { next: Draft; found: TakenWords[] } => {
+    const { title, matches } = matchTitleWords(raw, { today, people: wordPeople, final, ignore: ignored });
+    let next: Draft = { ...f, title };
+    const found: TakenWords[] = [];
+    for (const match of matches) {
+      if (match.kind === 'due') {
+        found.push({ match, before: { dueDate: next.dueDate, repeat: next.repeat } });
+        next = { ...next, dueDate: match.value, repeat: repeatFollowDue(next.repeat, next.dueDate || null, match.value, today, rules) };
+      } else if (match.kind === 'time') {
+        found.push({ match, before: { dueTime: next.dueTime, dueDate: next.dueDate } });
+        next = { ...next, dueTime: match.value, dueDate: next.dueDate || today };
+      } else {
+        found.push({ match, before: { assignedTo: next.assignedTo } });
+        next = { ...next, assignedTo: match.value };
+      }
+    }
+    return { next, found };
+  };
+  const onTitleChange = (raw: string) => {
+    const { next, found } = takeWords(form, raw, false);
+    setForm(next);
+    if (found.length) setTaken((t) => [...t.filter((x) => !found.some((n) => n.match.kind === x.match.kind)), ...found]);
+  };
+  const putWordsBack = (raw: string) => {
+    const back = taken.filter((t) => t.match.raw === raw);
+    setForm((f) => {
+      let next = { ...f, title: `${f.title.trimEnd()} ${raw}`.trimStart() };
+      for (const t of back) next = { ...next, ...t.before };
+      return next;
+    });
+    setIgnored((i) => [...i, raw.toLowerCase()]);
+    setTaken((t) => t.filter((x) => x.match.raw !== raw));
+  };
+  const titleMatches: ItemSheetTitleMatch[] = taken
+    .filter((t, i) => taken.findIndex((x) => x.match.raw === t.match.raw) === i)
+    .map((t) => ({
+      id: t.match.raw,
+      label: taken
+        .filter((x) => x.match.raw === t.match.raw)
+        .map((x) => titleMatchLabel(x.match, today, wordPeople))
+        .join(', '),
+      icon:
+        t.match.kind === 'who' ? (
+          <Avatar userId={t.match.value} profiles={memberProfiles} size={16} />
+        ) : t.match.kind === 'time' ? (
+          <Clock className="size-3" />
+        ) : (
+          <CalendarDays className="size-3" />
+        ),
+      onUndo: () => putWordsBack(t.match.raw),
+    }));
   // Moving the date keeps a picked repeat on the same pattern; clearing it clears the time.
   const setDue = (next: string) =>
     setForm((f) => ({
@@ -181,20 +253,22 @@ export function HouseholdTaskModal({ isOpen, task, groupId, defaultTitle, defaul
   };
 
   const submit = () => {
+    // Words still at the end of a changed title count as it saves.
+    const final = form.title !== initial.current.title ? takeWords(form, form.title, true).next : form;
     if (task) {
       // Editing saves as it closes. An emptied title keeps the old one.
-      const f = form.title.trim() ? form : { ...form, title: task.title };
+      const f = final.title.trim() ? final : { ...final, title: task.title };
       if (JSON.stringify(f) !== JSON.stringify(initial.current)) onSave(build(f));
       onClose();
       return;
     }
-    if (!form.title.trim()) {
+    if (!final.title.trim()) {
       setAttempted(true);
       setNudge((n) => n + 1);
       return;
     }
     itemSheetDrafts.clear(DRAFT_KEY);
-    onSave(build(form));
+    onSave(build(final));
     onClose();
   };
 
@@ -246,7 +320,8 @@ export function HouseholdTaskModal({ isOpen, task, groupId, defaultTitle, defaul
       heading={task ? 'To-do' : 'New to-do'}
       caption="Household"
       title={form.title}
-      onTitleChange={(title) => set({ title })}
+      onTitleChange={onTitleChange}
+      titleMatches={titleMatches}
       titlePlaceholder="What needs doing?"
       titleError={itemTitleError(form.title, attempted)}
       nudge={nudge}

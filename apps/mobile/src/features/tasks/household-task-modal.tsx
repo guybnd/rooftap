@@ -20,23 +20,27 @@ import {
   TimeEditor,
   useClosePropertyRow,
   type ItemSheetQuickField,
+  type ItemSheetTitleMatch,
   type PersonOption,
 } from '@homeup/ui';
 import {
   dueValueLabel,
   itemSheetDrafts,
   itemTitleError,
+  matchTitleWords,
   personFirstName,
   repeatFollowDue,
   repeatSaveFields,
   repeatValueLabel,
   taskRepeatFields,
   timeValueLabel,
+  titleMatchLabel,
   todayISO,
   useModules,
   type GroupMember,
   type HouseholdTask,
   type TaskRepeatFields,
+  type TitleMatch,
 } from '@homeup/core';
 import { RepeatField } from './repeat-field';
 import { randomUUID } from '@/lib/uuid';
@@ -63,6 +67,12 @@ interface Draft {
   assignedTo: string | null;
   repeat: TaskRepeatFields;
   notes: string;
+}
+
+/** Words the title gave a field, and what that field held before. */
+interface TakenWords {
+  match: TitleMatch;
+  before: Partial<Draft>;
 }
 
 interface HouseholdTaskModalProps {
@@ -134,6 +144,66 @@ export function HouseholdTaskModal({
   const [nudge, setNudge] = React.useState(0);
 
   const set = (patch: Partial<Draft>) => setForm((f) => ({ ...f, ...patch }));
+
+  // Title words: "tomorrow", "friday", "5pm" or "@sam" in the title set Due,
+  // Time or Who, leave the title, and show as a chip that puts them back.
+  const [taken, setTaken] = React.useState<TakenWords[]>([]);
+  const [ignored, setIgnored] = React.useState<string[]>([]);
+  const wordPeople = React.useMemo(
+    () => groupMembers.map((m) => ({ id: m.user_id, name: personFirstName(memberLabel(m.user_id, memberProfiles)) })),
+    [groupMembers, memberProfiles]
+  );
+  const takeWords = (f: Draft, raw: string, final: boolean): { next: Draft; found: TakenWords[] } => {
+    const { title, matches } = matchTitleWords(raw, { today, people: wordPeople, final, ignore: ignored });
+    let next: Draft = { ...f, title };
+    const found: TakenWords[] = [];
+    for (const match of matches) {
+      if (match.kind === 'due') {
+        found.push({ match, before: { dueDate: next.dueDate, repeat: next.repeat } });
+        next = { ...next, dueDate: match.value, repeat: repeatFollowDue(next.repeat, next.dueDate || null, match.value, today, rules) };
+      } else if (match.kind === 'time') {
+        found.push({ match, before: { dueTime: next.dueTime, dueDate: next.dueDate } });
+        next = { ...next, dueTime: match.value, dueDate: next.dueDate || today };
+      } else {
+        found.push({ match, before: { assignedTo: next.assignedTo } });
+        next = { ...next, assignedTo: match.value };
+      }
+    }
+    return { next, found };
+  };
+  const onTitleChange = (raw: string) => {
+    const { next, found } = takeWords(form, raw, false);
+    setForm(next);
+    if (found.length) setTaken((t) => [...t.filter((x) => !found.some((n) => n.match.kind === x.match.kind)), ...found]);
+  };
+  const putWordsBack = (raw: string) => {
+    const back = taken.filter((t) => t.match.raw === raw);
+    setForm((f) => {
+      let next = { ...f, title: `${f.title.trimEnd()} ${raw}`.trimStart() };
+      for (const t of back) next = { ...next, ...t.before };
+      return next;
+    });
+    setIgnored((i) => [...i, raw.toLowerCase()]);
+    setTaken((t) => t.filter((x) => x.match.raw !== raw));
+  };
+  const titleMatches: ItemSheetTitleMatch[] = taken
+    .filter((t, i) => taken.findIndex((x) => x.match.raw === t.match.raw) === i)
+    .map((t) => ({
+      id: t.match.raw,
+      label: taken
+        .filter((x) => x.match.raw === t.match.raw)
+        .map((x) => titleMatchLabel(x.match, today, wordPeople))
+        .join(', '),
+      icon:
+        t.match.kind === 'who' ? (
+          <Avatar userId={t.match.value} profiles={memberProfiles} size={18} />
+        ) : t.match.kind === 'time' ? (
+          <Clock size={13} className="text-primary" />
+        ) : (
+          <CalendarDays size={13} className="text-primary" />
+        ),
+      onUndo: () => putWordsBack(t.match.raw),
+    }));
   // Moving the date keeps a picked repeat on the same pattern ("Weekly on
   // Sunday" becomes "Weekly on Monday"); a custom rule stays as it is.
   // Clearing the date clears the time too.
@@ -180,20 +250,22 @@ export function HouseholdTaskModal({
   };
 
   const submit = () => {
+    // Words still at the end of a changed title count as it saves.
+    const final = form.title !== initial.current.title ? takeWords(form, form.title, true).next : form;
     if (task) {
       // Editing saves as it closes. An emptied title keeps the old one.
-      const f = form.title.trim() ? form : { ...form, title: task.title };
+      const f = final.title.trim() ? final : { ...final, title: task.title };
       if (JSON.stringify(f) === JSON.stringify(initial.current)) onClose();
       else onSave(build(f));
       return;
     }
-    if (!form.title.trim()) {
+    if (!final.title.trim()) {
       setAttempted(true);
       setNudge((n) => n + 1);
       return;
     }
     itemSheetDrafts.clear(DRAFT_KEY);
-    onSave(build(form));
+    onSave(build(final));
   };
 
   const closeAdd = () => {
@@ -251,7 +323,8 @@ export function HouseholdTaskModal({
       heading={task ? 'To-do' : 'New to-do'}
       caption="Household"
       title={form.title}
-      onTitleChange={(title) => set({ title })}
+      onTitleChange={onTitleChange}
+      titleMatches={titleMatches}
       titlePlaceholder="What needs doing?"
       titleError={itemTitleError(form.title, attempted)}
       nudge={nudge}
