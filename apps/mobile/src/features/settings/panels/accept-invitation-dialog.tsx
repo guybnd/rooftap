@@ -9,7 +9,6 @@
 // file in this ticket) DOES render it, exactly like web's GroupManager does.
 import * as React from 'react';
 import { Pressable, View } from 'react-native';
-import { use$ } from '@legendapp/state/react';
 import { ArrowRightLeft, Trash2 } from 'lucide-react-native';
 import { Text, BottomSheet, Button } from '@homeup/ui';
 import {
@@ -26,6 +25,7 @@ import {
 } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
 import { getCurrentSupabaseClient } from '@/lib/supabase-client';
+import { useRows } from '@homeup/core';
 
 export interface AcceptInvitationDialogProps {
   invitation: GroupInvitation;
@@ -46,18 +46,10 @@ export function AcceptInvitationDialog({ invitation, onAccept, onDecline }: Acce
   useReconnectSync(agentsStore$);
   useReconnectSync(checklistItemsStore$);
   useReconnectSync(savedSearchesStore$);
-  const apartments = use$(() =>
-    Object.values(apts$.get() ?? {}).filter((a): a is Apartment => !!a && !a.deleted)
-  );
-  const agents = use$(() =>
-    Object.values(agentsStore$.get() ?? {}).filter((a): a is Agent => !!a && !a.deleted)
-  );
-  const checklistItems = use$(() =>
-    Object.values(checklistItemsStore$.get() ?? {}).filter((c): c is ChecklistItem => !!c && !c.deleted)
-  );
-  const savedSearches = use$(() =>
-    Object.values(savedSearchesStore$.get() ?? {}).filter((s): s is SavedSearch => !!s && !s.deleted)
-  );
+  const apartments = useRows(apts$);
+  const agents = useRows(agentsStore$);
+  const checklistItems = useRows(checklistItemsStore$);
+  const savedSearches = useRows(savedSearchesStore$);
 
   const handleAccept = async (mode: 'merge' | 'abandon') => {
     setProcessing(true);

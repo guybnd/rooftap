@@ -61,6 +61,7 @@ import { ScoutRunRow } from '@/features/shopper/scout-run-row';
 import { lookupWhenSynced, shopperSources } from '@/features/shopper/shopper-api';
 import { ModuleSettingsButton } from '@/features/settings/module-settings-sheet';
 import { FirstSteps } from '@/components/first-steps';
+import { useRows } from '@homeup/core';
 
 const TABS: { value: ShopperWantStatus; label: string }[] = [
   { value: 'watching', label: 'Watching' },
@@ -93,10 +94,8 @@ export default function ShopperScreen() {
   const [scoutOpen, setScoutOpen] = React.useState(false);
   const storeLoaded = useStoreLoaded(wants$, snaps$);
 
-  const wants = use$(() => Object.values(wants$.get() ?? {}).filter((w): w is ShopperWant => !!w && !w.deleted));
-  const snapshots = use$(() =>
-    Object.values(snaps$.get() ?? {}).filter((s): s is ShopperPriceSnapshot => !!s && !s.deleted),
-  );
+  const wants = useRows(wants$);
+  const snapshots = useRows(snaps$);
   const rows = React.useMemo(() => summarizeWants(wants, snapshots, todayISO()), [wants, snapshots]);
 
   const [tab, setTab] = React.useState<ShopperWantStatus>('watching');

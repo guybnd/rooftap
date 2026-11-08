@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import { use$ } from "@legendapp/state/react";
 import { useDataCache } from "@/lib/data-cache";
 import { apartments$, useReconnectSync } from "@homeup/core";
 import { Input } from "@/components/ui/input";
 import { ChevronDown, MapPin, XIcon } from "lucide-react";
 import type { Apartment } from '@homeup/core';
+import { useRows } from '@homeup/core';
 
 interface ApartmentPickerProps {
   value: string | null;
@@ -18,9 +18,7 @@ export function ApartmentPicker({ value, onChange, suggestedId }: ApartmentPicke
   const { group } = useDataCache();
   const apts$ = apartments$(group?.id);
   useReconnectSync(apts$);
-  const apartments = use$(() =>
-    Object.values(apts$.get() ?? {}).filter((a): a is Apartment => !!a && !a.deleted)
-  );
+  const apartments = useRows(apts$);
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [highlightIndex, setHighlightIndex] = useState(-1);

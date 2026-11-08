@@ -22,7 +22,6 @@ import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
-import { use$ } from '@legendapp/state/react';
 import { useLocalSearchParams } from 'expo-router';
 import { Building2, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, LayoutList, ListPlus, Plus } from 'lucide-react-native';
 import { Text, ActionMenu, type ActionMenuAnchor, BottomSheet, Button, HeroLede, Input, MonthDatePicker, ScreenBackground, SegmentedControl, cn, haptics, toast } from '@homeup/ui';
@@ -82,6 +81,7 @@ import { WeekView, WEEK_SLOT_HEIGHT } from '@/features/calendar/week-view';
 import { CalendarEventSheet } from '@/features/calendar/calendar-event-sheet';
 import { calendarApi } from '@/features/calendar/calendar-api';
 import { ModuleSettingsButton } from '@/features/settings/module-settings-sheet';
+import { useRows } from '@homeup/core';
 
 const WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
@@ -116,17 +116,17 @@ export default function CalendarSectionScreen() {
   useReconnectSync(events$);
   useReconnectSync(costs$);
 
-  const apartments = use$(() => Object.values(apts$.get() ?? {}).filter((a): a is Apartment => !!a && !a.deleted));
-  const agents = use$(() => Object.values(agentsStore$.get() ?? {}).filter((a): a is Agent => !!a && !a.deleted));
-  const appointments = use$(() => Object.values(appts$.get() ?? {}).filter((a): a is Appointment => !!a && !a.deleted));
-  const allTasks = use$(() => Object.values(tasks$.get() ?? {}).filter((t): t is HouseholdTask => !!t && !t.deleted));
+  const apartments = useRows(apts$);
+  const agents = useRows(agentsStore$);
+  const appointments = useRows(appts$);
+  const allTasks = useRows(tasks$);
   // Modules: a bill or document reminder whose module is off stays off the
   // calendar, even while Tasks is on (task-modules.ts).
   const tasks = React.useMemo(
     () => allTasks.filter((t) => isTaskOwnerEnabled(t, modules.enabled)),
     [allTasks, modules.enabled]
   );
-  const allGroupEvents = use$(() => Object.values(events$.get() ?? {}).filter((e): e is GroupEvent => !!e && !e.deleted));
+  const allGroupEvents = useRows(events$);
   const groupEvents = React.useMemo(
     () => allGroupEvents.filter((e) => !e.private || e.created_by === currentUserId),
     [allGroupEvents, currentUserId]

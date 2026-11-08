@@ -44,7 +44,6 @@ import * as React from 'react';
 import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { use$ } from '@legendapp/state/react';
 import {
   Archive,
   Bookmark,
@@ -89,6 +88,7 @@ import { SavedSearchPicker } from '@/features/homesearch/saved-search-picker';
 import { DashboardStats, type DashboardStatTone } from '@/features/homesearch/dashboard-stats';
 import { InvitationBanner } from '@/features/settings/panels/invitation-banner';
 import { ModuleSettingsButton } from '@/features/settings/module-settings-sheet';
+import { useRows } from '@homeup/core';
 
 type QuickFilter = 'all' | 'has-appointment' | 'to-book' | 'viewed' | 'needs-score' | 'skipped' | 'rebook';
 
@@ -125,27 +125,13 @@ export default function HomeSearchScreen() {
   useReconnectSync(appointmentsStore$);
   useReconnectSync(commentsStore$);
 
-  const rawApartments = use$(() =>
-    Object.values(apts$.get() ?? {}).filter((a): a is Apartment => !!a && !a.deleted)
-  );
-  const agents = use$(() =>
-    Object.values(agentsStore$.get() ?? {}).filter((a): a is Agent => !!a && !a.deleted)
-  );
-  const apartmentAgents = use$(() =>
-    Object.values(apartmentAgentsStore$.get() ?? {}).filter((aa): aa is ApartmentAgent => !!aa && !aa.deleted)
-  );
-  const checklistItems = use$(() =>
-    Object.values(checklistItemsStore$.get() ?? {}).filter((i): i is ChecklistItem => !!i && !i.deleted)
-  );
-  const responses = use$(() =>
-    Object.values(checklistResponsesStore$.get() ?? {}).filter((r): r is ChecklistResponse => !!r && !r.deleted)
-  );
-  const appointments = use$(() =>
-    Object.values(appointmentsStore$.get() ?? {}).filter((a): a is Appointment => !!a && !a.deleted)
-  );
-  const commentRows = use$(() =>
-    Object.values(commentsStore$.get() ?? {}).filter((c): c is ApartmentComment => !!c && !c.deleted)
-  );
+  const rawApartments = useRows(apts$);
+  const agents = useRows(agentsStore$);
+  const apartmentAgents = useRows(apartmentAgentsStore$);
+  const checklistItems = useRows(checklistItemsStore$);
+  const responses = useRows(checklistResponsesStore$);
+  const appointments = useRows(appointmentsStore$);
+  const commentRows = useRows(commentsStore$);
 
   const storeLoaded = useStoreLoaded(
     apts$,

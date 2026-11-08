@@ -13,7 +13,6 @@
 // Native twin: apps/mobile/src/components/capture/capture-search-results.tsx.
 
 import { useMemo, type ReactNode } from "react";
-import { use$ } from "@legendapp/state/react";
 import { ChevronRight } from "lucide-react";
 import {
   applyTaskCompletion,
@@ -57,6 +56,7 @@ import { SetupItemCard } from "@/app/setup/setup-item-card";
 import { ChecklistRow } from "@/app/checklists/checklist-row";
 import { RecipeRow } from "@/app/recipes/recipe-row";
 import { WantRow } from "@/app/shopper/want-row";
+import { useRows } from '@homeup/core';
 
 /** Results cap across all sections (FLUX-176: the sheet and keyboard always fit). */
 const RESULT_LIMIT = 3;
@@ -194,12 +194,8 @@ export function useLiveRowRenderer({
   const ingredientsStore$ = recipeIngredients$(syncedGroupId(recipeIngredients$, groupId, modules.enabled));
   useReconnectSync(checklistItemsStore$);
   useReconnectSync(ingredientsStore$);
-  const checklistTaskItems = use$(() =>
-    Object.values(checklistItemsStore$.get() ?? {}).filter((i): i is ChecklistTaskItem => !!i && !i.deleted)
-  );
-  const ingredients = use$(() =>
-    Object.values(ingredientsStore$.get() ?? {}).filter((i): i is RecipeIngredient => !!i && !i.deleted)
-  );
+  const checklistTaskItems = useRows(checklistItemsStore$);
+  const ingredients = useRows(ingredientsStore$);
 
   const checklistsById = useMemo(() => {
     const map: Record<string, Checklist> = {};

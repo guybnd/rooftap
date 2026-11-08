@@ -55,6 +55,7 @@ import { upBankApi } from '@/features/costs/up-bank-api';
 import { MoneyView } from '@/features/costs/money-view';
 import { useModuleSettingsSheet } from '@/features/settings/module-settings-sheet';
 import { sectionIconFor } from '@/lib/section-icons';
+import { useRows } from '@homeup/core';
 
 type MemberProfiles = Record<string, { email: string; name: string | null; avatar: string | null }>;
 
@@ -101,9 +102,7 @@ function CostsScreenBody() {
   const suggestRent = modules.feature('costs.suggest-rent');
   const suggestSetup = modules.feature('costs.suggest-setup');
   const apts$ = apartments$(suggestRent ? group?.id : undefined);
-  const apartments = use$(() =>
-    Object.values(apts$.get() ?? {}).filter((a): a is Apartment => !!a && !a.deleted)
-  );
+  const apartments = useRows(apts$);
   const setup$ = setupItems$(suggestSetup ? group?.id : undefined);
   const setupTotalCents = use$(() =>
     Object.values(setup$.get() ?? {})

@@ -45,6 +45,7 @@ import {
   type MealRole,
   type WeekShopping,
 } from './meal-plan';
+import { useRows } from '../../data/use-rows';
 
 /** One dish on a night. */
 export interface MealDish {
@@ -128,17 +129,11 @@ export function useMealWeek(input: {
   const { writeRow: writeGrocery } = useStoreHelpers(items$, currentUserId);
   const { staples } = useRecipeMatch(groupId, currentUserId);
 
-  const allEntries = use$(() => Object.values(entries$.get() ?? {}).filter((e): e is MealPlanEntry => !!e && !e.deleted));
-  const allRecipes = use$(() => Object.values(recs$.get() ?? {}).filter((r): r is Recipe => !!r && !r.deleted && !r.draft));
-  const allIngredients = use$(() =>
-    Object.values(ings$.get() ?? {}).filter((i): i is RecipeIngredient => !!i && !i.deleted),
-  );
-  const groceryItems = use$(() => Object.values(items$.get() ?? {}).filter((i): i is GroceryItem => !!i && !i.deleted));
-  const events = use$(() =>
-    Object.values(events$.get() ?? {}).filter(
-      (e): e is GroupEvent => !!e && !e.deleted && !(e.private && e.created_by !== currentUserId),
-    ),
-  );
+  const allEntries = useRows(entries$);
+  const allRecipes = useRows(recs$, (r) => !r.draft);
+  const allIngredients = useRows(ings$);
+  const groceryItems = useRows(items$);
+  const events = useRows(events$, (e) => !(e.private && e.created_by !== currentUserId),);
 
   const recipes = useMemo(() => [...allRecipes].sort((a, b) => a.title.localeCompare(b.title)), [allRecipes]);
   const recipesById = useMemo(() => new Map(recipes.map((r) => [r.id, r])), [recipes]);
@@ -428,7 +423,7 @@ export function useMealWeek(input: {
 export function useTonightMeal(groupId: string | null | undefined, on: boolean, today: string, multiDish = true) {
   const entries$ = mealPlanEntries$(on ? groupId : undefined);
   const recs$ = recipes$(on ? groupId : undefined);
-  const entries = use$(() => Object.values(entries$.get() ?? {}).filter((e): e is MealPlanEntry => !!e && !e.deleted && e.date === today));
+  const entries = useRows(entries$, (e) => e.date === today);
   const recipeIds = useMemo(
     () => (mealDishesByDate(entries, 'dinner', multiDish).get(today) ?? []).flatMap((e) => (e.recipe_id ? [e.recipe_id] : [])),
     [entries, today, multiDish],

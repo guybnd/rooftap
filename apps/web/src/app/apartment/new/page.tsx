@@ -4,7 +4,6 @@ import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Check, Sparkles, Loader2, Camera, FileText, X } from "lucide-react";
-import { use$ } from "@legendapp/state/react";
 import { createClient } from "@/lib/supabase/client";
 import { geocodeAddress } from "@/lib/geocode";
 import { fetchNearestPoiDistancesClient } from "@/lib/nearest-pois-client";
@@ -18,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { MultiAgentSelector } from "@/components/multi-agent-selector";
 import { OfflineHint } from "@/components/offline-hint";
+import { useRows } from '@homeup/core';
 
 const MAX_PDF_SIZE = 20 * 1024 * 1024; // 20MB
 const REA_LISTING_RE = /^https?:\/\/(www\.)?realestate\.com\.au\/property-[^?#]+/;
@@ -65,9 +65,7 @@ function NewApartmentPage() {
   const { writeRow: writeAgent } = useStoreHelpers(agentsStore$, currentUserId);
   const { writeRow: writeApartment, patchRow: patchApartment } = useStoreHelpers(apts$, currentUserId);
   const { writeRow: writeApartmentAgent } = useStoreHelpers(apartmentAgentsStore$, currentUserId);
-  const agents = use$(() =>
-    Object.values(agentsStore$.get() ?? {}).filter((a): a is Agent => !!a && !a.deleted)
-  );
+  const agents = useRows(agentsStore$);
 
   const [agentIds, setAgentIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);

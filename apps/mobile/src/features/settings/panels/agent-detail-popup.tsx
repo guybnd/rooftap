@@ -9,13 +9,13 @@
 // has no Dialog primitive) — Modal already owns portal/backdrop/dismiss so
 // this needs no extra chrome beyond a manual header + close button (mirrors
 // web's popup header exactly).
-import { use$ } from '@legendapp/state/react';
 import { Pressable, View } from 'react-native';
 import { Home, Phone, StickyNote, X } from 'lucide-react-native';
 import { Text, BottomSheet, BottomSheetScrollView } from '@homeup/ui';
 import { apartments$, apartmentAgents$, useReconnectSync, currencySymbol } from '@homeup/core';
 import type { Agent, Apartment, ApartmentAgent } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
+import { useRows } from '@homeup/core';
 
 interface AgentDetailPopupProps {
   agent: Agent | null;
@@ -29,12 +29,8 @@ export function AgentDetailPopup({ agent, onClose }: AgentDetailPopupProps) {
   useReconnectSync(apts$);
   useReconnectSync(apartmentAgentsStore$);
 
-  const apartments = use$(() =>
-    Object.values(apts$.get() ?? {}).filter((a): a is Apartment => !!a && !a.deleted)
-  );
-  const apartmentAgents = use$(() =>
-    Object.values(apartmentAgentsStore$.get() ?? {}).filter((aa): aa is ApartmentAgent => !!aa && !aa.deleted)
-  );
+  const apartments = useRows(apts$);
+  const apartmentAgents = useRows(apartmentAgentsStore$);
 
   const agentApartments = agent
     ? apartments.filter((a) => apartmentAgents.some((aa) => aa.agent_id === agent.id && aa.apartment_id === a.id))

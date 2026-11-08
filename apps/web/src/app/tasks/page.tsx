@@ -48,6 +48,7 @@ import { cn } from '@/lib/utils';
 import { FirstSteps } from '@/components/first-steps';
 import { EmptyState } from '@/components/ui/empty-state';
 import { DropIn } from '@/components/ui/drop-in';
+import { useRows } from '@homeup/core';
 
 // FLUX-60: Household tasks & reminders — generic recurring tasks + moving template
 // FLUX-64: Mobile-first UX pass — overflow menus, pill filters, group-by, undo toasts
@@ -74,12 +75,8 @@ export default function TasksPage() {
   useReconnectSync(checklistsStore$);
   useReconnectSync(checklistItemsStore$);
 
-  const checklists = use$(() =>
-    Object.values(checklistsStore$.get() ?? {}).filter((c): c is Checklist => !!c && !c.deleted)
-  );
-  const checklistTaskItems = use$(() =>
-    Object.values(checklistItemsStore$.get() ?? {}).filter((i): i is ChecklistTaskItem => !!i && !i.deleted)
-  );
+  const checklists = useRows(checklistsStore$);
+  const checklistTaskItems = useRows(checklistItemsStore$);
 
   const checklistsMap = useMemo(() => checklistsById(checklists), [checklists]);
   const checklistItemsMap = useMemo(() => checklistItemsByChecklistId(checklistTaskItems), [checklistTaskItems]);

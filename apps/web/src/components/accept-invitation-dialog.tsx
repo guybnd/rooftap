@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { use$ } from "@legendapp/state/react";
 import { createClient } from "@/lib/supabase/client";
 import { useDataCache } from "@/lib/data-cache";
 import { apartments$, agents$, apartmentChecklistItems$, savedSearches$, useReconnectSync } from "@homeup/core";
@@ -10,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { ArrowRightLeftIcon, Trash2Icon } from "lucide-react";
 import { toast } from "sonner";
 import type { Agent, Apartment, ChecklistItem, GroupInvitation, SavedSearch } from '@homeup/core';
+import { useRows } from '@homeup/core';
 
 export function AcceptInvitationDialog({
   invitation,
@@ -31,18 +31,10 @@ export function AcceptInvitationDialog({
   useReconnectSync(agentsStore$);
   useReconnectSync(checklistItemsStore$);
   useReconnectSync(savedSearchesStore$);
-  const apartments = use$(() =>
-    Object.values(apts$.get() ?? {}).filter((a): a is Apartment => !!a && !a.deleted)
-  );
-  const agents = use$(() =>
-    Object.values(agentsStore$.get() ?? {}).filter((a): a is Agent => !!a && !a.deleted)
-  );
-  const checklistItems = use$(() =>
-    Object.values(checklistItemsStore$.get() ?? {}).filter((c): c is ChecklistItem => !!c && !c.deleted)
-  );
-  const savedSearches = use$(() =>
-    Object.values(savedSearchesStore$.get() ?? {}).filter((s): s is SavedSearch => !!s && !s.deleted)
-  );
+  const apartments = useRows(apts$);
+  const agents = useRows(agentsStore$);
+  const checklistItems = useRows(checklistItemsStore$);
+  const savedSearches = useRows(savedSearchesStore$);
 
   const handleAccept = async (mode: "merge" | "abandon") => {
     setProcessing(true);

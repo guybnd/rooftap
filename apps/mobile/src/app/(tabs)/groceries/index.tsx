@@ -77,6 +77,7 @@ import {
 } from '@/features/groceries/session-fetch-freshness';
 import { groupFrameClass, type RowPos } from '@homeup/ui';
 import { GroceriesListHeader, GroceriesTripSummary, GroceriesCollapsedBar, GroceriesAddAisleFooter } from '@/features/groceries/list-chrome';
+import { useRows } from '@homeup/core';
 
 // HOUP-225: aisle-collapse state now persists across sessions (was
 // in-memory-only) — mirrors web page.tsx's localStorage mirror, via
@@ -144,9 +145,7 @@ export default function GroceriesSectionScreen() {
   useReconnectSync(items$);
   const { writeRow, patchRow, softDeleteRow } = useStoreHelpers(items$, currentUserId);
   const storeLoaded = useStoreLoaded(items$);
-  const items = use$(() =>
-    Object.values(items$.get() ?? {}).filter((i): i is GroceryItem => !!i && !i.deleted)
-  );
+  const items = useRows(items$);
   whyRender('groceries:stores', { items$, items, storeLoaded });
 
   // HOUP-245: tick-off linger — a disposition change away from 'needed'

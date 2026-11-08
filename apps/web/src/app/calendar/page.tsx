@@ -25,7 +25,6 @@ import {
   Check,
 } from "lucide-react";
 import { toast } from "sonner";
-import { use$ } from "@legendapp/state/react";
 import { useDataCache } from "@/lib/data-cache";
 import { commit } from "@/lib/haptics";
 import { Button } from "@/components/ui/button";
@@ -94,6 +93,7 @@ import type { Agent, Apartment, Appointment, CalendarAgendaItem, CalendarEntry, 
 import { useEventForecast } from "@/lib/use-event-forecast";
 import { useLegTravel } from "@/lib/use-event-travel";
 import { calendarApi } from "@/lib/calendar-client";
+import { useRows } from '@homeup/core';
 
 // Full 24h grid — was 7am-9pm, which silently dropped events starting outside
 // that window from the Day/Week grid entirely (FLUX-1562).
@@ -157,24 +157,16 @@ function CalendarPage() {
   useReconnectSync(agentsStore$);
   useReconnectSync(appts$);
 
-  const apartments = use$(() =>
-    Object.values(apts$.get() ?? {}).filter((a): a is Apartment => !!a && !a.deleted)
-  );
-  const agents = use$(() =>
-    Object.values(agentsStore$.get() ?? {}).filter((a): a is Agent => !!a && !a.deleted)
-  );
-  const appointments = use$(() =>
-    Object.values(appts$.get() ?? {}).filter((a): a is Appointment => !!a && !a.deleted)
-  );
+  const apartments = useRows(apts$);
+  const agents = useRows(agentsStore$);
+  const appointments = useRows(appts$);
   const { patchRow: patchApartment } = useStoreHelpers(apts$, currentUserId);
   const { writeRow: writeAgent, patchRow: patchAgent } = useStoreHelpers(agentsStore$, currentUserId);
   const { writeRow: writeAppointment } = useStoreHelpers(appts$, currentUserId);
 
   const tasks$ = householdTasks$(showTasks ? group?.id : undefined);
   const { writeRow: writeTask, patchRow: patchTask, softDeleteRow: deleteTask } = useStoreHelpers(tasks$, currentUserId);
-  const allTasks = use$(() =>
-    Object.values(tasks$.get() ?? {}).filter((t): t is HouseholdTask => !!t && !t.deleted)
-  );
+  const allTasks = useRows(tasks$);
   // Modules: a bill or document reminder whose module is off stays off the
   // calendar, even while Tasks is on (task-modules.ts).
   const tasks = useMemo(() => allTasks.filter((t) => isTaskOwnerEnabled(t, modules.enabled)), [allTasks, modules.enabled]);
@@ -185,9 +177,7 @@ function CalendarPage() {
   const costs$ = costItems$(showBudget ? group?.id : undefined);
   // Saving an event also creates, updates or removes its Budget line (event-budget.ts).
   const { linkedCostOf, saveEvent: saveEventWithCost, deleteEvent: deleteEventWithCost } = useEventSave(group?.id, currentUserId, showBudget);
-  const allGroupEvents = use$(() =>
-    Object.values(events$.get() ?? {}).filter((e): e is GroupEvent => !!e && !e.deleted)
-  );
+  const allGroupEvents = useRows(events$);
   const groupEvents = useMemo(
     () => allGroupEvents.filter((e) => !e.private || e.created_by === currentUserId),
     [allGroupEvents, currentUserId]

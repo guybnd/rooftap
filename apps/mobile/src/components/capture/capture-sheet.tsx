@@ -100,6 +100,7 @@ import { NewRecipeSheet } from '@/features/recipes/new-recipe-sheet';
 import { useOpenRoute } from '@/lib/tab-routes';
 import { RooftapTile } from '@/components/brand/rooftap-mark';
 import { launcherColumns } from '@homeup/core';
+import { useRows } from '@homeup/core';
 
 /** Rows of `size` for the launcher grid. */
 function chunk<T>(items: readonly T[], size: number): T[][] {
@@ -200,10 +201,10 @@ export function CaptureSheet() {
   const { writeRow: writeSetup, patchRow: patchSetup, softDeleteRow: softDeleteSetup } = useStoreHelpers(setup$, currentUserId);
   const groceryAux = useGroceryAux(modules.feature('capture.groceries') ? groupId : null);
 
-  const tasks = use$(() => Object.values(tasks$.get() ?? {}).filter((t): t is HouseholdTask => !!t && !t.deleted));
-  const groceries = use$(() => Object.values(groceries$.get() ?? {}).filter((g): g is GroceryItem => !!g && !g.deleted));
-  const costItemsList = use$(() => Object.values(costs$.get() ?? {}).filter((c): c is CostItem => !!c && !c.deleted));
-  const setupItemsList = use$(() => Object.values(setup$.get() ?? {}).filter((s): s is SetupItem => !!s && !s.deleted));
+  const tasks = useRows(tasks$);
+  const groceries = useRows(groceries$);
+  const costItemsList = useRows(costs$);
+  const setupItemsList = useRows(setup$);
 
   // Every module's search rows come from its search source (core
   // slots/search.ts), read only while the sheet is open. Read here, gated on

@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import MapGL, { Marker, Source, Layer, NavigationControl } from "react-map-gl/mapbox";
-import { use$ } from "@legendapp/state/react";
 import { useDataCache } from "@/lib/data-cache";
 import { calculateScore, apartments$, agents$, appointments$, apartmentComments$, apartmentChecklistItems$, apartmentChecklistResponses$, useReconnectSync, useStoreHelpers, compareStrings } from '@homeup/core';
 import { TransitLeg, TransitLegNoRoute } from "@/components/transit-leg";
@@ -13,6 +12,7 @@ import { useGeolocation } from "@/hooks/use-geolocation";
 import type { TravelProfile } from "@/hooks/use-multi-route";
 import type { Agent, Apartment, ApartmentComment, Appointment, ApartmentWithScore, ChecklistItem, ChecklistResponse } from '@homeup/core';
 import "mapbox-gl/dist/mapbox-gl.css";
+import { useRows } from '@homeup/core';
 
 
 function formatDuration(seconds: number): string {
@@ -67,24 +67,12 @@ export function ItineraryMap({ initialDate }: { initialDate?: string } = {}) {
   useReconnectSync(checklistItemsStore$);
   useReconnectSync(checklistResponsesStore$);
 
-  const rawApartments = use$(() =>
-    Object.values(apts$.get() ?? {}).filter((a): a is Apartment => !!a && !a.deleted)
-  );
-  const appointments = use$(() =>
-    Object.values(appts$.get() ?? {}).filter((a): a is Appointment => !!a && !a.deleted)
-  );
-  const agents = use$(() =>
-    Object.values(agentsStore$.get() ?? {}).filter((a): a is Agent => !!a && !a.deleted)
-  );
-  const comments = use$(() =>
-    Object.values(commentsStore$.get() ?? {}).filter((c): c is ApartmentComment => !!c && !c.deleted)
-  );
-  const checklistItems = use$(() =>
-    Object.values(checklistItemsStore$.get() ?? {}).filter((i): i is ChecklistItem => !!i && !i.deleted)
-  );
-  const responses = use$(() =>
-    Object.values(checklistResponsesStore$.get() ?? {}).filter((r): r is ChecklistResponse => !!r && !r.deleted)
-  );
+  const rawApartments = useRows(apts$);
+  const appointments = useRows(appts$);
+  const agents = useRows(agentsStore$);
+  const comments = useRows(commentsStore$);
+  const checklistItems = useRows(checklistItemsStore$);
+  const responses = useRows(checklistResponsesStore$);
   const { patchRow: patchAppointment } = useStoreHelpers(appts$, currentUserId);
   const { patchRow: patchApartment } = useStoreHelpers(apts$, currentUserId);
   const { writeRow: writeComment } = useStoreHelpers(commentsStore$, currentUserId);

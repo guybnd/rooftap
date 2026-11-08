@@ -16,8 +16,8 @@ import { createClient } from "@/lib/supabase/client";
 import { useDataCache } from "@/lib/data-cache";
 import { appointments$, apartments$, agents$, useReconnectSync, useStoreHelpers } from "@homeup/core";
 import { downloadIcs } from "@/lib/ics";
-import { use$ } from "@legendapp/state/react";
 import type { Agent, Apartment, Appointment } from '@homeup/core';
+import { useRows } from '@homeup/core';
 
 
 function getDaysInMonth(year: number, month: number) {
@@ -56,12 +56,8 @@ export function AppointmentModal({
   const agentsStore$ = agents$(group?.id);
   useReconnectSync(agentsStore$);
 
-  const apartments = use$(() =>
-    Object.values(apartmentsStore$.get() ?? {}).filter((a): a is Apartment => !!a && !a.deleted)
-  );
-  const agents = use$(() =>
-    Object.values(agentsStore$.get() ?? {}).filter((a): a is Agent => !!a && !a.deleted)
-  );
+  const apartments = useRows(apartmentsStore$);
+  const agents = useRows(agentsStore$);
 
   const initDate = appointment ? new Date(appointment.scheduled_at) : new Date();
   const [year, setYear] = useState(initDate.getFullYear());

@@ -28,7 +28,6 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, type Href } from 'expo-router';
 import { ArrowLeft, CheckCircle2, ExternalLink, Play, Square, XCircle } from 'lucide-react-native';
-import { use$ } from '@legendapp/state/react';
 import { Text, Button, Card, Input, ScreenBackground } from '@homeup/ui';
 import { agents$, apartmentAgents$, apartments$, useReconnectSync, useStoreHelpers, type Agent } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
@@ -36,6 +35,7 @@ import { NoGroupScreen } from '@/components/no-group-screen';
 import { createApartmentFromParsed, resolveParsedAgents } from '@/features/homesearch/create-apartment-from-parsed';
 import { parseListing } from '@/features/homesearch/parse-listing-api';
 import { useOpenRoute } from '@/lib/tab-routes';
+import { useRows } from '@homeup/core';
 
 type UrlStatus = 'queued' | 'parsing' | 'saving' | 'done' | 'failed';
 
@@ -76,9 +76,7 @@ export default function BulkUploadScreen() {
   const { writeRow: writeAgent } = useStoreHelpers(agentsStore$, currentUserId);
   const { writeRow: writeApartment, patchRow: patchApartment } = useStoreHelpers(apts$, currentUserId);
   const { writeRow: writeApartmentAgent } = useStoreHelpers(apartmentAgentsStore$, currentUserId);
-  const agents = use$(() =>
-    Object.values(agentsStore$.get() ?? {}).filter((a): a is Agent => !!a && !a.deleted)
-  );
+  const agents = useRows(agentsStore$);
 
   const [urls, setUrls] = React.useState('');
   const [entries, setEntries] = React.useState<UrlEntry[]>([]);

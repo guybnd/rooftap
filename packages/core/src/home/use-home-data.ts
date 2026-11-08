@@ -40,6 +40,7 @@ import {
   shopperWants$,
 } from '../data/stores';
 import { syncedGroupId } from '../store-modules';
+import { readableRows } from '../data/use-rows';
 import { todayISO } from '../date-utils';
 import { calculateScore } from '../modules/search/scoring';
 import { completion, completionLabel } from '../modules/checklists/checklists';
@@ -57,9 +58,7 @@ import {
  * object with no id), and Home drew each one as a blank, untitled to-do.
  */
 export function liveRows<T extends { deleted: boolean }>(record: Record<string, T | undefined> | undefined): T[] {
-  return Object.values(record ?? {}).filter(
-    (r): r is T => typeof r === 'object' && r !== null && typeof (r as { id?: unknown }).id === 'string' && !r.deleted,
-  );
+  return readableRows(record);
 }
 
 /** Each listing with its checklist score, or null before anyone answered its checklist. */

@@ -5,8 +5,7 @@
 //
 // Usage in a page:
 //   const events$ = groupEvents$(group?.id);
-//   const allEvents = use$(() => Object.values(events$.get() ?? {})
-//     .filter(e => !!e && !e.deleted));
+//   const allEvents = useRows(events$); // readable, not deleted, stable
 //
 //   const { writeRow: writeEvent } = useStoreHelpers(events$, currentUserId);
 //   useReconnectSync(events$);
@@ -16,5 +15,6 @@ import type { GroupEvent } from '../../types';
 
 export const groupEvents$ = createGroupStore<GroupEvent>({
   collection: 'events',
+  requiredFields: ['title'],
   storageName: 'events',
 });

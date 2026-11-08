@@ -55,6 +55,7 @@ import { useLongPress } from '@/hooks/use-long-press';
 import { PopMenu, MenuItem } from '@/app/setup/pop-menu';
 import { cn } from '@/lib/utils';
 import { useWideLayout } from '@/lib/desktop-layout';
+import { useRows } from '@homeup/core';
 
 function nowISO(): string {
   return new Date().toISOString();
@@ -110,15 +111,9 @@ export default function RecipeDetailPage() {
     const r = rec[recipeId];
     return r && !r.deleted ? r : null;
   });
-  const allRecipes = use$(() =>
-    Object.values(recs$.get() ?? {}).filter((r): r is Recipe => !!r && !r.deleted),
-  );
-  const allIngredients = use$(() =>
-    Object.values(ings$.get() ?? {}).filter((i): i is RecipeIngredient => !!i && !i.deleted),
-  );
-  const groceryItems = use$(() =>
-    Object.values(items$.get() ?? {}).filter((i): i is GroceryItem => !!i && !i.deleted),
-  );
+  const allRecipes = useRows(recs$);
+  const allIngredients = useRows(ings$);
+  const groceryItems = useRows(items$);
 
   const ingredients = useMemo(
     () => allIngredients.filter((i) => i.recipe_id === recipeId).sort((a, b) => a.position - b.position),

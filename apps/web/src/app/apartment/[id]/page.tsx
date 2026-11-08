@@ -22,6 +22,7 @@ import { InlineEdit } from "@/components/inline-edit";
 import { ApartmentDetailMapLazy as ApartmentDetailMap } from "@/components/apartment-detail-map-lazy";
 import { toast } from "sonner";
 import ApartmentLoading from "./loading";
+import { useRows } from '@homeup/core';
 
 // Hearth v2 pass: the detail view is a Display-step address on the ground,
 // one meta line (suburb, move-in, main location), the listing's actions, then
@@ -81,18 +82,10 @@ export default function ApartmentPage() {
     const row = apts$.get()?.[id];
     return row && !row.deleted ? row : undefined;
   });
-  const agents = use$(() =>
-    Object.values(agentsStore$.get() ?? {}).filter((a): a is Agent => !!a && !a.deleted)
-  );
-  const apartmentAgents = use$(() =>
-    Object.values(apartmentAgentsStore$.get() ?? {}).filter((aa): aa is ApartmentAgent => !!aa && !aa.deleted)
-  );
-  const checklistItems = use$(() =>
-    Object.values(checklistItemsStore$.get() ?? {}).filter((i): i is ChecklistItem => !!i && !i.deleted)
-  );
-  const responses = use$(() =>
-    Object.values(checklistResponsesStore$.get() ?? {}).filter((r): r is ChecklistResponse => !!r && !r.deleted)
-  );
+  const agents = useRows(agentsStore$);
+  const apartmentAgents = useRows(apartmentAgentsStore$);
+  const checklistItems = useRows(checklistItemsStore$);
+  const responses = useRows(checklistResponsesStore$);
   const storeLoaded = useStoreLoaded(apts$, agentsStore$, apartmentAgentsStore$, checklistItemsStore$, checklistResponsesStore$);
 
   const [viewMode, setViewMode] = useState<"full" | "checklist">("full");

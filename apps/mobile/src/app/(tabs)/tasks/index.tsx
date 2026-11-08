@@ -119,6 +119,7 @@ import { createUndoToastPresenter } from '@/lib/undo-toast';
 import { useTaskSnoozeUndo } from '@/features/tasks/use-task-snooze-undo';
 import { DropIn, flattenGroups, groupFrameClass, rowSpacingClassName, type SectionRow, type SectionTone } from '@homeup/ui';
 import { FirstSteps } from '@/components/first-steps';
+import { useRows } from '@homeup/core';
 
 // FLUX-193 parity: the move-in countdown is one-time info once you've moved
 // in — dismissible, persisted per move-in date (a new date re-shows it).
@@ -434,12 +435,8 @@ export default function TasksSectionScreen() {
   useReconnectSync(checklistsStore$);
   useReconnectSync(checklistItemsStore$);
 
-  const checklists = use$(() =>
-    Object.values(checklistsStore$.get() ?? {}).filter((c): c is Checklist => !!c && !c.deleted)
-  );
-  const checklistTaskItems = use$(() =>
-    Object.values(checklistItemsStore$.get() ?? {}).filter((i): i is ChecklistTaskItem => !!i && !i.deleted)
-  );
+  const checklists = useRows(checklistsStore$);
+  const checklistTaskItems = useRows(checklistItemsStore$);
 
   const checklistsMap = React.useMemo(() => checklistsById(checklists), [checklists]);
   const checklistItemsMap = React.useMemo(() => checklistItemsByChecklistId(checklistTaskItems), [checklistTaskItems]);

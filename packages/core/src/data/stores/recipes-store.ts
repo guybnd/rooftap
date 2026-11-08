@@ -4,8 +4,7 @@
 //
 // Usage in a page:
 //   const recs$ = recipes$(group?.id);
-//   const all = use$(() => Object.values(recs$.get() ?? {})
-//     .filter(r => !!r && !r.deleted).sort(...));
+//   const all = useRows(recs$); // readable, not deleted, stable
 //
 //   const { writeRow, patchRow, softDeleteRow } = useStoreHelpers(recs$, currentUserId);
 //   useReconnectSync(recs$);
@@ -16,6 +15,7 @@ import { normalizeRecipeRow } from '../../modules/recipes/recipes';
 
 export const recipes$ = createGroupStore<Recipe>({
   collection: 'recipes',
+  requiredFields: ['title'],
   storageName: 'recipes',
   // HOUP-333: every row from Supabase gets a guaranteed `cuisines` array.
   normalizeRow: normalizeRecipeRow,

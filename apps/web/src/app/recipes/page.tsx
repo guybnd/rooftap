@@ -14,7 +14,6 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { HelperButton } from '@/components/helper-button';
-import { use$ } from '@legendapp/state/react';
 import { toast } from 'sonner';
 import { Plus, ChefHat, Camera, ImagePlus, Loader2 } from 'lucide-react';
 import { useDataCache } from '@/lib/data-cache';
@@ -47,6 +46,7 @@ import { SegmentedControl } from '@/components/ui/segmented-control';
 import { MealWeek } from './meal-week';
 import { FirstSteps } from '@/components/first-steps';
 import { EmptyState } from '@/components/ui/empty-state';
+import { useRows } from '@homeup/core';
 
 export default function RecipesPage() {
   const { group, currentUserId, isOnline, loading: cacheLoading, memberProfiles, groupMembers } = useDataCache();
@@ -86,9 +86,7 @@ export default function RecipesPage() {
   const staples = groceriesLinked ? match.staples : undefined;
   const storeLoaded = useStoreLoaded(...(groceriesLinked ? [recs$, ings$, items$] : [recs$, ings$]));
 
-  const allRecipes = use$(() =>
-    Object.values(recs$.get() ?? {}).filter((r): r is Recipe => !!r && !r.deleted),
-  );
+  const allRecipes = useRows(recs$);
   // The book, scanned drafts and the To try list (ideas, often saved by the
   // Assistant, kept out of the book until someone keeps one).
   const { recipes, drafts, toTry } = useMemo(() => splitRecipeList(allRecipes), [allRecipes]);
@@ -97,12 +95,8 @@ export default function RecipesPage() {
   const [toTryPicked, setToTryOnly] = useState(false);
   const toTryOnly = toTryOn && toTryPicked;
   const shown = toTryOnly ? toTry : recipes;
-  const allIngredients = use$(() =>
-    Object.values(ings$.get() ?? {}).filter((i): i is RecipeIngredient => !!i && !i.deleted),
-  );
-  const groceryItems = use$(() =>
-    Object.values(items$.get() ?? {}).filter((i): i is GroceryItem => !!i && !i.deleted),
-  );
+  const allIngredients = useRows(ings$);
+  const groceryItems = useRows(items$);
 
   const ingredientsByRecipe = useMemo(() => {
     const m = new Map<string, RecipeIngredient[]>();

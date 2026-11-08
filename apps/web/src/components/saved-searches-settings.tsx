@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { Bookmark, Plus, Trash2, ExternalLink } from "lucide-react";
-import { use$ } from "@legendapp/state/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormSection, FieldRow } from "@/components/ui/item-form-sheet";
@@ -19,15 +18,14 @@ function hostOf(url: string): string {
 import { useDataCache } from "@/lib/data-cache";
 import { savedSearches$, useReconnectSync, useStoreHelpers } from "@homeup/core";
 import type { SavedSearch } from '@homeup/core';
+import { useRows } from '@homeup/core';
 
 export function SavedSearchesSettings() {
   const { group, currentUserId } = useDataCache();
   const searches$ = savedSearches$(group?.id);
   useReconnectSync(searches$);
   const { writeRow, softDeleteRow } = useStoreHelpers(searches$, currentUserId);
-  const savedSearches = use$(() =>
-    Object.values(searches$.get() ?? {}).filter((s): s is SavedSearch => !!s && !s.deleted)
-  );
+  const savedSearches = useRows(searches$);
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");

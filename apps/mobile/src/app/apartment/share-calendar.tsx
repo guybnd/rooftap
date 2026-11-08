@@ -16,13 +16,13 @@ import { ArrowLeft, Calendar } from 'lucide-react-native';
 import { Text, Button, FieldRow, FormSection, ScreenBackground } from '@homeup/ui';
 import { appointments$, apartments$, useReconnectSync, useStoreHelpers, type Apartment } from '@homeup/core';
 import { parseIcs, type ParsedEvent } from '@homeup/core';
-import { use$ } from '@legendapp/state/react';
 import { useDataCache } from '@/lib/data-cache';
 import { NoGroupScreen } from '@/components/no-group-screen';
 import { ApartmentPicker, fuzzyMatchApartment } from '@/features/homesearch/apartment-picker';
 import { takePendingShareIcs } from '@/lib/share-ingest';
 import { randomUUID } from '@/lib/uuid';
 import { useOpenRoute } from '@/lib/tab-routes';
+import { useRows } from '@homeup/core';
 
 function formatEventWhen(event: ParsedEvent): string {
   if (!event.dtstart) return '';
@@ -44,9 +44,7 @@ export default function ShareCalendarScreen() {
 
   const apts$ = apartments$(group?.id);
   useReconnectSync(apts$);
-  const apartments = use$(() =>
-    Object.values(apts$.get() ?? {}).filter((a): a is Apartment => !!a && !a.deleted)
-  );
+  const apartments = useRows(apts$);
 
   const appts$ = appointments$(group?.id);
   const { writeRow: writeAppointment } = useStoreHelpers(appts$, currentUserId);

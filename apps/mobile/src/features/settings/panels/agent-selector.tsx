@@ -8,7 +8,6 @@
 // popover becomes a `BottomSheet` (native's Modal already owns the portal +
 // backdrop + dismiss web hand-rolled).
 import { useState } from 'react';
-import { use$ } from '@legendapp/state/react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { ChevronDown, Plus, X } from 'lucide-react-native';
 import { Text, BottomSheet, Button, Input } from '@homeup/ui';
@@ -16,6 +15,7 @@ import { agents$, useReconnectSync, useStoreHelpers } from '@homeup/core';
 import type { Agent } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
 import { randomUUID } from '@/lib/uuid';
+import { useRows } from '@homeup/core';
 
 const AGENT_COLORS = [
   '#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e',
@@ -41,9 +41,7 @@ export function AgentSelector({ value, onChange }: AgentSelectorProps) {
   const agentsStore$ = agents$(group?.id);
   useReconnectSync(agentsStore$);
   const { writeRow } = useStoreHelpers(agentsStore$, currentUserId);
-  const agents = use$(() =>
-    Object.values(agentsStore$.get() ?? {}).filter((a): a is Agent => !!a && !a.deleted)
-  );
+  const agents = useRows(agentsStore$);
 
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');

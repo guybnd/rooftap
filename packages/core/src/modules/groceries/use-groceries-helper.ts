@@ -8,7 +8,6 @@
 // the link to them is on (store-modules.ts).
 
 import { useCallback, useMemo } from 'react';
-import { use$ } from '@legendapp/state/react';
 import { useReconnectSync, useStoreHelpers } from '../../data/create-group-store';
 import { groceryItems$ } from '../../data/stores/grocery-items-store';
 import { mealPlanEntries$ } from '../../data/stores/meal-plan-store';
@@ -21,6 +20,7 @@ import type { MealPlanEntry } from '../meals/meal-plan';
 import { buildNeededGroceryItem, recipeNoteFor } from '../recipes/recipes';
 import { useRecipeMatch } from '../recipes/use-recipe-match';
 import { briefMissing, groceriesBrief } from './helper-brief';
+import { useRows } from '../../data/use-rows';
 
 
 export function useGroceriesHelper(input: {
@@ -41,14 +41,11 @@ export function useGroceriesHelper(input: {
   const { writeRow, patchRow } = useStoreHelpers(items$, currentUserId);
   const { staples } = useRecipeMatch(mealGroup, currentUserId);
 
-  const items = use$(() =>
-    Object.values(items$.get() ?? {}).filter(
-      (i): i is GroceryItem => !!i && !i.deleted && !(i.private && i.assigned_to !== currentUserId)
-    )
+  const items = useRows(items$, (i) => !(i.private && i.assigned_to !== currentUserId)
   );
-  const entries = use$(() => Object.values(entries$.get() ?? {}).filter((e): e is MealPlanEntry => !!e && !e.deleted));
-  const recipeRows = use$(() => Object.values(recs$.get() ?? {}).filter((r): r is Recipe => !!r && !r.deleted));
-  const ingredientRows = use$(() => Object.values(ings$.get() ?? {}).filter((i): i is RecipeIngredient => !!i && !i.deleted));
+  const entries = useRows(entries$);
+  const recipeRows = useRows(recs$);
+  const ingredientRows = useRows(ings$);
 
   const missing = useMemo(() => {
     if (!mealGroup) return null;

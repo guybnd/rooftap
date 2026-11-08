@@ -1,13 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { use$ } from "@legendapp/state/react";
 import { useDataCache } from "@/lib/data-cache";
 import { agents$, useReconnectSync, useStoreHelpers } from "@homeup/core";
 import type { Agent } from '@homeup/core';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ChevronDown, PlusIcon, XIcon } from "lucide-react";
+import { useRows } from '@homeup/core';
 
 const AGENT_COLORS = [
   "#ef4444", "#f97316", "#f59e0b", "#84cc16", "#22c55e",
@@ -24,9 +24,7 @@ export function AgentSelector({ value, onChange }: AgentSelectorProps) {
   const agentsStore$ = agents$(group?.id);
   useReconnectSync(agentsStore$);
   const { writeRow } = useStoreHelpers(agentsStore$, currentUserId);
-  const agents = use$(() =>
-    Object.values(agentsStore$.get() ?? {}).filter((a): a is Agent => !!a && !a.deleted)
-  );
+  const agents = useRows(agentsStore$);
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [adding, setAdding] = useState(false);

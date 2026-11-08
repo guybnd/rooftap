@@ -49,6 +49,7 @@ import { useDataCache } from '@/lib/data-cache';
 import { NoGroupScreen } from '@/components/no-group-screen';
 import { ChecklistRow } from '@/features/checklists/checklist-row';
 import { FirstSteps } from '@/components/first-steps';
+import { useRows } from '@homeup/core';
 
 export default function ChecklistsSectionScreen() {
   const insets = useSafeAreaInsets();
@@ -75,9 +76,7 @@ export default function ChecklistsSectionScreen() {
       .filter((c): c is Checklist => !!c && !c.deleted)
       .sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''))
   );
-  const allItems = use$(() =>
-    Object.values(items$.get() ?? {}).filter((i): i is ChecklistTaskItem => !!i && !i.deleted)
-  );
+  const allItems = useRows(items$);
 
   const itemsByList = React.useMemo(() => {
     const m = new Map<string, ChecklistTaskItem[]>();

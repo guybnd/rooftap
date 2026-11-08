@@ -15,7 +15,6 @@
 //    rather than porting the web's click-again-to-confirm affordance.
 import * as React from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
-import { use$ } from '@legendapp/state/react';
 import { Plus, ShieldAlert, Sparkles, Trash2 } from 'lucide-react-native';
 import {
   Text,
@@ -45,6 +44,7 @@ import {
   type ChecklistItem,
 } from '@homeup/core';
 import { randomUUID } from '@/lib/uuid';
+import { useRows } from '@homeup/core';
 
 interface ItemFormState {
   label: string;
@@ -70,9 +70,7 @@ export function ChecklistPanel({ groupId }: { groupId: string }) {
   const { writeRow, patchRow, softDeleteRow } = useStoreHelpers(items$, null);
   const storeLoaded = useStoreLoaded(items$);
 
-  const items = use$(() =>
-    Object.values(items$.get() ?? {}).filter((i): i is ChecklistItem => !!i && !i.deleted)
-  );
+  const items = useRows(items$);
 
   const [sheetOpen, setSheetOpen] = React.useState(false);
   const [editingItem, setEditingItem] = React.useState<ChecklistItem | undefined>();

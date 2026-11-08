@@ -4,7 +4,6 @@ import { useState, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Archive, MapPin, Plus } from "lucide-react";
-import { use$ } from "@legendapp/state/react";
 import { useDataCache } from "@/lib/data-cache";
 import { calculateScore, apartments$, agents$, apartmentAgents$, apartmentChecklistItems$, apartmentChecklistResponses$, appointments$, apartmentComments$, useReconnectSync, useStoreLoaded } from '@homeup/core';
 import type { Agent, Apartment, ApartmentAgent, ApartmentComment, Appointment, ApartmentWithScore, ChecklistItem, ChecklistResponse } from '@homeup/core';
@@ -21,6 +20,7 @@ import { useDebounce } from "@/hooks/use-debounce";
 import { useFuzzySearch } from "@/hooks/use-fuzzy-search";
 import { cn } from "@/lib/utils";
 import HomeSearchLoading from "./loading";
+import { useRows } from '@homeup/core';
 
 export default function HomeSearchPage() {
   const { group, preliminaryScores, currentUserId, userSettings, loading: cacheLoading } = useDataCache();
@@ -40,27 +40,13 @@ export default function HomeSearchPage() {
   useReconnectSync(appointmentsStore$);
   useReconnectSync(commentsStore$);
 
-  const rawApartments = use$(() =>
-    Object.values(apts$.get() ?? {}).filter((a): a is Apartment => !!a && !a.deleted)
-  );
-  const agents = use$(() =>
-    Object.values(agentsStore$.get() ?? {}).filter((a): a is Agent => !!a && !a.deleted)
-  );
-  const apartmentAgents = use$(() =>
-    Object.values(apartmentAgentsStore$.get() ?? {}).filter((aa): aa is ApartmentAgent => !!aa && !aa.deleted)
-  );
-  const checklistItems = use$(() =>
-    Object.values(checklistItemsStore$.get() ?? {}).filter((i): i is ChecklistItem => !!i && !i.deleted)
-  );
-  const responses = use$(() =>
-    Object.values(checklistResponsesStore$.get() ?? {}).filter((r): r is ChecklistResponse => !!r && !r.deleted)
-  );
-  const appointments = use$(() =>
-    Object.values(appointmentsStore$.get() ?? {}).filter((a): a is Appointment => !!a && !a.deleted)
-  );
-  const commentRows = use$(() =>
-    Object.values(commentsStore$.get() ?? {}).filter((c): c is ApartmentComment => !!c && !c.deleted)
-  );
+  const rawApartments = useRows(apts$);
+  const agents = useRows(agentsStore$);
+  const apartmentAgents = useRows(apartmentAgentsStore$);
+  const checklistItems = useRows(checklistItemsStore$);
+  const responses = useRows(checklistResponsesStore$);
+  const appointments = useRows(appointmentsStore$);
+  const commentRows = useRows(commentsStore$);
 
   // Mirrors data-cache.tsx's former loadFromOfflineStore/fetchAll `counts`/
   // `latest[...]` reducers: total count + most-recent-first top 3, per apartment.

@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { use$ } from '@legendapp/state/react';
 import { requestWidgetUpdate } from 'react-native-android-widget';
 import {
   apartments$,
@@ -43,6 +42,7 @@ import { isWeatherStale, readWeatherCache } from './weather-cache';
 import { readWidgetSnapshot, writeWidgetSnapshot } from './widget-snapshot';
 import { tasksWidgetRepresentation } from './TasksWidget';
 import { useAppTheme } from '@/lib/theme-context';
+import { useRows } from '@homeup/core';
 
 const SYNC_DEBOUNCE_MS = 400;
 
@@ -76,20 +76,12 @@ export function useWidgetSync(): void {
   const appts$ = appointments$(syncedGroupId(appointments$, groupId, enabled));
   const apts$ = apartments$(syncedGroupId(apartments$, groupId, enabled));
 
-  const tasks = use$(() =>
-    Object.values(tasks$.get() ?? {}).filter((t): t is HouseholdTask => !!t && !t.deleted),
-  );
-  const groceries = use$(() =>
-    Object.values(groceriesStore$.get() ?? {}).filter((g): g is GroceryItem => !!g && !g.deleted),
-  );
-  const costItemsList = use$(() =>
-    Object.values(costsStore$.get() ?? {}).filter((c): c is CostItem => !!c && !c.deleted),
-  );
-  const eventsList = use$(() => Object.values(events$.get() ?? {}).filter((e): e is GroupEvent => !!e && !e.deleted));
-  const appointmentsList = use$(() =>
-    Object.values(appts$.get() ?? {}).filter((a): a is Appointment => !!a && !a.deleted),
-  );
-  const apartmentsList = use$(() => Object.values(apts$.get() ?? {}).filter((a): a is Apartment => !!a && !a.deleted));
+  const tasks = useRows(tasks$);
+  const groceries = useRows(groceriesStore$);
+  const costItemsList = useRows(costsStore$);
+  const eventsList = useRows(events$);
+  const appointmentsList = useRows(appts$);
+  const apartmentsList = useRows(apts$);
   // Other modules' feed items (bin night), as Home's feed shows them (core slots/home.ts).
   const moduleAgenda = useHomeAgenda(groupId, currentUserId, hidden);
 

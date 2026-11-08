@@ -4,7 +4,6 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2, CheckCircle, AlertCircle, Calendar } from "lucide-react";
 import imageCompression from "browser-image-compression";
-import { use$ } from "@legendapp/state/react";
 import { createClient } from "@/lib/supabase/client";
 import { geocodeAddress } from "@/lib/geocode";
 import { renderPdfToImages } from "@/lib/pdf-utils";
@@ -16,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AgentSelector } from "@/components/agent-selector";
 import { ShareDestinationPicker } from "@/components/share-destination-picker";
+import { useRows } from '@homeup/core';
 
 type Status = "picking-destination" | "loading" | "parsing" | "confirm" | "confirm-calendar" | "saving" | "done" | "error" | "unavailable";
 
@@ -45,12 +45,8 @@ function ShareTargetContent() {
   useReconnectSync(apts$);
   useReconnectSync(agentsStore$);
   useReconnectSync(appts$);
-  const apartments = use$(() =>
-    Object.values(apts$.get() ?? {}).filter((a): a is Apartment => !!a && !a.deleted)
-  );
-  const agents = use$(() =>
-    Object.values(agentsStore$.get() ?? {}).filter((a): a is Agent => !!a && !a.deleted)
-  );
+  const apartments = useRows(apts$);
+  const agents = useRows(agentsStore$);
   const { writeRow: writeAppointment } = useStoreHelpers(appts$, currentUserId);
 
   // Modules: a shared .ics imports a viewing (capture.calendar-file) and any

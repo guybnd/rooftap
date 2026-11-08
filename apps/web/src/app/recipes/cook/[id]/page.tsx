@@ -38,6 +38,7 @@ import { useDataCache } from '@/lib/data-cache';
 import { cn } from '@/lib/utils';
 import { askTimerNotificationPermission } from '@/components/cook/cook-alarms';
 import { CookAsk } from '@/components/cook/cook-ask';
+import { useRows } from '@homeup/core';
 
 function useWakeLock(active: boolean): void {
   useEffect(() => {
@@ -79,9 +80,7 @@ export default function CookModePage() {
     const r = ((recs$.get() ?? {}) as Record<string, Recipe>)[recipeId];
     return r && !r.deleted ? r : null;
   });
-  const allIngredients = use$(() =>
-    Object.values(ings$.get() ?? {}).filter((i): i is RecipeIngredient => !!i && !i.deleted && i.recipe_id === recipeId),
-  );
+  const allIngredients = useRows(ings$, (i) => i.recipe_id === recipeId);
   const steps = useMemo(() => (recipe ? recipeSteps(recipe) : []), [recipe]);
 
   const cooks = useCooks(group?.id, currentUserId);

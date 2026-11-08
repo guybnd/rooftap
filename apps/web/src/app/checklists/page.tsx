@@ -26,6 +26,7 @@ import { WideList } from '@/components/wide-list';
 import { cn } from '@/lib/utils';
 import { FirstSteps } from '@/components/first-steps';
 import { EmptyState } from '@/components/ui/empty-state';
+import { useRows } from '@homeup/core';
 
 export default function ChecklistsPage() {
   const router = useRouter();
@@ -63,9 +64,7 @@ export default function ChecklistsPage() {
       .filter((c): c is Checklist => !!c && !c.deleted)
       .sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? '')),
   );
-  const allItems = use$(() =>
-    Object.values(items$.get() ?? {}).filter((i): i is ChecklistTaskItem => !!i && !i.deleted),
-  );
+  const allItems = useRows(items$);
 
   // completion map keyed by checklist id
   const itemsByList = useMemo(() => {

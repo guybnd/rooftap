@@ -16,7 +16,6 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { use$ } from '@legendapp/state/react';
 import { ChevronRight, Plus, ShoppingCart, Star } from 'lucide-react';
 import { HOME_RE_ADD_CHIP_CAP, type Group, type GroceryItem } from '@homeup/core';
 import { dialog } from '@homeup/core';
@@ -31,6 +30,7 @@ import { GroceryItemCardStandalone } from '@/app/groceries/grocery-item-card';
 import { ReAddSuggestions } from '@/app/groceries/re-add-suggestions';
 import { useGroceryAux } from '@/app/groceries/use-grocery-aux';
 import { HUB, HubTile, TileHeader, stopNav, localDateISO } from './hub-shared';
+import { useRows } from '@homeup/core';
 
 const FADE_MS = 600; // fade-out animation length inside the 10s linger window
 
@@ -52,9 +52,7 @@ export function GroceriesWidget({
   const { writeRow: writeItem, patchRow: patchItem, softDeleteRow: softDeleteItem } =
     useStoreHelpers(items$, currentUserId);
 
-  const allItems = use$(() =>
-    Object.values(items$.get() ?? {}).filter((i): i is GroceryItem => !!i && !i.deleted)
-  );
+  const allItems = useRows(items$);
   const needed = countNeeded(allItems);
   const today = localDateISO(new Date());
 

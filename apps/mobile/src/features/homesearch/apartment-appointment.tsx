@@ -45,6 +45,7 @@ import {
 } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
 import { AppointmentModal } from '@/features/appointments/appointment-modal';
+import { useRows } from '@homeup/core';
 
 export function ApartmentAppointment({ apartmentId }: { apartmentId: string }) {
   const { group, currentUserId, userSettings } = useDataCache();
@@ -72,9 +73,7 @@ export function ApartmentAppointment({ apartmentId }: { apartmentId: string }) {
         (a): a is Apartment => !!a && !a.deleted && a.id === apartmentId
       ) ?? null
   );
-  const agents = use$(() =>
-    Object.values(agentsStore$.get() ?? {}).filter((a): a is Agent => !!a && !a.deleted)
-  );
+  const agents = useRows(agentsStore$);
   const agent = apartment?.agent_id ? agents.find((a) => a.id === apartment.agent_id) ?? null : null;
 
   const [open, setOpen] = React.useState(false);

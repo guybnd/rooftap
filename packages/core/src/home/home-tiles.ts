@@ -4,7 +4,6 @@
 // progress, the next viewing and best listing, and the Shopper watch list.
 // The tiles keep their own rendering and navigation.
 
-import { use$ } from '@legendapp/state/react';
 import type { Appointment, ApartmentWithScore, SetupItem } from '../types';
 import { useReconnectSync } from '../data/create-group-store';
 import { setupItems$, shopperPriceSnapshots$, shopperWants$ } from '../data/stores';
@@ -18,12 +17,13 @@ import {
   type ShopperRowSummary,
   type ShopperWant,
 } from '../modules/shopper/shopper';
+import { useRows } from '../data/use-rows';
 
 /** The Setup tile's summary and how many items are done. */
 export function useSetupTileSummary(groupId: string): SetupSummary & { done: number } {
   const items$ = setupItems$(groupId);
   useReconnectSync(items$);
-  const items = use$(() => Object.values(items$.get() ?? {}).filter((i): i is SetupItem => !!i && !i.deleted));
+  const items = useRows(items$);
   const summary = summarize(items);
   return { ...summary, done: summary.total - summary.outstanding };
 }
@@ -77,9 +77,7 @@ export function useShopperGlance(groupId: string): ShopperGlance {
   const snaps$ = shopperPriceSnapshots$(groupId);
   useReconnectSync(wants$);
   useReconnectSync(snaps$);
-  const wants = use$(() =>
-    Object.values(wants$.get() ?? {}).filter((w): w is ShopperWant => !!w && !w.deleted && w.status === 'watching')
-  );
-  const snaps = use$(() => Object.values(snaps$.get() ?? {}).filter((s): s is ShopperPriceSnapshot => !!s && !s.deleted));
+  const wants = useRows(wants$, (w) => w.status === 'watching');
+  const snaps = useRows(snaps$);
   return shopperGlance(wants, snaps, todayISO());
 }

@@ -3,7 +3,6 @@
 import { useState, useRef, useCallback } from "react";
 import Link from "next/link";
 import { ArrowLeft, Play, Square, CheckCircle2, XCircle, Loader2, ExternalLink } from "lucide-react";
-import { use$ } from "@legendapp/state/react";
 import { createClient } from "@/lib/supabase/client";
 import { geocodeAddress } from "@/lib/geocode";
 import { fetchNearestPoiDistancesClient } from "@/lib/nearest-pois-client";
@@ -12,6 +11,7 @@ import { apartments$, agents$, apartmentAgents$, useReconnectSync, useStoreHelpe
 import type { Agent } from '@homeup/core';
 import { Button } from "@/components/ui/button";
 import { useBulkUploadSession } from "@/hooks/use-bulk-upload-session";
+import { useRows } from '@homeup/core';
 
 type UrlStatus = "queued" | "parsing" | "saving" | "done" | "failed";
 
@@ -35,9 +35,7 @@ export default function BulkUploadPage() {
   const { writeRow: writeAgent } = useStoreHelpers(agentsStore$, currentUserId);
   const { writeRow: writeApartment, patchRow: patchApartment } = useStoreHelpers(apts$, currentUserId);
   const { writeRow: writeApartmentAgent } = useStoreHelpers(apartmentAgentsStore$, currentUserId);
-  const agents = use$(() =>
-    Object.values(agentsStore$.get() ?? {}).filter((a): a is Agent => !!a && !a.deleted)
-  );
+  const agents = useRows(agentsStore$);
   const [urls, setUrls] = useState("");
   const { entries, setEntries, restored, startSession, completeSession, clearSession } = useBulkUploadSession();
   const [running, setRunning] = useState(false);

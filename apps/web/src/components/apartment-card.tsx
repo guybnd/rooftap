@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Bed, Bath, Car, MapPin, ExternalLink, Trash2, Clock, MessageSquare, Archive, ArchiveRestore, CalendarDays, CalendarPlus, Send, ShoppingCart, TrainFront } from "lucide-react";
-import { use$ } from "@legendapp/state/react";
 import { ImageCarousel } from "@/components/image-carousel";
 import { Card } from "@/components/ui/card";
 import { ScoreBadge } from "@/components/score-badge";
@@ -19,6 +18,7 @@ import { apartmentPhotoUrls, formatRelativeDay, formatMoney, mapsDirectionsUrl, 
 import { dialog } from '@homeup/core';
 import { toast } from "sonner";
 import type { Agent, ApartmentWithScore, Appointment } from '@homeup/core';
+import { useRows } from '@homeup/core';
 
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -107,9 +107,7 @@ export function ApartmentCard({ apartment, agent, agents: linkedAgents, commentC
 
   const appts$ = appointments$(group?.id);
   useReconnectSync(appts$);
-  const appointments = use$(() =>
-    Object.values(appts$.get() ?? {}).filter((a): a is Appointment => !!a && !a.deleted)
-  );
+  const appointments = useRows(appts$);
 
   const apts$ = apartments$(group?.id);
   useReconnectSync(apts$);

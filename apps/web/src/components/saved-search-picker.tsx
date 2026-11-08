@@ -3,18 +3,16 @@
 import { useState, useEffect, useRef } from "react";
 import { Search, ChevronDown, ExternalLink, Settings } from "lucide-react";
 import Link from "next/link";
-import { use$ } from "@legendapp/state/react";
 import { useDataCache } from "@/lib/data-cache";
 import { savedSearches$, useReconnectSync } from "@homeup/core";
 import type { SavedSearch } from '@homeup/core';
+import { useRows } from '@homeup/core';
 
 export function SavedSearchPicker() {
   const { group } = useDataCache();
   const searches$ = savedSearches$(group?.id);
   useReconnectSync(searches$);
-  const savedSearches = use$(() =>
-    Object.values(searches$.get() ?? {}).filter((s): s is SavedSearch => !!s && !s.deleted)
-  );
+  const savedSearches = useRows(searches$);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 

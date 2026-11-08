@@ -17,11 +17,14 @@
 // Write-path gotchas (INSERT vs UPDATE classification, 409 on swipe) live in
 // useStoreHelpers() below.
 //
-// REACTIVITY NOTE: always use the selector form with use$:
-//   const rows = use$(() => Object.values(store$.get() ?? {}).filter(...))
+// REACTIVITY NOTE: read rows with useRows (data/use-rows.ts):
+//   const rows = useRows(store$, (r) => r.status === 'needed')
 // NOT:  const rows = use$(store$)
-// The reference form returns a stable Proxy — downstream useMemo/effects never
-// detect child-level changes, so adds/edits silently don't re-render.
+// NOR:  const rows = use$(() => Object.values(store$.get() ?? {}).filter(...))
+// The reference form returns a stable Proxy, so downstream useMemo/effects
+// never see child-level changes. The hand-written selector builds a new array
+// every render (effects that depend on it loop) and lets unreadable rows
+// through. useRows fixes both.
 //
 // HOUP-73: all platform coupling (IndexedDB/expo-sqlite persistence, online/
 // visibility detection, the Supabase client) goes through getStoreEnvironment()
@@ -78,7 +81,18 @@ export function ensureLegendConfigured(): void {
 // useReconnectSync can mount a table/group-scoped realtime watchdog and
 // fallback-sync scheduler without changing its call signature at every
 // consumer (11 stores across the app already call `useReconnectSync(store$)`).
-const storeMeta = new WeakMap<Observable<GroupRecord<SyncedRow>>, { collection: string; groupId: string }>();
+const storeMeta = new WeakMap<
+  Observable<GroupRecord<SyncedRow>>,
+  { collection: string; groupId: string; requiredFields: readonly string[] }
+>();
+
+/**
+ * The fields a store's rows must carry to be read (see `requiredFields` on
+ * createGroupStore). useRows skips a row that lacks one.
+ */
+export function storeRequiredFields(store$: Observable<GroupRecord<SyncedRow>>): readonly string[] {
+  return storeMeta.get(store$)?.requiredFields ?? [];
+}
 
 // Fast delta cadence: caps worst-case staleness while the realtime channel is
 // down. Delta-only (changesSince: 'last-sync'), so each pull is small — but by
@@ -253,8 +267,16 @@ export function createGroupStore<T extends SyncedRow>(config: {
    * cache are NOT passed through it — render sites keep their own guard.
    */
   normalizeRow?: (row: T) => T;
+  /**
+   * Fields a row must hold before a screen sees it. A local cache can keep a
+   * row that synced before its name, or a partial row from an old build, and
+   * one such row crashed whole screens (#386, #483, #547). useRows skips rows
+   * where any of these is null or missing. `id` is always checked.
+   */
+  requiredFields?: readonly (keyof T & string)[];
 }): GroupStore<T> {
   const { collection, storageName, normalizeRow } = config;
+  const requiredFields: readonly string[] = config.requiredFields ?? [];
   const logTag = config.logTag ?? `[legend ${collection}]`;
 
   const stores = new Map<string, Observable<GroupRecord<T>>>();
@@ -367,7 +389,7 @@ export function createGroupStore<T extends SyncedRow>(config: {
         }),
       ) as unknown as Observable<GroupRecord<T>>;
       stores.set(groupId, store);
-      storeMeta.set(store as unknown as Observable<GroupRecord<SyncedRow>>, { collection, groupId });
+      storeMeta.set(store as unknown as Observable<GroupRecord<SyncedRow>>, { collection, groupId, requiredFields });
     }
     return store;
   }

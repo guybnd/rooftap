@@ -48,6 +48,7 @@ import {
 import { useDataCache } from '@/lib/data-cache';
 import { NoGroupScreen } from '@/components/no-group-screen';
 import { checklistTypeIcon } from '@/features/checklists/checklist-ui';
+import { useRows } from '@homeup/core';
 
 export default function NewChecklistScreen() {
   const insets = useSafeAreaInsets();
@@ -82,9 +83,7 @@ export default function NewChecklistScreen() {
       .filter((t): t is ChecklistTemplate => !!t && !t.deleted)
       .sort((a, b) => compareStrings(a.title, b.title))
   );
-  const templateItems = use$(() =>
-    Object.values(templateItems$.get() ?? {}).filter((i): i is ChecklistTemplateItem => !!i && !i.deleted)
-  );
+  const templateItems = useRows(templateItems$);
 
   // Seed starter templates once (idempotent) so they're offered here even
   // before the templates manager has been visited.

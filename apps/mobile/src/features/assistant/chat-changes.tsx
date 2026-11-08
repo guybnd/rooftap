@@ -9,7 +9,6 @@
 // Web twin: apps/web/src/app/assistant/chat-changes.tsx.
 import * as React from 'react';
 import { Pressable, View } from 'react-native';
-import { use$ } from '@legendapp/state/react';
 import { Check, ChevronRight, EyeOff, PackageCheck, Plus, Undo2 } from 'lucide-react-native';
 import { LeadingTile, ListGroup, ListItem, ListItemContent, ListItemMeta, ListItemTitle, ListItemTrailing, SpectrumOnce, SwipeActions, Text, cn, haptics, toast } from '@homeup/ui';
 import {
@@ -52,6 +51,7 @@ import { sectionIconFor } from '@/lib/section-icons';
 import { getBoundSupabaseClient } from '@/lib/supabase-client';
 import { useGroceryAux } from '@/features/groceries/use-grocery-aux';
 import { useLiveRowRenderer, type LiveRowRef } from '@/components/capture/capture-search-results';
+import { useRows } from '@homeup/core';
 
 const UNDOABLE_ROWS = new Set(['tasks', 'groceries', 'costs', 'setup']);
 
@@ -122,13 +122,13 @@ function LiveChanges({ groups, extras }: { groups: ChangeGroup[]; extras?: ChatC
   useReconnectSync(recipesStore$);
   useReconnectSync(checklistsStore$);
   useReconnectSync(shopperStore$);
-  const tasks = use$(() => Object.values(tasks$.get() ?? {}).filter((t): t is HouseholdTask => !!t && !t.deleted));
-  const groceries = use$(() => Object.values(groceries$.get() ?? {}).filter((g): g is GroceryItem => !!g && !g.deleted));
-  const costItems = use$(() => Object.values(costs$.get() ?? {}).filter((c): c is CostItem => !!c && !c.deleted));
-  const setupItems = use$(() => Object.values(setup$.get() ?? {}).filter((s): s is SetupItem => !!s && !s.deleted));
-  const recipes = use$(() => Object.values(recipesStore$.get() ?? {}).filter((r): r is Recipe => !!r && !r.deleted));
-  const checklists = use$(() => Object.values(checklistsStore$.get() ?? {}).filter((c): c is Checklist => !!c && !c.deleted));
-  const shopperWants = use$(() => Object.values(shopperStore$.get() ?? {}).filter((w): w is ShopperWant => !!w && !w.deleted));
+  const tasks = useRows(tasks$);
+  const groceries = useRows(groceries$);
+  const costItems = useRows(costs$);
+  const setupItems = useRows(setup$);
+  const recipes = useRows(recipesStore$);
+  const checklists = useRows(checklistsStore$);
+  const shopperWants = useRows(shopperStore$);
   const { writeRow: writeTask, patchRow: patchTask, softDeleteRow: softDeleteTask } = useStoreHelpers(tasks$, currentUserId);
   const { patchRow: patchGrocery } = useStoreHelpers(groceries$, currentUserId);
   const { patchRow: patchCost, softDeleteRow: softDeleteCost } = useStoreHelpers(costs$, currentUserId);
@@ -388,7 +388,7 @@ function SuggestCard({ group }: { group: SuggestGroup }) {
   const groupId = household?.id ?? null;
   const items$ = groceryItems$(syncedGroupId(groceryItems$, groupId, modules.enabled));
   useReconnectSync(items$);
-  const items = use$(() => Object.values(items$.get() ?? {}).filter((g): g is GroceryItem => !!g && !g.deleted));
+  const items = useRows(items$);
   const { writeRow, patchRow } = useStoreHelpers(items$, currentUserId);
   const [dismissed, setDismissed] = React.useState<ReadonlySet<string>>(new Set());
   const rows = group.items.filter((it) => !dismissed.has(it.name) && !suggestionNeeded(it.name, items));

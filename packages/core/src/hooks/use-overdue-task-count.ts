@@ -1,10 +1,10 @@
-import { use$ } from '@legendapp/state/react';
 import { householdTasks$ } from '../data/stores';
 import { bucketTasksByDueDate } from '../modules/household/household-tasks';
 import { useModules } from '../modules-store';
 import { isTaskOwnerEnabled } from '../task-modules';
 import { syncedGroupId } from '../store-modules';
 import type { HouseholdTask } from '../types';
+import { useRows } from '../data/use-rows';
 
 // HOUP-142: native counterpart of apps/web/src/hooks/use-overdue-task-count.ts.
 // Web recounts via a dedicated Supabase query (it has no local-first store);
@@ -17,6 +17,6 @@ export function useOverdueTaskCount(groupId: string | undefined | null): number 
   // is on (task-modules.ts), and with none of them on the table doesn't sync.
   const { enabled } = useModules();
   const tasks$ = householdTasks$(syncedGroupId(householdTasks$, groupId, enabled));
-  const tasks = use$(() => Object.values(tasks$.get() ?? {}).filter((t): t is HouseholdTask => !!t && !t.deleted));
+  const tasks = useRows(tasks$);
   return bucketTasksByDueDate(tasks.filter((t) => isTaskOwnerEnabled(t, enabled))).overdue.length;
 }

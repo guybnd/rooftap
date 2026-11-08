@@ -4,7 +4,6 @@ import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowUpRight, CalendarDays, Download, ChevronDown, CheckCircle2, ExternalLink, Pencil, Map, Plus } from "lucide-react";
 import Link from "next/link";
-import { use$ } from "@legendapp/state/react";
 import { useDataCache } from "@/lib/data-cache";
 import { AppointmentModal } from "@/components/appointment-modal";
 import { CalendarSuggestions } from "@/components/calendar-suggestions";
@@ -36,6 +35,7 @@ import { PulseTile } from "@/components/ui/pulse-tile";
 import { HeroLede } from "@/components/ui/hero-lede";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useRows } from '@homeup/core';
 
 function DayGroup({
   appointments,
@@ -250,18 +250,10 @@ export default function AppointmentsPage() {
   const agentsStore$ = agents$(group?.id);
   useReconnectSync(agentsStore$);
 
-  const appointments = use$(() =>
-    Object.values(appts$.get() ?? {}).filter((a): a is Appointment => !!a && !a.deleted)
-  );
-  const rawApartments = use$(() =>
-    Object.values(apartmentsStore$.get() ?? {}).filter((a): a is Apartment => !!a && !a.deleted)
-  );
-  const agents = use$(() =>
-    Object.values(agentsStore$.get() ?? {}).filter((a): a is Agent => !!a && !a.deleted)
-  );
-  const commentRows = use$(() =>
-    Object.values(comments$.get() ?? {}).filter((c): c is ApartmentComment => !!c && !c.deleted)
-  );
+  const appointments = useRows(appts$);
+  const rawApartments = useRows(apartmentsStore$);
+  const agents = useRows(agentsStore$);
+  const commentRows = useRows(comments$);
 
   // preliminaryScores still comes from useDataCache (preliminary-score
   // migration is a separate slice, FLUX-150 slice 8 prep); apartments now

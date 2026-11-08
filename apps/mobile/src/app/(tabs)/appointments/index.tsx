@@ -37,7 +37,6 @@ import * as React from 'react';
 import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FlashList, type ListRenderItem } from '@shopify/flash-list';
-import { use$ } from '@legendapp/state/react';
 import { CalendarDays, ChevronDown, Plus } from 'lucide-react-native';
 import { Text, BottomSheet, Button, EmptyState, HeroLede, Input, PulseTile, ScreenBackground, cn, groupFrameClass, type RowPos } from '@homeup/ui';
 import {
@@ -62,6 +61,7 @@ import { useDataCache } from '@/lib/data-cache';
 import { NoGroupScreen } from '@/components/no-group-screen';
 import { AppointmentRow } from '@/features/appointments/appointment-row';
 import { AppointmentModal } from '@/features/appointments/appointment-modal';
+import { useRows } from '@homeup/core';
 
 // HOUP-208: the flattened row union feeding FlashList — a day-header row per
 // upcoming day group, its AppointmentRows, one past-section toggle row, and
@@ -97,15 +97,9 @@ export default function AppointmentsSectionScreen() {
   useReconnectSync(agentsStore$);
   const { writeRow: writeAgent } = useStoreHelpers(agentsStore$, currentUserId);
 
-  const appointments = use$(() =>
-    Object.values(appts$.get() ?? {}).filter((a): a is Appointment => !!a && !a.deleted)
-  );
-  const apartments = use$(() =>
-    Object.values(apartmentsStore$.get() ?? {}).filter((a): a is Apartment => !!a && !a.deleted)
-  );
-  const agents = use$(() =>
-    Object.values(agentsStore$.get() ?? {}).filter((a): a is Agent => !!a && !a.deleted)
-  );
+  const appointments = useRows(appts$);
+  const apartments = useRows(apartmentsStore$);
+  const agents = useRows(agentsStore$);
 
   const storeLoaded = useStoreLoaded(appts$, apartmentsStore$, agentsStore$);
 

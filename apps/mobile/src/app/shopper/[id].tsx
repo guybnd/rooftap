@@ -74,6 +74,7 @@ import {
   wantDeals,
   type ShopperSourceInfo,
 } from '@/features/shopper/shopper-api';
+import { useRows } from '@homeup/core';
 
 type Range = '30' | '90' | '365';
 const RANGES: { value: Range; label: string }[] = [
@@ -109,12 +110,8 @@ export default function ShopperItemScreen() {
     const w = wants$.get()?.[id];
     return w && !w.deleted ? (w as ShopperWant) : null;
   });
-  const offers = use$(() =>
-    Object.values(offers$.get() ?? {}).filter((o): o is ShopperOffer => !!o && !o.deleted && o.want_id === id),
-  );
-  const snapshots = use$(() =>
-    Object.values(snaps$.get() ?? {}).filter((s): s is ShopperPriceSnapshot => !!s && !s.deleted && s.want_id === id),
-  );
+  const offers = useRows(offers$, (o) => o.want_id === id);
+  const snapshots = useRows(snaps$, (s) => s.want_id === id);
 
   const today = todayISO();
   const series = React.useMemo(() => dailyLows(snapshots), [snapshots]);

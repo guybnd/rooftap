@@ -90,6 +90,7 @@ import { ChecklistScoring } from '@/features/homesearch/checklist-scoring';
 import { PhotoGallery } from '@/features/homesearch/photo-gallery';
 import { PreliminaryScoreDetail } from '@/features/homesearch/preliminary-score';
 import { fetchNearestPoiDistances, geocodeAddress } from '@/lib/geocode-api';
+import { useRows } from '@homeup/core';
 
 type ViewMode = 'full' | 'checklist';
 
@@ -179,13 +180,9 @@ export default function ApartmentDetailScreen() {
     const row = (apts$.get() ?? {})[id];
     return row && !row.deleted ? row : undefined;
   });
-  const agents = use$(() => Object.values(agentsStore$.get() ?? {}).filter((a): a is Agent => !!a && !a.deleted));
-  const apartmentAgents = use$(() =>
-    Object.values(apartmentAgentsStore$.get() ?? {}).filter((aa): aa is ApartmentAgent => !!aa && !aa.deleted)
-  );
-  const checklistItems = use$(() =>
-    Object.values(checklistItemsStore$.get() ?? {}).filter((i): i is ChecklistItem => !!i && !i.deleted)
-  );
+  const agents = useRows(agentsStore$);
+  const apartmentAgents = useRows(apartmentAgentsStore$);
+  const checklistItems = useRows(checklistItemsStore$);
   const storeLoaded = useStoreLoaded(apts$, agentsStore$, apartmentAgentsStore$, checklistItemsStore$, checklistResponsesStore$);
 
   const [viewMode, setViewMode] = React.useState<ViewMode>('full');

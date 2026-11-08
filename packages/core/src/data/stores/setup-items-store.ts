@@ -9,8 +9,7 @@
 //
 // Usage in a page:
 //   const items$ = setupItems$(group?.id);
-//   const allItems = use$(() => Object.values(items$.get() ?? {})
-//     .filter(i => !!i && !i.deleted).sort(...));
+//   const allItems = useRows(items$); // readable, not deleted, stable
 //
 //   const { writeRow, patchRow, softDeleteRow } = useStoreHelpers(items$, currentUserId);
 //   useReconnectSync(items$);
@@ -23,5 +22,6 @@ import type { SetupItem } from '../../types';
 
 export const setupItems$ = createGroupStore<SetupItem>({
   collection: 'setup_items',
+  requiredFields: ['name'],
   storageName: 'setup_items',
 });

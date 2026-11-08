@@ -9,7 +9,6 @@
 // chevron (GlobalSearchResults' fallback). Web twin:
 // apps/web/src/components/capture/capture-search-results.tsx.
 import * as React from 'react';
-import { use$ } from '@legendapp/state/react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { haptics, toast } from '@homeup/ui';
 import {
@@ -54,6 +53,7 @@ import { WantRow } from '@/features/shopper/want-row';
 import { getBoundSupabaseClient } from '@/lib/supabase-client';
 import { createUndoToastPresenter } from '@/lib/undo-toast';
 import { randomUUID } from '@/lib/uuid';
+import { useRows } from '@homeup/core';
 
 type MemberProfiles = Record<string, { email: string; name: string | null; avatar: string | null }>;
 type Patch<T> = (id: string, patch: Partial<T>) => void;
@@ -173,12 +173,8 @@ export function useLiveRowRenderer(
   const ingredientsStore$ = recipeIngredients$(syncedGroupId(recipeIngredients$, groupId, modules.enabled));
   useReconnectSync(checklistItemsStore$);
   useReconnectSync(ingredientsStore$);
-  const checklistTaskItems = use$(() =>
-    Object.values(checklistItemsStore$.get() ?? {}).filter((i): i is ChecklistTaskItem => !!i && !i.deleted)
-  );
-  const ingredients = use$(() =>
-    Object.values(ingredientsStore$.get() ?? {}).filter((i): i is RecipeIngredient => !!i && !i.deleted)
-  );
+  const checklistTaskItems = useRows(checklistItemsStore$);
+  const ingredients = useRows(ingredientsStore$);
 
   const checklistsById = React.useMemo(() => {
     const map: Record<string, Checklist> = {};

@@ -21,7 +21,6 @@ import * as React from 'react';
 import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FlashList, type ListRenderItem } from '@shopify/flash-list';
-import { use$ } from '@legendapp/state/react';
 import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import { Plus, ChefHat, Camera, ImagePlus, WifiOff } from 'lucide-react-native';
 import {
@@ -72,6 +71,7 @@ import { RecipeRow } from '@/features/recipes/recipe-row';
 import { captureRecipeFromPhoto, discardRecipeDraftPhoto, type CaptureSource } from '@/features/recipes/recipe-capture';
 import { MealWeek } from '@/features/recipes/meal-week';
 import { FirstSteps } from '@/components/first-steps';
+import { useRows } from '@homeup/core';
 
 export default function RecipesSectionScreen() {
   const insets = useSafeAreaInsets();
@@ -110,7 +110,7 @@ export default function RecipesSectionScreen() {
   const staples = groceriesLinked ? match.staples : undefined;
   const storeLoaded = useStoreLoaded(...(groceriesLinked ? [recs$, ings$, items$] : [recs$, ings$]));
 
-  const allRecipes = use$(() => Object.values(recs$.get() ?? {}).filter((r): r is Recipe => !!r && !r.deleted));
+  const allRecipes = useRows(recs$);
   // The book, scanned drafts and the To try list (ideas, often saved by the
   // Assistant, kept out of the book until someone keeps one).
   const { recipes, drafts, toTry } = React.useMemo(() => splitRecipeList(allRecipes), [allRecipes]);
@@ -119,12 +119,8 @@ export default function RecipesSectionScreen() {
   const [toTryPicked, setToTryOnly] = React.useState(false);
   const toTryOnly = toTryOn && toTryPicked;
   const shown = toTryOnly ? toTry : recipes;
-  const allIngredients = use$(() =>
-    Object.values(ings$.get() ?? {}).filter((i): i is RecipeIngredient => !!i && !i.deleted)
-  );
-  const groceryItems = use$(() =>
-    Object.values(items$.get() ?? {}).filter((i): i is GroceryItem => !!i && !i.deleted)
-  );
+  const allIngredients = useRows(ings$);
+  const groceryItems = useRows(items$);
 
   const ingredientsByRecipe = React.useMemo(() => {
     const m = new Map<string, RecipeIngredient[]>();

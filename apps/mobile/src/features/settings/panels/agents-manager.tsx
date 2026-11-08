@@ -13,7 +13,6 @@
 // future consumers (apartment/appointment forms, a listings filter bar) per
 // the ticket's plan — see each file's own header comment.
 import { useState } from 'react';
-import { use$ } from '@legendapp/state/react';
 import { View } from 'react-native';
 import { Check, Contact, Pencil, Plus, Trash2, X } from 'lucide-react-native';
 import {
@@ -33,6 +32,7 @@ import { useDataCache } from '@/lib/data-cache';
 import { randomUUID } from '@/lib/uuid';
 import { AgentDetailPopup } from './agent-detail-popup';
 import { SettingsInset, SettingsPanel } from './settings-panel';
+import { useRows } from '@homeup/core';
 
 const AGENT_COLORS = [
   '#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e',
@@ -54,12 +54,8 @@ export function AgentsManager() {
   useReconnectSync(apartmentAgentsStore$);
   const { writeRow, patchRow, softDeleteRow } = useStoreHelpers(agentsStore$, currentUserId);
 
-  const agents = use$(() =>
-    Object.values(agentsStore$.get() ?? {}).filter((a): a is Agent => !!a && !a.deleted)
-  );
-  const apartmentAgents = use$(() =>
-    Object.values(apartmentAgentsStore$.get() ?? {}).filter((aa): aa is ApartmentAgent => !!aa && !aa.deleted)
-  );
+  const agents = useRows(agentsStore$);
+  const apartmentAgents = useRows(apartmentAgentsStore$);
 
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState('');

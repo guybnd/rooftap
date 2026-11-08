@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
-import { use$ } from "@legendapp/state/react";
 import { apartmentChecklistItems$, useReconnectSync, useStoreHelpers, useStoreLoaded } from "@homeup/core";
 import type { ChecklistItem } from '@homeup/core';
 import { compareStrings } from '@homeup/core';
@@ -31,6 +30,7 @@ import {
   InfoIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useRows } from '@homeup/core';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -62,9 +62,7 @@ export function ChecklistPanel({ groupId }: { groupId: string }) {
   const { writeRow, patchRow, softDeleteRow } = useStoreHelpers(items$, null);
   const storeLoaded = useStoreLoaded(items$);
 
-  const items = use$(() =>
-    Object.values(items$.get() ?? {}).filter((i): i is ChecklistItem => !!i && !i.deleted)
-  );
+  const items = useRows(items$);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);

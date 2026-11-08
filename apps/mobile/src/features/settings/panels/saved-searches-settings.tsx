@@ -9,7 +9,6 @@
 // trailing verb.
 import * as React from 'react';
 import { Linking, View } from 'react-native';
-import { use$ } from '@legendapp/state/react';
 import { Bookmark, ExternalLink, Plus, Trash2 } from 'lucide-react-native';
 import {
   Text,
@@ -27,6 +26,7 @@ import { savedSearches$, useReconnectSync, useStoreHelpers, type SavedSearch } f
 import { useDataCache } from '@/lib/data-cache';
 import { randomUUID } from '@/lib/uuid';
 import { SettingsInset, SettingsPanel } from './settings-panel';
+import { useRows } from '@homeup/core';
 
 function hostOf(url: string): string {
   try {
@@ -41,9 +41,7 @@ export function SavedSearchesSettings() {
   const searches$ = savedSearches$(group?.id);
   useReconnectSync(searches$);
   const { writeRow, softDeleteRow } = useStoreHelpers(searches$, currentUserId);
-  const savedSearches = use$(() =>
-    Object.values(searches$.get() ?? {}).filter((s): s is SavedSearch => !!s && !s.deleted)
-  );
+  const savedSearches = useRows(searches$);
 
   const [adding, setAdding] = React.useState(false);
   const [name, setName] = React.useState('');

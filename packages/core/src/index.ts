@@ -206,6 +206,7 @@ export * from './widget-colors';
 export * from './data/store-environment';
 export * from './data/create-group-store';
 export * from './data/write-failures';
+export * from './data/use-rows';
 export * from './data/use-store-loaded';
 export * from './data/strip-symbol-keys';
 export * from './data/stores';

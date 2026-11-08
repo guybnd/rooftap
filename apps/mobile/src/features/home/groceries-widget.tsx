@@ -10,7 +10,6 @@
 import * as React from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { use$ } from '@legendapp/state/react';
 import { ChevronRight, Plus, ShoppingCart, Star } from 'lucide-react-native';
 import { Text, Card, IngredientNameInput, LeadingTile, haptics } from '@homeup/ui';
 import {
@@ -36,6 +35,7 @@ import { useGroceryArchive } from '@/features/groceries/use-grocery-archive';
 import { useSuggestDismiss } from '@/features/groceries/use-suggest-dismiss';
 import { useGroceryUndo } from '@/features/groceries/use-grocery-undo';
 import { GroceryItemFormSheet } from '@/features/groceries/grocery-item-form-sheet';
+import { useRows } from '@homeup/core';
 
 const HIDDEN = { display: 'none' } as const;
 
@@ -58,7 +58,7 @@ export function GroceriesWidget({
   const groceryUndo = useGroceryUndo(patchRow);
   const suggestDismiss = useSuggestDismiss({ hide: groceryUndo.hide, archive: archiveItem });
 
-  const allItems = use$(() => Object.values(items$.get() ?? {}).filter((i): i is GroceryItem => !!i && !i.deleted));
+  const allItems = useRows(items$);
   const needed = countNeeded(allItems);
 
   const reAddSuggestions = React.useMemo(() => suggestReAdd(allItems, libMap), [allItems, libMap]);

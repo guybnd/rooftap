@@ -14,10 +14,10 @@ import { useState } from 'react';
 import { Linking, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ChevronDown, Search, Settings2 } from 'lucide-react-native';
-import { use$ } from '@legendapp/state/react';
 import { Text, Button, BottomSheet, ListItem, ListItemContent, ListItemTitle, ListItemMeta } from '@homeup/ui';
 import { savedSearches$, useReconnectSync, type SavedSearch } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
+import { useRows } from '@homeup/core';
 
 /** Strips the scheme and everything past the first `/` — avoids depending on the `URL` global. */
 function hostnameOf(url: string): string {
@@ -31,9 +31,7 @@ export function SavedSearchPicker() {
   const { group } = useDataCache();
   const searches$ = savedSearches$(group?.id);
   useReconnectSync(searches$);
-  const savedSearches = use$(() =>
-    Object.values(searches$.get() ?? {}).filter((s): s is SavedSearch => !!s && !s.deleted)
-  );
+  const savedSearches = useRows(searches$);
   const [open, setOpen] = useState(false);
 
   const goToSettings = () => {

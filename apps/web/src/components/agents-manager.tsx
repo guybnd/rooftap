@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { use$ } from "@legendapp/state/react";
 import { useDataCache } from "@/lib/data-cache";
 import { agents$, apartmentAgents$, useReconnectSync, useStoreHelpers } from "@homeup/core";
 import { dialog } from "@homeup/core";
@@ -11,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { SettingsInset, SettingsPanel } from "@/components/settings-panel";
 import { Contact, PlusIcon, TrashIcon, PencilIcon, CheckIcon, XIcon } from "lucide-react";
 import { AgentDetailPopup } from "@/components/agent-detail-popup";
+import { useRows } from '@homeup/core';
 
 const AGENT_COLORS = [
   "#ef4444", "#f97316", "#f59e0b", "#84cc16", "#22c55e",
@@ -31,12 +31,8 @@ export function AgentsManager() {
   useReconnectSync(agentsStore$);
   useReconnectSync(apartmentAgentsStore$);
   const { writeRow, patchRow, softDeleteRow } = useStoreHelpers(agentsStore$, currentUserId);
-  const agents = use$(() =>
-    Object.values(agentsStore$.get() ?? {}).filter((a): a is Agent => !!a && !a.deleted)
-  );
-  const apartmentAgents = use$(() =>
-    Object.values(apartmentAgentsStore$.get() ?? {}).filter((aa): aa is ApartmentAgent => !!aa && !aa.deleted)
-  );
+  const agents = useRows(agentsStore$);
+  const apartmentAgents = useRows(apartmentAgentsStore$);
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
   const [newPhone, setNewPhone] = useState("");

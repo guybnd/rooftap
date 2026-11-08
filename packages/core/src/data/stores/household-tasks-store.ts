@@ -9,8 +9,7 @@
 //
 // Usage in a page:
 //   const tasks$ = householdTasks$(group?.id);
-//   const allTasks = use$(() => Object.values(tasks$.get() ?? {})
-//     .filter(t => !!t && !t.deleted).sort(...));
+//   const allTasks = useRows(tasks$); // readable, not deleted, stable
 //
 //   const { writeRow, patchRow, softDeleteRow } = useStoreHelpers(tasks$, currentUserId);
 //   useReconnectSync(tasks$);
@@ -25,5 +24,6 @@ import type { HouseholdTask } from '../../types';
 
 export const householdTasks$ = createGroupStore<HouseholdTask>({
   collection: 'household_tasks',
+  requiredFields: ['title'],
   storageName: 'household_tasks',
 });

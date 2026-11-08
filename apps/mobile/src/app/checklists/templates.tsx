@@ -50,6 +50,7 @@ import { useDataCache } from '@/lib/data-cache';
 import { NoGroupScreen } from '@/components/no-group-screen';
 import { randomUUID } from '@/lib/uuid';
 import { checklistTypeIcon } from '@/features/checklists/checklist-ui';
+import { useRows } from '@homeup/core';
 
 interface DraftItem {
   key: string;
@@ -73,9 +74,7 @@ export default function ChecklistTemplatesScreen() {
       .filter((t): t is ChecklistTemplate => !!t && !t.deleted)
       .sort((a, b) => (a.created_at ?? '').localeCompare(b.created_at ?? ''))
   );
-  const items = use$(() =>
-    Object.values(templateItems$.get() ?? {}).filter((i): i is ChecklistTemplateItem => !!i && !i.deleted)
-  );
+  const items = useRows(templateItems$);
 
   const { writeRow: writeTemplate, patchRow: patchTemplate, softDeleteRow: softDeleteTemplate } = useStoreHelpers(templates$, currentUserId);
   const { writeRow: writeTemplateItem, patchRow: patchTemplateItem, softDeleteRow: softDeleteTemplateItem } = useStoreHelpers(

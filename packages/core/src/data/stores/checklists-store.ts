@@ -4,8 +4,7 @@
 //
 // Usage in a page:
 //   const lists$ = checklists$(group?.id);
-//   const all = use$(() => Object.values(lists$.get() ?? {})
-//     .filter(c => !!c && !c.deleted).sort(...));
+//   const all = useRows(lists$); // readable, not deleted, stable
 //
 //   const { writeRow, patchRow, softDeleteRow } = useStoreHelpers(lists$, currentUserId);
 //   useReconnectSync(lists$);
@@ -15,5 +14,6 @@ import type { Checklist } from '../../types';
 
 export const checklists$ = createGroupStore<Checklist>({
   collection: 'checklists',
+  requiredFields: ['title'],
   storageName: 'checklists',
 });

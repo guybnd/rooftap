@@ -33,6 +33,7 @@ import { MoneyView } from './money-view';
 import { upBankApi } from '@/lib/up-bank-client';
 import { useWideLayout } from '@/lib/desktop-layout';
 import { cn } from '@/lib/utils';
+import { useRows } from '@homeup/core';
 
 // Costs (Guy's redesign, Oct 22): the page is CostsOverview, one month at a
 // time from core costMonth. This file keeps the data around it: the cost
@@ -52,9 +53,7 @@ export default function CostsPage() {
 
   const apts$ = apartments$(suggestRent ? group?.id : undefined);
   useReconnectSync(apts$);
-  const apartments = use$(() =>
-    Object.values(apts$.get() ?? {}).filter((a): a is Apartment => !!a && !a.deleted)
-  );
+  const apartments = useRows(apts$);
 
   const items$ = costItems$(group?.id);
   useReconnectSync(items$);

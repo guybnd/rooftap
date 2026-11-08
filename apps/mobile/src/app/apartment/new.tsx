@@ -41,7 +41,6 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { AlertCircle, ArrowLeft, Check, ImagePlus, Sparkles } from 'lucide-react-native';
 import { Text, Button, FieldRow, FormSection, Input, ScreenBackground, cn } from '@homeup/ui';
 import { agents$, apartmentAgents$, apartments$, useReconnectSync, useStoreHelpers, type Agent } from '@homeup/core';
-import { use$ } from '@legendapp/state/react';
 import { useDataCache } from '@/lib/data-cache';
 import { NoGroupScreen } from '@/components/no-group-screen';
 import { MultiAgentSelector } from '@/features/settings/panels/multi-agent-selector';
@@ -49,6 +48,7 @@ import { createApartmentFromParsed, resolveParsedAgents } from '@/features/homes
 import { parseListing, type ParsedListing } from '@/features/homesearch/parse-listing-api';
 import { takePendingShareImages } from '@/lib/share-ingest';
 import { useOpenRoute } from '@/lib/tab-routes';
+import { useRows } from '@homeup/core';
 
 interface FormState {
   address: string;
@@ -104,9 +104,7 @@ export default function NewApartmentScreen() {
   const { writeRow: writeAgent } = useStoreHelpers(agentsStore$, currentUserId);
   const { writeRow: writeApartment, patchRow: patchApartment } = useStoreHelpers(apts$, currentUserId);
   const { writeRow: writeApartmentAgent } = useStoreHelpers(apartmentAgentsStore$, currentUserId);
-  const agents = use$(() =>
-    Object.values(agentsStore$.get() ?? {}).filter((a): a is Agent => !!a && !a.deleted)
-  );
+  const agents = useRows(agentsStore$);
 
   const [form, setForm] = React.useState<FormState>(EMPTY_FORM);
   const [pastedText, setPastedText] = React.useState('');

@@ -29,6 +29,7 @@ import {
   type CookTimer,
 } from './cook';
 import { recipeSteps } from './steps';
+import { useRows } from '../../data/use-rows';
 
 const DEVICE_KEY = 'rooftap.cook-device-id';
 let deviceId: string | null = null;
@@ -108,11 +109,7 @@ export function useCooks(groupId: string | null | undefined, userId: string | nu
   useReconnectSync(store$);
   const { writeRow, patchRow, softDeleteRow } = useStoreHelpers(store$, userId);
 
-  const sessions = use$(() =>
-    Object.values(store$.get() ?? {}).filter(
-      (s): s is CookSession => !!s && !s.deleted && (!userId || !s.user_id || s.user_id === userId),
-    ),
-  );
+  const sessions = useRows(store$, (s) => (!userId || !s.user_id || s.user_id === userId),);
   const recipes = use$(() => (recs$.get() ?? {}) as Record<string, Recipe>);
 
   const cooks = useMemo(() => {

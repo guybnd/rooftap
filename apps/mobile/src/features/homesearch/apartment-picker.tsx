@@ -15,10 +15,10 @@
 // re-implemented as a one-off — callers needing "no apartment" can still pick
 // it via the sheet if an explicit "None" option is added later.
 import { useMemo } from 'react';
-import { use$ } from '@legendapp/state/react';
 import { SearchablePicker, type PickerOption } from '@homeup/ui';
 import { apartments$, useReconnectSync, type Apartment } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
+import { useRows } from '@homeup/core';
 
 export interface ApartmentPickerProps {
   value: string | null;
@@ -30,9 +30,7 @@ export function ApartmentPicker({ value, onChange, suggestedId }: ApartmentPicke
   const { group } = useDataCache();
   const apts$ = apartments$(group?.id);
   useReconnectSync(apts$);
-  const apartments = use$(() =>
-    Object.values(apts$.get() ?? {}).filter((a): a is Apartment => !!a && !a.deleted)
-  );
+  const apartments = useRows(apts$);
 
   const options = useMemo((): PickerOption[] => {
     const toOption = (a: Apartment, suggested: boolean): PickerOption => ({

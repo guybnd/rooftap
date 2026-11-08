@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { XIcon, Phone, StickyNote, Home } from "lucide-react";
-import { use$ } from "@legendapp/state/react";
 import { useDataCache } from "@/lib/data-cache";
 import { apartments$, apartmentAgents$, useReconnectSync, currencySymbol } from "@homeup/core";
 import type { Agent, Apartment, ApartmentAgent } from '@homeup/core';
+import { useRows } from '@homeup/core';
 
 interface AgentDetailPopupProps {
   agent: Agent;
@@ -18,12 +18,8 @@ export function AgentDetailPopup({ agent, onClose }: AgentDetailPopupProps) {
   const apartmentAgentsStore$ = apartmentAgents$(group?.id);
   useReconnectSync(apts$);
   useReconnectSync(apartmentAgentsStore$);
-  const apartments = use$(() =>
-    Object.values(apts$.get() ?? {}).filter((a): a is Apartment => !!a && !a.deleted)
-  );
-  const apartmentAgents = use$(() =>
-    Object.values(apartmentAgentsStore$.get() ?? {}).filter((aa): aa is ApartmentAgent => !!aa && !aa.deleted)
-  );
+  const apartments = useRows(apts$);
+  const apartmentAgents = useRows(apartmentAgentsStore$);
 
   const agentApartmentIds = apartmentAgents
     .filter((aa) => aa.agent_id === agent.id)

@@ -2,7 +2,6 @@
 
 import { Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { use$ } from "@legendapp/state/react";
 import { useDataCache } from "@/lib/data-cache";
 import { calculateScore, apartments$, appointments$, apartmentChecklistItems$, apartmentChecklistResponses$, useReconnectSync } from '@homeup/core';
 import { MapViewLazy } from "@/components/map-view-lazy";
@@ -11,6 +10,7 @@ import MapLoading from "./loading";
 import { Button } from "@/components/ui/button";
 import { MapPin, Loader2 } from "lucide-react";
 import type { Apartment, ApartmentWithScore, Appointment, ChecklistItem, ChecklistResponse } from '@homeup/core';
+import { useRows } from '@homeup/core';
 
 type MapTab = "all" | "itinerary";
 
@@ -36,18 +36,10 @@ function MapPage() {
   useReconnectSync(checklistItemsStore$);
   useReconnectSync(checklistResponsesStore$);
 
-  const rawApartments = use$(() =>
-    Object.values(apts$.get() ?? {}).filter((a): a is Apartment => !!a && !a.deleted)
-  );
-  const appointments = use$(() =>
-    Object.values(appts$.get() ?? {}).filter((a): a is Appointment => !!a && !a.deleted)
-  );
-  const checklistItems = use$(() =>
-    Object.values(checklistItemsStore$.get() ?? {}).filter((i): i is ChecklistItem => !!i && !i.deleted)
-  );
-  const responses = use$(() =>
-    Object.values(checklistResponsesStore$.get() ?? {}).filter((r): r is ChecklistResponse => !!r && !r.deleted)
-  );
+  const rawApartments = useRows(apts$);
+  const appointments = useRows(appts$);
+  const checklistItems = useRows(checklistItemsStore$);
+  const responses = useRows(checklistResponsesStore$);
 
   // Derive score the same way homesearch/page.tsx does — checklistItems/responses
   // come from the Legend apartmentChecklist* stores (FLUX-150 slice 8 prep).
