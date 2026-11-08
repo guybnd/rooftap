@@ -27,6 +27,8 @@ export type SettingsPanelId =
   | 'checklists'
   | 'google-calendar'
   | 'assistant'
+  | 'assistant-helpers'
+  | 'assistant-memories'
   | 'assistant-spending'
   | 'assistant-telegram'
   | 'assistant-home-assistant'
@@ -48,6 +50,27 @@ export function moduleSettingsPanels(id: string, enabled: ReadonlySet<string>): 
     const owner = PANEL_MODULE[panel];
     return !owner || enabled.has(owner);
   });
+}
+
+/** One tab of a module's settings, with only the panels this household shows. */
+export interface ModuleSettingsTab {
+  label: string;
+  panels: SettingsPanelId[];
+}
+
+/**
+ * A module's settings as tabs. A module with no `settingsTabs` gets one tab
+ * with no label, which both doors show without a tab row. A tab whose panels
+ * are all hidden for this household drops out.
+ */
+export function moduleSettingsTabs(id: string, enabled: ReadonlySet<string>): ModuleSettingsTab[] {
+  const shown = moduleSettingsPanels(id, enabled);
+  if (shown.length === 0) return [];
+  const tabs = ALL_MANIFESTS.find((m) => m.id === id)?.settingsTabs;
+  if (!tabs) return [{ label: '', panels: shown }];
+  return tabs
+    .map((tab) => ({ label: tab.label, panels: tab.panels.filter((panel) => shown.includes(panel)) }))
+    .filter((tab) => tab.panels.length > 0);
 }
 
 /** True when the module has settings, so its screen's More menu ends with a settings row. */

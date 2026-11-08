@@ -2,6 +2,8 @@
 
 import type { ComponentType, ReactNode } from "react";
 import { useDataCache } from "@/lib/data-cache";
+import { SettingsTabs } from "@/components/settings-tabs";
+import type { SettingsTabPanels } from "./settings-registry";
 import SettingsLoading from "./loading";
 
 /**
@@ -11,14 +13,17 @@ import SettingsLoading from "./loading";
  * stays dumb and the registry stays the single source of truth.
  */
 export function SettingsContent({
-  panels,
+  panels: listed,
+  tabs,
   emptyLabel,
   gateOnDataCache = true,
   lede,
 }: {
   /** Drawn above the panels (the Global page's household header). */
   lede?: ReactNode;
-  panels: ComponentType[];
+  panels?: ComponentType[];
+  /** A module's settings as tabs; when set, `panels` is ignored. */
+  tabs?: SettingsTabPanels[];
   emptyLabel?: string;
   /**
    * HOUP-50 bug 4: the Global Settings page (src/app/settings/page.tsx) opts
@@ -33,6 +38,7 @@ export function SettingsContent({
   gateOnDataCache?: boolean;
 }) {
   const { loading } = useDataCache();
+  const panels = tabs ? tabs.flatMap((t) => t.panels) : (listed ?? []);
 
   if (gateOnDataCache && loading) return <SettingsLoading />;
 
@@ -50,9 +56,11 @@ export function SettingsContent({
   return (
     <main className="p-4 sm:p-8 max-w-3xl mx-auto space-y-6">
       {lede}
-      {panels.map((Panel, i) => (
-        <Panel key={i} />
-      ))}
+      {tabs ? (
+        <SettingsTabs tabs={tabs} ariaLabel={emptyLabel ? `${emptyLabel} settings` : undefined} />
+      ) : (
+        panels.map((Panel, i) => <Panel key={i} />)
+      )}
     </main>
   );
 }

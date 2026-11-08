@@ -3,7 +3,7 @@
 import { useParams, notFound } from "next/navigation";
 import { getSection, getEnabledSections, useModules } from "@homeup/core";
 import { SettingsContent } from "../settings-content";
-import { globalMenus, moduleSettingsComponents, visiblePanels } from "../settings-registry";
+import { globalMenus, moduleSettingsTabComponents, visiblePanels } from "../settings-registry";
 
 // Resolves either a global-menu key (users, appearance, notifications,
 // integrations) or an enabled app-section id (search, setup, ...) through one
@@ -26,6 +26,6 @@ export default function SettingsKeyPage() {
   }
 
   return (
-    <SettingsContent panels={moduleSettingsComponents(key, modules.enabled)} emptyLabel={section.label} />
+    <SettingsContent tabs={moduleSettingsTabComponents(key, modules.enabled)} emptyLabel={section.label} />
   );
 }

@@ -10,16 +10,21 @@ import { EmptyState } from '@homeup/ui';
 import { SlidersHorizontal } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDataCache } from '@/lib/data-cache';
+import type { SettingsTabPanels } from './settings-registry';
+import { SettingsTabs } from './settings-tabs';
 
 export interface SettingsContentProps {
   panels: React.ComponentType[];
+  /** A module's settings as tabs; when set, `panels` is ignored. */
+  tabs?: SettingsTabPanels[];
   emptyLabel?: string;
   gateOnDataCache?: boolean;
 }
 
-export function SettingsContent({ panels, emptyLabel, gateOnDataCache = true }: SettingsContentProps) {
+export function SettingsContent({ panels: listed, tabs, emptyLabel, gateOnDataCache = true }: SettingsContentProps) {
   const insets = useSafeAreaInsets();
   const { loading } = useDataCache();
+  const panels = tabs ? tabs.flatMap((t) => t.panels) : listed;
 
   if (gateOnDataCache && loading) {
     return (
@@ -51,9 +56,11 @@ export function SettingsContent({ panels, emptyLabel, gateOnDataCache = true }: 
       // adding insets.top again left a dead band under the header.
       contentContainerStyle={{ paddingTop: 8, paddingBottom: insets.bottom + 24 }}
     >
-      {panels.map((Panel, i) => (
-        <Panel key={i} />
-      ))}
+      {tabs ? (
+        <SettingsTabs tabs={tabs} accessibilityLabel={emptyLabel ? `${emptyLabel} settings` : undefined} />
+      ) : (
+        panels.map((Panel, i) => <Panel key={i} />)
+      )}
     </ScrollView>
   );
 }

@@ -1,10 +1,12 @@
 "use client";
 
-// HOUP-443: Settings > Assistant. What the assistant may do in each module
-// (Read, Ask first, Act; deletes always ask), which models it uses, and the
-// facts it keeps about the household. Owners change the first two; anyone in
-// the home can see and edit memories. Budgets and usage live in
-// assistant-spending.tsx (HOUP-444).
+// HOUP-443: Settings > Assistant, three of its tabs (manifest settingsTabs).
+// General: what the assistant may do in each module (Read, Ask first, Act;
+// deletes always ask) and which models it uses. Helpers: who sees each
+// helper's chat and the household's notes for it. Memories: the facts it
+// keeps about the household. Owners change the first two; anyone in the home
+// can see and edit memories. Budgets and usage live in assistant-spending.tsx
+// (HOUP-444).
 // Native twin: apps/mobile/src/features/settings/panels/assistant-settings.tsx.
 
 import { useEffect, useState } from "react";
@@ -35,13 +37,10 @@ import { SearchablePicker } from "@/components/ui/searchable-picker";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { SettingsInset, SettingsPanel, SettingsSwitchRow } from "@/components/settings-panel";
 
-export function AssistantSettings() {
-  const modules = useModules();
+/** The household's assistant settings, shared by the General and Helpers tabs. Each tab loads its own copy. */
+function useAssistantSettings() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [isOwner, setIsOwner] = useState(false);
-  const [memories, setMemories] = useState<AssistantMemory[]>([]);
-  const [draft, setDraft] = useState("");
-  const [models, setModels] = useState({ chat: "", quick: "" });
   // The server's model choices; missing on a server from before them, which keeps the free-text fields.
   const [choices, setChoices] = useState<AiModelChoices | null>(null);
 
@@ -51,11 +50,9 @@ export function AssistantSettings() {
       .then((res) => {
         setSettings(res.settings);
         setIsOwner(res.isOwner);
-        setModels({ chat: res.settings.chatModel ?? "", quick: res.settings.quickModel ?? "" });
         setChoices(res.models ?? null);
       })
       .catch(() => {});
-    assistantApi.memories().then(setMemories).catch(() => {});
   }, []);
 
   const save = async (patch: Partial<Settings>) => {
@@ -70,28 +67,16 @@ export function AssistantSettings() {
     }
   };
 
-  const addMemory = async () => {
-    const text = draft.trim();
-    if (!text) return;
-    try {
-      const { memory } = await assistantApi.addMemory(text);
-      setMemories((m) => [...m, memory]);
-      setDraft("");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not save that.");
-    }
-  };
+  return { settings, isOwner, choices, save };
+}
 
-  const removeMemory = async (id: string) => {
-    const before = memories;
-    setMemories((m) => m.filter((x) => x.id !== id));
-    try {
-      await assistantApi.removeMemory(id);
-    } catch {
-      setMemories(before);
-      toast.error("Could not remove that.");
-    }
-  };
+/** General tab: what it may do, which models it uses, and your own reply pushes. */
+export function AssistantSettings() {
+  const modules = useModules();
+  const { settings, isOwner, choices, save } = useAssistantSettings();
+  // The free-text model fields while someone types; until then they show the saved models.
+  const [typed, setTyped] = useState<{ chat: string; quick: string } | null>(null);
+  const models = typed ?? { chat: settings?.chatModel ?? "", quick: settings?.quickModel ?? "" };
 
   const reachable = assistantModules(modules.enabled);
 
@@ -170,7 +155,7 @@ export function AssistantSettings() {
                     value={models.chat}
                     disabled={!isOwner}
                     placeholder="Server default"
-                    onChange={(e) => setModels((m) => ({ ...m, chat: e.target.value }))}
+                    onChange={(e) => setTyped({ ...models, chat: e.target.value })}
                     onBlur={() => models.chat.trim() !== (settings.chatModel ?? "") && void save({ chatModel: models.chat.trim() || null })}
                   />
                 </label>
@@ -180,7 +165,7 @@ export function AssistantSettings() {
                     value={models.quick}
                     disabled={!isOwner}
                     placeholder="Server default"
-                    onChange={(e) => setModels((m) => ({ ...m, quick: e.target.value }))}
+                    onChange={(e) => setTyped({ ...models, quick: e.target.value })}
                     onBlur={() => models.quick.trim() !== (settings.quickModel ?? "") && void save({ quickModel: models.quick.trim() || null })}
                   />
                 </label>
@@ -198,51 +183,84 @@ export function AssistantSettings() {
         )}
       </SettingsPanel>
 
-      {settings && modules.server("assistant.shared-helpers") && <HelperSettings settings={settings} isOwner={isOwner} save={save} />}
-
       {modules.server("assistant.reply-notifications") && <ReplyNotifications />}
-
-      <SettingsPanel icon={Brain} title="Memories" description="Facts the assistant keeps about your home. It adds its own as it learns; remove any you don't want.">
-        {memories.length > 0 && (
-          <SettingsInset>
-            {memories.map((m) => (
-              <div key={m.id} className="flex min-h-[48px] items-center gap-3 px-3.5 py-2">
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm text-foreground">{m.text}</p>
-                  {m.onlyYou && <p className="text-xs text-muted-foreground">Only you</p>}
-                </div>
-                {m.canRemove !== false && (
-                  <button
-                    type="button"
-                    aria-label="Remove memory"
-                    onClick={() => void removeMemory(m.id)}
-                    className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-destructive"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                )}
-              </div>
-            ))}
-          </SettingsInset>
-        )}
-        <form
-          className="flex gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void addMemory();
-          }}
-        >
-          <Input value={draft} maxLength={500} placeholder="e.g. Bins go out on Tuesday night" onChange={(e) => setDraft(e.target.value)} />
-          <button
-            type="submit"
-            disabled={!draft.trim()}
-            className="inline-flex h-10 shrink-0 items-center rounded-xl bg-primary px-3.5 text-sm font-medium text-primary-foreground hover:bg-primary/80 disabled:opacity-40"
-          >
-            Add
-          </button>
-        </form>
-      </SettingsPanel>
     </div>
+  );
+}
+
+/** Memories tab: facts the assistant keeps about the home. Anyone in the home can add or remove them. */
+export function AssistantMemories() {
+  const [memories, setMemories] = useState<AssistantMemory[]>([]);
+  const [draft, setDraft] = useState("");
+
+  useEffect(() => {
+    assistantApi.memories().then(setMemories).catch(() => {});
+  }, []);
+
+  const addMemory = async () => {
+    const text = draft.trim();
+    if (!text) return;
+    try {
+      const { memory } = await assistantApi.addMemory(text);
+      setMemories((m) => [...m, memory]);
+      setDraft("");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not save that.");
+    }
+  };
+
+  const removeMemory = async (id: string) => {
+    const before = memories;
+    setMemories((m) => m.filter((x) => x.id !== id));
+    try {
+      await assistantApi.removeMemory(id);
+    } catch {
+      setMemories(before);
+      toast.error("Could not remove that.");
+    }
+  };
+
+  return (
+    <SettingsPanel icon={Brain} title="Memories" description="Facts the assistant keeps about your home. It adds its own as it learns; remove any you don't want.">
+      {memories.length > 0 && (
+        <SettingsInset>
+          {memories.map((m) => (
+            <div key={m.id} className="flex min-h-[48px] items-center gap-3 px-3.5 py-2">
+              <div className="min-w-0 flex-1">
+                <p className="text-sm text-foreground">{m.text}</p>
+                {m.onlyYou && <p className="text-xs text-muted-foreground">Only you</p>}
+              </div>
+              {m.canRemove !== false && (
+                <button
+                  type="button"
+                  aria-label="Remove memory"
+                  onClick={() => void removeMemory(m.id)}
+                  className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-destructive"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          ))}
+        </SettingsInset>
+      )}
+      <form
+        className="flex gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void addMemory();
+        }}
+      >
+        <Input value={draft} maxLength={500} placeholder="e.g. Bins go out on Tuesday night" onChange={(e) => setDraft(e.target.value)} />
+        <button
+          type="submit"
+          disabled={!draft.trim()}
+          className="inline-flex h-10 shrink-0 items-center rounded-xl bg-primary px-3.5 text-sm font-medium text-primary-foreground hover:bg-primary/80 disabled:opacity-40"
+        >
+          Add
+        </button>
+      </form>
+    </SettingsPanel>
   );
 }
 
@@ -253,15 +271,17 @@ const SHARE_OPTIONS: { value: HelperShare; label: string }[] = [
 ];
 
 /**
- * Module helpers (core module-helpers.ts): who sees each helper's chat, and
- * the household's own notes for it. Owners set both; notes only add to the
- * helper's rules, never replace them.
+ * Helpers tab (core module-helpers.ts): who sees each helper's chat, and the
+ * household's own notes for it. Owners set both; notes only add to the
+ * helper's rules, never replace them. A helper that can't be shared (Gifts)
+ * always stays just you.
  */
-function HelperSettings({ settings, isOwner, save }: { settings: Settings; isOwner: boolean; save: (patch: Partial<Settings>) => Promise<void> }) {
+export function AssistantHelpers() {
   const modules = useModules();
-  const helpers = MODULE_HELPERS.filter((h) => helperAvailable(h.id, (id) => modules.isEnabled(id)));
+  const { settings, isOwner, save } = useAssistantSettings();
   const [notes, setNotes] = useState<Record<string, string>>({});
-  if (helpers.length === 0) return null;
+  if (!modules.server("assistant.shared-helpers") || !settings) return null;
+  const helpers = MODULE_HELPERS.filter((h) => helperAvailable(h.id, (id) => modules.isEnabled(id)));
   const stored = (id: string) => parseHelperSettings(settings.helpers[id]);
   const saveHelper = (id: string, patch: { shared?: boolean; instructions?: string }) =>
     save({ helpers: { ...settings.helpers, [id]: { ...stored(id), ...patch } } });
@@ -271,51 +291,59 @@ function HelperSettings({ settings, isOwner, save }: { settings: Settings; isOwn
       title="Helpers"
       description={
         isOwner
-          ? "Household gives everyone one chat with the helper, so anyone can chime in. Notes add to how the helper works and never change its privacy rules."
+          ? "Household gives everyone one chat with a helper, so anyone can chime in. Notes add to how a helper works and never change its privacy rules."
           : "Set by the household's owners."
       }
     >
-      <div className="space-y-3">
-        {helpers.map((h) => {
-          const current = stored(h.id);
-          const draft = notes[h.id] ?? current.instructions;
-          return (
-            <SettingsInset key={h.id}>
-              <div className="flex min-h-[52px] items-center gap-3 px-3.5 py-2.5">
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-foreground">{h.label}</p>
-                  <p className="text-xs text-muted-foreground">{helperCanShare(h) ? "Who sees this chat" : "Always just you"}</p>
+      {helpers.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Switch on a tile like Groceries, Costs or Recipes to get its helper.</p>
+      ) : (
+        <div className="space-y-3">
+          {helpers.map((h) => {
+            const current = stored(h.id);
+            const draft = notes[h.id] ?? current.instructions;
+            const canShare = helperCanShare(h);
+            return (
+              <SettingsInset key={h.id}>
+                <div className="space-y-2.5 px-3.5 py-3">
+                  <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-foreground">{h.label}</p>
+                      <p className="text-xs text-muted-foreground">{canShare ? "Who sees this chat" : "Always just you"}</p>
+                    </div>
+                    {canShare && (
+                      <SegmentedControl<HelperShare>
+                        ariaLabel={`Who sees the ${h.label} chat`}
+                        size="sm"
+                        value={current.shared ? "home" : "me"}
+                        options={SHARE_OPTIONS}
+                        onChange={(v) => isOwner && void saveHelper(h.id, { shared: v === "home" })}
+                        className="w-full sm:w-56"
+                      />
+                    )}
+                  </div>
+                  <div className="space-y-1">
+                    <textarea
+                      value={draft}
+                      disabled={!isOwner}
+                      maxLength={HELPER_INSTRUCTIONS_MAX}
+                      rows={3}
+                      aria-label={`Notes for the ${h.label}`}
+                      placeholder={isOwner ? "Notes, e.g. We shop at Aldi on Saturdays. No pork." : "No notes"}
+                      onChange={(e) => setNotes((n) => ({ ...n, [h.id]: e.target.value }))}
+                      onBlur={() => draft.trim() !== current.instructions && void saveHelper(h.id, { instructions: draft.trim() })}
+                      className="w-full resize-none rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm placeholder:text-muted-foreground focus:outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60 dark:bg-input/30"
+                    />
+                    {isOwner && draft.length > HELPER_INSTRUCTIONS_MAX - 80 && (
+                      <p className="px-1 text-[11px] tabular-nums text-muted-foreground">{HELPER_INSTRUCTIONS_MAX - draft.length} left</p>
+                    )}
+                  </div>
                 </div>
-                {helperCanShare(h) && (
-                  <SegmentedControl<HelperShare>
-                    ariaLabel={`Who sees the ${h.label} chat`}
-                    size="sm"
-                    value={current.shared ? "home" : "me"}
-                    options={SHARE_OPTIONS}
-                    onChange={(v) => isOwner && void saveHelper(h.id, { shared: v === "home" })}
-                  />
-                )}
-              </div>
-              <div className="space-y-1 px-3.5 pb-3">
-                <textarea
-                  value={draft}
-                  disabled={!isOwner}
-                  maxLength={HELPER_INSTRUCTIONS_MAX}
-                  rows={2}
-                  aria-label={`Notes for the ${h.label}`}
-                  placeholder={isOwner ? "e.g. We shop at Aldi on Saturdays. No pork." : "No notes"}
-                  onChange={(e) => setNotes((n) => ({ ...n, [h.id]: e.target.value }))}
-                  onBlur={() => draft.trim() !== current.instructions && void saveHelper(h.id, { instructions: draft.trim() })}
-                  className="w-full resize-none rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm placeholder:text-muted-foreground focus:outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60 dark:bg-input/30"
-                />
-                {isOwner && draft.length > HELPER_INSTRUCTIONS_MAX - 80 && (
-                  <p className="px-1 text-[11px] tabular-nums text-muted-foreground">{HELPER_INSTRUCTIONS_MAX - draft.length} left</p>
-                )}
-              </div>
-            </SettingsInset>
-          );
-        })}
-      </div>
+              </SettingsInset>
+            );
+          })}
+        </div>
+      )}
     </SettingsPanel>
   );
 }

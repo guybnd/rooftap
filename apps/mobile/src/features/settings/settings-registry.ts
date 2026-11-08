@@ -5,13 +5,13 @@
 // packages/core/scripts/check-import-boundary.mjs and this map holds live
 // component refs).
 import type { ComponentType } from 'react';
-import { CONNECTORS, moduleSettingsPanels, type ConnectorPanelId, type ModuleId, type SettingsPanelId } from '@homeup/core';
+import { CONNECTORS, moduleSettingsTabs, type ConnectorPanelId, type ModuleId, type SettingsPanelId } from '@homeup/core';
 import { AppearanceSettings, HapticsSettings, MotionSettings } from './panels/appearance-settings';
 import { SectionPreferences } from './panels/section-preferences';
 import { HomeProfileSettings } from './panels/home-profile-settings';
 import { NavigationSettings } from './panels/navigation-settings';
 import { ModulesSettings } from './panels/modules-settings';
-import { AssistantSettings } from './panels/assistant-settings';
+import { AssistantHelpers, AssistantMemories, AssistantSettings } from './panels/assistant-settings';
 import { AssistantSpending } from './panels/assistant-spending';
 import { AssistantTelegram } from './panels/assistant-telegram';
 import { AssistantHomeAssistant } from './panels/assistant-home-assistant';
@@ -67,7 +67,7 @@ export const globalMenus: GlobalMenu[] = [
 
 // Every module settings panel by its core id (module-settings.ts). The
 // Settings page and the module screen's settings sheet both render
-// moduleSettingsPanels() through this map, so a module's settings are listed
+// moduleSettingsTabs() through this map, so a module's settings are listed
 // once, in core.
 export const SETTINGS_PANELS: Record<SettingsPanelId, ComponentType> = {
   'search-budget': BudgetSettings,
@@ -84,15 +84,23 @@ export const SETTINGS_PANELS: Record<SettingsPanelId, ComponentType> = {
   checklists: ChecklistsSettings,
   'google-calendar': CalendarSetup,
   assistant: AssistantSettings,
+  'assistant-helpers': AssistantHelpers,
+  'assistant-memories': AssistantMemories,
   'assistant-spending': AssistantSpending,
   'assistant-telegram': AssistantTelegram,
   'assistant-home-assistant': AssistantHomeAssistant,
   'shopper-sources': ShopperSettings,
 };
 
-/** A module's settings panels for this household, ready to render. */
-export function moduleSettingsComponents(id: string, enabled: ReadonlySet<string>): ComponentType[] {
-  return moduleSettingsPanels(id, enabled).map((panel) => SETTINGS_PANELS[panel]);
+/** One tab of a module's settings, ready to render. */
+export interface SettingsTabPanels {
+  label: string;
+  panels: ComponentType[];
+}
+
+/** A module's settings as tabs (core moduleSettingsTabs). One unlabelled tab when the module has no tabs. */
+export function moduleSettingsTabComponents(id: string, enabled: ReadonlySet<string>): SettingsTabPanels[] {
+  return moduleSettingsTabs(id, enabled).map((tab) => ({ label: tab.label, panels: tab.panels.map((panel) => SETTINGS_PANELS[panel]) }));
 }
 
 // Modules (.docs/modules.md): a panel for an integration module shows only

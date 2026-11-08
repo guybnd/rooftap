@@ -440,6 +440,8 @@ To add a setting:
 3. Read and save the value with `useUserSetting` from core. The panel shows the change at once, saves it and reloads the settings cache, so the screen gets the new value from the same row.
 4. In the screen, call `useModuleSettingsSheet(<id>)`. Put its row last in the More menu and render its `sheet` one time.
 
+A module with many panels can split them into tabs with `settingsTabs` in its manifest. Each tab has a short label and a list of panel ids. Every panel in `settings` goes in one tab, in the same order. Both doors then show a row of tabs above the panels and render only the panels of the tab that is open. `moduleSettingsTabs` in core gives the tabs for a household, and drops a tab when all of its panels are hidden. The Assistant uses tabs.
+
 A panel that applies only when a feature is on returns nothing when the feature is off. A panel that belongs to another module, such as Google Calendar, shows only while that module is on.
 
 A screen with no More menu, for example Home search, Calendar or Assistant, puts `ModuleSettingsButton` in its header instead. The button opens the same sheet and shows nothing when the module has nothing to set.

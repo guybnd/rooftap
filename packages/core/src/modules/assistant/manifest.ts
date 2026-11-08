@@ -34,6 +34,13 @@ export const assistantModule = defineModule({
     assistant_web_lookups: { reach: { none: REACH_REASONS.server } },
   },
   noTools: 'The Assistant itself. Its settings stay in Settings, where an owner decides what it may do.',
-  settings: ['assistant', 'assistant-spending', 'assistant-telegram', 'assistant-home-assistant'],
+  settings: ['assistant', 'assistant-helpers', 'assistant-memories', 'assistant-spending', 'assistant-telegram', 'assistant-home-assistant'],
+  settingsTabs: [
+    { label: 'General', panels: ['assistant'] },
+    { label: 'Helpers', panels: ['assistant-helpers'] },
+    { label: 'Memories', panels: ['assistant-memories'] },
+    { label: 'Spending', panels: ['assistant-spending'] },
+    { label: 'Connections', panels: ['assistant-telegram', 'assistant-home-assistant'] },
+  ],
   spaces: [{ key: 'assistant', label: 'Assistant', size: 'tile' }],
 });

@@ -5,7 +5,8 @@ import { getSection, moduleSettingsTitle, useModules } from "@homeup/core";
 import { Settings } from "lucide-react";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { cn } from "@/lib/utils";
-import { moduleSettingsComponents } from "@/app/settings/settings-registry";
+import { moduleSettingsTabComponents } from "@/app/settings/settings-registry";
+import { SettingsTabs } from "@/components/settings-tabs";
 
 // The second door to a module's settings (module-settings.ts): the module
 // screen's More menu ends with "<Module> settings", which opens the same
@@ -29,17 +30,17 @@ export interface ModuleSettingsDoor {
 export function useModuleSettingsSheet(moduleId: string): ModuleSettingsDoor {
   const modules = useModules();
   const [open, setOpen] = useState(false);
-  const panels = moduleSettingsComponents(moduleId, modules.enabled);
+  const tabs = moduleSettingsTabComponents(moduleId, modules.enabled);
   const label = moduleSettingsTitle(getSection(moduleId)?.label ?? "Module");
   return {
-    available: panels.length > 0,
+    available: tabs.length > 0,
     label,
     open: () => setOpen(true),
-    sheet: panels.length ? (
+    sheet: tabs.length ? (
       <BottomSheet open={open} onOpenChange={setOpen} overlayClassName="bg-black/40" className={SHEET} handleClassName="sm:hidden" popupProps={{ "aria-label": label }}>
         <div className="space-y-4 pb-2 pt-1">
           <h2 className="px-1 font-heading text-lg font-semibold">{label}</h2>
-          {panels.map((Panel, i) => <Panel key={i} />)}
+          <SettingsTabs tabs={tabs} ariaLabel={label} />
         </div>
       </BottomSheet>
     ) : null,

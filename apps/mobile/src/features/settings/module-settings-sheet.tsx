@@ -7,7 +7,8 @@ import { Pressable } from 'react-native';
 import { Settings } from 'lucide-react-native';
 import { BottomSheet, BottomSheetScrollView, Text, cn } from '@homeup/ui';
 import { getSection, moduleSettingsTitle, useModules } from '@homeup/core';
-import { moduleSettingsComponents } from './settings-registry';
+import { moduleSettingsTabComponents } from './settings-registry';
+import { SettingsTabs } from './settings-tabs';
 
 export interface ModuleSettingsDoor {
   /** False when the module has nothing to set for this household: leave the row out. */
@@ -23,17 +24,17 @@ export interface ModuleSettingsDoor {
 export function useModuleSettingsSheet(moduleId: string): ModuleSettingsDoor {
   const modules = useModules();
   const [open, setOpen] = React.useState(false);
-  const panels = moduleSettingsComponents(moduleId, modules.enabled);
+  const tabs = moduleSettingsTabComponents(moduleId, modules.enabled);
   const label = moduleSettingsTitle(getSection(moduleId)?.label ?? 'Module');
   return {
-    available: panels.length > 0,
+    available: tabs.length > 0,
     label,
     open: () => setOpen(true),
-    sheet: panels.length ? (
+    sheet: tabs.length ? (
       <BottomSheet open={open} onOpenChange={setOpen} className="max-h-[88%]" accessibilityLabel={label}>
         <BottomSheetScrollView keyboardShouldPersistTaps="handled" contentContainerClassName="gap-4 px-4 pb-8">
           <Text className="px-1 pt-1 font-heading text-title font-semibold text-foreground">{label}</Text>
-          {panels.map((Panel, i) => <Panel key={i} />)}
+          <SettingsTabs tabs={tabs} accessibilityLabel={label} />
         </BottomSheetScrollView>
       </BottomSheet>
     ) : null,

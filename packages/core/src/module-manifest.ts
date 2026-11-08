@@ -181,6 +181,8 @@ export interface ModuleManifest {
   noTools?: string;
   /** Its settings panels, in the order Settings and the screen's settings sheet show them (module-settings.ts). */
   settings?: readonly SettingsPanelId[];
+  /** Splits a long settings list into tabs. Every panel in `settings` sits in exactly one tab, in the same order (module-settings.test.ts). */
+  settingsTabs?: readonly ManifestSettingsTab[];
   /** Outside sources that fill this module's data (connectors.ts, .docs/connectors.md). Shown in Settings > Connectors while the module is on. */
   connectors?: readonly ConnectorManifest[];
   /** The shared screens it puts content on, each with a source in its folder (slots/). */
@@ -189,6 +191,12 @@ export interface ModuleManifest {
   spaces?: readonly ManifestSpace[];
   /** Its helper chat, when the module has a repeating decision worth one (module-helpers.ts). */
   helper?: ManifestHelper;
+}
+
+/** One tab of a module's settings: a short label and the panels it shows. */
+export interface ManifestSettingsTab {
+  label: string;
+  panels: readonly SettingsPanelId[];
 }
 
 /** Declares a module. The `const` type parameter keeps the id a literal, which is how ModuleId is built. */
