@@ -1,51 +1,56 @@
 'use client';
 
 // A module helper's brief (core module-helpers.ts): what needs a decision
-// today, as rows that act at once, with no AI. A suggested row (a missing
-// ingredient) adds with its +; an item row with an action (running low)
-// goes back on the list with its +; the section's header link does every
-// row. Rows leave as they are done, because the brief is read live from the
+// today, as rows that act at once, with no AI. Rows that already exist
+// (running low, use soon) are their module's own rows, the same ones the
+// chat's answers show, plus "Not now"; a suggested row (a missing
+// ingredient) adds with its + or a swipe, and swipes away as "Have it". The
+// section's header link does every row. Long sections fold under Show all. Rows leave as they are done, because the brief is read live from the
 // stores. Under it, the helper's catch-up ask leads its starters, which send as asks.
 // Native twin: apps/mobile/src/features/assistant/helper-brief.tsx.
 import { useState, type CSSProperties } from 'react';
-import { Plus, Sparkles } from 'lucide-react';
-import { arriveDelayMs, moduleHelper, useHelperBrief, type BriefRow, type BriefSection } from '@homeup/core';
+import { Sparkles } from 'lucide-react';
+import {
+  SHOWN_ITEMS_FOLD,
+  briefItemIds,
+  arriveDelayMs,
+  moduleHelper,
+  useHelperBrief,
+  type AssistantShown,
+  type BriefSection,
+  type HelperBriefState,
+} from '@homeup/core';
 import { toast } from 'sonner';
 import { ListGroup, ListItem, ListItemContent, ListItemMeta, ListItemTitle, ListItemTrailing } from '@/components/ui/list-item';
 import { useDataCache } from '@/lib/data-cache';
-import { cn } from '@/lib/utils';
+import { ChatChanges, SuggestLine } from './chat-changes';
 
 const arrive = (i: number) => ({ '--arrive-delay': `${arriveDelayMs(i)}ms` }) as CSSProperties;
 
-function BriefLine({ row, onAdd, onAct }: { row: BriefRow; onAdd: (key: string) => void; onAct: (id: string) => void }) {
-  const actionable = row.kind === 'suggest' || !!row.action;
-  const label = row.kind === 'suggest' ? `Add ${row.title}` : `Put ${row.title} back on the list`;
+function SuggestSection({ section, state }: { section: BriefSection; state: HelperBriefState | null }) {
+  const [all, setAll] = useState(false);
+  const rows = all ? section.rows : section.rows.slice(0, SHOWN_ITEMS_FOLD);
+  const hidden = section.rows.length - rows.length;
   return (
-    <ListItem className={cn(actionable && 'bg-[repeating-linear-gradient(135deg,transparent_0_6px,color-mix(in_oklab,var(--muted)_55%,transparent)_6px_7px)]')}>
-      {actionable ? (
-        <button
-          type="button"
-          onClick={() => (row.kind === 'suggest' ? onAdd(row.key) : onAct(row.id))}
-          aria-label={label}
-          className="inline-flex size-9 shrink-0 items-center justify-center rounded-full border-[1.5px] border-dashed border-primary/60 text-primary hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-ring"
-        >
-          <Plus className="size-4" />
-        </button>
-      ) : (
-        <span aria-hidden className="size-9 shrink-0" />
+    <ListGroup>
+      {rows.map((row) => (
+        <SuggestLine
+          key={row.kind === 'suggest' ? `s:${row.key}` : row.id}
+          title={row.title}
+          meta={row.meta}
+          dismissLabel={section.dismissLabel ?? null}
+          onAdd={() => (row.kind === 'suggest' ? state?.add(row.key) : state?.act(row.id))}
+          onDismiss={() => state?.dismiss(row)}
+        />
+      ))}
+      {hidden > 0 && (
+        <ListItem asChild>
+          <button type="button" className="cursor-pointer justify-center text-sm font-medium text-foreground" onClick={() => setAll(true)}>
+            Show all {section.rows.length}
+          </button>
+        </ListItem>
       )}
-      <ListItemContent>
-        <ListItemTitle>
-          <span className="text-foreground">{row.title}</span>
-        </ListItemTitle>
-        {row.meta && <ListItemMeta>{row.meta}</ListItemMeta>}
-      </ListItemContent>
-      {row.kind === 'item' && row.trailing && (
-        <ListItemTrailing>
-          <span className={cn('text-xs tabular-nums', row.warn ? 'font-medium text-warning' : 'text-muted-foreground')}>{row.trailing}</span>
-        </ListItemTrailing>
-      )}
-    </ListItem>
+    </ListGroup>
   );
 }
 
@@ -71,19 +76,35 @@ export function HelperBrief({ helper, onAsk, disabled }: { helper: string; onAsk
       </div>
       {brief?.sections.map((section) => (
         <div key={section.id} className="ask-arrive space-y-2" style={arrive(i++)}>
-          <div className="flex items-center gap-2 px-1">
-            <p className="flex-1 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">{section.title}</p>
-            {section.allLabel && (
-              <button type="button" onClick={() => doAll(section)} className="text-xs font-semibold text-primary hover:underline">
-                {section.allLabel}
-              </button>
-            )}
-          </div>
-          <ListGroup>
-            {section.rows.map((row) => (
-              <BriefLine key={row.kind === 'suggest' ? `s:${row.key}` : row.id} row={row} onAdd={(k) => state?.add(k)} onAct={(id) => state?.act(id)} />
-            ))}
-          </ListGroup>
+          {section.module ? (
+            // Rows that already exist: the module's own row, as in the chat's answers, with the brief's action and dismiss.
+            <ChatChanges
+              changes={undefined}
+              shown={[{ title: section.title, module: section.module as AssistantShown['module'], ids: briefItemIds(section) }]}
+              extras={{
+                action: () => (section.allLabel ? { label: section.allLabel, run: () => doAll(section) } : null),
+                rowExtra: (_, id) => {
+                  const row = section.rows.find((r) => r.kind === 'item' && r.id === id);
+                  return {
+                    needAgain: row?.kind === 'item' && !!row.action,
+                    onNotNow: section.dismissLabel && row ? () => state?.dismiss(row) : undefined,
+                  };
+                },
+              }}
+            />
+          ) : (
+            <>
+              <div className="flex items-center gap-2 px-1">
+                <p className="flex-1 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">{section.title}</p>
+                {section.allLabel && (
+                  <button type="button" onClick={() => doAll(section)} className="text-xs font-semibold text-primary hover:underline">
+                    {section.allLabel}
+                  </button>
+                )}
+              </div>
+              <SuggestSection section={section} state={state} />
+            </>
+          )}
         </div>
       ))}
       <div className="ask-arrive flex flex-wrap gap-1.5 pt-1" style={arrive(i++)}>

@@ -15,6 +15,7 @@ import {
   Archive,
   Check,
   Circle,
+  EyeOff,
   PackageCheck,
   Pencil,
   StickyNote,
@@ -98,6 +99,8 @@ export interface GroceryItemQuickMenuProps {
   onClearRecipeNote?: () => void;
   /** Omitted in reuse contexts (Home hub widget, global search) that don't wire the library-learn flow — mirrors web GroceryItemCardProps' onArchive (FLUX-191). Hides the menu item entirely rather than rendering a dead action. */
   onArchive?: () => void;
+  /** A running-low suggestion (the helper's brief): hide it until the item is next bought. */
+  onNotNow?: () => void;
   /** Same reuse-context carve-out as onArchive — omitted (not wired to a no-op) where the caller has no delete/undo flow of its own. */
   onRequestDelete?: () => void;
   onAssign: (userId: string | null) => void;
@@ -120,6 +123,7 @@ export function GroceryItemQuickMenu({
   onEdit,
   onClearRecipeNote,
   onArchive,
+  onNotNow,
   onRequestDelete,
   onAssign,
   onSetAisle,
@@ -166,6 +170,9 @@ export function GroceryItemQuickMenu({
       <ScrollView className="max-h-96 px-1 py-1">
         {/* Mark as — top of the menu (matches web's ordering rationale,
             page.tsx/grocery-item-card.tsx: most-used section goes first). */}
+        {onNotNow && (
+          <MenuItem icon={<EyeOff size={14} className="text-muted-foreground" />} label="Not now" onPress={() => commit(onNotNow, haptics.remove)} />
+        )}
         <MenuLabel>Mark as</MenuLabel>
         <MenuItem
           active={item.status === 'needed'}

@@ -4,7 +4,7 @@
 // links only), so web and native render the same reply the same way.
 
 import { isConversationOpen } from './assistant';
-import { SHOW_ITEMS_TOOL, type AssistantChange, type AssistantConversation, type AssistantShown, type AssistantStatus } from './assistant-api';
+import { SHOW_ITEMS_TOOL, type AssistantChange, type AssistantConversation, type AssistantShown, type AssistantStatus, type AssistantSuggestion } from './assistant-api';
 import { timeAgo } from '../../relative-time';
 import { MCP_TOOLS } from '../../mcp-tools';
 import { getModule, type ModuleId } from '../../modules';
@@ -425,5 +425,36 @@ export function shownGroups(shown: AssistantShown[] | undefined): ChangeGroup[] 
         changes: ids.map((id) => ({ tool: SHOW_ITEMS_TOOL, module: s.module, verb: 'changed' as const, id, summary: '' })),
       },
     ];
+  });
+}
+
+/** Modules whose things a reply can offer to add as rows (suggest_items); each app knows how to add one. */
+export const SUGGESTABLE_MODULES: readonly ModuleId[] = ['groceries' as ModuleId];
+
+/** At most this many suggestions in one group. */
+export const SUGGEST_ITEMS_MAX = 20;
+
+/** A reply's offered additions (suggest_items), one card per group. */
+export interface SuggestGroup {
+  key: string;
+  title: string;
+  module: ModuleId;
+  items: AssistantSuggestion[];
+}
+
+/** The suggestion groups of a reply, cleaned: known modules, named items, no repeats. */
+export function suggestGroups(shown: AssistantShown[] | undefined): SuggestGroup[] {
+  return (shown ?? []).flatMap((s, i) => {
+    const module = s.module as ModuleId;
+    if (!SUGGESTABLE_MODULES.includes(module) || !Array.isArray(s.suggest)) return [];
+    const seen = new Set<string>();
+    const items = s.suggest.filter((it) => {
+      const key = typeof it?.name === 'string' ? it.name.trim().toLowerCase() : '';
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    if (!items.length) return [];
+    return [{ key: `suggest:${i}`, title: s.title?.trim() || 'Worth adding', module, items: items.slice(0, SUGGEST_ITEMS_MAX) }];
   });
 }

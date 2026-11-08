@@ -107,6 +107,10 @@ export interface CaptureSearchResultsProps extends LiveRowSources {
 export interface LiveRowRef {
   section: string;
   id: string;
+  /** A Have it grocery row offered back (the helper's brief): swiping it right hides it for now. */
+  onNotNow?: (item: GroceryItem) => void;
+  /** A have or bought grocery row gets a one-tap "Need again". */
+  needAgain?: boolean;
 }
 
 export function CaptureSearchResults({ index, query, docsLoading, onHitPress, ...sources }: CaptureSearchResultsProps) {
@@ -291,6 +295,8 @@ export function useLiveRowRenderer(
             memberProfiles={memberProfiles}
             onPatch={patchGrocery}
             onEdit={onEditGrocery}
+            onNotNow={hit.onNotNow}
+            showNeedAgain={hit.needAgain}
           />
         );
       }

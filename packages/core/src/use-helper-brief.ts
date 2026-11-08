@@ -6,9 +6,9 @@
 
 import { useRef } from 'react';
 import { todayISO } from './date-utils';
-import { showsBrief } from './module-helpers';
+import { showsBrief, type HelperBriefState } from './module-helpers';
 import { useModules } from './modules-store';
-import { useGroceriesHelper, type HelperBriefState } from './modules/groceries/use-groceries-helper';
+import { useGroceriesHelper } from './modules/groceries/use-groceries-helper';
 
 export function useHelperBrief(input: {
   helper: string | null | undefined;

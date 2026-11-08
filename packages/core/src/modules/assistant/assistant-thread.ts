@@ -104,6 +104,20 @@ export function cachedThread(id: string): CachedThread | null {
   return threadCache.get(id) ?? null;
 }
 
+/**
+ * The newest cached chat with a module helper, so hopping to a helper paints
+ * its chat at once while the server confirms which one it is.
+ */
+export function cachedHelperThread(helper: string): CachedThread | null {
+  hydrate();
+  let best: CachedThread | null = null;
+  for (const entry of threadCache.values()) {
+    if (entry.conversation.helper !== helper || entry.conversation.archived) continue;
+    if (!best || entry.conversation.last_active_at > best.conversation.last_active_at) best = entry;
+  }
+  return best;
+}
+
 export function forgetThread(id: string): void {
   hydrate();
   threadCache.delete(id);
@@ -189,7 +203,9 @@ function errorText(err: unknown, fallback: string): string {
 
 export function useAssistantThread(target: ThreadTarget, host: ThreadHost) {
   const isNew = target.id === 'new';
-  const cached = isNew ? null : cachedThread(target.id);
+  // A helper's chat paints from the device at once; the first load still checks it is the right one.
+  const cached = isNew ? (target.helper ? cachedHelperThread(target.helper) : null) : cachedThread(target.id);
+  const checkHelper = useRef(isNew && !!target.helper);
   const [conversation, setConversation] = useState<AssistantConversation | null>(cached?.conversation ?? null);
   const [messages, setMessages] = useState<AssistantMessage[]>(cached?.messages ?? []);
   // Only a thread with nothing to show yet waits; a cached one refreshes behind.
@@ -252,11 +268,20 @@ export function useAssistantThread(target: ThreadTarget, host: ThreadHost) {
     let id: string | undefined = conversationIdRef.current ?? (isNew ? undefined : target.id);
     // A helper's chat carries on where it was left: this person's own, or the
     // one the household shares when owners chose that (Settings > Assistant).
-    if (!id && target.helper) {
+    // The one painted from the device is checked once, in case that changed.
+    if (target.helper && (!id || checkHelper.current)) {
+      checkHelper.current = false;
       try {
         const [list, settings] = await Promise.all([api.conversations(), api.settings().catch(() => null)]);
         const shared = helperShared(settings?.settings, target.helper);
-        id = list.find((c) => c.helper === target.helper && (c.kind === 'household') === shared)?.id;
+        const found = list.find((c) => c.helper === target.helper && (c.kind === 'household') === shared)?.id;
+        if (found !== id && !sendingRef.current) {
+          // Not the chat on show (it was deleted, or sharing changed): start from the right one.
+          conversationIdRef.current = found ?? null;
+          setConversation(null);
+          setMessages([]);
+        }
+        id = found;
       } catch {
         // Offline: the brief still shows, and the first message finds the chat on the server.
       }

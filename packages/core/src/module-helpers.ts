@@ -112,7 +112,21 @@ export interface BriefSection {
   rows: BriefRow[];
   /** The header link that acts on every row ("Add all"); null when rows are only to look at. */
   allLabel?: string | null;
+  /**
+   * The module whose own rows these are. The chat then draws each item row
+   * as that module's real row, the same row its screen and the chat's
+   * answers use, with the brief's action and dismiss added to it.
+   */
+  module?: string | null;
+  /**
+   * What swiping a row away does, as its label ("Not now", "Have it"). The
+   * helper's `dismiss` runs it. Null when its rows can't be dismissed.
+   */
+  dismissLabel?: string | null;
 }
+
+/** At most this many rows of one section go into the prompt; the helper reads the rest with its tools. */
+export const BRIEF_PROMPT_ROWS = 12;
 
 export interface HelperBrief {
   /** The display line, e.g. "Ready for the shop". */
@@ -122,16 +136,35 @@ export interface HelperBrief {
   sections: BriefSection[];
 }
 
+/** The ids of a section's rows that already exist, drawn as their module's own rows. */
+export function briefItemIds(section: BriefSection): string[] {
+  return section.rows.flatMap((r) => (r.kind === 'item' ? [r.id] : []));
+}
+
+/** A brief on the device, with what its rows do (use-helper-brief.ts). */
+export interface HelperBriefState {
+  brief: HelperBrief | null;
+  /** Puts one suggested row on the list. */
+  add: (key: string) => void;
+  /** Runs a row's action (readd). */
+  act: (id: string) => void;
+  /** The section header's action, on every row. Returns how many changed. */
+  all: (section: BriefSection) => number;
+  /** Swipes a row away, as its section's `dismissLabel` says. */
+  dismiss: (row: BriefRow) => void;
+}
+
 /** The brief as prompt text, so the model knows it without spending tool calls. */
 export function briefPromptText(brief: HelperBrief): string {
   const lines = [`## Today's brief (the person sees it above the chat)`, `${brief.title}. ${brief.lede}`];
   for (const section of brief.sections) {
     if (section.rows.length === 0) continue;
-    lines.push(`${section.title}:`);
-    for (const row of section.rows) {
+    lines.push(`${section.title} (${section.rows.length}):`);
+    for (const row of section.rows.slice(0, BRIEF_PROMPT_ROWS)) {
       const facts = [row.meta, row.kind === 'item' ? row.trailing : null].filter(Boolean).join(', ');
       lines.push(`- ${row.title}${facts ? ` (${facts})` : ''}${row.kind === 'item' ? ` [id ${row.id}]` : ''}`);
     }
+    if (section.rows.length > BRIEF_PROMPT_ROWS) lines.push(`- and ${section.rows.length - BRIEF_PROMPT_ROWS} more`);
   }
   return lines.join('\n');
 }

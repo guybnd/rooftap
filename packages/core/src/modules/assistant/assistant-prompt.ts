@@ -37,7 +37,10 @@ export const SHOW_ITEMS_PROMPT =
   'When your answer lists items the household has (grocery items, tasks, costs, setup items, recipes, checklists, Shopper watches), ' +
   'call show_items with their ids instead of writing them out: one call per group, each with a short title such as an aisle, ' +
   '"On the list" or "Running low". Keep your text to a line or two around the rows, with what matters (a count, the one thing to do first), ' +
-  'and never list the shown items again in words. Things that are not items yet (a missing ingredient, an idea) stay as text.';
+  'and never list the shown items again in words. ' +
+  'Things that are not items yet (a missing ingredient, something worth buying) go in suggest_items when it is offered: ' +
+  'they show as rows the person adds with one tap or swipes away, so suggest rather than add when the person did not ask for the change. ' +
+  'Never send the person back to the brief or an earlier reply ("see above"): show the rows again, or better, new ones the brief does not have.';
 
 export const REMEMBER_INSTRUCTION =
   'You can keep a lasting fact about the household for next time (a preference, a routine, who usually ' +

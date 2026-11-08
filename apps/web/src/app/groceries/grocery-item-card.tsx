@@ -31,6 +31,7 @@ import {
   Star,
   Circle,
   StickyNote,
+  EyeOff,
 } from 'lucide-react';
 import { AssigneePicker } from '../setup/assignee-picker';
 import { memberLabel } from '../setup/member-label';
@@ -77,6 +78,11 @@ interface GroceryItemCardProps {
   showAisleDot?: boolean;
   /** Search results: a have/bought row gets a one-click "Need again" button. */
   showNeedAgain?: boolean;
+  /**
+   * A running-low suggestion (the helper's brief): a Have it row swipes
+   * right to "Not now" instead of Got it, and its menus offer the same.
+   */
+  onNotNow?: (item: GroceryItem) => void;
 }
 
 function roundQty(v: number, unit: string | null | undefined): number {
@@ -229,6 +235,7 @@ function GroceryItemCardInner({
   onEdit,
   showAisleDot,
   showNeedAgain,
+  onNotNow,
   dragListeners,
   dragAttributes,
 }: GroceryItemCardProps & { dragListeners?: object; dragAttributes?: object }) {
@@ -353,7 +360,8 @@ function GroceryItemCardInner({
     void patchField(payload);
   }, [patchField, effectivePriceCents]);
 
-  const swipeRight = () => setDisposition(bought ? 'needed' : 'bought');
+  const notNow = onNotNow && have ? () => onNotNow(item) : null;
+  const swipeRight = () => (notNow ? notNow() : setDisposition(bought ? 'needed' : 'bought'));
   const swipeLeft = () => setDisposition(have ? 'needed' : 'have');
 
   const qty = qtyLabel(item);
@@ -456,6 +464,7 @@ function GroceryItemCardInner({
     title: item.name,
     kind: 'Grocery item',
     actions: [
+      notNow && { id: 'not-now', label: 'Not now', group: 'state', icon: 'hide', run: notNow },
       !bought && { id: 'bought', label: 'Got it', group: 'state', icon: 'done', run: () => setDisposition('bought') },
       !have && { id: 'have', label: 'Have it', group: 'state', icon: 'hide', run: () => setDisposition('have') },
       item.status !== 'needed' && { id: 'needed', label: 'Need it again', group: 'state', icon: 'undo', run: () => setDisposition('needed') },
@@ -538,7 +547,9 @@ function GroceryItemCardInner({
   const priceDisplayCents = priceDrag.preview != null ? Math.round(priceDrag.preview * 100) : effectivePriceCents;
 
   // ── Status-aware swipe configs (reverse swipes read as "undo") ───────────────
-  const rightCfg = bought
+  const rightCfg = notNow
+    ? { bg: 'bg-muted-foreground/70', activeBg: 'bg-muted-foreground', icon: <EyeOff className="h-5 w-5 text-white" />, label: 'Not now' }
+    : bought
     ? { bg: 'bg-muted-foreground/70', activeBg: 'bg-muted-foreground', icon: <RotateCcw className="h-5 w-5 text-white" />, label: 'Needed' }
     : { bg: 'bg-success/70', activeBg: 'bg-success', icon: <Check className="h-5 w-5 text-white" />, label: 'Got it' };
   const leftCfg = have
@@ -928,6 +939,11 @@ function GroceryItemCardInner({
                       status button is gone (the leading badge is the only
                       indicator now), so this + swipe are the two ways to
                       change disposition. Most-used section, so it's first. */}
+                  {notNow && (
+                    <MenuItem icon={<EyeOff className="h-3.5 w-3.5" />} onClick={() => { notNow(); close(); }}>
+                      Not now
+                    </MenuItem>
+                  )}
                   <MenuLabel>Mark as</MenuLabel>
                   <MenuItem
                     active={item.status === 'needed'}

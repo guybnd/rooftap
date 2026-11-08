@@ -22,7 +22,7 @@
 import * as React from 'react';
 import { Pressable, View } from 'react-native';
 import { useRouter, type Href } from 'expo-router';
-import { Check, ChefHat, GripVertical, PackageCheck, RefreshCw } from 'lucide-react-native';
+import { Check, ChefHat, EyeOff, GripVertical, PackageCheck, RefreshCw } from 'lucide-react-native';
 import {
   Text,
   BottomSheet,
@@ -86,6 +86,11 @@ interface GroceryItemCardProps {
   dragging?: boolean;
   /** Search results: a have/bought row gets a one-tap "Need again" pill. */
   showNeedAgain?: boolean;
+  /**
+   * A running-low suggestion (the helper's brief): a Have it row swipes
+   * right to "Not now" instead of Got it, and its menu offers the same.
+   */
+  onNotNow?: (item: GroceryItem) => void;
   /** HOUP-317: "One list" shows the aisle as a colour dot (there are no aisle
    *  headers there). Off by default: the aisle view's header already says it. */
   showAisleDot?: boolean;
@@ -122,10 +127,12 @@ export function GroceryItemCard({
   dragging,
   showNeedAgain,
   showAisleDot = false,
+  onNotNow,
 }: GroceryItemCardProps) {
   const router = useRouter();
   const bought = item.status === 'bought';
   const have = item.status === 'have';
+  const notNow = onNotNow && have ? () => onNotNow(item) : null;
   // HOUP-198: hold-to-edit arming fill — wired through SwipeActions' onLongPress
   // (see swipe-actions.tsx header comment for why a bare ListItem.onLongPress
   // never reliably fires here, nested inside SwipeActions' Pan GestureDetector).
@@ -439,14 +446,18 @@ export function GroceryItemCard({
   return (
     <>
       <SwipeActions
-        onSwipeRight={() => setDisposition(bought ? 'needed' : 'bought')}
+        onSwipeRight={() => (notNow ? (haptics.remove(), notNow()) : setDisposition(bought ? 'needed' : 'bought'))}
         onSwipeLeft={() => setDisposition(have ? 'needed' : 'have')}
-        right={{
-          bg: 'bg-success/15',
-          activeBg: 'bg-success',
-          icon: <Check size={18} className="text-success" />,
-          label: bought ? 'Needed' : 'Got it',
-        }}
+        right={
+          notNow
+            ? { bg: 'bg-muted', activeBg: 'bg-muted-foreground', icon: <EyeOff size={18} className="text-muted-foreground" />, label: 'Not now' }
+            : {
+                bg: 'bg-success/15',
+                activeBg: 'bg-success',
+                icon: <Check size={18} className="text-success" />,
+                label: bought ? 'Needed' : 'Got it',
+              }
+        }
         left={{
           bg: 'bg-primary/15',
           activeBg: 'bg-primary',
@@ -474,6 +485,7 @@ export function GroceryItemCard({
         memberProfiles={memberProfiles}
         onSetDisposition={setDisposition}
         onToggleEssential={() => onPatch(item.id, { is_essential: !item.is_essential })}
+        onNotNow={notNow ?? undefined}
         onEdit={() => onEdit(item)}
         onClearRecipeNote={
           recipeLinked && item.recipe_note ? () => onPatch(item.id, { recipe_note: null, recipe_source_id: null }) : undefined

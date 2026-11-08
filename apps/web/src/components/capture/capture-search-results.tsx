@@ -114,6 +114,10 @@ export interface CaptureSearchResultsProps extends LiveRowSources {
 export interface LiveRowRef {
   section: string;
   id: string;
+  /** A Have it grocery row offered back (the helper's brief): swiping it right hides it for now. */
+  onNotNow?: (item: GroceryItem) => void;
+  /** A have or bought grocery row gets a one-tap "Need again". */
+  needAgain?: boolean;
 }
 
 /** A hit with no row of its own: section tile, title, one meta line, chevron. */
@@ -270,6 +274,8 @@ export function useLiveRowRenderer({
               }
             }}
             onEdit={onEditGrocery}
+            onNotNow={hit.onNotNow}
+            showNeedAgain={hit.needAgain}
           />
         );
       }

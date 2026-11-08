@@ -15,22 +15,13 @@ import { mealPlanEntries$ } from '../../data/stores/meal-plan-store';
 import { recipeIngredients$ } from '../../data/stores/recipe-ingredients-store';
 import { recipes$ } from '../../data/stores/recipes-store';
 import { groceryNeededAgainPatch } from '../../home/home-groceries';
-import type { BriefSection, HelperBrief } from '../../module-helpers';
+import type { BriefRow, BriefSection, HelperBriefState } from '../../module-helpers';
 import type { GroceryItem, Recipe, RecipeIngredient } from '../../types';
 import type { MealPlanEntry } from '../meals/meal-plan';
 import { buildNeededGroceryItem, recipeNoteFor } from '../recipes/recipes';
 import { useRecipeMatch } from '../recipes/use-recipe-match';
 import { briefMissing, groceriesBrief } from './helper-brief';
 
-export interface HelperBriefState {
-  brief: HelperBrief | null;
-  /** Puts one suggested row on the list. */
-  add: (key: string) => void;
-  /** Runs a row's action (readd). */
-  act: (id: string) => void;
-  /** The section header's action, on every row. Returns how many changed. */
-  all: (section: BriefSection) => number;
-}
 
 export function useGroceriesHelper(input: {
   groupId: string | null | undefined;
@@ -90,6 +81,30 @@ export function useGroceriesHelper(input: {
 
   const act = useCallback((id: string) => patchRow(id, groceryNeededAgainPatch(new Date().toISOString())), [patchRow]);
 
+  // A missing ingredient swiped away is one the household has: it goes in
+  // as Have it, so no dinner asks for it again until it runs low. Running
+  // low swiped away is "Not now": hidden until it is next bought, the same
+  // as the list's own suggestions.
+  const dismiss = useCallback(
+    (row: BriefRow) => {
+      const now = new Date().toISOString();
+      if (row.kind === 'item') return patchRow(row.id, { re_add_dismissed_at: now });
+      const m = missing?.find((x) => x.key === row.key);
+      if (!m || !groupId) return;
+      writeRow(
+        buildNeededGroceryItem({
+          groupId,
+          name: m.key,
+          recipeNote: recipeNoteFor(m.ingredient, m.recipeTitle),
+          recipeSourceId: m.recipeId,
+          createdBy: currentUserId ?? null,
+          status: 'have',
+        })
+      );
+    },
+    [patchRow, missing, groupId, writeRow, currentUserId]
+  );
+
   const all = useCallback(
     (section: BriefSection) => {
       let n = 0;
@@ -104,5 +119,5 @@ export function useGroceriesHelper(input: {
     [add, act]
   );
 
-  return { brief, add, act, all };
+  return { brief, add, act, all, dismiss };
 }

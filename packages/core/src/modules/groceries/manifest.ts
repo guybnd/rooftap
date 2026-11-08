@@ -48,6 +48,9 @@ export const groceriesModule = defineModule({
       'say which nights each item is for. When the person says they will be out or skipping a night, take off only the items for that ' +
       'night that no other night needs. When they ask what is on the list or to catch up, show the items as rows with show_items, ' +
       'one group per aisle for the list and one for what is running low (the brief gives those ids), and add one or two lines on what matters most. ' +
+      'The person already sees the brief, so never send them back to it: bring something new. Offer what is not on the list yet ' +
+      "(what a dinner still needs, a usual they have not bought in a while, what a recipe they like would need) with suggest_items, " +
+      'one group per reason, so each is one tap to add or a swipe to skip; add items yourself only when the person asks for the change. ' +
       'Make every change in one reply, one tool call per item, and confirm in one short line; the items show under your reply. ' +
       'Never guess a price. Items another member keeps private are hidden from you, so do not ask about them.',
     reads: ['meals', 'recipes', 'costs'],

@@ -9,6 +9,9 @@ import { weekShopping, type MealPlanEntry } from '../meals/meal-plan';
 import type { BriefRow, BriefSection, HelperBrief } from '../../module-helpers';
 import { countNeeded, freshnessWindow, suggestReAdd } from './groceries';
 import { resolveItemDefaults, type LibraryOverride } from './item-library';
+import { canonicalizeItemName } from './shelf-life-defaults';
+import { groceryNeededAgainPatch } from '../../home/home-groceries';
+import { buildNeededGroceryItem } from '../recipes/recipes';
 
 /** An ingredient a planned dinner needs that is not on the list or in stock. */
 export interface BriefMissing {
@@ -30,8 +33,8 @@ export interface GroceriesBriefInput {
   missing?: readonly BriefMissing[] | null;
 }
 
-/** At most this many rows per section; the helper can list the rest when asked. */
-export const BRIEF_ROWS = 6;
+/** At most this many rows per section; the chat folds a long one under Show all. */
+export const BRIEF_ROWS = 40;
 
 function daysAgo(iso: string | null, today: string): string | null {
   if (typeof iso !== 'string' || !iso) return null;
@@ -95,9 +98,18 @@ export function groceriesBrief(input: GroceriesBriefInput): HelperBrief {
   soon.sort((a, b) => (a.kind === 'item' && b.kind === 'item' ? Number(!!b.warn) - Number(!!a.warn) : 0));
 
   const sections: BriefSection[] = [];
-  if (dinners.length) sections.push({ id: 'dinners', title: "For this week's dinners", rows: dinners, allLabel: dinners.length > 1 ? 'Add all' : null });
-  if (usuals.length) sections.push({ id: 'usuals', title: 'Running low or past it', rows: usuals, allLabel: usuals.length > 1 ? 'Re-add all' : null });
-  if (soon.length) sections.push({ id: 'soon', title: 'Use soon', rows: soon.slice(0, BRIEF_ROWS) });
+  if (dinners.length)
+    sections.push({ id: 'dinners', title: "For this week's dinners", rows: dinners, allLabel: dinners.length > 1 ? 'Add all' : null, dismissLabel: 'Have it' });
+  if (usuals.length)
+    sections.push({
+      id: 'usuals',
+      title: 'Running low or past it',
+      rows: usuals,
+      allLabel: usuals.length > 1 ? 'Re-add all' : null,
+      module: 'groceries',
+      dismissLabel: 'Not now',
+    });
+  if (soon.length) sections.push({ id: 'soon', title: 'Use soon', rows: soon.slice(0, BRIEF_ROWS), module: 'groceries' });
 
   const said: string[] = [];
   if (missing.length) {
@@ -150,4 +162,41 @@ export function briefMissing(input: {
     const night = firstNight.get(m.recipe.id);
     return { key: m.key, recipeId: m.recipe.id, recipeTitle: m.recipe.title, night: night ? nightName(night, input.today) : null, ingredient: m.ingredient };
   });
+}
+
+/**
+ * What adding an offered grocery (suggest_items) does to the list: an item
+ * already there in Have it or Bought goes back to needed, one already needed
+ * stays as it is, and a new name goes in as needed. Null when nothing
+ * changes. Names match the way the list matches them (canonicalizeItemName).
+ */
+export function addSuggestedGrocery(input: {
+  groupId: string;
+  suggestion: { name: string; note?: string | null; quantity?: number | null; unit?: string | null };
+  items: readonly GroceryItem[];
+  createdBy: string | null;
+  now?: string;
+}): { write: GroceryItem } | { patch: { id: string; changes: Partial<GroceryItem> } } | null {
+  const name = input.suggestion.name.trim();
+  if (!name) return null;
+  const key = canonicalizeItemName(name);
+  const found = input.items.find((i) => !i.deleted && typeof i.name === 'string' && canonicalizeItemName(i.name) === key);
+  const now = input.now ?? new Date().toISOString();
+  if (found) return found.status === 'needed' ? null : { patch: { id: found.id, changes: groceryNeededAgainPatch(now) } };
+  const item = buildNeededGroceryItem({
+    groupId: input.groupId,
+    name,
+    recipeNote: '',
+    recipeSourceId: '',
+    createdBy: input.createdBy,
+    quantity: input.suggestion.quantity ?? null,
+    unit: input.suggestion.unit ?? null,
+  });
+  return { write: { ...item, recipe_note: input.suggestion.note?.trim() || null, recipe_source_id: null, aisle: resolveItemDefaults(name).aisle ?? 'other' } };
+}
+
+/** Whether an offered grocery is already on the list as needed, so its row can go. */
+export function suggestionNeeded(name: string, items: readonly GroceryItem[]): boolean {
+  const key = canonicalizeItemName(name);
+  return items.some((i) => !i.deleted && i.status === 'needed' && typeof i.name === 'string' && canonicalizeItemName(i.name) === key);
 }

@@ -7,7 +7,7 @@
 // the + dot and shows the "Rooftap answered" toast, and reopening shows it. core's
 // openAssistantPopup() reaches this one host, mounted inside the app shell.
 // Native twin: apps/mobile/src/features/assistant/chat-popup.tsx.
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -21,6 +21,8 @@ import {
   popupTitle,
   useAssistantPopupState,
   usePopupChats,
+  usePopupSlot,
+  usePopupSlotValue,
   usePopupThreadLifecycle,
   useAssistantPending,
   useAssistantThread,
@@ -28,6 +30,7 @@ import {
   type AssistantConversation,
   type AssistantEdgePace,
   type ChatChoice,
+  type PopupSlot,
   type ThreadTarget,
 } from "@homeup/core";
 import { cn } from "@/lib/utils";
@@ -49,16 +52,31 @@ import { useSpectrumEdge } from "@/components/spectrum-edge";
 
 const popupToast = { error: (m: string) => toast.error(m), message: (m: string) => toast(m) };
 
+/** What the thread hands its card (core PopupSlot): the card stays put while the chat inside changes. */
+interface PopupContent {
+  /** Changes with the chat, so the inside starts clean. */
+  key: number;
+  pace: AssistantEdgePace;
+  title: string;
+  body: ReactNode;
+}
+
 export function AssistantChatPopup() {
   const modules = useModules();
   const { group } = useDataCache();
   const on = modules.isEnabled("assistant") && !!group?.id;
   const { state, minimize, dismissBack, fresh, remember } = useAssistantPopupState(on);
+  const slot = usePopupSlot<PopupContent>();
 
   if (!on) return null;
+  // The thread is keyed (a new chat starts clean) but the card is not, so
+  // hopping between chats swaps what is inside it, with no shrink and grow.
   return (
+    <>
     <PopupThread
       key={state.key}
+      slotKey={state.key}
+      slot={slot}
       open={state.open}
       target={state.target}
       ask={state.ask}
@@ -69,10 +87,23 @@ export function AssistantChatPopup() {
       onFresh={fresh}
       onConversation={remember}
     />
+    <PopupCard slot={slot} open={state.open} onMinimize={minimize} />
+    </>
+  );
+}
+
+function PopupCard({ slot, open, onMinimize }: { slot: PopupSlot<PopupContent>; open: boolean; onMinimize: () => void }) {
+  const content = usePopupSlotValue(slot);
+  return (
+    <PopupSurface open={open} pace={content?.pace ?? "rest"} onMinimize={onMinimize} title={content?.title || "Rooftap"}>
+      {content && <Fragment key={content.key}>{content.body}</Fragment>}
+    </PopupSurface>
   );
 }
 
 function PopupThread({
+  slotKey,
+  slot,
   open,
   target,
   ask,
@@ -83,6 +114,8 @@ function PopupThread({
   onFresh,
   onConversation,
 }: {
+  slotKey: number;
+  slot: PopupSlot<PopupContent>;
   open: boolean;
   target: ThreadTarget;
   ask?: string;
@@ -161,9 +194,7 @@ function PopupThread({
   const iconButton =
     "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground";
 
-  return (
-    <>
-    {!open && back && (
+  const backToChat = !open && back && (
       <BackToChat
         mode={back}
         label={popupTitle(false, conversation, target.id, helper) || "Rooftap"}
@@ -172,8 +203,10 @@ function PopupThread({
         onOpen={() => openAssistantPopup()}
         onDismiss={onDismissBack}
       />
-    )}
-    <PopupSurface open={open} pace={thread.thinking ? "thinking" : listening ? "listening" : "rest"} onMinimize={onMinimize} title={title || "Rooftap"}>
+  );
+
+  const body = (
+    <>
       <div className="flex items-center gap-1 border-b border-border pb-2 pl-3.5 pr-1.5 md:pt-2">
         {!showChats && (
           <span className="relative shrink-0">
@@ -235,7 +268,7 @@ function PopupThread({
           <ThreadFooter
             thread={thread}
             offline={!isOnline}
-            autoFocus={target.id === "new" && !ask}
+            autoFocus={target.id === "new" && !target.helper && !ask}
             onFresh={onFresh}
             band
             lookingAt={pathname}
@@ -244,9 +277,16 @@ function PopupThread({
           />
         </>
       )}
-    </PopupSurface>
     </>
   );
+
+  // Every render hands the card what it shows now (before paint, so a hop never flashes the old chat).
+  const pace: AssistantEdgePace = thread.thinking ? "thinking" : listening ? "listening" : "rest";
+  useLayoutEffect(() => {
+    slot.set({ key: slotKey, pace, title: title || "Rooftap", body });
+  });
+
+  return backToChat || null;
 }
 
 /**

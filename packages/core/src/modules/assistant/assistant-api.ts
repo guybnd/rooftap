@@ -78,11 +78,28 @@ export interface AssistantMessage {
 /** The tool a reply uses to show household items as their live rows under it. */
 export const SHOW_ITEMS_TOOL = 'show_items';
 
-/** One titled group of items a reply shows, e.g. "Dairy" with three grocery ids. */
+/** The tool a reply uses to offer things not there yet as rows the person can add. */
+export const SUGGEST_ITEMS_TOOL = 'suggest_items';
+
+/**
+ * One titled group of items a reply shows, e.g. "Dairy" with three grocery
+ * ids, or (suggest_items) things to add that are not there yet.
+ */
 export interface AssistantShown {
   title: string;
   module: AssistantScope;
   ids: string[];
+  /** Things to add, each one tap away (suggest_items); `ids` is then empty. */
+  suggest?: AssistantSuggestion[];
+}
+
+/** Something a reply offers to add (a grocery item not on the list yet). */
+export interface AssistantSuggestion {
+  name: string;
+  /** Why, in a few words ("for Tuesday's curry"). */
+  note?: string | null;
+  quantity?: number | null;
+  unit?: string | null;
 }
 
 /** One change a reply made: which item, so the app can show its live row. */
@@ -534,7 +551,7 @@ export function describeProposal(tool: string, module: AssistantScope, args: Rec
  */
 export function toolStatus(all: { tool: string; module: AssistantScope; lookup?: boolean; args: Record<string, unknown> }[]): string | null {
   // Showing rows is laying out the answer, not a lookup.
-  const calls = all.filter((c) => c.tool !== SHOW_ITEMS_TOOL);
+  const calls = all.filter((c) => c.tool !== SHOW_ITEMS_TOOL && c.tool !== SUGGEST_ITEMS_TOOL);
   if (calls.length === 0) return all.length ? 'Laying out the items' : null;
   const change = calls.find((c) => !c.lookup);
   if (change) {

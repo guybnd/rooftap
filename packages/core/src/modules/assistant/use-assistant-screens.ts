@@ -4,7 +4,7 @@
 // pass their API client and decide when to load (web on mount, the phone
 // when its tab comes into view), and keep their own rendering and routing.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { AssistantApiError, type AssistantApi, type AssistantConversation, type AssistantErrorCode, type AssistantStatus } from './assistant-api';
 import { onAssistantPopup } from './assistant-popup';
 import { cachedConversations, type ThreadTarget } from './assistant-thread';
@@ -213,4 +213,44 @@ export function usePopupThreadLifecycle(input: {
     if (open && !wasOpen.current && (conversation || loadError)) void reload();
     wasOpen.current = open;
   }, [open, conversation, loadError, reload]);
+}
+
+/**
+ * A hand-off from the pop-up's thread to its card. The thread (keyed, so a
+ * new chat starts clean) puts what the card shows here on every render, and
+ * the card, which stays mounted, draws it. Hopping between chats then swaps
+ * what is inside the card without closing it and growing it again.
+ */
+export interface PopupSlot<T> {
+  get: () => T | null;
+  set: (value: T) => void;
+  subscribe: (listener: () => void) => () => void;
+}
+
+export function createPopupSlot<T>(): PopupSlot<T> {
+  let value: T | null = null;
+  const listeners = new Set<() => void>();
+  return {
+    get: () => value,
+    set: (next) => {
+      value = next;
+      listeners.forEach((l) => l());
+    },
+    subscribe: (listener) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+  };
+}
+
+/** One slot for the life of the component. */
+export function usePopupSlot<T>(): PopupSlot<T> {
+  const ref = useRef<PopupSlot<T> | null>(null);
+  if (!ref.current) ref.current = createPopupSlot<T>();
+  return ref.current;
+}
+
+/** What the slot holds now, redrawn when it changes. */
+export function usePopupSlotValue<T>(slot: PopupSlot<T>): T | null {
+  return useSyncExternalStore(slot.subscribe, slot.get, slot.get);
 }

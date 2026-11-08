@@ -31,12 +31,15 @@ import {
   popupTitle,
   useAssistantPopupState,
   usePopupChats,
+  usePopupSlot,
+  usePopupSlotValue,
   usePopupThreadLifecycle,
   useAssistantThread,
   useModules,
   type AssistantConversation,
   type AssistantEdgePace,
   type ChatChoice,
+  type PopupSlot,
   type ThreadTarget,
 } from '@homeup/core';
 import { Button, LeadingTile, ListGroup, SpectrumEdge, Text, cn, haptics, toast, useKeyboardOffset, useThemeMaterial, useStillMotion } from '@homeup/ui';
@@ -62,16 +65,33 @@ const DISMISS_VELOCITY = 800;
 
 const popupToast = { error: (m: string) => toast.error(m), message: (m: string) => toast.message(m) };
 
+/** What the thread hands its card (core PopupSlot): the card stays put while the chat inside changes. */
+interface PopupContent {
+  /** Changes with the chat, so the inside starts clean. */
+  key: number;
+  pace: AssistantEdgePace;
+  onSwipe?: (step: 1 | -1) => void;
+  scrollY: SharedValue<number>;
+  header: React.ReactNode;
+  body: React.ReactNode;
+}
+
 export function AssistantChatPopup() {
   const modules = useModules();
   const { group } = useDataCache();
   const on = modules.isEnabled('assistant') && !!group?.id;
   const { state, minimize, dismissBack, fresh, remember } = useAssistantPopupState(on);
+  const slot = usePopupSlot<PopupContent>();
 
   if (!on) return null;
+  // The thread is keyed (a new chat starts clean) but the card is not, so
+  // hopping between chats swaps what is inside it, with no shrink and grow.
   return (
+    <>
     <PopupThread
       key={state.key}
+      slotKey={state.key}
+      slot={slot}
       open={state.open}
       target={state.target}
       ask={state.ask}
@@ -82,10 +102,31 @@ export function AssistantChatPopup() {
       onFresh={fresh}
       onConversation={remember}
     />
+    <PopupCard slot={slot} open={state.open} onMinimize={minimize} />
+    </>
+  );
+}
+
+function PopupCard({ slot, open, onMinimize }: { slot: PopupSlot<PopupContent>; open: boolean; onMinimize: () => void }) {
+  const content = usePopupSlotValue(slot);
+  const idle = useSharedValue(0);
+  return (
+    <PopupSurface
+      open={open}
+      pace={content?.pace ?? 'rest'}
+      onMinimize={onMinimize}
+      onSwipe={content?.onSwipe}
+      scrollY={content?.scrollY ?? idle}
+      header={content ? <React.Fragment key={content.key}>{content.header}</React.Fragment> : null}
+    >
+      {content ? <React.Fragment key={content.key}>{content.body}</React.Fragment> : null}
+    </PopupSurface>
   );
 }
 
 function PopupThread({
+  slotKey,
+  slot,
   open,
   target,
   ask,
@@ -96,6 +137,8 @@ function PopupThread({
   onFresh,
   onConversation,
 }: {
+  slotKey: number;
+  slot: PopupSlot<PopupContent>;
   open: boolean;
   target: ThreadTarget;
   ask?: string;
@@ -185,9 +228,8 @@ function PopupThread({
   }, [open, conversation?.kind]);
   const status = showChats ? null : listening ? 'Listening' : popupStatus(conversation, target.id, new Date(), helper);
 
-  return (
-    <>
-    {!open && back ? (
+  const backToChat =
+    !open && back ? (
       <BackToChat
         mode={back}
         label={popupTitle(false, conversation, target.id, helper) || 'Rooftap'}
@@ -196,14 +238,9 @@ function PopupThread({
         onOpen={() => openAssistantPopup()}
         onDismiss={onDismissBack}
       />
-    ) : null}
-    <PopupSurface
-      open={open}
-      pace={thread.thinking ? 'thinking' : listening ? 'listening' : 'rest'}
-      onMinimize={onMinimize}
-      onSwipe={!showChats && choices.length > 1 ? hop : undefined}
-      scrollY={scrollY}
-      header={
+    ) : null;
+
+  const header = (
         <View>
         <View className="flex-row items-center gap-1 pb-2 pl-3.5 pr-1.5">
           {!showChats && (
@@ -260,19 +297,25 @@ function PopupThread({
         </View>
         {!showChats && choices.length > 1 ? <HelperStrip choices={choices} current={helper} /> : null}
         </View>
-      }
-    >
-      {showChats ? (
+  );
+
+  const body = showChats ? (
         <PopupChats currentId={conversation?.id ?? null} onPick={pick} onAll={allChats} onScrollY={onScrollY} />
       ) : (
         <>
           <ThreadMessages thread={thread} offline={!isOnline} onScrollY={onScrollY} />
-          <ThreadFooter thread={thread} offline={!isOnline} autoFocus={open && target.id === 'new' && !ask} onFresh={onFresh} band lookingAt={pathname} onListening={setListening} />
+          <ThreadFooter thread={thread} offline={!isOnline} autoFocus={open && target.id === 'new' && !target.helper && !ask} onFresh={onFresh} band lookingAt={pathname} onListening={setListening} />
         </>
-      )}
-    </PopupSurface>
-    </>
-  );
+      );
+
+  // Every render hands the card what it shows now (before paint, so a hop never flashes the old chat).
+  const pace: AssistantEdgePace = thread.thinking ? 'thinking' : listening ? 'listening' : 'rest';
+  const onSwipe = !showChats && choices.length > 1 ? hop : undefined;
+  React.useLayoutEffect(() => {
+    slot.set({ key: slotKey, pace, onSwipe, scrollY, header, body });
+  });
+
+  return backToChat;
 }
 
 /**

@@ -10,14 +10,17 @@
 import * as React from 'react';
 import { Pressable, View } from 'react-native';
 import { use$ } from '@legendapp/state/react';
-import { Check, ChevronRight, Undo2 } from 'lucide-react-native';
-import { LeadingTile, ListGroup, ListItem, ListItemContent, ListItemTitle, ListItemTrailing, SpectrumOnce, Text, cn, haptics } from '@homeup/ui';
+import { Check, ChevronRight, EyeOff, PackageCheck, Plus, Undo2 } from 'lucide-react-native';
+import { LeadingTile, ListGroup, ListItem, ListItemContent, ListItemMeta, ListItemTitle, ListItemTrailing, SpectrumOnce, SwipeActions, Text, cn, haptics, toast } from '@homeup/ui';
 import {
   CHANGES_SHOWN,
   SHOWN_ITEMS_FOLD,
   changeCaption,
   changeGroups,
   shownGroups,
+  suggestGroups,
+  addSuggestedGrocery,
+  suggestionNeeded,
   checklists$,
   costItems$,
   groceryItems$,
@@ -41,6 +44,7 @@ import {
   type SetupItem,
   type SetupStore,
   type ShopperWant,
+  type SuggestGroup,
 } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
 import { useOpenRoute } from '@/lib/tab-routes';
@@ -52,14 +56,44 @@ import { useLiveRowRenderer, type LiveRowRef } from '@/components/capture/captur
 const UNDOABLE_ROWS = new Set(['tasks', 'groceries', 'costs', 'setup']);
 
 /** `fresh`: the reply just arrived, so its cards arrive with one turn of the spectrum edge (Hearth §8 "Spectrum once"). */
-export function ChatChanges({ changes, shown, fresh = false }: { changes: AssistantChange[] | undefined; shown?: AssistantShown[]; fresh?: boolean }) {
+/** A titled group's header link ("Re-add all"), for the helper's brief. */
+export interface GroupAction {
+  label: string;
+  run: () => void;
+}
+
+/**
+ * `action`: a titled group's header link. `rowExtra`: what one row adds to
+ * its module's own row (the brief's "Not now"). Both only for the brief.
+ */
+export interface ChatChangesExtras {
+  action?: (group: ChangeGroup) => GroupAction | null;
+  rowExtra?: (group: ChangeGroup, id: string) => Partial<LiveRowRef>;
+}
+
+export function ChatChanges({
+  changes,
+  shown,
+  fresh = false,
+  extras,
+}: {
+  changes: AssistantChange[] | undefined;
+  shown?: AssistantShown[];
+  fresh?: boolean;
+  extras?: ChatChangesExtras;
+}) {
   // What the reply shows (show_items) first: it is the answer; then what it changed.
   const groups = React.useMemo(() => [...shownGroups(shown), ...changeGroups(changes)], [changes, shown]);
-  if (!groups.length) return null;
+  // Things it offers to add (suggest_items) come last: they are the next step.
+  const offers = React.useMemo(() => suggestGroups(shown), [shown]);
+  if (!groups.length && !offers.length) return null;
   return (
     <FreshContext.Provider value={fresh}>
       <View className="mt-2.5 gap-2.5">
-        {groups.some((g) => g.rowKind) ? <LiveChanges groups={groups} /> : groups.map((g) => <ChangeCard key={g.key} group={g} renderRow={null} />)}
+        {groups.some((g) => g.rowKind) ? <LiveChanges groups={groups} extras={extras} /> : groups.map((g) => <ChangeCard key={g.key} group={g} renderRow={null} action={extras?.action?.(g) ?? null} />)}
+        {offers.map((g) => (
+          <SuggestCard key={g.key} group={g} />
+        ))}
       </View>
     </FreshContext.Provider>
   );
@@ -68,7 +102,7 @@ export function ChatChanges({ changes, shown, fresh = false }: { changes: Assist
 const FreshContext = React.createContext(false);
 
 /** Opens the stores the rows read only when a reply changed something that has a row. */
-function LiveChanges({ groups }: { groups: ChangeGroup[] }) {
+function LiveChanges({ groups, extras }: { groups: ChangeGroup[]; extras?: ChatChangesExtras }) {
   const { group, currentUserId, groupMembers, memberProfiles } = useDataCache();
   const groupId = group?.id ?? null;
   const modules = useModules();
@@ -171,6 +205,8 @@ function LiveChanges({ groups }: { groups: ChangeGroup[] }) {
           key={g.key}
           group={g}
           renderRow={renderRow}
+          action={extras?.action?.(g) ?? null}
+          rowExtra={extras?.rowExtra ? (id) => extras.rowExtra!(g, id) : undefined}
           onUndo={!g.title && UNDOABLE_ROWS.has(g.rowKind ?? '') && g.changes.every((c) => c.verb === 'added' && c.id) ? () => undoAdded(g) : undefined}
         />
       ))}
@@ -182,10 +218,14 @@ function LiveChanges({ groups }: { groups: ChangeGroup[] }) {
 function ChangeCard({
   group,
   renderRow,
+  action,
+  rowExtra,
   onUndo,
 }: {
   group: ChangeGroup;
   renderRow: ((ref: LiveRowRef) => React.ReactNode | null) | null;
+  action?: GroupAction | null;
+  rowExtra?: (id: string) => Partial<LiveRowRef>;
   onUndo?: () => void;
 }) {
   const openRoute = useOpenRoute();
@@ -199,7 +239,7 @@ function ChangeCard({
   if (group.title && listed.length === 0) return null;
   const Icon = sectionIconFor(group.module);
   const line = (c: AssistantChange, i: number) => {
-    const live = renderRow && group.rowKind && c.id ? renderRow({ section: group.rowKind, id: c.id }) : null;
+    const live = renderRow && group.rowKind && c.id ? renderRow({ ...rowExtra?.(c.id), section: group.rowKind, id: c.id }) : null;
     if (live) return <React.Fragment key={c.id ?? i}>{live}</React.Fragment>;
     // No row of its own (or the item is gone): the summary line, opening the module.
     return (
@@ -238,6 +278,11 @@ function ChangeCard({
             </Text>
           </>
         )}
+        {action && !onUndo ? (
+          <Pressable onPress={action.run} accessibilityRole="button" hitSlop={8} className="h-8 justify-center rounded-lg px-2 active:bg-muted">
+            <Text className="text-xs font-semibold text-primary">{action.label}</Text>
+          </Pressable>
+        ) : null}
         {onUndo && !undone ? (
           <Pressable
             onPress={() => {
@@ -267,6 +312,128 @@ function ChangeCard({
           {fresh && <SpectrumOnce radius={24} />}
         </View>
       )}
+    </View>
+  );
+}
+
+/**
+ * A suggested row (something not there yet, such as a missing ingredient):
+ * the + or a swipe right adds it, a swipe left dismisses it as the section
+ * says ("Have it", "Not needed"). The helper's brief and a reply's
+ * suggest_items both use it; rows that already exist are their module's own
+ * row instead.
+ */
+export function SuggestLine({
+  title,
+  meta,
+  dismissLabel,
+  onAdd,
+  onDismiss,
+}: {
+  title: string;
+  meta?: string | null;
+  dismissLabel: string | null;
+  onAdd: () => void;
+  onDismiss: () => void;
+}) {
+  const add = () => {
+    haptics.commit();
+    onAdd();
+  };
+  return (
+    <SwipeActions
+      onSwipeRight={add}
+      onSwipeLeft={
+        dismissLabel
+          ? () => {
+              haptics.remove();
+              onDismiss();
+            }
+          : undefined
+      }
+      right={{ bg: 'bg-success/15', activeBg: 'bg-success', icon: <Plus size={18} className="text-success" />, label: 'Add' }}
+      left={dismissLabel ? { bg: 'bg-primary/15', activeBg: 'bg-primary', icon: dismissLabel === 'Have it' ? <PackageCheck size={18} className="text-primary" /> : <EyeOff size={18} className="text-primary" />, label: dismissLabel } : undefined}
+    >
+      <ListItem className="items-center gap-3">
+        <Pressable
+          onPress={add}
+          accessibilityRole="button"
+          accessibilityLabel={`Add ${title}`}
+          hitSlop={6}
+          className="h-9 w-9 items-center justify-center rounded-full border-[1.5px] border-dashed border-primary/60 active:bg-primary/10"
+        >
+          <Plus size={16} className="text-primary" />
+        </Pressable>
+        <ListItemContent>
+          <ListItemTitle numberOfLines={1}>{title}</ListItemTitle>
+          {meta ? (
+            <ListItemMeta>
+              <Text className="text-caption text-muted-foreground">{meta}</Text>
+            </ListItemMeta>
+          ) : null}
+        </ListItemContent>
+      </ListItem>
+    </SwipeActions>
+  );
+}
+
+
+/**
+ * A reply's offered groceries (suggest_items): each a tap or a swipe from the
+ * list, or swiped away as not needed. A row goes once its item is on the list.
+ */
+function SuggestCard({ group }: { group: SuggestGroup }) {
+  const { group: household, currentUserId } = useDataCache();
+  const modules = useModules();
+  const groupId = household?.id ?? null;
+  const items$ = groceryItems$(syncedGroupId(groceryItems$, groupId, modules.enabled));
+  useReconnectSync(items$);
+  const items = use$(() => Object.values(items$.get() ?? {}).filter((g): g is GroceryItem => !!g && !g.deleted));
+  const { writeRow, patchRow } = useStoreHelpers(items$, currentUserId);
+  const [dismissed, setDismissed] = React.useState<ReadonlySet<string>>(new Set());
+  const rows = group.items.filter((it) => !dismissed.has(it.name) && !suggestionNeeded(it.name, items));
+  if (!groupId || !modules.isEnabled('groceries') || rows.length === 0) return null;
+  const add = (list: typeof rows) => {
+    let n = 0;
+    for (const it of list) {
+      const change = addSuggestedGrocery({ groupId, suggestion: it, items, createdBy: currentUserId ?? null });
+      if (!change) continue;
+      if ('write' in change) writeRow(change.write);
+      else patchRow(change.patch.id, change.patch.changes);
+      n++;
+    }
+    if (n > 0) toast.success(n === 1 ? `Added ${list[0].name} to the list` : `Added ${n} to the list`);
+  };
+  return (
+    <View className="gap-1.5">
+      <View className="flex-row items-center gap-1.5 px-1">
+        <Text className="min-w-0 flex-1 text-micro-label uppercase text-muted-foreground">{group.title}</Text>
+        {rows.length > 1 ? (
+          <Pressable
+            onPress={() => {
+              haptics.commit();
+              add(rows);
+            }}
+            accessibilityRole="button"
+            hitSlop={8}
+            className="h-8 justify-center rounded-lg px-2 active:bg-muted"
+          >
+            <Text className="text-xs font-semibold text-primary">Add all</Text>
+          </Pressable>
+        ) : null}
+      </View>
+      <ListGroup>
+        {rows.map((it) => (
+          <SuggestLine
+            key={it.name}
+            title={it.name}
+            meta={[it.quantity ? `${it.quantity}${it.unit ? ` ${it.unit}` : ''}` : null, it.note].filter(Boolean).join(', ') || null}
+            dismissLabel="Not needed"
+            onAdd={() => add([it])}
+            onDismiss={() => setDismissed((d) => new Set(d).add(it.name))}
+          />
+        ))}
+      </ListGroup>
     </View>
   );
 }

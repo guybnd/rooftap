@@ -78,7 +78,7 @@ import { householdKeys } from "@/lib/ai/household-keys";
 import { assistantTools } from "./tools";
 import { homeAssistantTools } from "./home-assistant";
 import { feedbackTool } from "./feedback-tool";
-import { showItemsTool } from "./show-items-tool";
+import { showItemsTool, suggestItemsTool } from "./show-items-tool";
 import { webTools } from "./web-tools";
 import { isUnread, markConversationRead, readStates } from "./reads";
 import { memberNames } from "@/lib/member-names";
@@ -863,6 +863,7 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
       ? gathered.tools.filter((t) => helperKeepsTool(helper, readable, { name: t.name, module: t.module, lookup: t.lookup, moduleless: t.module === "assistant" }))
       : gathered.tools),
     ...(showsRows ? [showItemsTool(shown, ctx.enabled)] : []),
+    ...(showsRows ? [suggestItemsTool(shown, ctx.enabled)].filter((t): t is NonNullable<typeof t> => !!t) : []),
   ];
   const homeAssistant = helper ? null : gathered.homeAssistant;
   const brief = await briefing;
