@@ -166,6 +166,14 @@ export default function RecipesPage() {
   };
 
   const openNew = () => setSheetState({});
+  // ?new=1 (the /recipes/new link) opens the New recipe sheet over this list.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('new') !== '1') return;
+    setSheetState({});
+    url.searchParams.delete('new');
+    window.history.replaceState(window.history.state, '', url);
+  }, []);
   const openReview = (recipe: Recipe) => setSheetState({ recipe });
   const closeSheet = () => setSheetState(null);
 

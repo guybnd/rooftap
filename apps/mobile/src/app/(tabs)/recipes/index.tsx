@@ -156,6 +156,15 @@ export default function RecipesSectionScreen() {
   // keyed on `sheetState`, so clearing it in the same tick as closing would
   // remount the sheet mid-close and skip the 250ms exit animation entirely.
   const [sheetOpen, setSheetOpen] = React.useState(false);
+  // ?new=<nonce> (the /recipes/new link) opens the New recipe sheet over this
+  // list, also when the screen is already mounted.
+  const newParam = useLocalSearchParams<{ new?: string }>().new;
+  const [seenNew, setSeenNew] = React.useState<string | undefined>(undefined);
+  if (newParam && newParam !== seenNew) {
+    setSeenNew(newParam);
+    setSheetState({});
+    setSheetOpen(true);
+  }
   const [scanning, setScanning] = React.useState(false);
 
   const searched = useFuzzySearch(shown, search, ['title']);

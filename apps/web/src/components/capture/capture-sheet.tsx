@@ -36,6 +36,7 @@ import { GroceryItemModal } from "@/app/groceries/grocery-item-modal";
 import { useGroceryAux } from "@/app/groceries/use-grocery-aux";
 import { CostModal } from "@/app/costs/cost-modal";
 import { SetupItemModal } from "@/app/setup/setup-item-modal";
+import { NewRecipeSheet } from "@/app/recipes/new-recipe-sheet";
 import { CaptureSearchResults } from "@/components/capture/capture-search-results";
 import { LeadingTile } from "@/components/ui/leading-tile";
 import { ListGroup, ListItem, ListItemContent, ListItemLeading, ListItemMeta, ListItemTitle, ListItemTrailing } from "@/components/ui/list-item";
@@ -155,6 +156,10 @@ export function CaptureSheet() {
   const [setupModalOpen, setSetupModalOpen] = useState(false);
   const [editingSetup, setEditingSetup] = useState<SetupItem | undefined>();
   const [setupStores, setSetupStores] = useState<SetupStore[]>([]);
+  // The recipe form opens over the current page. It mounts on first use (it
+  // reads the recipe stores), then stays mounted so its close animation plays.
+  const [recipeModalOpen, setRecipeModalOpen] = useState(false);
+  const [recipeMounted, setRecipeMounted] = useState(false);
 
   // The stores need to stay observed while EITHER the launcher or a quick-add
   // modal is open — the launcher for search, the modal so its save writes against
@@ -354,6 +359,11 @@ export function CaptureSheet() {
     setGroceryModalOpen(true);
     closeCapture();
   };
+  const openAddRecipe = () => {
+    setRecipeMounted(true);
+    setRecipeModalOpen(true);
+    closeCapture();
+  };
   const openAddCost = (name = "") => {
     setEditingCost(undefined);
     setNewCostName(name);
@@ -450,7 +460,7 @@ export function CaptureSheet() {
     { key: "calendar", label: "Event", section: "calendar", icon: CalendarDays, run: () => navigateTo("/calendar?compose=event") },
     { key: "checklist", label: "Viewing checklist", section: "search", icon: ClipboardCheck, run: () => navigateTo("/checklist") },
     { key: "apartment", label: "Listing", section: "search", icon: Building2, onlineOnly: true, run: () => navigateTo("/apartment/new") },
-    { key: "recipe", label: "Recipe", section: "recipes", icon: ChefHat, run: () => navigateTo("/recipes/new") },
+    { key: "recipe", label: "Recipe", section: "recipes", icon: ChefHat, run: () => openAddRecipe() },
     { key: "new-checklist", label: "Checklist", section: "checklists", icon: ListTodo, run: () => navigateTo("/checklists/new") },
   ];
   const enabledActions = launcherActions.filter((a) => enabledSectionIds.has(a.section));
@@ -1389,6 +1399,20 @@ export function CaptureSheet() {
           onClose={() => { setGroceryModalOpen(false); setEditingGrocery(undefined); setNewGroceryName(""); }}
           onSave={(item) => { const isNew = !editingGrocery; writeGrocery(item); setGroceryModalOpen(false); setEditingGrocery(undefined); setNewGroceryName(""); if (isNew) toastItemAdded(item.name, () => { setEditingGrocery(item); setGroceryModalOpen(true); }); }}
         />
+        {recipeMounted && (
+          <NewRecipeSheet
+            isOpen={recipeModalOpen}
+            onClose={() => setRecipeModalOpen(false)}
+            groupId={groupId}
+            currentUserId={currentUserId}
+            onSaved={(recipe) =>
+              toast.success(`Added ${recipe.title.trim() || "recipe"}`, {
+                duration: 5000,
+                action: { label: "Open", onClick: () => router.push(`/recipes/${recipe.id}`) },
+              })
+            }
+          />
+        )}
         <SetupItemModal
           key={editingSetup?.id ?? "new-setup"}
           isOpen={setupModalOpen}

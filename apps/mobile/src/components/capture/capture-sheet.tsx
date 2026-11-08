@@ -50,6 +50,7 @@ import {
   SectionSearchBar,
   ToastHost,
   cn,
+  toast,
   useThemeMaterial,
 } from '@homeup/ui';
 import {
@@ -95,6 +96,7 @@ import { GroceryItemFormSheet } from '@/features/groceries/grocery-item-form-she
 import { useGroceryAux } from '@/features/groceries/use-grocery-aux';
 import { CostModal } from '@/features/costs/cost-modal';
 import { SetupItemSheet } from '@/features/setup/setup-item-sheet';
+import { NewRecipeSheet } from '@/features/recipes/new-recipe-sheet';
 import { useOpenRoute } from '@/lib/tab-routes';
 import { RooftapTile } from '@/components/brand/rooftap-mark';
 import { launcherColumns } from '@homeup/core';
@@ -106,7 +108,7 @@ function chunk<T>(items: readonly T[], size: number): T[][] {
   return rows;
 }
 
-type ComposeKind = 'todo' | 'grocery' | 'cost' | 'setup' | 'doc';
+type ComposeKind = 'todo' | 'grocery' | 'cost' | 'setup' | 'doc' | 'recipe';
 
 interface LauncherAction {
   key: string;
@@ -140,6 +142,10 @@ export function CaptureSheet() {
   // A setup hit's tap/hold opens its editor (a blank one from the Setup tile).
   const [editingSetup, setEditingSetup] = React.useState<SetupItem | undefined>();
   const [setupStores, setSetupStores] = React.useState<SetupStore[]>([]);
+
+  // The recipe form mounts on first use (it reads the recipe stores), then
+  // stays mounted so its close animation plays.
+  const [recipeMounted, setRecipeMounted] = React.useState(false);
 
   const [q, setQ] = React.useState('');
   React.useEffect(() => {
@@ -266,6 +272,7 @@ export function CaptureSheet() {
   }, [activeModal, groupId]);
 
   const openCompose = (kind: ComposeKind) => {
+    if (kind === 'recipe') setRecipeMounted(true);
     setActiveModal(kind);
     closeCapture();
   };
@@ -378,7 +385,7 @@ export function CaptureSheet() {
     { key: 'doc', label: 'Scan doc', section: 'documents', icon: ScanLine, onlineOnly: true, run: () => openCompose('doc') },
     { key: 'apartment', label: 'Listing', section: 'search', icon: Building2, onlineOnly: true, run: () => navigateTo('/apartment/new') },
     { key: 'checklist', label: 'Viewing checklist', section: 'search', icon: ClipboardCheck, run: () => navigateTo('/checklist') },
-    { key: 'recipe', label: 'Recipe', section: 'recipes', icon: ChefHat, run: () => navigateTo('/recipes/new') },
+    { key: 'recipe', label: 'Recipe', section: 'recipes', icon: ChefHat, run: () => openCompose('recipe') },
     { key: 'calendar', label: 'Event', section: 'calendar', icon: CalendarDays, run: () => navigateTo('/calendar') },
     { key: 'new-checklist', label: 'Checklist', section: 'checklists', icon: ListTodo, run: () => navigateTo('/checklists/new') },
   ];
@@ -608,6 +615,21 @@ export function CaptureSheet() {
             onSave={(item) => writeSetup(item)}
             onDelete={(itemId) => softDeleteSetup(itemId)}
           />
+          {/* Opens over the current screen, like the other quick adds, so
+              the screen behind stays put. Open goes to the saved recipe. */}
+          {recipeMounted && (
+            <NewRecipeSheet
+              open={activeModal === 'recipe'}
+              onOpenChange={(next) => { if (!next) setActiveModal(null); }}
+              groupId={groupId}
+              currentUserId={currentUserId}
+              onSaved={(recipe) =>
+                toast.success(`Added ${recipe.title.trim() || 'recipe'}`, {
+                  action: { label: 'Open', onPress: () => openRoute(`/recipes/${recipe.id}`) },
+                })
+              }
+            />
+          )}
           <CaptureFlow
             open={activeModal === 'doc'}
             onClose={() => setActiveModal(null)}

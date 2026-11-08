@@ -227,6 +227,7 @@ export * from './slots/home-spaces';
 export * from './use-user-setting';
 // new-module:module-hooks (scripts/new-module.mjs adds above this line)
 export * from './modules/recipes/use-recipe-match';
+export * from './modules/recipes/use-new-recipe';
 export * from './hooks/use-reply-items';
 
 // hooks/use-debounce + hooks/use-fuzzy-search are deliberately NOT exported
