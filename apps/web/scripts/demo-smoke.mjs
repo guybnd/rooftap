@@ -1,7 +1,9 @@
 // Smoke test for the landing page's live demo (landing-static/demo with
 // ?live=1): builds it, serves the build, opens every page people can reach
 // and walks the Shopper and Scout taps. It fails on any page error or on a
-// page that renders nothing (the black screen a crash leaves).
+// page that renders nothing (the black screen a crash leaves). Then it does a
+// few things a person does: adds a grocery from Home and from Groceries,
+// checks the item is still there after moving away, and opens a row menu.
 //
 //   npm run smoke:demo -w apps/web
 //
@@ -124,6 +126,33 @@ for (const width of [390, 1440]) {
     await page.getByText('Hisense 65" U7 Mini-LED').first().click({ timeout: 5000 });
     await page.getByRole("button", { name: "Watch the price" }).click({ timeout: 5000 });
   });
+
+  // Adding: a write goes through the real core store and stays after a move.
+  await go(page, "/home");
+  await step("home add", async () => {
+    const box = page.getByPlaceholder("Add to the list…");
+    await box.fill("Smoke zucchini", { timeout: 5000 });
+    await box.press("Enter");
+  }, "Smoke zucchini");
+  await go(page, "/groceries");
+  await step("groceries add", async () => {
+    const box = page.getByPlaceholder("Search or add, e.g. 2 milk");
+    await box.fill("Smoke lemons", { timeout: 5000 });
+    await box.press("Enter");
+  }, "Smoke lemons");
+  await go(page, "/calendar");
+  await go(page, "/groceries");
+  await step("groceries kept", async () => {}, "Smoke zucchini");
+
+  // A row menu opens and closes (desktop rows show a More actions button).
+  if (width >= 1024) {
+    await step("row menu", async () => {
+      await page.getByRole("button", { name: "More actions" }).first().click({ timeout: 5000 });
+      await page.getByRole("menu").first().waitFor({ timeout: 5000 });
+      await page.keyboard.press("Escape");
+      await page.getByRole("menu").first().waitFor({ state: "hidden", timeout: 5000 });
+    });
+  }
   await page.close();
 }
 
