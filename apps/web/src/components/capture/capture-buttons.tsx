@@ -17,7 +17,7 @@
 
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { ASK_HOLD_MS, askHoldZipperMs, holdChoiceAt, holdChoices, openAssistantPopup, sectionHue, useAssistantUnread, useModules, type ChatChoice } from "@homeup/core";
+import { ASK_HOLD_MS, ROOFTAP_SPECTRUM, askHoldZipperMs, holdChoiceAt, holdChoices, openAssistantPopup, sectionHue, useAssistantUnread, useModules, type ChatChoice } from "@homeup/core";
 import { cn } from "@/lib/utils";
 import { commit, pop, tick, zipper } from "@/lib/haptics";
 import { useDataCache } from "@/lib/data-cache";
@@ -235,9 +235,12 @@ function CaptureFab({ dock = false }: { dock?: boolean }) {
   );
 }
 
+const PICK_SPECTRUM = `linear-gradient(90deg, ${ROOFTAP_SPECTRUM.join(", ")})`;
+
 /**
  * The hold's list of chats, rising above the +: one row per chat, the one
- * under the finger filled. Ask Rooftap sits next to the +.
+ * under the finger filled and wearing the Rooftap spectrum, so it is plain
+ * which one letting go opens. Ask Rooftap sits next to the +.
  */
 function HoldChoices({ choices, pick, dock }: { choices: ChatChoice[]; pick: number; dock: boolean }) {
   return (
@@ -255,9 +258,10 @@ function HoldChoices({ choices, pick, dock }: { choices: ChatChoice[]; pick: num
           role="option"
           aria-selected={i === pick}
           className={cn(
-            "flex h-11 items-center gap-2.5 rounded-xl px-2.5 text-sm font-medium",
-            i === pick ? "bg-muted text-foreground" : "text-muted-foreground"
+            "flex h-11 items-center gap-2.5 rounded-xl border-[1.5px] border-transparent px-2.5 text-sm font-medium",
+            i === pick ? "text-foreground" : "text-muted-foreground"
           )}
+          style={i === pick ? { background: `linear-gradient(var(--muted), var(--muted)) padding-box, ${PICK_SPECTRUM} border-box` } : undefined}
         >
           {c.helper ? (
             <LeadingTile sectionId={c.helper} Icon={sectionIconFor(c.helper)} size="sm" />

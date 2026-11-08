@@ -217,6 +217,12 @@ export function popupTitle(showChats: boolean, conversation: AssistantConversati
   return conversation ? conversationTitle(conversation) : targetId === 'new' ? 'Ask Rooftap' : '';
 }
 
+/** The banner for a reply that landed elsewhere in the app: who answered ("Week helper replied"), so it reads as a message, not a system notice. */
+export function answeredTitle(conversation: AssistantConversation): string {
+  const h = moduleHelper(conversation.helper);
+  return `${h ? h.label : 'Rooftap'} replied`;
+}
+
 /** An ask the empty Ask sheet offers: the module it belongs to, the sections it touches (by short name) and the words it sends. */
 export interface AskStarter {
   module: ModuleId;

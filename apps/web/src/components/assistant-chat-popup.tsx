@@ -13,6 +13,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ChevronDown, Maximize2, MessagesSquare, SquarePen, Trash2, X } from "lucide-react";
 import {
+  announceAnswer,
   chatChoices,
   deleteConversation,
   moduleHelper,
@@ -146,9 +147,25 @@ function PopupThread({
     if (pathRef.current !== pathname && openRef.current && !docked) onNavigateAway();
     pathRef.current = pathname;
   }, [pathname, docked, onNavigateAway]);
+  // A reply that lands while the chat waits as a pill or bubble lights a dot
+  // on it, instead of a banner. It goes out when the chat opens.
+  const backRef = useRef(back);
+  useEffect(() => {
+    backRef.current = back;
+  }, [back]);
+  const [waiting, setWaiting] = useState(false);
+  useEffect(() => {
+    if (open) setWaiting(false);
+  }, [open]);
   const thread = useAssistantThread(target, {
     api: assistantApi,
     presence: () => (document.visibilityState !== "visible" ? "background" : openRef.current ? "here" : "away"),
+    onAway: (answer) => {
+      if (!backRef.current) return announceAnswer(answer);
+      setWaiting(true);
+      // Seen here, so no push follows.
+      void assistantApi.markRead(answer.conversation.id, { seen: true }).catch(() => {});
+    },
     toast: popupToast,
     screen: () => pathRef.current,
     here: devicePosition,
@@ -201,6 +218,7 @@ function PopupThread({
         label={popupTitle(false, conversation, target.id, helper) || "Rooftap"}
         helper={helper}
         working={thread.thinking}
+        waiting={waiting}
         onOpen={() => openAssistantPopup()}
         onDismiss={onDismissBack}
       />
@@ -354,6 +372,7 @@ function BackToChat({
   label,
   helper,
   working,
+  waiting,
   onOpen,
   onDismiss,
 }: {
@@ -361,22 +380,28 @@ function BackToChat({
   label: string;
   helper: string | null;
   working: boolean;
+  /** A reply landed while it was put away: a dot until it opens. */
+  waiting: boolean;
   onOpen: () => void;
   onDismiss: () => void;
 }) {
-  const mark = (small: boolean) =>
-    helper ? (
-      <HelperMark helper={helper} Icon={sectionIconFor(helper)} working={working} className={small ? "size-7" : undefined} />
-    ) : (
-      <RooftapTile size={small ? "sm" : "md"} working={working} />
-    );
+  const mark = (small: boolean) => (
+    <span className="relative inline-flex">
+      {helper ? (
+        <HelperMark helper={helper} Icon={sectionIconFor(helper)} working={working} className={small ? "size-7" : undefined} />
+      ) : (
+        <RooftapTile size={small ? "sm" : "md"} working={working} />
+      )}
+      {waiting && !working && <span className="absolute -right-1 -top-1 size-3 rounded-full bg-primary ring-2 ring-popover" />}
+    </span>
+  );
   if (mode === "pill") {
     return (
       <div className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] z-40 flex justify-center px-4 md:hidden">
         <div className="flex items-center gap-1 rounded-full bg-popover py-1 pl-1 pr-1 shadow-[var(--card-shadow)] ring-1 ring-border">
           <button type="button" onClick={onOpen} className="flex min-h-11 items-center gap-2 rounded-full pl-1 pr-3 text-sm font-medium text-foreground hover:bg-muted">
             {mark(true)}
-            Back to {label}
+            {waiting ? `${label} replied` : `Back to ${label}`}
           </button>
           <button type="button" onClick={onDismiss} aria-label="Dismiss" className="inline-flex size-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted">
             <X className="size-4" />
@@ -390,7 +415,7 @@ function BackToChat({
       <button
         type="button"
         onClick={onOpen}
-        aria-label={`Open ${label}`}
+        aria-label={waiting ? `${label} replied, open it` : `Open ${label}`}
         className="relative flex size-14 items-center justify-center rounded-full bg-popover shadow-[var(--card-shadow)] ring-1 ring-border"
       >
         {mark(false)}

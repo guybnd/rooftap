@@ -259,18 +259,21 @@ export function MessageBubble({
   );
   if (!user) {
     // Rooftap's reply: its tile and name, so a long answer never reads as loose text.
+    // The rows and cards under the words take the chat's full width, centred in it like the brief's rows.
     return (
-      <div className="flex items-start gap-2.5">
-        <RooftapTile size="sm" />
-        <div className="min-w-0 flex-1 text-[15px] leading-relaxed text-foreground">
-          <p className="mb-0.5 text-xs font-semibold text-muted-foreground">Rooftap</p>
-          {message.photos?.length ? <MessagePhotos photos={message.photos} spaced={!!message.content} /> : null}
-          {message.content ? <ReplyText text={message.content} /> : null}
-          {message.content ? <ReplyItems text={message.content} /> : null}
-          <ProposalCard message={message} busy={busy} onDecide={(d, picks) => onDecide(message.id, d, picks)} />
-          <ChatChanges changes={message.changes} shown={message.shown} fresh={fresh} />
-          {meta}
+      <div className="text-[15px] leading-relaxed text-foreground">
+        <div className="flex items-start gap-2.5">
+          <RooftapTile size="sm" />
+          <div className="min-w-0 flex-1">
+            <p className="mb-0.5 text-xs font-semibold text-muted-foreground">Rooftap</p>
+            {message.photos?.length ? <MessagePhotos photos={message.photos} spaced={!!message.content} /> : null}
+            {message.content ? <ReplyText text={message.content} /> : null}
+          </div>
         </div>
+        {message.content ? <ReplyItems text={message.content} /> : null}
+        <ProposalCard message={message} busy={busy} onDecide={(d, picks) => onDecide(message.id, d, picks)} />
+        <ChatChanges changes={message.changes} shown={message.shown} fresh={fresh} />
+        {meta}
       </div>
     );
   }

@@ -20,6 +20,7 @@ import Animated, {
 import { ASK_HOLD_MS, askHoldZipperMs, holdChoiceAt, sectionHueSwatch, type ChatChoice } from '@homeup/core';
 import { LeadingTile, Text, cn, haptics, useThemeMaterial, useStillMotion } from '@homeup/ui';
 import { RooftapMark, RooftapTile } from '@/components/brand/rooftap-mark';
+import { SpectrumOutline } from '@/components/brand/spectrum-outline';
 import { sectionIconFor } from '@/lib/section-icons';
 
 /** How far up a swipe must travel (or how fast) to open the chat. */
@@ -236,7 +237,11 @@ export function CaptureFab({ onPress, onAsk, unread, choices, onChoose, classNam
   );
 }
 
-/** The hold's list of chats, rising above the +: the row under the finger is filled; Ask Rooftap sits next to the +. */
+/**
+ * The hold's list of chats, rising above the +: the row under the finger is
+ * filled and wears the Rooftap spectrum, so it is plain which one letting go
+ * opens. Ask Rooftap sits next to the +.
+ */
 function HoldChoices({ choices, pick }: { choices: ChatChoice[]; pick: number }) {
   const { cardShadow } = useThemeMaterial();
   return (
@@ -247,6 +252,7 @@ function HoldChoices({ choices, pick }: { choices: ChatChoice[]; pick: number })
     >
       {choices.map((c, i) => (
         <View key={c.helper ?? 'rooftap'} className={cn('h-11 flex-row items-center gap-2.5 rounded-xl px-2.5', i === pick && 'bg-muted')}>
+          {i === pick ? <SpectrumOutline radius={11} /> : null}
           {c.helper ? <LeadingTile sectionId={c.helper} Icon={sectionIconFor(c.helper)} size="sm" /> : <RooftapTile size="sm" />}
           <Text className={cn('text-sm font-medium', i === pick ? 'text-foreground' : 'text-muted-foreground')}>{c.label}</Text>
         </View>

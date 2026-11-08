@@ -24,8 +24,8 @@ import {
   MOTION_DURATIONS_MS,
   chatChoices,
   deleteConversation,
+  announceAnswer,
   moduleHelper,
-  ROOFTAP_SPECTRUM,
   openAssistantPopup,
   stepChoice,
   popupStatus,
@@ -44,7 +44,6 @@ import {
   type ThreadTarget,
 } from '@homeup/core';
 import { useKeyboardHandler } from 'react-native-keyboard-controller';
-import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { Button, LeadingTile, ListGroup, SpectrumEdge, Text, cn, haptics, toast, useKeyboardOffset, useThemeMaterial, useStillMotion } from '@homeup/ui';
 import { useDataCache } from '@/lib/data-cache';
 import { sectionIconFor } from '@/lib/section-icons';
@@ -55,6 +54,7 @@ import { ConversationRow } from './conversation-row';
 import { ThreadFooter, ThreadMessages } from './thread-body';
 import { devicePosition } from '@/lib/device-position';
 import { HelperMark, RooftapTile } from '@/components/brand/rooftap-mark';
+import { SpectrumOutline } from '@/components/brand/spectrum-outline';
 
 const SWIFT_OUT = Easing.bezier(0.16, 1, 0.3, 1);
 const EASE_IN = Easing.bezier(0.42, 0, 1, 1);
@@ -169,9 +169,25 @@ function PopupThread({
     pathRef.current = pathname;
   }, [pathname, onNavigateAway]);
 
+  // A reply that lands while the chat waits as a pill or bubble lights a dot
+  // on it, instead of a banner over the screen. It goes out when the chat opens.
+  const backRef = React.useRef(back);
+  React.useEffect(() => {
+    backRef.current = back;
+  }, [back]);
+  const [waiting, setWaiting] = React.useState(false);
+  React.useEffect(() => {
+    if (open) setWaiting(false);
+  }, [open]);
   const thread = useAssistantThread(target, {
     api: assistantApi,
     presence: () => (AppState.currentState !== 'active' ? 'background' : openRef.current ? 'here' : 'away'),
+    onAway: (answer) => {
+      if (!backRef.current) return announceAnswer(answer);
+      setWaiting(true);
+      // Seen here, so no push follows.
+      void assistantApi.markRead(answer.conversation.id, { seen: true }).catch(() => {});
+    },
     toast: popupToast,
     screen: () => pathRef.current,
     here: devicePosition,
@@ -238,6 +254,7 @@ function PopupThread({
         label={popupTitle(false, conversation, target.id, helper) || 'Rooftap'}
         helper={helper}
         working={thread.thinking}
+        waiting={waiting}
         onOpen={() => openAssistantPopup()}
         onDismiss={onDismissBack}
       />
@@ -405,47 +422,6 @@ function HelperStrip({ choices, current }: { choices: ChatChoice[]; current: str
 }
 
 /**
- * The chat on show wears the Rooftap spectrum round its chip, the same
- * colours as the card's living edge, so it reads as the one floated up.
- */
-function SpectrumOutline() {
-  const [size, setSize] = React.useState<{ w: number; h: number } | null>(null);
-  const stroke = 1.5;
-  return (
-    <View
-      pointerEvents="none"
-      className="absolute inset-0"
-      onLayout={(e) => {
-        const { width: w, height: h } = e.nativeEvent.layout;
-        setSize((prev) => (prev && prev.w === w && prev.h === h ? prev : { w, h }));
-      }}
-    >
-      {size ? (
-        <Svg width={size.w} height={size.h}>
-          <Defs>
-            <LinearGradient id="chip-spectrum" x1="0" y1="0" x2="1" y2="0">
-              {ROOFTAP_SPECTRUM.map((c, i) => (
-                <Stop key={c} offset={i / (ROOFTAP_SPECTRUM.length - 1)} stopColor={c} />
-              ))}
-            </LinearGradient>
-          </Defs>
-          <Rect
-            x={stroke / 2}
-            y={stroke / 2}
-            width={size.w - stroke}
-            height={size.h - stroke}
-            rx={(size.h - stroke) / 2}
-            fill="none"
-            stroke="url(#chip-spectrum)"
-            strokeWidth={stroke}
-          />
-        </Svg>
-      ) : null}
-    </View>
-  );
-}
-
-/**
  * The chat, put away, offering itself back: a "Back to <chat>" pill after a
  * tap in the chat opened an item, or a bubble at the edge for a helper chat
  * swiped away. Either one opens the chat where it was; the x lets it go (the
@@ -456,6 +432,7 @@ function BackToChat({
   label,
   helper,
   working,
+  waiting,
   onOpen,
   onDismiss,
 }: {
@@ -463,17 +440,23 @@ function BackToChat({
   label: string;
   helper: string | null;
   working: boolean;
+  /** A reply landed while it was put away: a dot until it opens. */
+  waiting: boolean;
   onOpen: () => void;
   onDismiss: () => void;
 }) {
   const insets = useSafeAreaInsets();
   const material = useThemeMaterial();
-  const mark = (small: boolean) =>
-    helper ? (
-      <HelperMark helper={helper} Icon={sectionIconFor(helper)} size={small ? 28 : 36} working={working} />
-    ) : (
-      <RooftapTile size={small ? 'sm' : 'md'} working={working} />
-    );
+  const mark = (small: boolean) => (
+    <View>
+      {helper ? (
+        <HelperMark helper={helper} Icon={sectionIconFor(helper)} size={small ? 28 : 36} working={working} />
+      ) : (
+        <RooftapTile size={small ? 'sm' : 'md'} working={working} />
+      )}
+      {waiting && !working ? <View className="absolute -right-1 -top-1 h-3 w-3 rounded-full border-2 border-popover bg-primary" /> : null}
+    </View>
+  );
   const open = () => {
     haptics.select();
     onOpen();
@@ -484,7 +467,7 @@ function BackToChat({
         <View className="flex-row items-center gap-1 rounded-full border border-border bg-popover p-1" style={{ boxShadow: material.cardShadow }}>
           <Pressable onPress={open} accessibilityRole="button" className="min-h-11 flex-row items-center gap-2 rounded-full pl-1 pr-3 active:bg-muted">
             {mark(true)}
-            <Text className="text-sm font-medium text-foreground">Back to {label}</Text>
+            <Text className="text-sm font-medium text-foreground">{waiting ? `${label} replied` : `Back to ${label}`}</Text>
           </Pressable>
           <Pressable onPress={onDismiss} accessibilityRole="button" accessibilityLabel="Dismiss" hitSlop={6} className="h-9 w-9 items-center justify-center rounded-full active:bg-muted">
             <X size={16} className="text-muted-foreground" />
@@ -497,17 +480,25 @@ function BackToChat({
     <View pointerEvents="box-none" className="absolute right-3" style={{ bottom: insets.bottom + 92 }}>
       <Pressable
         onPress={open}
-        onLongPress={() => {
-          haptics.remove();
-          onDismiss();
-        }}
         accessibilityRole="button"
-        accessibilityLabel={`Open ${label}`}
-        accessibilityHint="Hold to close the bubble"
+        accessibilityLabel={waiting ? `${label} replied, open it` : `Open ${label}`}
         className="h-14 w-14 items-center justify-center rounded-full border border-border bg-popover"
         style={{ boxShadow: material.cardShadow }}
       >
         {mark(false)}
+      </Pressable>
+      {/* Its own small x puts the bubble away; the chat stays behind the +. */}
+      <Pressable
+        onPress={() => {
+          haptics.remove();
+          onDismiss();
+        }}
+        accessibilityRole="button"
+        accessibilityLabel="Close the bubble"
+        hitSlop={12}
+        className="absolute -left-1.5 -top-1.5 h-6 w-6 items-center justify-center rounded-full border border-border bg-popover active:bg-muted"
+      >
+        <X size={12} className="text-muted-foreground" />
       </Pressable>
     </View>
   );

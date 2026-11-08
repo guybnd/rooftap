@@ -1,12 +1,12 @@
 // Rooftap Assistant: a reply that lands after you left its chat. With the app
-// in front it shows as a "Rooftap answered" toast with Open and tells the
+// in front it shows as a "<helper> replied" toast (core answeredTitle) with Open and tells the
 // server it was seen, so no push follows; in the background it does nothing
 // and the push covers it. Also keeps the + dot's unread count fresh (on
 // launch and whenever the app comes back). Web twin:
 // apps/web/src/components/assistant-answers.tsx.
 import * as React from 'react';
 import { AppState } from 'react-native';
-import { conversationTitle, onAnswerElsewhere, openAssistantPopup, replyPreview, useModules } from '@homeup/core';
+import { answeredTitle, conversationTitle, onAnswerElsewhere, openAssistantPopup, replyPreview, useModules } from '@homeup/core';
 import { toast } from '@homeup/ui';
 import { useDataCache } from '@/lib/data-cache';
 import { useOpenRoute } from '@/lib/tab-routes';
@@ -29,7 +29,7 @@ export function AssistantAnswers() {
     const stop = onAnswerElsewhere(({ conversation, reply }) => {
       if (AppState.currentState !== 'active') return;
       void assistantApi.markRead(conversation.id, { seen: true }).catch(() => {});
-      toast.message('Rooftap answered', {
+      toast.message(answeredTitle(conversation), {
         description: replyPreview(reply.content, 90) || conversationTitle(conversation),
         duration: 8000,
         placement: 'top',
