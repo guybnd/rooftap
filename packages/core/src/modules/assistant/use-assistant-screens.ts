@@ -124,6 +124,12 @@ export function useAssistantPopupState(on: boolean) {
     return onAssistantPopup((request) => {
       setState((prev) => {
         const shown = current.current;
+        if (request.helper) {
+          // The helper's chat already on show just comes back up.
+          if (prev.target.helper === request.helper || (shown && shown.helper === request.helper)) return { ...prev, open: true, ask: undefined };
+          current.current = null;
+          return { open: true, key: prev.key + 1, target: { id: 'new', kind: 'chat', helper: request.helper } };
+        }
         if (request.conversationId) {
           if (shown?.id === request.conversationId) return { ...prev, open: true, ask: undefined };
           current.current = null;

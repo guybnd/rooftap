@@ -109,6 +109,38 @@ export interface FirstStepDef {
   module?: string;
 }
 
+/**
+ * A module helper (module-helpers.ts): Rooftap focused on one job, such as the
+ * weekly shop. It opens from the module's screen on a brief built from the
+ * household's own data (no AI), then chats with the module's tools plus the
+ * read tools of the modules in `reads`. Only modules with a repeating
+ * decision get one. Hearth copy rules apply to every string.
+ */
+export interface ManifestHelper {
+  /** The chat's name, e.g. "Groceries helper". */
+  label: string;
+  /** One line under the name, e.g. "Your list, dinners and usuals". */
+  subtitle: string;
+  /**
+   * The helper's playbook, added to the system prompt after Rooftap's own
+   * persona and privacy rules: what it is for, how it works through a job,
+   * and the mistakes to avoid. Plain sentences, second person.
+   */
+  focus: string;
+  /** Other modules whose read tools it borrows while they are on. It changes only its own module. */
+  reads?: readonly string[];
+  /** Other modules' tools that change this module (Recipes' add_recipe_to_groceries), kept while their module is on. */
+  writesVia?: readonly string[];
+  /**
+   * The lead ask, shown first and strongest under the brief: a short catch-up
+   * the AI writes from the brief and the module's rows ("Catch me up on the shop").
+   * `label` is the chip, `ask` is what it sends.
+   */
+  summary: { label: string; ask: string };
+  /** Asks offered under the brief, in the person's own words. */
+  starters: readonly string[];
+}
+
 export interface ModuleManifest {
   /** Kebab-case id, also the folder name and the `group_modules.module_id`. */
   id: string;
@@ -149,6 +181,8 @@ export interface ModuleManifest {
   slots?: readonly SlotId[];
   /** Its Spaces on Home, in the order they show. */
   spaces?: readonly ManifestSpace[];
+  /** Its helper chat, when the module has a repeating decision worth one (module-helpers.ts). */
+  helper?: ManifestHelper;
 }
 
 /** Declares a module. The `const` type parameter keeps the id a literal, which is how ModuleId is built. */

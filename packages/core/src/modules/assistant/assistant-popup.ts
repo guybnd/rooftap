@@ -10,6 +10,8 @@ export interface AssistantPopupRequest {
   ask?: string;
   /** Start a new quick ask even if one is open. */
   fresh?: boolean;
+  /** Open a module helper's chat (module-helpers.ts), resuming this person's chat with it. */
+  helper?: string;
 }
 
 type PopupListener = (request: AssistantPopupRequest) => void;

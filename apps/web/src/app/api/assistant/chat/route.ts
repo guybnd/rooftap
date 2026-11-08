@@ -40,7 +40,7 @@ function afterTurn(ctx: AssistantContext, out: Extract<ChatOutcome, { ok: true }
 
 export async function POST(request: Request) {
   const receivedAt = Date.now();
-  const body = (await request.json().catch(() => ({}))) as { text?: unknown; conversationId?: unknown; kind?: unknown; reopen?: unknown; lastWaitMs?: unknown; cook?: unknown; screen?: unknown; here?: unknown; photos?: unknown };
+  const body = (await request.json().catch(() => ({}))) as { text?: unknown; conversationId?: unknown; kind?: unknown; reopen?: unknown; lastWaitMs?: unknown; cook?: unknown; screen?: unknown; here?: unknown; photos?: unknown; helper?: unknown };
   const sentPhotos = Array.isArray(body.photos) ? body.photos : [];
   if (typeof body.text !== "string" || (!body.text.trim() && sentPhotos.length === 0)) return assistantErrorResponse(400, "text is required");
   if (body.text.length > 4000) return assistantErrorResponse(400, "That message is too long.");
@@ -63,6 +63,8 @@ export async function POST(request: Request) {
     screen: cleanScreenPath(body.screen),
     // Where the device is, sent only with a "near me" ask; never stored.
     here: cleanHere(body.here),
+    // A module helper's chat (core module-helpers.ts); runChat checks the helper exists and is on.
+    helper: typeof body.helper === "string" ? body.helper.slice(0, 64) : null,
     photos: [...new Set(sentPhotos as string[])],
   };
 

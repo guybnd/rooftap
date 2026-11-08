@@ -20,11 +20,12 @@ import {
   cn,
   haptics,
 } from '@homeup/ui';
-import { askGreeting, askStarters, getSectionByPath, mentionOptions, minutesLeft, useModules, type AssistantThread } from '@homeup/core';
+import { askGreeting, askStarters, getSectionByPath, mentionOptions, minutesLeft, showsBrief, useModules, type AssistantThread } from '@homeup/core';
 import { sectionIconFor } from '@/lib/section-icons';
 import { useDataCache } from '@/lib/data-cache';
 import { Composer, MessageBubble, Thinking } from './assistant-parts';
 import { AssistantNotice } from './assistant-notice';
+import { HelperBrief } from './helper-brief';
 
 /** A thread still loading: faint lines where the conversation will be, not the thinking dots (nothing is thinking yet). */
 function ThreadLoading() {
@@ -147,7 +148,10 @@ export function ThreadMessages({
   /** How far the messages are scrolled (the pop-up closes on a drag down only from the top). */
   onScrollY?: (y: number) => void;
 }) {
-  const { loading, loadError, reload, messages, sending, thinking, draft, kind, showCost, deciding, decide, send, blocked } = thread;
+  const { loading, loadError, reload, messages, sending, thinking, draft, kind, showCost, deciding, decide, send, blocked, helper } = thread;
+  // A helper chat picked up after a quiet spell starts from today's brief again.
+  const lastAt = messages[messages.length - 1]?.created_at;
+  const briefAfter = !!helper && messages.length > 0 && !sending && !thinking && showsBrief(lastAt);
   const scrollRef = React.useRef<ScrollView>(null);
   return (
     <ScrollView
@@ -167,6 +171,8 @@ export function ThreadMessages({
           <Text className="px-1 py-10 text-center text-sm text-muted-foreground">
             The household chat. Talk to each other here, and tag @Rooftap when you want it to look something up or make a change.
           </Text>
+        ) : helper ? (
+          <HelperBrief helper={helper} onAsk={(text) => void send(text)} disabled={offline || !!blocked} />
         ) : (
           <AskEmpty onAsk={(text) => void send(text)} disabled={offline || !!blocked} />
         )
@@ -182,6 +188,7 @@ export function ThreadMessages({
           />
         ))
       )}
+      {briefAfter && helper ? <HelperBrief helper={helper} onAsk={(text) => void send(text)} disabled={offline || !!blocked} /> : null}
       {thinking && <Thinking draft={draft} />}
     </ScrollView>
   );

@@ -33,5 +33,29 @@ export const groceriesModule = defineModule({
   ],
   settings: ['groceries'],
   spaces: [{ key: 'groceries', label: 'Groceries', size: 'card', lens: 'shoppingList' }],
+  helper: {
+    label: 'Groceries helper',
+    subtitle: 'Your list, dinners and usuals',
+    focus:
+      "You run this household's shopping: the list, what the week's dinners need, and what is running low. " +
+      'The list keeps every item the household buys: needed is the shopping list, have is in stock, bought is in the trolley. ' +
+      'Work like this. Before you add anything, check the list (get_grocery_items, all statuses): an item already there as have or ' +
+      'bought goes back on the list by setting its status to needed, never as a second item, and one already needed stays as it is. ' +
+      'Adding a name that is already on the list does the same for you, and the result says so. ' +
+      'Put each new item in a sensible aisle (produce, dairy, meat, bakery, pantry, frozen, household, other, or one the list already uses) ' +
+      'and give a quantity and unit when the person or a recipe gives one. ' +
+      "For a dinner or a recipe, read the meal plan and the recipe's ingredients, then add only what is not on the list or in stock; " +
+      'say which nights each item is for. When the person says they will be out or skipping a night, take off only the items for that ' +
+      'night that no other night needs. When they ask what to buy, answer from the brief and the list, grouped by aisle. ' +
+      'Make every change in one reply, one tool call per item, and confirm in one short line; the items show under your reply. ' +
+      'Never guess a price. Items another member keeps private are hidden from you, so do not ask about them.',
+    reads: ['meals', 'recipes', 'costs'],
+    writesVia: ['add_recipe_to_groceries'],
+    summary: {
+      label: 'Catch me up',
+      ask: "Catch me up on the shop: what is on the list by aisle, what this week's dinners still need, what is running low or about to go off, and the one thing I should do first.",
+    },
+    starters: ["Add what this week's dinners need", "We're out Thursday, trim the list", 'What can I make with what we have?'],
+  },
   slots: ['search'],
 });

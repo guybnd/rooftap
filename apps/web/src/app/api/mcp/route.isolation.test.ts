@@ -60,6 +60,11 @@ function chainable(rows: Record<string, unknown>[], singleRow: unknown) {
       filtered = filtered.filter((r) => r[col] === val);
       return builder;
     },
+    // Case-blind name match (create_grocery_item's look for the same name).
+    ilike: (col: string, val: string) => {
+      filtered = filtered.filter((r) => String(r[col]).toLowerCase() === val.toLowerCase());
+      return builder;
+    },
     limit: () => builder,
     gte: () => builder,
     lte: () => builder,

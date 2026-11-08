@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { createAdminClient } from "@/lib/supabase/admin";
 import { visibleTasks, visibleEvents, visibleGroceryItems } from "@/lib/pat";
 import {
+  groceryNeededAgainPatch,
   listCostItems,
   isTaskOwnerEnabled,
   applyTaskCompletion,
@@ -1305,7 +1306,7 @@ export function householdTools({
     "create_grocery_item",
     {
       description:
-        "Add a new item to the household grocery list, attributed to the authenticated user.",
+        "Add an item to the household grocery list, attributed to the authenticated user. A name already on the list (any status, same name ignoring case) is not added twice: an item in stock (have or bought) goes back to needed, with the quantity, unit and notes given, and one already needed stays as it is. The result's `outcome` says which: added, back_on_list or already_needed.",
       inputSchema: {
         name: z.string().min(1),
         aisle: z.string().optional(),
@@ -1334,6 +1335,27 @@ export function householdTools({
       private: isPrivate,
     }) => {
       if (!groupId) return noGroupError();
+      // Like the app's quick add: the list keeps every item, so a name already
+      // there comes back to needed instead of being added twice.
+      const { data: sameName } = await admin
+        .from("grocery_items")
+        .select("*")
+        .eq("group_id", groupId)
+        .eq("deleted", false)
+        .ilike("name", name.trim().replace(/[\\%_]/g, (c) => `\\${c}`));
+      const existing = visibleGroceryItems((sameName ?? []) as GroceryItem[], userId)[0];
+      if (existing) {
+        if (existing.status === "needed") {
+          return { content: [{ type: "text", text: JSON.stringify({ outcome: "already_needed", id: existing.id, name: existing.name }) }] };
+        }
+        const patch: Record<string, unknown> = { ...groceryNeededAgainPatch(new Date().toISOString()) };
+        if (quantity !== undefined) patch.quantity = quantity;
+        if (unit !== undefined) patch.unit = unit;
+        if (notes !== undefined) patch.notes = notes;
+        const { error } = await admin.from("grocery_items").update(patch).eq("id", existing.id).eq("group_id", groupId);
+        if (error) return toolError(error.message);
+        return { content: [{ type: "text", text: JSON.stringify({ outcome: "back_on_list", id: existing.id, name: existing.name }) }] };
+      }
       const row: Record<string, unknown> = {
         id: crypto.randomUUID(),
         group_id: groupId,
@@ -1366,7 +1388,7 @@ export function householdTools({
       };
       const { error } = await admin.from("grocery_items").insert(row);
       if (error) return toolError(error.message);
-      return { content: [{ type: "text", text: JSON.stringify(row) }] };
+      return { content: [{ type: "text", text: JSON.stringify({ ...row, outcome: "added" }) }] };
     },
   );
 
@@ -1414,6 +1436,11 @@ export function householdTools({
         "private",
       ] as const) {
         if (patch[key] !== undefined) updates[key] = patch[key];
+      }
+      // A status change restarts the shelf-life clock, as in the app; back to needed clears the last buy.
+      if (patch.status !== undefined && patch.status !== item.status) {
+        updates.status_changed_at = new Date().toISOString();
+        if (patch.status === "needed") updates.last_purchased_at = null;
       }
       if (Object.keys(updates).length > 0) {
         const { error } = await admin

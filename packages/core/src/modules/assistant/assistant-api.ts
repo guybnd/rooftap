@@ -42,6 +42,8 @@ export interface AssistantConversation {
   unread?: boolean;
   /** Archived by its owner: out of the lists, under "Archived". Missing from servers before archiving. */
   archived?: boolean;
+  /** The module whose helper this chat is (module-helpers.ts); null or missing for a plain chat. */
+  helper?: string | null;
 }
 
 export interface ProposalItem {
@@ -318,6 +320,8 @@ export function createAssistantApi(call: AssistantCall, stream?: AssistantStream
         here?: WebHere;
         /** Uploaded photos (uploadAssistantPhoto paths) for Rooftap to look at. */
         photos?: string[];
+        /** A module helper's chat (module-helpers.ts): the server finds or starts this person's chat with it. */
+        helper?: string;
       },
       onEvent?: (event: AssistantProgressEvent) => void
     ) => {

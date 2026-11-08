@@ -70,6 +70,7 @@ import {
   Settings as SettingsIcon,
 } from 'lucide-react';
 import { useModuleSettingsSheet } from '@/components/module-settings-sheet';
+import { HelperButton } from '@/components/helper-button';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { GroceryItemCard, GroceryItemCardStandalone } from './grocery-item-card';
@@ -1259,6 +1260,7 @@ export default function GroceriesPage() {
           caption={heroCaption}
           trailing={
             <>
+              <HelperButton module="groceries" />
               <button onClick={() => setCardsOpen(true)} aria-label="Rewards cards" title="Rewards cards" className={iconButtonClass}>
                 <WalletCards className="h-4 w-4" />
               </button>

@@ -51,6 +51,7 @@ function fakeAdmin(tables: Record<string, Row[]>) {
       gte: (k: string, v: string) => (filters.push((r) => String(r[k]) >= v), b),
       lte: (k: string, v: string) => (filters.push((r) => String(r[k]) <= v), b),
       lt: (k: string, v: string) => (filters.push((r) => String(r[k]) < v), b),
+      ilike: (k: string, v: string) => (filters.push((r) => String(r[k]).toLowerCase() === v.replace(/\\(.)/g, "$1").toLowerCase()), b),
       maybeSingle: () => Promise.resolve({ data: rows()[0] ?? null, error: null }),
       update: (patch: Row) => ((op = { kind: "update", patch }), b),
       insert: (row: Row | Row[]) => ((op = { kind: "insert", row }), b),
@@ -512,5 +513,37 @@ describe("cooking tools", () => {
 
   it("asks for minutes when the step has no timer", async () => {
     expect((await run(base(), "start_timer", { recipe_id: "r1", step: 1 })).res.isError).toBe(true);
+  });
+});
+
+describe("grocery tools", () => {
+  const item = (over: Row) => ({ group_id: "g1", deleted: false, private: false, assigned_to: null, status: "have", quantity: null, unit: null, notes: null, ...over });
+
+  it("puts a stocked item back on the list instead of adding it twice", async () => {
+    const tables = { grocery_items: [item({ id: "m", name: "Milk", status: "have", last_purchased_at: "2026-11-01" })] };
+    const { body } = await run(tables, "create_grocery_item", { name: "milk", quantity: 2 });
+    expect(body).toEqual({ outcome: "back_on_list", id: "m", name: "Milk" });
+    expect(tables.grocery_items).toHaveLength(1);
+    expect(tables.grocery_items[0]).toMatchObject({ status: "needed", quantity: 2, last_purchased_at: null });
+  });
+
+  it("leaves an item already needed alone", async () => {
+    const tables = { grocery_items: [item({ id: "e", name: "Eggs", status: "needed" })] };
+    const { body } = await run(tables, "create_grocery_item", { name: "Eggs" });
+    expect(body.outcome).toBe("already_needed");
+    expect(tables.grocery_items).toHaveLength(1);
+  });
+
+  it("adds a new name, and ignores another member's private item", async () => {
+    const tables = { grocery_items: [item({ id: "p", name: "Chocolate", private: true, assigned_to: "u2" })] };
+    const { body } = await run(tables, "create_grocery_item", { name: "Chocolate" });
+    expect(body.outcome).toBe("added");
+    expect(tables.grocery_items).toHaveLength(2);
+  });
+
+  it("restarts the shelf-life clock when a status changes", async () => {
+    const tables: Record<string, Row[]> = { grocery_items: [item({ id: "b", name: "Bread", status: "needed", status_changed_at: null })] };
+    await run(tables, "update_grocery_item", { grocery_item_id: "b", status: "have" });
+    expect(typeof tables.grocery_items[0].status_changed_at).toBe("string");
   });
 });

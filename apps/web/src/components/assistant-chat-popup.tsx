@@ -40,6 +40,8 @@ import { Button } from "@/components/ui/button";
 import { PromptBadge } from "@/components/ui/prompt-badge";
 import { devicePosition } from "@/lib/device-position";
 import { RooftapTile } from "@/components/brand/rooftap-mark";
+import { LeadingTile } from "@/components/ui/leading-tile";
+import { sectionIconFor } from "@/lib/section-icons";
 import { useSpectrumEdge } from "@/components/spectrum-edge";
 
 const popupToast = { error: (m: string) => toast.error(m), message: (m: string) => toast(m) };
@@ -124,7 +126,8 @@ function PopupThread({
     router.push("/assistant");
   };
 
-  const title = popupTitle(showChats, conversation, target.id);
+  const helper = conversation?.helper ?? target.helper ?? null;
+  const title = popupTitle(showChats, conversation, target.id, helper);
   const [listening, setListening] = useState(false);
   // Re-read each minute so a quick ask's "more min" counts down while the pop-up is open.
   const [, setMinute] = useState(0);
@@ -133,14 +136,27 @@ function PopupThread({
     const timer = setInterval(() => setMinute((n) => n + 1), 60_000);
     return () => clearInterval(timer);
   }, [open, conversation?.kind]);
-  const status = showChats ? null : listening ? "Listening" : popupStatus(conversation, target.id);
+  const status = showChats ? null : listening ? "Listening" : popupStatus(conversation, target.id, new Date(), helper);
   const iconButton =
     "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground";
 
   return (
     <PopupSurface open={open} pace={thread.thinking ? "thinking" : listening ? "listening" : "rest"} onMinimize={onMinimize} title={title || "Rooftap"}>
       <div className="flex items-center gap-1 border-b border-border pb-2 pl-3.5 pr-1.5 md:pt-2">
-        {!showChats && <RooftapTile working={thread.thinking} />}
+        {!showChats && (
+          <span className="relative shrink-0">
+            <RooftapTile working={thread.thinking} />
+            {/* A helper wears its module's tile as a badge. */}
+            {helper && (
+              <LeadingTile
+                sectionId={helper}
+                Icon={sectionIconFor(helper)}
+                size="sm"
+                className="absolute -bottom-1 -right-1 size-[18px] rounded-[6px] ring-2 ring-card [&_svg]:size-[11px]"
+              />
+            )}
+          </span>
+        )}
         <div className={cn("min-w-0 flex-1", showChats ? "pl-0.5" : "pl-2")}>
           <p className="truncate text-[15px] font-semibold text-foreground">{title}</p>
           {status && <p className="truncate text-xs text-muted-foreground tabular-nums">{status}</p>}

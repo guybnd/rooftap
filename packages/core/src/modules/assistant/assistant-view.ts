@@ -9,6 +9,7 @@ import { timeAgo } from '../../relative-time';
 import { MCP_TOOLS } from '../../mcp-tools';
 import { getModule, type ModuleId } from '../../modules';
 import { ALL_MANIFESTS } from '../../module-manifests';
+import { moduleHelper } from '../../module-helpers';
 
 /** Modules the assistant has tools for, in tool order, that are switched on. */
 export function assistantModules(enabled: ReadonlySet<string>): { id: ModuleId; label: string; readOnly: boolean }[] {
@@ -205,8 +206,11 @@ export function popupChatSections(groups: ConversationGroups): { label: string; 
 }
 
 /** The pop-up's header: "Chats" over the list, the conversation's name, or "Ask Rooftap" for a new ask. */
-export function popupTitle(showChats: boolean, conversation: AssistantConversation | null, targetId: string): string {
-  return showChats ? 'Chats' : conversation ? conversationTitle(conversation) : targetId === 'new' ? 'Ask Rooftap' : '';
+export function popupTitle(showChats: boolean, conversation: AssistantConversation | null, targetId: string, helper?: string | null): string {
+  if (showChats) return 'Chats';
+  const h = moduleHelper(helper ?? conversation?.helper);
+  if (h) return h.label;
+  return conversation ? conversationTitle(conversation) : targetId === 'new' ? 'Ask Rooftap' : '';
 }
 
 /** An ask the empty Ask sheet offers: the module it belongs to, the sections it touches (by short name) and the words it sends. */
@@ -262,7 +266,9 @@ export function askGreeting(name: string | null | undefined, now: Date = new Dat
 }
 
 /** The pop-up header's second line: what kind of conversation this is and, for a quick ask, how long it stays open. */
-export function popupStatus(conversation: AssistantConversation | null, targetId: string, now: Date = new Date()): string | null {
+export function popupStatus(conversation: AssistantConversation | null, targetId: string, now: Date = new Date(), helper?: string | null): string | null {
+  const h = moduleHelper(helper ?? conversation?.helper);
+  if (h) return h.subtitle;
   if (!conversation) return targetId === 'new' ? 'New quick ask' : null;
   if (conversation.kind === 'household') return 'Everyone in the home';
   if (conversation.kind === 'chat' || conversation.pinned) return 'Pinned chat';

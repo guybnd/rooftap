@@ -141,6 +141,10 @@ export const SERVER_FEATURES = {
     minSchema: '20261029220000_task_repeat_rule',
     label: 'repeating tasks on calendar dates, like the 1st of every month',
   },
+  'assistant.helpers': {
+    minSchema: '20261108020000_assistant_helpers',
+    label: 'helper chats for single modules, such as the Groceries helper',
+  },
 } as const satisfies Record<string, ServerFeatureDef>;
 
 export type ServerFeatureId = keyof typeof SERVER_FEATURES;

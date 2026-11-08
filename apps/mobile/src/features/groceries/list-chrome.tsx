@@ -6,6 +6,7 @@ import { Text, type ActionMenuAnchor, Button, Card, cn, HeroLede, Input, Section
 import { CUSTOM_AISLE_COLOR_KEYS, getAisleColor, type GroceryShowFilter, formatMoney, MOTION_DURATIONS_MS, type GrocerySortMode, type SuggestReAddItem, type GroceryDismissAction } from '@homeup/core';
 import { ReAddSuggestions } from '@/features/groceries/re-add-suggestions';
 import { SwipeHintCard } from '@/features/groceries/swipe-hint-card';
+import { HelperButton } from '@/components/helper-button';
 
 export interface GroceriesListHeaderProps {
   itemsCount: number;
@@ -113,6 +114,7 @@ export function GroceriesListHeader({
           caption={caption}
           trailing={
             <View className="flex-row items-center gap-2">
+              <HelperButton module="groceries" />
               {/* Rewards cards: one tap to the checkout barcode (a household
                   with one card lands straight on it). */}
               <Button size="icon-sm" variant="outline" onPress={onOpenCards} accessibilityLabel="Rewards cards">

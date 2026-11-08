@@ -35,8 +35,9 @@ import {
   type AssistantEdgePace,
   type ThreadTarget,
 } from '@homeup/core';
-import { Button, ListGroup, SpectrumEdge, Text, toast, useKeyboardOffset, useThemeMaterial, useStillMotion } from '@homeup/ui';
+import { Button, LeadingTile, ListGroup, SpectrumEdge, Text, toast, useKeyboardOffset, useThemeMaterial, useStillMotion } from '@homeup/ui';
 import { useDataCache } from '@/lib/data-cache';
+import { sectionIconFor } from '@/lib/section-icons';
 import { useOpenRoute } from '@/lib/tab-routes';
 import { assistantApi } from './assistant-api';
 import { archiveToast } from '@/lib/archive-toast';
@@ -143,7 +144,8 @@ function PopupThread({
     openRoute('/assistant');
   };
 
-  const title = popupTitle(showChats, conversation, target.id);
+  const helper = conversation?.helper ?? target.helper ?? null;
+  const title = popupTitle(showChats, conversation, target.id, helper);
   const [listening, setListening] = React.useState(false);
   // Re-read each minute so a quick ask's "more min" counts down while the pop-up is open.
   const [, tick] = React.useReducer((n: number) => n + 1, 0);
@@ -152,7 +154,7 @@ function PopupThread({
     const timer = setInterval(tick, 60_000);
     return () => clearInterval(timer);
   }, [open, conversation?.kind]);
-  const status = showChats ? null : listening ? 'Listening' : popupStatus(conversation, target.id);
+  const status = showChats ? null : listening ? 'Listening' : popupStatus(conversation, target.id, new Date(), helper);
 
   return (
     <PopupSurface
@@ -162,7 +164,17 @@ function PopupThread({
       scrollY={scrollY}
       header={
         <View className="flex-row items-center gap-1 pb-2 pl-3.5 pr-1.5">
-          {!showChats && <RooftapTile size="md" working={thread.thinking} />}
+          {!showChats && (
+            <View>
+              <RooftapTile size="md" working={thread.thinking} />
+              {/* A helper wears its module's tile as a badge. */}
+              {helper ? (
+                <View className="absolute -bottom-2.5 -right-2.5" style={{ transform: [{ scale: 0.64 }] }}>
+                  <LeadingTile sectionId={helper} Icon={sectionIconFor(helper)} size="sm" />
+                </View>
+              ) : null}
+            </View>
+          )}
           <View className={showChats ? 'min-w-0 flex-1 pl-0.5' : 'min-w-0 flex-1 pl-2'}>
             <Text numberOfLines={1} className="text-body font-semibold text-foreground">
               {title}

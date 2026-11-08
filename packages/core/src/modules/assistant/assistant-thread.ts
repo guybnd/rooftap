@@ -132,6 +132,8 @@ export function cachedConversations(): AssistantConversation[] {
 export interface ThreadTarget {
   id: string;
   kind?: ConversationKind;
+  /** With `new`: a module helper's chat (module-helpers.ts). It resumes this person's chat with the helper when there is one. */
+  helper?: string;
 }
 
 /**
@@ -215,7 +217,7 @@ export function useAssistantThread(target: ThreadTarget, host: ThreadHost) {
   const shownCount = useRef(messages.length);
   shownCount.current = messages.length;
 
-  const newKind: ConversationKind = target.kind === 'chat' ? 'chat' : 'quick';
+  const newKind: ConversationKind = target.kind === 'chat' || target.helper ? 'chat' : 'quick';
   const kind: ConversationKind = conversation?.kind ?? (target.id === 'household' ? 'household' : newKind);
 
   const refreshUnread = useCallback(() => {
@@ -247,6 +249,14 @@ export function useAssistantThread(target: ThreadTarget, host: ThreadHost) {
   const reload = useCallback(async ({ quiet = false }: { quiet?: boolean } = {}) => {
     const { api } = hostRef.current;
     let id: string | undefined = conversationIdRef.current ?? (isNew ? undefined : target.id);
+    // A helper's chat carries on where this person left it.
+    if (!id && target.helper) {
+      try {
+        id = (await api.conversations()).find((c) => c.helper === target.helper && c.kind !== 'household')?.id;
+      } catch {
+        // Offline: the brief still shows, and the first message finds the chat on the server.
+      }
+    }
     if (!id) {
       setLoading(false);
       return;
@@ -272,7 +282,7 @@ export function useAssistantThread(target: ThreadTarget, host: ThreadHost) {
       setLoading(false);
     }
     if (!quiet) refreshUnread();
-  }, [isNew, target.id, refreshUnread]);
+  }, [isNew, target.id, target.helper, refreshUnread]);
 
   useEffect(() => {
     void reload();
@@ -317,6 +327,7 @@ export function useAssistantThread(target: ThreadTarget, host: ThreadHost) {
             conversationId: conversationIdRef.current,
             kind,
             reopen: resumedRef.current || undefined,
+            ...(target.helper && !conversationIdRef.current ? { helper: target.helper } : {}),
             ...(cook ? { cook } : {}),
             ...(screen ? { screen } : {}),
             ...(here ? { here } : {}),
@@ -359,7 +370,7 @@ export function useAssistantThread(target: ThreadTarget, host: ThreadHost) {
         setDraft(null);
       }
     },
-    [kind]
+    [kind, target.helper]
   );
 
   const decide = useCallback(
@@ -421,7 +432,9 @@ export function useAssistantThread(target: ThreadTarget, host: ThreadHost) {
   // Closed: a quick ask past its idle time, unless the person chose to carry on.
   const closed = !!conversation && !resumed && !isConversationOpen(conversation.kind, conversation.closes_at);
 
-  return { conversation, messages, kind, loading, loadError, sending, thinking, draft, deciding, blocked, showCost, photos, closed, resumed, send, decide, togglePin, remove, reload, resume };
+  // The helper this chat belongs to: the chat's own, or the one it is being opened for.
+  const helper = conversation?.helper ?? target.helper ?? null;
+  return { conversation, messages, kind, helper, loading, loadError, sending, thinking, draft, deciding, blocked, showCost, photos, closed, resumed, send, decide, togglePin, remove, reload, resume };
 }
 
 export type AssistantThread = ReturnType<typeof useAssistantThread>;

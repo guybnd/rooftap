@@ -13,6 +13,7 @@ import {
   getSectionByPath,
   mentionOptions,
   minutesLeft,
+  showsBrief,
   useModules,
   type AssistantThread,
 } from '@homeup/core';
@@ -24,6 +25,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Composer, MessageBubble, Thinking } from './assistant-parts';
 import { AssistantNotice } from './assistant-notice';
+import { HelperBrief } from './helper-brief';
 
 /** A thread still loading: faint lines where the conversation will be, not the thinking dots (nothing is thinking yet). */
 function ThreadLoading() {
@@ -142,7 +144,10 @@ function LookingAt({ path }: { path: string }) {
 }
 
 export function ThreadMessages({ thread, className, offline = false }: { thread: AssistantThread; className?: string; offline?: boolean }) {
-  const { loading, loadError, reload, messages, sending, thinking, draft, kind, showCost, deciding, decide, send, blocked } = thread;
+  const { loading, loadError, reload, messages, sending, thinking, draft, kind, showCost, deciding, decide, send, blocked, helper } = thread;
+  // A helper chat picked up after a quiet spell starts from today's brief again.
+  const lastAt = messages[messages.length - 1]?.created_at;
+  const briefAfter = !!helper && messages.length > 0 && !sending && !thinking && showsBrief(lastAt);
   const endRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'end' });
@@ -157,6 +162,8 @@ export function ThreadMessages({ thread, className, offline = false }: { thread:
           <p className="px-1 py-10 text-center text-sm text-muted-foreground">
             The household chat. Talk to each other here, and tag @Rooftap when you want it to look something up or make a change.
           </p>
+        ) : helper ? (
+          <HelperBrief helper={helper} onAsk={(text) => void send(text)} disabled={offline || !!blocked} />
         ) : (
           <AskEmpty onAsk={(text) => void send(text)} disabled={offline || !!blocked} />
         )
@@ -172,6 +179,7 @@ export function ThreadMessages({ thread, className, offline = false }: { thread:
           />
         ))
       )}
+      {briefAfter && helper && <HelperBrief helper={helper} onAsk={(text) => void send(text)} disabled={offline || !!blocked} />}
       {thinking && <Thinking draft={draft} />}
       <div ref={endRef} />
     </div>

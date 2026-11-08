@@ -52,7 +52,14 @@ import {
   type EntitlementTier,
   assistantPhotoKeepDays,
   type WebHere,
+  helperAvailable,
+  helperKeepsTool,
+  helperPromptText,
+  helperReads,
+  moduleHelper,
+  type ModuleHelper,
 } from "@homeup/core";
+import { loadHelperBrief } from "./helper-briefs";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSessionUser } from "@/lib/supabase/session";
 import { getEnabledModules } from "@/lib/server-modules";
@@ -198,6 +205,8 @@ interface ConversationRow {
   closes_at: string | null;
   /** When its owner archived it (20261022093000); null or undefined when not. */
   archived_at?: string | null;
+  /** The module helper it belongs to (20261108020000); null or undefined for a plain chat. */
+  helper?: string | null;
 }
 
 interface MessageRow {
@@ -229,6 +238,7 @@ export function toConversation(row: ConversationRow, pending = 0, unread = false
     pending,
     unread,
     archived: !!row.archived_at,
+    helper: row.helper ?? null,
   };
 }
 
@@ -509,6 +519,37 @@ async function startConversation(ctx: AssistantContext, kind: Exclude<Conversati
   return data as ConversationRow;
 }
 
+/**
+ * This person's chat with a module helper: the one they have (brought back
+ * if archived), or a new one. The partial unique index keeps it to one.
+ */
+async function helperChat(ctx: AssistantContext, helper: ModuleHelper): Promise<ConversationRow> {
+  const find = () =>
+    ctx.admin
+      .from("assistant_conversations")
+      .select("*")
+      .eq("group_id", ctx.groupId)
+      .eq("owner_id", ctx.userId)
+      .eq("kind", "chat")
+      .eq("helper", helper.id)
+      .eq("deleted", false)
+      .maybeSingle();
+  const { data: existing } = await find();
+  if (existing) return existing as ConversationRow;
+  const { data, error } = await ctx.admin
+    .from("assistant_conversations")
+    .insert({ group_id: ctx.groupId, owner_id: ctx.userId, kind: "chat", title: helper.label, helper: helper.id, pinned: false })
+    .select("*")
+    .single();
+  if (error || !data) {
+    // Opened on two devices at once: the other one made it.
+    const { data: again } = await find();
+    if (again) return again as ConversationRow;
+    throw new Error(error?.message ?? "Could not start the helper chat");
+  }
+  return data as ConversationRow;
+}
+
 export async function pendingCounts(ctx: AssistantContext, conversationIds: string[]): Promise<Map<string, number>> {
   const counts = new Map<string, number>();
   if (conversationIds.length === 0) return counts;
@@ -588,6 +629,8 @@ export interface ChatInput {
   here?: WebHere | null;
   /** Photos sent with the message: storage paths the caller checked belong to this person (isAssistantPhotoPathFor). */
   photos?: string[];
+  /** Start or resume this person's chat with a module helper (core module-helpers.ts), when no conversationId is given. */
+  helper?: string | null;
 }
 
 export type ChatOutcome =
@@ -680,6 +723,19 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
     monthUsage(ctx.admin, ctx.groupId),
     input.conversationId ? findConversation(ctx, input.conversationId) : Promise.resolve(null),
   ]);
+  // A module helper's chat: the conversation's own helper, or the one a new chat is opened for,
+  // while its module is on. Its brief is read alongside everything else.
+  const helper = (() => {
+    const h = moduleHelper(input.conversationId ? found?.helper : input.helper);
+    return h && helperAvailable(h.id, (id) => ctx.enabled.has(id)) ? h : null;
+  })();
+  const briefing = helper
+    ? userTimeZone(ctx.admin, ctx.userId).then((timeZone) =>
+        loadHelperBrief(helper.id, { admin: ctx.admin, groupId: ctx.groupId, userId: ctx.userId, enabled: ctx.enabled, timeZone, now: deps.now })
+      )
+    : Promise.resolve(null);
+  briefing.catch(() => {});
+
   // The household thread is the members' chat room: a message that doesn't
   // tag Rooftap is just posted, with no model, key or budget involved.
   const roomKind = input.conversationId ? found?.kind : input.kind;
@@ -731,6 +787,8 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
     conversation = found;
   } else if (input.kind === "household") {
     conversation = await householdThread(ctx);
+  } else if (helper) {
+    conversation = await helperChat(ctx, helper);
   } else {
     conversation = await startConversation(ctx, input.kind === "chat" ? "chat" : "quick", text || "Photo", settings.quickAskIdleMinutes);
   }
@@ -770,7 +828,16 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
   );
 
   const contextMs = Date.now() - started - readMs;
-  const { tools, homeAssistant, web, webSpentMicros, allowLinksFrom, ms: toolsMs } = await gathering;
+  const gathered = await gathering;
+  const { web, webSpentMicros, allowLinksFrom, ms: toolsMs } = gathered;
+  // A helper keeps its own module's tools, lookups in the modules it reads,
+  // and the tools that belong to no module; Home Assistant stays with plain Rooftap.
+  const readable = helper ? helperReads(helper, (id) => ctx.enabled.has(id)) : [];
+  const tools = helper
+    ? gathered.tools.filter((t) => helperKeepsTool(helper, readable, { name: t.name, module: t.module, lookup: t.lookup, moduleless: t.module === "assistant" }))
+    : gathered.tools;
+  const homeAssistant = helper ? null : gathered.homeAssistant;
+  const brief = await briefing;
   // read_page opens the links people sent in this chat, never one the model
   // read somewhere else (web-tools.ts).
   for (const row of rows) if (row.role === "user" && row.content) allowLinksFrom(row.content);
@@ -803,7 +870,9 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
     cooking,
     screen: input.screen,
     web,
-  }) + (photos.length || lookAgain ? PHOTO_PROMPT : "");
+  }) +
+    (helper ? `\n\n${helperPromptText(helper, { reads: readable, brief })}` : "") +
+    (photos.length || lookAgain ? PHOTO_PROMPT : "");
 
   const channel = input.channel ?? "app";
   // A busy model (the provider's 503 after its own retries) hands the turn to

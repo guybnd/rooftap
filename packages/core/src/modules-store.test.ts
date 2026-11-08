@@ -329,6 +329,7 @@ describe('server schema', () => {
       'keeping Scout searches and watches from someone',
       'importing bank statements',
       'repeating tasks on calendar dates, like the 1st of every month',
+      'helper chats for single modules, such as the Groceries helper',
     ]);
 
     act(() => setServerSchema('20261020050000_mcp_oauth'));
@@ -377,6 +378,7 @@ describe('server schema', () => {
         'keeping Scout searches and watches from someone',
         'importing bank statements',
         'repeating tasks on calendar dates, like the 1st of every month',
+        'helper chats for single modules, such as the Groceries helper',
       ]);
     } finally {
       delete mcp.minSchema;
