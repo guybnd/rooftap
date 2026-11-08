@@ -718,6 +718,6 @@ kind: feature
 link: /${n.id}
 spotlight: true
 ---
-${n.description} Switch it on in Settings > Modules.
+${n.description} Switch it on in Settings > Tiles.
 `;
 }

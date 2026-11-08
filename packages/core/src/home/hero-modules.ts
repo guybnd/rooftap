@@ -39,7 +39,7 @@ export const HERO_GROUP_LABELS: Record<HeroModuleGroup, string> = {
   day: 'Your day',
   home: 'Shortcuts, up to 3',
   tips: 'Smart tips',
-  spaces: 'Spaces',
+  spaces: 'Tiles',
 };
 
 export const HERO_GROUP_ORDER: HeroModuleGroup[] = ['header', 'day', 'tips', 'home', 'spaces'];
@@ -122,7 +122,7 @@ export const HERO_MODULES: HeroModuleMeta[] = [
     key: 'budgetPulse',
     group: 'home',
     label: 'Budget',
-    description: 'Your monthly costs vs your budget. Tap it to show just your Budget space.',
+    description: 'Your monthly costs vs your budget. Tap it to show just your Budget tile.',
     defaultOn: false,
   },
   {
@@ -143,7 +143,7 @@ export const HERO_MODULES: HeroModuleMeta[] = [
     key: 'shopperWatch',
     group: 'home',
     label: 'Shopper',
-    description: 'How many things you watch are at a good price. Tap it to show just your Shopper space.',
+    description: 'How many things you watch are at a good price. Tap it to show just your Shopper tile.',
     defaultOn: false,
   },
   {
@@ -164,14 +164,14 @@ export const HERO_MODULES: HeroModuleMeta[] = [
     key: 'spaceBudget',
     group: 'spaces',
     label: 'Budget',
-    description: 'Your Budget space at the bottom of Home.',
+    description: 'Your Budget tile at the bottom of Home.',
     defaultOn: true,
   },
   {
     key: 'spaceBills',
     group: 'spaces',
     label: 'Bills',
-    description: 'Your Bills space at the bottom of Home: what falls due this week.',
+    description: 'Your Bills tile at the bottom of Home: what falls due this week.',
     defaultOn: true,
   },
 ];

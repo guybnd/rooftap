@@ -1183,7 +1183,7 @@ function HomeSectionBody() {
             shortcut filters Home down to its own Space, expanded (same
             order as web: Groceries, Budget, Bills, Setup, Home Search). */}
         <Text className="-mb-1 px-1 pt-2 text-micro-label uppercase text-muted-foreground" style={showIf(!shownLens)}>
-          Spaces
+          Tiles
         </Text>
         {/* Every module's Spaces (core slots/home-spaces.ts), drawn by HOME_SPACE_VIEWS.
             Cards stay mounted while a shortcut hides them, so turning it

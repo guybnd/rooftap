@@ -244,7 +244,7 @@ export function NotificationKinds() {
   if (!has("household") && !has("calendar") && !assistant && !has("shopper")) return null;
 
   return (
-    <SettingsPanel icon={BellRing} title="What you get" description="Pushes for the modules your home uses.">
+    <SettingsPanel icon={BellRing} title="What you get" description="Pushes for the tiles your home uses.">
       {has("household") && (
         <div className="space-y-1.5">
           <SettingsLabel>Tasks</SettingsLabel>

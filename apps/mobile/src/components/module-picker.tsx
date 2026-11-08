@@ -42,7 +42,7 @@ export function ModulePicker() {
     // a failed Continue reopens the picker with the ticks kept.
     if (skipped) picker.dismiss();
     const error = await saveModuleChoices(getCurrentSupabaseClient(), group.id, choice, currentUserId);
-    if (error && !skipped) toast.error("Couldn't save your modules. Try again.");
+    if (error && !skipped) toast.error("Couldn't save your tiles. Try again.");
   };
   const skip = () => void save(picker.defaults, true);
 

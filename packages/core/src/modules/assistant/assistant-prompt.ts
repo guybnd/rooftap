@@ -116,7 +116,7 @@ export function buildAssistantSystemPrompt(input: AssistantPromptInput): string 
         'change right away and which wait for their tap.' +
         (input.off?.length
           ? `\nSwitched off here: ${input.off.join(', ')}. When asked about one of these, say that part of the app is ` +
-            'switched off and that a household owner can turn it on in Settings > Modules. Do not try another tool instead.'
+            'switched off and that a household owner can turn it on in Settings > Tiles. Do not try another tool instead.'
           : '\nIf something is not listed, that part of the app is switched off: say so plainly rather than guessing.')
     );
   } else {

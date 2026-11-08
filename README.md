@@ -2,7 +2,7 @@
 
 [![License: ELv2](https://img.shields.io/badge/license-ELv2-blue.svg)](LICENSE)
 
-Rooftap is a household app. It holds shared tasks and chores, groceries, recipes, a family calendar, costs and a budget, loyalty cards and price tracking. An optional assistant can also talk to Home Assistant. Each household switches on only the modules it uses.
+Rooftap is a household app. It holds shared tasks and chores, groceries, recipes, a family calendar, costs and a budget, loyalty cards and price tracking. An optional assistant can also talk to Home Assistant. Each household switches on only the tiles it uses. A tile is one part of the app, such as Groceries or Bin night.
 
 This repository has everything you need to run your own Rooftap server, so your household's data stays on your machine. Rooftap is source-available under the [Elastic License 2.0](#license). You can self-host it and change it, but you cannot offer it to others as a hosted service.
 
@@ -15,11 +15,11 @@ This repository has everything you need to run your own Rooftap server, so your 
   <img src="apps/web/public/landing/screens/assistant-home-assistant.webp" width="190" alt="Assistant settings with Home Assistant and Telegram connected">
 </p>
 
-## Modules
+## Tiles
 
-<img src=".github/readme/module-map.webp" alt="Map of the Rooftap modules. Each line is a link between two modules, for example Recipes to Groceries.">
+<img src=".github/readme/module-map.webp" alt="Map of the Rooftap tiles. Each line is a link between two tiles, for example Recipes to Groceries.">
 
-| Module | What it does |
+| Tile | What it does |
 | --- | --- |
 | Tasks & Reminders | Shared to-dos, chores and reminders with due dates. |
 | Calendar | Household events and everything with a date, in one view. Optional Google Calendar link: sends tasks and viewings there and shows your Google events. |
@@ -35,11 +35,11 @@ This repository has everything you need to run your own Rooftap server, so your 
 | Assistant | A household agent you can ask or talk to. It asks before it changes anything. It can use Home Assistant through HA's MCP Server integration, and you can talk to it from Telegram. Needs your own AI provider key. |
 | AI assistants (MCP) | Lets an outside AI assistant, such as Claude, read and update your household through MCP. |
 
-Everything works with no AI and no AI key. The Assistant and MCP modules stay off until a household owner turns them on.
+Everything works with no AI and no AI key. The Assistant and MCP tiles stay off until a household owner turns them on.
 
-### How the modules work together
+### How the tiles work together
 
-Each module works alone. When two related modules are on, they link to each other. The screens show the demo data.
+Each tile works alone. When two related tiles are on, they link to each other. The screens show the demo data.
 
 <img src=".github/readme/journey-recipe-scan.webp" alt="Scan a recipe in Recipes, add the missing ingredients to Groceries, track the trip, and see its cost line in Costs.">
 
@@ -63,13 +63,13 @@ cp .env.example .env
 ./scripts/self-host-init.sh -d
 ```
 
-The first run writes every secret into `.env`, builds the app, starts the stack and applies the database migrations. Back up `.env`. Then open http://localhost:3737. The first visit creates the owner account. After that, registration closes, and the owner adds household members in **Settings → Users**.
+The first run writes every secret into `.env`, builds the app, starts the stack and applies the database migrations. Back up `.env`. Then open http://localhost:3737. The first visit creates the owner account. After that, registration closes, and the owner adds household members in **Settings → Under this roof**.
 
 Everything else is optional. `.env.example` explains each setting:
 
 - a [Mapbox token](https://account.mapbox.com/access-tokens/) for maps, geocoding and directions
 - an OpenAI, Anthropic, Gemini or OpenRouter key for the AI features
-- `HOMEUP_MODULES` to limit the modules that your server offers
+- `HOMEUP_MODULES` to limit the tiles that your server offers
 
 The full guide covers HTTPS for the phone app, backups, upgrades and how to recover a locked-out owner: **[.docs/self-hosting.md](.docs/self-hosting.md)**.
 

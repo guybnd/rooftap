@@ -56,8 +56,8 @@ export interface GlobalMenu {
 
 export const globalMenus: GlobalMenu[] = [
   { key: 'global', label: 'Global settings', panels: [SectionPreferences, HomeProfileSettings, NavigationSettings] },
-  { key: 'modules', label: 'Modules', panels: [ModulesSettings] },
-  { key: 'users', label: 'Users', panels: [GroupManager, UsersManager] },
+  { key: 'modules', label: 'Tiles', panels: [ModulesSettings] },
+  { key: 'users', label: 'Under this roof', panels: [GroupManager, UsersManager] },
   { key: 'appearance', label: 'Appearance', panels: [AppearanceSettings, MotionSettings, HapticsSettings] },
   { key: 'notifications', label: 'Notifications', panels: [NotificationsSettings, NotificationKinds] },
   { key: 'connectors', label: 'Connectors', panels: CONNECTORS.map((c) => CONNECTOR_PANELS[c.panel]) },

@@ -2,6 +2,8 @@
 
 > **TL;DR.** Every Rooftap feature becomes a **module** that a household can switch on or off. All modules ship inside the one app (web, Android, iOS). A module that is off leaves **no trace**: no nav entry, no capture option, no hub tile, no search hit, no notification, no settings panel, no MCP tool, and its data does not sync. Data is kept, so switching a module back on restores everything. Self-hosted servers choose which modules they offer, and the store app shows only those. This note fixes the module list, the rules, and the first phase of work (switching only, no code moves).
 
+**Names in the app.** People never see the word "module". The app calls a module a **tile**, in Settings > Tiles, on Home and in the More sheet. The code, the manifests, `HOMEUP_MODULES` and these docs keep "module". See "Product words" in [writing-style.md](writing-style.md).
+
 Status: proposed, 2026-10-18. Background and effort estimate: `analysis/backlog-and-modularity.md` in the project files.
 
 ---
@@ -274,7 +276,7 @@ The store app follows `main` through OTA updates, but a self-hosted server only 
 
 - `/api/public-config` reports `schemaVersion`: the newest file in `supabase/migrations/` the server was built from (`apps/web/next.config.ts` bakes it in). Servers from before this field count as the 1.0.0 baseline (`SCHEMA_BASELINE`).
 - `packages/core/src/server-features.ts` lists every app feature newer than the baseline with the migration it needs. Surfaces gate on `useModules().server(id)`. A whole new module sets `minSchema` on its `ModuleDef` instead, and drops out of `offered` exactly like a module the server doesn't offer, so section 7's rules apply unchanged.
-- Settings > Modules shows one line naming what updating the server would add (`useModules().serverUpdateAdds`).
+- Settings > Tiles shows one line naming what updating the server would add (`useModules().serverUpdateAdds`).
 - Until the app has heard from the server, everything counts as supported, so the official server never flashes features away on a cold start.
 - `apps/web/src/lib/server-features.test.ts` fails if a minimum names a migration that doesn't exist.
 
@@ -351,7 +353,7 @@ export const binsModule = defineModule({
 
 | Field | What reads it |
 |---|---|
-| `id`, `label`, `description`, `iconId`, `defaultEnabled`, `requires`, `enhances`, `minSchema` | `MODULES` and `ModuleId` in `modules.ts`, so Settings > Modules, the first-run picker and every module gate. |
+| `id`, `label`, `description`, `iconId`, `defaultEnabled`, `requires`, `enhances`, `minSchema` | `MODULES` and `ModuleId` in `modules.ts`, so Settings > Tiles, the first-run picker and every module gate. |
 | `section` | `sections` and `getSectionByPath` in `sections.ts`, the section's colour, the phone tab routes (`tabRoutes` adds nav items that are tabs) and both apps' route tests. A module with no screen of its own leaves it out. |
 | `tables` | `TABLE_REACH`. A table with `sync` is a synced group store: `STORE_MODULES` syncs it while one of the listed modules is on, and the web app caches it in IndexedDB. |
 | `tools` | `MCP_TOOLS`. The handlers live in `apps/web/src/lib/mcp/`. |

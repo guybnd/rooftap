@@ -121,7 +121,7 @@ export function AssistantSettings() {
             ))}
           </SettingsInset>
         ) : (
-          <p className="text-sm text-muted-foreground">Switch on a module like Tasks, Calendar, Groceries or Recipes to give the assistant something to reach.</p>
+          <p className="text-sm text-muted-foreground">Switch on a tile like Tasks, Calendar, Groceries or Recipes to give the assistant something to reach.</p>
         )}
       </SettingsPanel>
 

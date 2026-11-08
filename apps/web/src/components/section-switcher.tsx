@@ -752,7 +752,7 @@ export function SectionTabBar({
                   </div>
                 </div>
               )}
-              {recentSections.length > 0 && <p className={MICRO_LABEL}>All spaces</p>}
+              {recentSections.length > 0 && <p className={MICRO_LABEL}>All tiles</p>}
               <SpaceGrid
                 sections={enabledSections}
                 currentSectionId={currentSectionId}
@@ -770,7 +770,7 @@ export function SectionTabBar({
                   matching the sidebar/drawer's menu-first behaviour. */}
               <div className="mt-3 flex items-center justify-between gap-3 border-t border-border pt-3">
                 {rearranging ? (
-                  <span className="text-xs text-muted-foreground">Drag a space onto the dock to put it in your bar</span>
+                  <span className="text-xs text-muted-foreground">Drag a tile onto the dock to put it in your bar</span>
                 ) : hasBarTiles ? (
                   <span className="flex items-center gap-2 text-xs text-muted-foreground">
                     <span aria-hidden className="size-3.5 rounded-[5px] border-[1.5px] border-muted-foreground" />

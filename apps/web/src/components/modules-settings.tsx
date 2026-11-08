@@ -47,10 +47,10 @@ export function ModulesSettings() {
   return (
     <SettingsPanel
       icon={Blocks}
-      title="Modules"
+      title="Tiles"
       description={
         isGroupOwner
-          ? "Choose what your household uses. A module you turn off disappears for everyone, and its data is kept for when you turn it back on."
+          ? "Choose what your household uses. A tile you turn off disappears for everyone, and its data is kept for when you turn it back on."
           : ownerName
             ? `${ownerName} manages these for your household. You can still hide sections just for yourself under Global settings.`
             : "Your household owner manages these. You can still hide sections just for yourself under Global settings."

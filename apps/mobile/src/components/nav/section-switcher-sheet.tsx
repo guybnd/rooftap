@@ -242,7 +242,7 @@ function SpaceTile({
         ...(index > 0 ? [{ name: 'earlier', label: 'Move earlier' }] : []),
         ...(index < count - 1 ? [{ name: 'later', label: 'Move later' }] : []),
       ]
-    : [{ name: 'longpress', label: 'Rearrange spaces' }];
+    : [{ name: 'longpress', label: 'Rearrange tiles' }];
 
   return (
     <GestureDetector gesture={pan}>
@@ -480,7 +480,7 @@ export function SectionSwitcherSheet({
 
         {grid.length > 0 && (
           <View className="px-3">
-            {recentSections.length > 0 && <Text className={`${MICRO_LABEL} px-2`}>All spaces</Text>}
+            {recentSections.length > 0 && <Text className={`${MICRO_LABEL} px-2`}>All tiles</Text>}
             <View
               onLayout={(e) => setGridWidth(e.nativeEvent.layout.width)}
               style={{ height: spaceGridRows(grid.length) * SPACE_GRID_CELL_HEIGHT }}
@@ -525,7 +525,7 @@ export function SectionSwitcherSheet({
         <View className="mx-4 mt-3 flex-row items-center justify-between gap-3 border-t border-border pt-3">
           {editing ? (
             <Text className="flex-1 text-caption text-muted-foreground">
-              Drag a space onto the dock to put it in your bar
+              Drag a tile onto the dock to put it in your bar
             </Text>
           ) : hasBarTiles ? (
             <View className="flex-1 flex-row items-center gap-2">

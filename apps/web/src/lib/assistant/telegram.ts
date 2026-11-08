@@ -171,7 +171,7 @@ export async function handleTelegramUpdate(update: TgUpdate, deps: TelegramDeps)
   }
   const ctx = await assistantContextFor(admin, link.user_id);
   if ("error" in ctx) {
-    await send(deps.api, msg.chat.id, "The assistant isn't switched on for your household. An owner can turn it on in Settings > Modules.");
+    await send(deps.api, msg.chat.id, "The assistant isn't switched on for your household. An owner can turn it on in Settings > Tiles.");
     return;
   }
   if (ctx.access === "none") {

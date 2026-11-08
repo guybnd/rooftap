@@ -144,7 +144,7 @@ const config: ExpoConfig = {
         widgets: [
           {
             name: 'TodaysTasks',
-            label: "Today's Tasks",
+            label: 'Skylight',
             // HOUP-110: widened from the read-only-tasks-list era (4x2) to fit
             // the summary strip + tasks + groceries sections; resizable up to
             // a larger dashboard-ish size, but never smaller than this floor.
@@ -155,7 +155,7 @@ const config: ExpoConfig = {
             resizeMode: 'horizontal|vertical',
             maxResizeWidth: '400dp',
             maxResizeHeight: '400dp',
-            description: "Shows today's Rooftap tasks, cached offline — no network required.",
+            description: 'Your day from Rooftap at a glance. Works offline.',
             previewImage: './assets/images/icon.png',
             updatePeriodMillis: 1800000,
           },

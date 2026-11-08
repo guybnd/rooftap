@@ -77,7 +77,7 @@ export function LandingPage({
             </a>
             <nav className={styles.navLinks} aria-label="Page">
               <details ref={menuRef} className={styles.navMenu} onClick={closeMenuOnPick}>
-                <summary className={styles.navLink}>Modules</summary>
+                <summary className={styles.navLink}>Tiles</summary>
                 <div className={styles.navMenuList}>
                   {STORIES.map((story) => (
                     <a key={story.id} href={`#${storyAnchor(story)}`}>
@@ -159,7 +159,7 @@ export function LandingPage({
                   Dynamic and interconnected
                 </h2>
                 <p className={styles.sectionLede}>
-                  Most actions do more than one thing. Plan to buy a TV and you get a to-do and a line in the budget. Finish a shopping trip and its total goes to Costs. You do not have to update each module by hand. Hover or tap a line to see what it does.
+                  Most actions do more than one thing. Plan to buy a TV and you get a to-do and a line in the budget. Finish a shopping trip and its total goes to Costs. You do not have to update each tile by hand. Hover or tap a line to see what it does.
                 </p>
               </div>
             </div>
@@ -310,9 +310,9 @@ export function LandingPage({
             <div className={styles.wrap}>
               <div className={styles.sectionHead}>
                 <h2 id="self-host-title" className={cn(styles.display, styles.sectionTitle)}>
-                  Run your own server
+                  Put it under your own roof
                 </h2>
-                <p className={styles.sectionLede}>All modules for one household in one Postgres database, in Docker on a machine you own.</p>
+                <p className={styles.sectionLede}>Every tile for one household in one Postgres database, in Docker on a machine you own.</p>
               </div>
               <ol className={styles.hostSteps}>
                 {SELF_HOST_STEPS.map((s, i) => (
@@ -398,7 +398,7 @@ export function LandingPage({
               <p>One shared app for a household, on a server you own.</p>
             </div>
             <nav className={styles.footerLinks} aria-label="Footer">
-              <a href="#modules">Modules</a>
+              <a href="#modules">Tiles</a>
               <a href="#self-host">Self-host</a>
               <a href="#assistant">Assistant</a>
               <a href="#features">Every feature</a>

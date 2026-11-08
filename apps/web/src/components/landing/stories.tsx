@@ -18,26 +18,26 @@ const play = (name: string, text: string, events: readonly PlayEvent[]): Feature
 /** A feature that only states a fact. */
 const fact = (name: string, text: string): Feature => ({ name, text });
 
-const HOME_SCREEN: Screen = { node: <HomeScreen />, label: "The Android home screen with the Rooftap widget: 2 of 2 left today, the weather, and Upcoming by day" };
+const HOME_SCREEN: Screen = { node: <HomeScreen />, label: "The Android home screen with the Skylight widget: 2 of 2 left today, the weather, and Upcoming by day" };
 
 export const HOME_STORY: Story = {
   id: "home",
   room: "home",
   name: "Home",
-  label: "The Home screen: the day's count, the weather, the next item, and the Upcoming feed that every module fills",
+  label: "The Home screen: the day's count, the weather, the next item, and the Upcoming feed that every tile fills",
   steps: [
     {
       title: "Full-featured dashboard",
       features: [
         point("Today count.", "Tasks left today, for you and for the household, with a meter.", at("a", m("home", "count"))),
         point("Weather.", "Current conditions from Open-Meteo, the hour the rain starts, and a tip.", at("a", m("home", "weather"))),
-        point("Now card.", "The next item due, with its time, its module, and a slide to complete it.", at("a", m("home", "now"))),
-        point("Upcoming.", "Every module's dated items in one feed, grouped by day.", at("a", m("home", "upcoming"))),
+        point("Now card.", "The next item due, with its time, its tile, and a slide to complete it.", at("a", m("home", "now"))),
+        point("Upcoming.", "Every tile's dated items in one feed, grouped by day.", at("a", m("home", "upcoming"))),
       ],
       a: "home",
     },
     {
-      title: "One feed for every module",
+      title: "One feed for every tile",
       features: [
         point("Calendar.", "Dentist, 2:30 PM. An event from the household calendar.", at("a", m("home-upcoming", "dentist"))),
         point("Tasks.", "Book the plumber. A task with a due day and a priority.", at("a", m("home-upcoming", "plumber"))),
@@ -53,7 +53,7 @@ export const CAPTURE_STORY: Story = {
   id: "capture",
   room: "home",
   name: "Capture",
-  label: "Capture: one + opens a sheet for every module; type first, see what already matches, then add it where it belongs or ask Rooftap",
+  label: "Capture: one + opens a sheet for every tile; type first, see what already matches, then add it where it belongs or ask Rooftap",
   steps: [
     {
       title: "One + for everything",
@@ -66,8 +66,8 @@ export const CAPTURE_STORY: Story = {
           { at: 1600, highlight: at("a", m("capture", "field")) },
           { at: 3300, highlight: null },
         ]),
-        point("Every module.", "A cost, a scanned document, a grocery, a to-do, an event, a recipe or a checklist, each one tap away.", at("a", m("capture", "grocery"), true)),
-        fact("Only your modules.", "A module the household has switched off leaves no tile."),
+        point("Every tile.", "A cost, a scanned document, a grocery, a to-do, an event, a recipe or a checklist, each one tap away.", at("a", m("capture", "grocery"), true)),
+        fact("Only your tiles.", "A tile the household has switched off does not show here."),
         point("Chat with Rooftap.", "Questions and multi-step asks go to the Assistant.", at("a", m("capture", "chat"), true)),
       ],
       a: "capture",
@@ -75,7 +75,7 @@ export const CAPTURE_STORY: Story = {
     {
       title: "Type first, decide after",
       features: [
-        point("It searches as you type.", "What you type matches across every module, shown as each one's own rows.", at("a", m("capture-search", "costRow"), true)),
+        point("It searches as you type.", "What you type matches across every tile, shown as each one's own rows.", at("a", m("capture-search", "costRow"), true)),
         point("Already there.", "The insurance renewal is a cost and a reminder task, so nothing gets added twice.", at("a", m("capture-search", "taskRow"), true)),
         play("Add it as.", "Make it a to-do, a grocery or a cost. The form opens with the text filled in.", [
           { at: 0, show: { a: "capture-search" } },
@@ -334,7 +334,7 @@ export const MCP_STORY: Story = {
     {
       title: "Two-way MCP for your agents",
       features: [
-        play("Reads your data.", "Rooftap exposes its modules as MCP tools. The assistant called get_grocery_items and answered from the real list and the recipes.", [
+        play("Reads your data.", "Rooftap exposes its tiles as MCP tools. The assistant called get_grocery_items and answered from the real list and the recipes.", [
           { at: 300, show: { a: chat(chat1, "The assistant is typing", true) } },
           { at: 1700, show: { a: chat(chat1b, "The assistant answers: steak and potatoes tonight, and the lasagne needs only sheets and ricotta") } },
           { at: 2000, highlight: at("b", m("recipes", "lasagne"), true) },
@@ -352,7 +352,7 @@ export const MCP_STORY: Story = {
           { at: 4700, highlight: at("b", m("groceries-batteries", "batteries"), true) },
           { at: 6800, highlight: null },
         ]),
-        play("Every module.", "The to-do lands in Tasks, due Saturday. Groceries, tasks, calendar events and costs each have tools to read and write.", [
+        play("Every tile.", "The to-do lands in Tasks, due Saturday. Groceries, tasks, calendar events and costs each have tools to read and write.", [
           { at: 300, show: { b: "tasks" } },
           { at: 300, pop: "b" },
           { at: 600, highlight: at("b", m("tasks", "sensor"), true) },
@@ -530,7 +530,7 @@ export const ASSISTANT_STORY: Story = {
     {
       title: "A household assistant in the app",
       features: [
-        point("Quick asks.", "Ask from the top of the space. A quick ask takes follow-ups for 30 minutes, then closes.", at("a", m("assistant", "quick"))),
+        point("Quick asks.", "Ask from the top of the Assistant tile. A quick ask takes follow-ups for 30 minutes, then closes.", at("a", m("assistant", "quick"))),
         play("Named chats.", "Keep a conversation under a name. Pin it to keep it on top. This one added the lasagne's missing ingredients, wine on a checklist and a task for Noa.", [
           { at: 200, highlight: at("a", m("assistant", "chats")) },
           { at: 1200, tap: m("assistant", "chats") },
@@ -553,7 +553,7 @@ export const ASSISTANT_STORY: Story = {
     {
       title: "Changes wait for your OK",
       features: [
-        point("Proposals.", "Under Ask first, each change is one line on a card, with the module it goes to.", at("a", m("assistant-household", "proposal"))),
+        point("Proposals.", "Under Ask first, each change is one line on a card, with the tile it goes to.", at("a", m("assistant-household", "proposal"))),
         play("Do all 2.", "One tap makes both changes. Not now drops them.", [{ at: 300, tap: m("assistant-household", "doAll") }]),
         fact("What it reaches.", "Tasks, the calendar, the budget, groceries, recipes, checklists, Home Setup and Shopper, with the same tools as the MCP server."),
         fact("Memory.", "It keeps short facts about the household. Anyone in the home can read and remove them."),
@@ -590,7 +590,7 @@ export const ASSISTANT_STORY: Story = {
     {
       title: "Trust, models and spending",
       features: [
-        point("Trust per module.", "Read only looks things up. Ask first proposes each change. Act makes the change. A delete always asks.", at("a", m("assistant-settings", "trust"))),
+        point("Trust per tile.", "Read only looks things up. Ask first proposes each change. Act makes the change. A delete always asks.", at("a", m("assistant-settings", "trust"))),
         point("Any model.", "Gemini, OpenAI, Anthropic, OpenRouter, or a local model in Ollama or LM Studio. Quick asks can use a cheaper model.", at("a", m("assistant-settings", "models"))),
         play("Spending.", "A monthly budget for the household and a limit per person. At the limit: warn, switch to the cheaper model, or stop.", [{ at: 300, pop: "b" }]),
         fact("Usage.", "Spend by person, by feature and by model. A local model counts as free."),
@@ -628,7 +628,7 @@ export const COSTS_STORY: Story = {
   id: "costs",
   room: "costs",
   name: "Costs",
-  label: "Costs: the month against a goal, a bar per month, Worth a look, the categories, and lines from other modules",
+  label: "Costs: the month against a goal, a bar per month, Worth a look, the categories, and lines from other tiles",
   steps: [
     {
       title: "Robust cost tracking",
@@ -638,7 +638,7 @@ export const COSTS_STORY: Story = {
         point("The year in one chart.", "A bar per month, in the colours of the categories.", at("a", m("costs", "chart"))),
         point("Worth a look.", "A category that runs ahead of usual, and plans that end soon, so you can look for a better deal.", at("a", m("costs", "worth"))),
         fact("Paid and to come.", "Each category shows what is paid and what is still to come this month."),
-        fact("From other modules.", "Grocery trips, event tickets, checklist purchases, gifts and contracts in Documents write their own cost lines."),
+        fact("From other tiles.", "Grocery trips, event tickets, checklist purchases, gifts and contracts in Documents write their own cost lines."),
       ],
       a: "costs",
     },
@@ -807,13 +807,13 @@ export const NATIVE_STORY: Story = {
   id: "native",
   room: "home",
   name: "Android",
-  label: "The Android app: the widget on the home screen, the share sheet, notifications, offline reads and haptics",
+  label: "The Android app: the Skylight widget on the home screen, the share sheet, notifications, offline reads and haptics",
   steps: [
     {
       title: "Native app features",
       features: [
-        fact("Android widget.", "Upcoming by day on the home screen, with the day's count, the weather, and a tap to add."),
-        fact("Share sheet.", "A link or a photo shared from any app goes to the module you pick."),
+        fact("Skylight widget.", "Upcoming by day on the Android home screen, with the day's count, the weather, and a tap to add."),
+        fact("Share sheet.", "A link or a photo shared from any app goes to the tile you pick."),
         fact("Notifications.", "When a task is assigned to you, due, or commented on."),
         fact("Offline.", "Reads work without a connection. Writes sync after."),
         fact("Haptics.", "A pulse on every tick, swipe and commit."),

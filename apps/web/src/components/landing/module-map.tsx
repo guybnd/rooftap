@@ -231,7 +231,7 @@ export function ModuleMap() {
             );
           })}
         </div>
-        <p className={styles.mapHint}>Hover or tap a module or a line.</p>
+        <p className={styles.mapHint}>Hover or tap a tile or a line.</p>
       </div>
 
       <div className={styles.mapCard} aria-live="polite">

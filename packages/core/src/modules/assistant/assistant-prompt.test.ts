@@ -49,7 +49,7 @@ describe('buildAssistantSystemPrompt', () => {
   it('names switched-off modules and how to turn them on', () => {
     const prompt = buildAssistantSystemPrompt({ ...base, off: ['Recipes', 'Meal plan'] });
     expect(prompt).toContain('Switched off here: Recipes, Meal plan.');
-    expect(prompt).toContain('Settings > Modules');
+    expect(prompt).toContain('Settings > Tiles');
     expect(buildAssistantSystemPrompt(base)).not.toContain('Switched off here');
   });
 

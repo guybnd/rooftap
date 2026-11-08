@@ -108,9 +108,9 @@ The panel shows only where a household key adds something. On a self-hosted serv
 
 On a self-hosted server, `ROOFTAP_BILLING` is unset, so every household can use the server's key with no limit.
 
-## Choosing which modules your server offers
+## Choosing which tiles your server offers
 
-Each feature (Tasks, Calendar, Groceries, Home Search and so on) is a module ([modules.md](modules.md)). By default, the server offers all of them, and each household owner turns them on or off in **Settings → Modules**.
+Each feature (Tasks, Calendar, Groceries, Home Search and so on) is a module ([modules.md](modules.md)). The app calls modules "tiles". By default, the server offers all of them, and each household owner turns them on or off in **Settings → Tiles**.
 
 To offer fewer, set `HOMEUP_MODULES` in `.env` to a comma-separated list of ids, for example `household,calendar,checklists,documents,groceries,recipes,costs,setup,search`. Then restart `app` and `edge-runtime`. The edge functions also read the list, so notifications skip the modules that the server does not offer. No household can turn on a module that is not on the list. The app reads the list at runtime, and the phone app gets it from `/api/public-config`, so you rebuild nothing.
 
@@ -118,7 +118,7 @@ When a new Rooftap release has an APK, the phone app shows a note with a link to
 
 ## The household assistant
 
-Turn on the **Assistant** module in **Settings → Modules**. The household then gets a chat agent. It reads tasks, the calendar, the budget, groceries, recipes and checklists, and it changes them when you agree. It also reads Home Setup and the Shopper watchlist. On a self-hosted server, it needs no paid plan and has no spending cap unless an owner sets one.
+Turn on the **Assistant** tile in **Settings → Tiles**. The household then gets a chat agent. It reads tasks, the calendar, the budget, groceries, recipes and checklists, and it changes them when you agree. It also reads Home Setup and the Shopper watchlist. On a self-hosted server, it needs no paid plan and has no spending cap unless an owner sets one.
 
 It needs a model. One of `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` is enough. Gemini Flash is the cheapest default.
 
@@ -458,7 +458,7 @@ Before `migrate` applies new migrations to an install with data, it saves a back
 
 Each migration runs in one transaction with the row that records it. So a migration that fails rolls back completely. Fix the cause, or pull the fix, and run the upgrade again. It starts again from a clean state.
 
-The phone app updates as soon as we ship, so it can be newer than your server. It asks the server for its version and hides the features that need a newer one. **Settings → Modules** lists what an update adds.
+The phone app updates as soon as we ship, so it can be newer than your server. It asks the server for its version and hides the features that need a newer one. **Settings → Tiles** lists what an update adds.
 
 To undo an upgrade, check out the version you ran before and restore the backup from just before the upgrade:
 

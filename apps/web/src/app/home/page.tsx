@@ -685,7 +685,7 @@ function HomeHub() {
             shortcut filters Home down to its own Space, expanded. */}
         {!lens && (
           <h2 className="-mb-1 px-1 pt-2 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground lg:col-span-3">
-            Spaces
+            Tiles
           </h2>
         )}
         {homeSpaces({ hidden, settingOn: spaceOn, lens }).map(({ space, shown, expanded }) =>

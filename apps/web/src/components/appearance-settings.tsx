@@ -26,14 +26,14 @@ export function AppearanceSettings() {
             onSelect={() => setDesktopLayout("top")}
             leading={<PanelTop className="h-5 w-5" />}
             title="Top bar"
-            description="Spaces across the top, pages laid out in columns"
+            description="Tiles across the top, pages laid out in columns"
           />
           <SettingsChoiceRow
             selected={layout === "classic"}
             onSelect={() => setDesktopLayout("classic")}
             leading={<PanelLeft className="h-5 w-5" />}
             title="Classic sidebar"
-            description="Spaces in a side bar, pages in one column"
+            description="Tiles in a side bar, pages in one column"
           />
         </SettingsInset>
       </div>

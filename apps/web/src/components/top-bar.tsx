@@ -134,7 +134,7 @@ export function TopBar({
         <span className="hidden font-heading text-[17px] font-semibold tracking-tight xl:inline">Rooftap</span>
       </Link>
 
-      <nav aria-label="Spaces" className="flex min-w-0 flex-1 justify-center overflow-x-auto [scrollbar-width:none]">
+      <nav aria-label="Tiles" className="flex min-w-0 flex-1 justify-center overflow-x-auto [scrollbar-width:none]">
         <div ref={barRef} className="topbar-tabs relative flex items-stretch">
           <TabGlide target={glideTarget} hue={active ? sectionHue(active) : undefined} />
           {sections.map((section) => {

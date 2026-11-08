@@ -17,7 +17,7 @@ export const SELF_HOST_STEPS: ReadonlyArray<{ title: string; text: string; code?
 /** What one server gives you. */
 export const SELF_HOST_FACTS: ReadonlyArray<[string, string]> = [
   ["Stack.", "Next.js app, Postgres, auth, file storage and realtime, as Docker containers on your own machine. No cloud account."],
-  ["Modules.", "HOMEUP_MODULES lists the modules your server offers. The rest are not served."],
+  ["Tiles.", "HOMEUP_MODULES lists the tiles your server offers. The rest are not served."],
   ["Clients.", "The web app, and the Android app (APK). Both point at your server."],
   ["MCP.", "The MCP server runs on your machine. Your assistant talks to it, not to us."],
   ["Assistant.", "The household assistant runs in the same app, with the model you pick, and answers on your own Telegram bot."],
@@ -40,7 +40,7 @@ export const HERO_FACTS: readonly (readonly string[])[] = [
   ["Free to self-host", "Elastic License 2.0"],
 ];
 
-/** Every feature, by module. */
+/** Every feature, by tile. */
 export const FEATURE_GROUPS: readonly FeatureGroup[] = [
   {
     section: "home",
@@ -49,11 +49,11 @@ export const FEATURE_GROUPS: readonly FeatureGroup[] = [
       ["Shared household", "everyone sees each change as it happens"],
       ["Every platform", "a web app (PWA) on any OS, native Android, native iOS coming soon"],
       ["Offline", "reads work without a connection, writes sync after"],
-      ["Capture", "one + adds anything to any module, and finds what is already there"],
+      ["Capture", "one + adds anything to any tile, and finds what is already there"],
       ["Share sheet", "a link or a photo from any app"],
-      ["Android widget", "Upcoming by day on the home screen"],
+      ["Skylight widget", "Upcoming by day on your Android home screen"],
       ["Weather on Home", "the forecast and the hour the rain starts"],
-      ["Modules per household", "the owner picks; each person hides the rest"],
+      ["Tiles per household", "the owner picks; each person hides the rest"],
       ["Ember Night and Day", "themes that follow the phone"],
       ["Haptics", "a pulse on every tick, swipe and commit"],
     ],
@@ -197,7 +197,7 @@ export const FEATURE_GROUPS: readonly FeatureGroup[] = [
       ["Quick asks", "close 30 minutes after the last message"],
       ["Named chats", "kept and pinned"],
       ["Household thread", "one thread the whole house shares"],
-      ["Trust per module", "read, ask first or act"],
+      ["Trust per tile", "read, ask first or act"],
       ["Any model", "a cloud key or a local model"],
       ["Spending", "a budget per household and per person"],
       ["Telegram", "your own bot, history in the app"],
@@ -213,7 +213,7 @@ export const FEATURE_GROUPS: readonly FeatureGroup[] = [
     items: [
       ["MCP server", "read-only mode and a tool picker per key"],
       ["API keys", "with an expiry you choose"],
-      ["Self-hosting", "one script, Docker, your modules"],
+      ["Your own roof", "self-host with one script and Docker"],
     ],
   },
 ];
@@ -234,7 +234,7 @@ export const ASSISTANT_ENV: readonly string[] = [
 export const ASSISTANT_FACTS: ReadonlyArray<[string, string]> = [
   ["Any model.", "A key for Gemini, OpenAI, Anthropic or OpenRouter, or a local model in Ollama or LM Studio. With a local model, no prompt leaves your network."],
   ["Your Telegram bot.", "The poller runs in Docker and needs no open ports. Each person links an account with a code. The history stays in your database."],
-  ["Trust per module.", "Read, Ask first or Act. A delete always asks. Changes under Ask first wait for a tap in the app or on Telegram."],
+  ["Trust per tile.", "Read, Ask first or Act. A delete always asks. Changes under Ask first wait for a tap in the app or on Telegram."],
   ["No caps.", "A self-hosted server has no plan and no spending limit unless an owner sets a budget."],
   ["Spending.", "A household budget, a limit per person, and usage by person, by feature and by model."],
   ["Home Assistant.", "Connect Home Assistant's MCP Server with a long-lived token. The assistant reads and controls what you expose to Assist, under one trust level and a switch per tool."],
@@ -250,7 +250,7 @@ export const FAQ: ReadonlyArray<[question: string, answer: string]> = [
   ["What is the licence?", "The Elastic License 2.0. You can read the source, run it and change it for your own household. You cannot offer it to others as a hosted service."],
   ["Can my AI assistant use it?", "Yes. Rooftap has an MCP server. Each key can be read-only, limited to some tools, and set to expire."],
   ["Is the Assistant free?", "On a self-hosted server, yes. You bring a model key or run a local model. On the hosted service the Assistant needs the Plus plan, which is not on sale yet."],
-  ["Does the Assistant change things without asking?", "Only where an owner sets a module to Act. The default is Ask first: each change waits for a tap. A delete always asks."],
+  ["Does the Assistant change things without asking?", "Only where an owner sets a tile to Act. The default is Ask first: each change waits for a tap. A delete always asks."],
   ["Does it work with Home Assistant?", "Yes. The Assistant connects to Home Assistant's MCP Server integration with a long-lived token. It sees and controls only the devices you expose to Assist. A self-hosted server can reach Home Assistant on your LAN."],
   ["Where do Shopper prices come from?", "From the sources your server has for its region. An AU server ships with Google Shopping via SerpApi, OpenStreetMap and OzBargain. You can add a price by hand, or write a source."],
 ];
@@ -291,7 +291,7 @@ export const EINK_FACTS: readonly { title: string; text: string }[] = [
 export const LAYOUT_FACTS: readonly { title: string; text: string }[] = [
   { title: "Phone layout", text: "On a phone or a narrow window, you get one column, a tab bar, swipes and press-and-hold. The Android app uses this layout too." },
   { title: "Desktop layout", text: "On a screen 1024 pixels wide or more, a top bar replaces the tab bar. Upcoming becomes a week board with the weather for each day." },
-  { title: "Your Home grid", text: "Drag the Home modules into place and change their size. Each browser keeps its own arrangement." },
+  { title: "Your Home grid", text: "Drag the Home tiles into place and change their size. Each browser keeps its own arrangement." },
   { title: "Mouse and keyboard", text: "Right-click any row for its actions. Double-click a day on the board to add a to-do, an event, a checklist or a cost to it." },
   { title: "Your choice", text: "Settings, then Appearance, switches a wide screen back to the classic sidebar layout." },
 ];

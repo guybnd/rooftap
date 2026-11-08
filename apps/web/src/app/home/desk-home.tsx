@@ -97,7 +97,7 @@ export function DeskHome({ modules }: { modules: Record<string, DeskModule> }) {
   return (
     <div className="space-y-3">
       <div className="flex h-8 items-center justify-end gap-2">
-        {arranging && <p className="mr-auto px-1 text-xs text-muted-foreground">Drag a module by its grip. Pull an edge to resize it.</p>}
+        {arranging && <p className="mr-auto px-1 text-xs text-muted-foreground">Drag a tile by its grip. Pull an edge to resize it.</p>}
         {arranging && (
           <button type="button" onClick={reset} className={cn(pill, 'text-muted-foreground hover:bg-muted hover:text-foreground')}>
             Reset

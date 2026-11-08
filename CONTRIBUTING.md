@@ -44,7 +44,7 @@ A new migration must also:
 
 ## Adding a module
 
-A module is a part of the app that a household can switch on or off, such as Bin night or Rewards. Open an issue first, so that we can agree on these points before you write the code:
+A module is a part of the app that a household can switch on or off, such as Bin night or Rewards. The app calls a module a "tile". The code and the docs say "module". Open an issue first, so that we can agree on these points before you write the code:
 
 - its privacy rule: private rows, "Just me" items, or items kept from a member
 - whether the Assistant can read it and change it
