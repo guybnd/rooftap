@@ -25,6 +25,7 @@ import {
   chatChoices,
   deleteConversation,
   moduleHelper,
+  ROOFTAP_SPECTRUM,
   openAssistantPopup,
   stepChoice,
   popupStatus,
@@ -43,6 +44,7 @@ import {
   type ThreadTarget,
 } from '@homeup/core';
 import { useKeyboardHandler } from 'react-native-keyboard-controller';
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { Button, LeadingTile, ListGroup, SpectrumEdge, Text, cn, haptics, toast, useKeyboardOffset, useThemeMaterial, useStillMotion } from '@homeup/ui';
 import { useDataCache } from '@/lib/data-cache';
 import { sectionIconFor } from '@/lib/section-icons';
@@ -382,8 +384,9 @@ function HelperStrip({ choices, current }: { choices: ChatChoice[]; current: str
             }}
             accessibilityRole="tab"
             accessibilityState={{ selected: on }}
-            className={cn('h-8 flex-row items-center gap-1.5 rounded-full px-3', on ? 'bg-foreground' : 'bg-muted active:bg-muted/70')}
+            className={cn('h-8 flex-row items-center gap-1.5 rounded-full px-3', on ? 'bg-card' : 'bg-muted active:bg-muted/70')}
           >
+            {on ? <SpectrumOutline /> : null}
             {c.helper ? (
               <View style={{ transform: [{ scale: 0.6 }] }} className="-mx-1.5">
                 <LeadingTile sectionId={c.helper} Icon={sectionIconFor(c.helper)} size="sm" />
@@ -393,13 +396,54 @@ function HelperStrip({ choices, current }: { choices: ChatChoice[]; current: str
                 <RooftapTile size="sm" />
               </View>
             )}
-            <Text className={cn('text-xs font-medium', on ? 'text-background' : 'text-foreground')}>
+            <Text className={cn('text-xs text-foreground', on ? 'font-semibold' : 'font-medium')}>
               {c.helper ? moduleHelper(c.helper)?.label.replace(/ helper$/, '') ?? c.label : c.label}
             </Text>
           </Pressable>
         );
       })}
     </ScrollView>
+    </View>
+  );
+}
+
+/**
+ * The chat on show wears the Rooftap spectrum round its chip, the same
+ * colours as the card's living edge, so it reads as the one floated up.
+ */
+function SpectrumOutline() {
+  const [size, setSize] = React.useState<{ w: number; h: number } | null>(null);
+  const stroke = 1.5;
+  return (
+    <View
+      pointerEvents="none"
+      className="absolute inset-0"
+      onLayout={(e) => {
+        const { width: w, height: h } = e.nativeEvent.layout;
+        setSize((prev) => (prev && prev.w === w && prev.h === h ? prev : { w, h }));
+      }}
+    >
+      {size ? (
+        <Svg width={size.w} height={size.h}>
+          <Defs>
+            <LinearGradient id="chip-spectrum" x1="0" y1="0" x2="1" y2="0">
+              {ROOFTAP_SPECTRUM.map((c, i) => (
+                <Stop key={c} offset={i / (ROOFTAP_SPECTRUM.length - 1)} stopColor={c} />
+              ))}
+            </LinearGradient>
+          </Defs>
+          <Rect
+            x={stroke / 2}
+            y={stroke / 2}
+            width={size.w - stroke}
+            height={size.h - stroke}
+            rx={(size.h - stroke) / 2}
+            fill="none"
+            stroke="url(#chip-spectrum)"
+            strokeWidth={stroke}
+          />
+        </Svg>
+      ) : null}
     </View>
   );
 }

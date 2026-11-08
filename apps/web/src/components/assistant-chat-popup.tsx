@@ -16,6 +16,7 @@ import {
   chatChoices,
   deleteConversation,
   moduleHelper,
+  ROOFTAP_SPECTRUM,
   openAssistantPopup,
   popupStatus,
   popupTitle,
@@ -294,6 +295,8 @@ function PopupThread({
  * is on (core chatChoices). The one on show is filled; a tap opens another,
  * carrying on where it was left.
  */
+const CHIP_SPECTRUM = `linear-gradient(90deg, ${ROOFTAP_SPECTRUM.join(", ")})`;
+
 // Where the strip was scrolled. Each chat draws its own header, so a hop
 // mounts a new strip: it starts where the last one was, not back at the start.
 let stripX = 0;
@@ -327,9 +330,11 @@ function HelperStrip({ choices, current }: { choices: ChatChoice[]; current: str
             aria-selected={on}
             onClick={() => !on && openAssistantPopup(c.helper ? { helper: c.helper } : { plain: true })}
             className={cn(
-              "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-xs font-medium",
-              on ? "bg-foreground text-background" : "bg-muted text-foreground hover:bg-muted/70"
+              "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-xs text-foreground",
+              on ? "border-[1.5px] border-transparent font-semibold" : "bg-muted font-medium hover:bg-muted/70"
             )}
+            // The chat on show wears the Rooftap spectrum round its chip, like the card's living edge.
+            style={on ? { background: `linear-gradient(var(--card), var(--card)) padding-box, ${CHIP_SPECTRUM} border-box` } : undefined}
           >
             {c.helper ? (
               <LeadingTile sectionId={c.helper} Icon={sectionIconFor(c.helper)} size="sm" className="size-4 rounded-[5px] [&_svg]:size-[10px]" />
