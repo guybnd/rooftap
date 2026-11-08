@@ -37,7 +37,10 @@ export function useThemeMaterial(): ResolvedThemeMaterial {
  */
 export function useStillMotion(): boolean {
   const reduced = useReducedMotion();
-  return reduced || React.useContext(ThemeMaterialContext).still;
+  // Both hooks run on every render: a `reduced ||` in front of useContext
+  // would skip it whenever the device asks for reduced motion.
+  const { still } = React.useContext(ThemeMaterialContext);
+  return reduced || still;
 }
 
 export interface ThemeProviderProps extends ViewProps {
