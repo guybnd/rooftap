@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
 
   const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${coordinates}?geometries=geojson&overview=full&steps=true&access_token=${token}`;
 
-  const res = await fetch(url);
+  const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
   if (!res.ok) {
     const text = await res.text();
     return NextResponse.json({ error: `Mapbox API error: ${text}` }, { status: res.status });

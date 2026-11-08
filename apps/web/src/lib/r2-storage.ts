@@ -28,7 +28,7 @@ type R2Config = NonNullable<ReturnType<typeof getR2Config>>;
 
 /** True when the object exists in R2. A non-404 failure throws so callers don't mistake an outage for "not copied". */
 export async function r2Exists(config: R2Config, key: string): Promise<boolean> {
-  const res = await fetch(presignR2(config, { method: "HEAD", key, expiresIn: 60 }), { method: "HEAD" });
+  const res = await fetch(presignR2(config, { method: "HEAD", key, expiresIn: 60 }), { method: "HEAD", signal: AbortSignal.timeout(30_000) });
   if (res.ok) return true;
   if (res.status === 404) return false;
   throw new Error(`R2 HEAD failed: ${res.status}`);
@@ -49,14 +49,14 @@ export function r2UploadUrl(config: R2Config, key: string, mimeType: string, siz
 }
 
 export async function r2Delete(config: R2Config, key: string): Promise<void> {
-  const res = await fetch(presignR2(config, { method: "DELETE", key, expiresIn: 60 }), { method: "DELETE" });
+  const res = await fetch(presignR2(config, { method: "DELETE", key, expiresIn: 60 }), { method: "DELETE", signal: AbortSignal.timeout(30_000) });
   // R2 answers 204 whether or not the object existed.
   if (!res.ok && res.status !== 404) throw new Error(`R2 DELETE failed: ${res.status}`);
 }
 
 /** The object's bytes, or null when it isn't in R2. */
 export async function r2Download(config: R2Config, key: string): Promise<ArrayBuffer | null> {
-  const res = await fetch(r2ViewUrl(config, key, 60));
+  const res = await fetch(r2ViewUrl(config, key, 60), { signal: AbortSignal.timeout(30_000) });
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`R2 GET failed: ${res.status}`);
   return res.arrayBuffer();

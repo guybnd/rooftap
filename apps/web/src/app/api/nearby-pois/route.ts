@@ -69,6 +69,7 @@ async function queryOverpass(query: string): Promise<OverpassElement[]> {
           "User-Agent": "Rooftap/1.0 (apartment search tool)",
         },
         body,
+        signal: AbortSignal.timeout(15_000),
       });
       if (res.ok) {
         const json = await res.json();

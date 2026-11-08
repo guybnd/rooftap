@@ -78,6 +78,7 @@ export async function refreshAccessToken(
   ]);
 
   const res = await fetch(TOKEN_URL, {
+    signal: AbortSignal.timeout(15_000),
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
@@ -131,6 +132,7 @@ export async function listCalendars(
   accessToken: string
 ): Promise<{ id: string; summary: string; primary?: boolean }[]> {
   const res = await fetch(`${CALENDAR_API_BASE}/users/me/calendarList`, {
+    signal: AbortSignal.timeout(15_000),
     headers: authHeaders(accessToken),
   });
   if (!res.ok) {
@@ -159,7 +161,7 @@ export async function getOrCreateRooftapCalendar(
   if (connection.homeup_calendar_id) {
     const res = await fetch(
       `${CALENDAR_API_BASE}/calendars/${encodeURIComponent(connection.homeup_calendar_id)}`,
-      { headers: authHeaders(accessToken) }
+      { signal: AbortSignal.timeout(15_000), headers: authHeaders(accessToken) }
     );
     if (res.ok) {
       return connection.homeup_calendar_id;
@@ -171,6 +173,7 @@ export async function getOrCreateRooftapCalendar(
   }
 
   const createRes = await fetch(`${CALENDAR_API_BASE}/calendars`, {
+    signal: AbortSignal.timeout(15_000),
     method: "POST",
     headers: authHeaders(accessToken),
     body: JSON.stringify({ summary: "Rooftap" }),
@@ -214,7 +217,7 @@ export async function listEvents(
   });
   const res = await fetch(
     `${CALENDAR_API_BASE}/calendars/${encodeURIComponent(calendarId)}/events?${params.toString()}`,
-    { headers: authHeaders(accessToken) }
+    { signal: AbortSignal.timeout(15_000), headers: authHeaders(accessToken) }
   );
   if (!res.ok) {
     const body = await res.text().catch(() => "");
@@ -240,6 +243,7 @@ export async function createEvent(
   body: GoogleEventInput
 ): Promise<{ id: string; htmlLink: string | null }> {
   const res = await fetch(`${CALENDAR_API_BASE}/calendars/${encodeURIComponent(calendarId)}/events`, {
+    signal: AbortSignal.timeout(15_000),
     method: "POST",
     headers: authHeaders(accessToken),
     body: JSON.stringify(body),
@@ -262,6 +266,7 @@ export async function updateEvent(
   const res = await fetch(
     `${CALENDAR_API_BASE}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
     {
+      signal: AbortSignal.timeout(15_000),
       method: "PATCH",
       headers: authHeaders(accessToken),
       body: JSON.stringify(body),
@@ -280,6 +285,7 @@ export async function deleteEvent(accessToken: string, calendarId: string, event
   const res = await fetch(
     `${CALENDAR_API_BASE}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
     {
+      signal: AbortSignal.timeout(15_000),
       method: "DELETE",
       headers: authHeaders(accessToken),
     }
@@ -293,6 +299,7 @@ export async function deleteEvent(accessToken: string, calendarId: string, event
 /** POST https://oauth2.googleapis.com/revoke?token=... — revokes an access or refresh token. */
 export async function revokeToken(token: string): Promise<void> {
   const res = await fetch(`${REVOKE_URL}?token=${encodeURIComponent(token)}`, {
+    signal: AbortSignal.timeout(15_000),
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
   });

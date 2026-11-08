@@ -179,6 +179,7 @@ async function callGemini(apiKey: string, model: string, req: StructuredParseReq
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
     {
+      signal: AbortSignal.timeout(55_000),
       method: "POST",
       headers: {
         "X-goog-api-key": apiKey,
@@ -235,6 +236,7 @@ async function callAnthropic(apiKey: string, model: string, req: StructuredParse
   });
 
   const response = await fetch("https://api.anthropic.com/v1/messages", {
+    signal: AbortSignal.timeout(55_000),
     method: "POST",
     headers: {
       "x-api-key": apiKey,

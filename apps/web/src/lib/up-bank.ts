@@ -488,6 +488,9 @@ async function autoFileJointPayments(
       start_date: plan.startDate,
       provider: payee.name.slice(0, 200),
       bank_source: "up",
+      // The database allows one live line per key (uniq_bank_payee_line), so
+      // a second run filing the same payee at once joins this line.
+      bank_payee_key: key,
       created_by: unique[0].user_id,
     });
     newLineKeys.push(key);
@@ -558,19 +561,39 @@ function bankLineEstimate(estimate: boolean, category: string): boolean {
 
 /**
  * Inserts the bank's new lines. When the batch fails, each goes in on its
- * own, so one bad line doesn't hold back the rest.
+ * own, so one bad line doesn't hold back the rest. A line another run made
+ * first for the same payee (unique violation on uniq_bank_payee_line) is
+ * read back and used in its place.
  */
-async function insertBankLines(admin: SupabaseClient, lines: Record<string, unknown>[]): Promise<{ id: string; provider: string }[]> {
+export async function insertBankLines(admin: SupabaseClient, lines: Record<string, unknown>[]): Promise<{ id: string; provider: string }[]> {
   const { data, error } = await admin.from("cost_items").insert(lines).select("id, provider");
   if (!error) return (data ?? []) as { id: string; provider: string }[];
   const made: { id: string; provider: string }[] = [];
   for (const line of lines) {
     const one = await admin.from("cost_items").insert(line).select("id, provider").single();
-    if (one.error) console.warn("[up-bank] cost line not made", line.name, one.error.message);
-    else made.push(one.data as { id: string; provider: string });
+    if (!one.error) {
+      made.push(one.data as { id: string; provider: string });
+      continue;
+    }
+    if (one.error.code === UNIQUE_VIOLATION && line.bank_payee_key) {
+      const first = await admin
+        .from("cost_items")
+        .select("id, provider")
+        .eq("group_id", line.group_id as string)
+        .eq("bank_payee_key", line.bank_payee_key as string)
+        .eq("deleted", false)
+        .maybeSingle();
+      if (first.data) {
+        made.push(first.data as { id: string; provider: string });
+        continue;
+      }
+    }
+    console.warn("[up-bank] cost line not made", line.name, one.error.message);
   }
   return made;
 }
+
+const UNIQUE_VIOLATION = "23505";
 
 /**
  * Two reads can file the same payee at once (Up sends a webhook when a

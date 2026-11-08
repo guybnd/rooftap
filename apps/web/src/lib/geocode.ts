@@ -8,7 +8,7 @@ export async function geocodeAddress(
   const query = suburb ? `${address}, ${suburb}, Australia` : `${address}, Australia`;
   const url = `https://api.mapbox.com/search/geocode/v6/forward?q=${encodeURIComponent(query)}&country=AU&limit=1&access_token=${token}`;
 
-  const res = await fetch(url);
+  const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
   if (!res.ok) return null;
 
   const data = await res.json();

@@ -1,6 +1,7 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { emptyBankLineCopies, upSignatureValid, upWebhookUrl } from "./up-bank";
+import { emptyBankLineCopies, insertBankLines, upSignatureValid, upWebhookUrl } from "./up-bank";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 describe("upSignatureValid", () => {
   const body = JSON.stringify({ data: { attributes: { eventType: "PING" } } });
@@ -58,5 +59,69 @@ describe("emptyBankLineCopies", () => {
   it("waits before dropping a copy a run may still be filing", () => {
     const lines = [line("a", "Lobby", "2026-11-04T02:58:00Z"), line("b", "Lobby", "2026-11-04T02:58:01Z")];
     expect(emptyBankLineCopies(lines, new Map([["a", 1]]), now)).toEqual([]);
+  });
+});
+
+describe("insertBankLines", () => {
+  // A fake cost_items table with the database's uniq_bank_payee_line rule.
+  function fakeAdmin(existing: { id: string; group_id: string; provider: string; bank_payee_key: string | null; deleted: boolean }[]) {
+    const rows = [...existing];
+    let next = 1;
+    const insertOne = (line: Record<string, unknown>) => {
+      const clash = rows.some((r) => !r.deleted && r.bank_payee_key && r.group_id === line.group_id && r.bank_payee_key === line.bank_payee_key);
+      if (clash) return { data: null, error: { code: "23505", message: "duplicate key value violates unique constraint" } };
+      const row = { id: `new${next++}`, group_id: line.group_id as string, provider: line.provider as string, bank_payee_key: (line.bank_payee_key as string) ?? null, deleted: false };
+      rows.push(row);
+      return { data: { id: row.id, provider: row.provider }, error: null };
+    };
+    const admin = {
+      from: () => ({
+        insert: (input: Record<string, unknown> | Record<string, unknown>[]) => ({
+          select: () => {
+            if (Array.isArray(input)) {
+              if (input.some((l) => rows.some((r) => !r.deleted && r.bank_payee_key === l.bank_payee_key && r.group_id === l.group_id))) {
+                return Promise.resolve({ data: null, error: { code: "23505", message: "duplicate" } });
+              }
+              return Promise.resolve({ data: input.map((l) => insertOne(l).data), error: null });
+            }
+            return { single: () => Promise.resolve(insertOne(input)) };
+          },
+        }),
+        select: () => {
+          const filters: Record<string, unknown> = {};
+          const q = {
+            eq: (col: string, val: unknown) => {
+              filters[col] = val;
+              return q;
+            },
+            maybeSingle: () => {
+              const hit = rows.find((r) => Object.entries(filters).every(([k, v]) => (r as Record<string, unknown>)[k] === v));
+              return Promise.resolve({ data: hit ? { id: hit.id, provider: hit.provider } : null, error: null });
+            },
+          };
+          return q;
+        },
+      }),
+    };
+    return { admin: admin as unknown as SupabaseClient, rows };
+  }
+
+  it("uses the line another run made first for the same payee", async () => {
+    const { admin, rows } = fakeAdmin([{ id: "first", group_id: "g", provider: "LUNE FITZROY", bank_payee_key: "LUNE FITZROY", deleted: false }]);
+    const made = await insertBankLines(admin, [
+      { group_id: "g", name: "Lune Fitzroy", provider: "LUNE FITZROY", bank_payee_key: "LUNE FITZROY" },
+      { group_id: "g", name: "Aldi", provider: "ALDI", bank_payee_key: "ALDI" },
+    ]);
+    expect(made).toEqual([
+      { id: "first", provider: "LUNE FITZROY" },
+      { id: "new1", provider: "ALDI" },
+    ]);
+    expect(rows.filter((r) => r.bank_payee_key === "LUNE FITZROY")).toHaveLength(1);
+  });
+
+  it("inserts the whole batch when nothing clashes", async () => {
+    const { admin } = fakeAdmin([]);
+    const made = await insertBankLines(admin, [{ group_id: "g", name: "Aldi", provider: "ALDI", bank_payee_key: "ALDI" }]);
+    expect(made).toEqual([{ id: "new1", provider: "ALDI" }]);
   });
 });

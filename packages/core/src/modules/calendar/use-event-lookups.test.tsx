@@ -46,16 +46,24 @@ describe('useEventTravelMinutes', () => {
 
   it('asks with the trimmed place and the home', async () => {
     const get = vi.fn(async () => ({ minutes: 5 }));
-    renderHook(() => useEventTravelMinutes(createEventLookups(get), ' Forum ', 'walk', home, 0));
+    // One lookups object for every render: a new one each render restarts the
+    // effect, which clears the answer, so the value flips and the test flakes.
+    const lookups = createEventLookups(get);
+    const { result, unmount } = renderHook(() => useEventTravelMinutes(lookups, ' Forum ', 'walk', home, 0));
     await waitFor(() => expect(get).toHaveBeenCalledWith('/api/event-travel?place=Forum&mode=walk&from_lat=-37.8&from_lng=144.9'));
+    // Let the answer land and unmount, so no state update runs after the
+    // test's jsdom is gone ("window is not defined" on a busy runner).
+    await waitFor(() => expect(result.current.minutes).toBe(5));
+    unmount();
   });
 });
 
 describe('useLegTravelMinutes', () => {
   it('looks up a leg between two places', async () => {
     const get = vi.fn(async () => ({ minutes: 7 }));
+    const lookups = createEventLookups(get);
     const { result } = renderHook(() =>
-      useLegTravelMinutes(createEventLookups(get), { fromId: 'a', toId: 'b', from: 'Home', to: 'Cafe', mode: 'drive' } as never)
+      useLegTravelMinutes(lookups, { fromId: 'a', toId: 'b', from: 'Home', to: 'Cafe', mode: 'drive' } as never)
     );
     await waitFor(() => expect(result.current).toBe(7));
     expect(get).toHaveBeenCalledWith('/api/event-travel?place=Cafe&mode=drive&from=Home');
