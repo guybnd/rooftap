@@ -2,8 +2,8 @@
 // paints the app icon's colours instead: the roof in every room hue and the
 // coral tap dot (public/icon.svg).
 // Native twin: apps/mobile/src/components/brand/rooftap-mark.tsx.
-import { useId, type CSSProperties } from "react";
-import { ROOFTAP_MARK, ROOFTAP_SPECTRUM, ROOFTAP_TILE } from "@homeup/core";
+import { useId, type ComponentType, type CSSProperties } from "react";
+import { HELPER_MARK, ROOFTAP_MARK, ROOFTAP_SPECTRUM, ROOFTAP_TILE, sectionHue } from "@homeup/core";
 import { cn } from "@/lib/utils";
 
 const SPECTRUM = ROOFTAP_SPECTRUM;
@@ -78,5 +78,43 @@ export function RooftapHero({ className }: { className?: string }) {
       />
       <RooftapTile size="xl" className="relative" />
     </div>
+  );
+}
+
+/**
+ * A module helper's avatar ("Under the roof", core HELPER_MARK): the
+ * spectrum roof over the helper's module icon in its module's colour
+ * (data-hue), with no tile. `working` makes the icon hop under the roof.
+ * Native twin: HelperMark in apps/mobile.
+ */
+export function HelperMark({
+  helper,
+  Icon,
+  working = false,
+  className,
+}: {
+  helper: string;
+  Icon: ComponentType<{ className?: string; strokeWidth?: number }>;
+  working?: boolean;
+  className?: string;
+}) {
+  const id = `helper-roof-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
+  const { x, y, size } = HELPER_MARK.icon;
+  return (
+    <span aria-hidden data-hue={sectionHue(helper)} className={cn("relative inline-block size-9 shrink-0", working && "helper-working", className)}>
+      <svg viewBox={HELPER_MARK.viewBox} className="absolute inset-0 size-full">
+        <defs>
+          <linearGradient id={id} gradientUnits="userSpaceOnUse" x1={HELPER_MARK.roofX[0]} y1="0" x2={HELPER_MARK.roofX[1]} y2="0">
+            {SPECTRUM.map((c, i) => (
+              <stop key={c} offset={i / (SPECTRUM.length - 1)} stopColor={c} />
+            ))}
+          </linearGradient>
+        </defs>
+        <path d={HELPER_MARK.roof} fill="none" stroke={`url(#${id})`} strokeWidth={HELPER_MARK.roofStroke} strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      <span className="helper-mark-icon absolute" style={{ left: `${x * 100}%`, top: `${y * 100}%`, width: `${size * 100}%`, height: `${size * 100}%`, color: "var(--hue-glyph)" }}>
+        <Icon className="size-full" strokeWidth={2.4} />
+      </span>
+    </span>
   );
 }

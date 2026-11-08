@@ -54,7 +54,7 @@ import { archiveToast } from '@/lib/archive-toast';
 import { ConversationRow } from './conversation-row';
 import { ThreadFooter, ThreadMessages } from './thread-body';
 import { devicePosition } from '@/lib/device-position';
-import { RooftapTile } from '@/components/brand/rooftap-mark';
+import { HelperMark, RooftapTile } from '@/components/brand/rooftap-mark';
 
 const SWIFT_OUT = Easing.bezier(0.16, 1, 0.3, 1);
 const EASE_IN = Easing.bezier(0.42, 0, 1, 1);
@@ -247,15 +247,12 @@ function PopupThread({
         <View>
         <View className="flex-row items-center gap-1 pb-2 pl-3.5 pr-1.5">
           {!showChats && (
-            <View>
+            // A helper wears its own mark: the Rooftap roof over its module's icon.
+            helper ? (
+              <HelperMark helper={helper} Icon={sectionIconFor(helper)} working={thread.thinking} />
+            ) : (
               <RooftapTile size="md" working={thread.thinking} />
-              {/* A helper wears its module's tile as a badge. */}
-              {helper ? (
-                <View className="absolute -bottom-2.5 -right-2.5" style={{ transform: [{ scale: 0.64 }] }}>
-                  <LeadingTile sectionId={helper} Icon={sectionIconFor(helper)} size="sm" />
-                </View>
-              ) : null}
-            </View>
+            )
           )}
           <View className={showChats ? 'min-w-0 flex-1 pl-0.5' : 'min-w-0 flex-1 pl-2'}>
             <Text numberOfLines={1} className="text-body font-semibold text-foreground">
@@ -471,11 +468,12 @@ function BackToChat({
 }) {
   const insets = useSafeAreaInsets();
   const material = useThemeMaterial();
-  const badge = helper ? (
-    <View className="absolute -bottom-2.5 -right-2.5" style={{ transform: [{ scale: 0.64 }] }}>
-      <LeadingTile sectionId={helper} Icon={sectionIconFor(helper)} size="sm" />
-    </View>
-  ) : null;
+  const mark = (small: boolean) =>
+    helper ? (
+      <HelperMark helper={helper} Icon={sectionIconFor(helper)} size={small ? 28 : 36} working={working} />
+    ) : (
+      <RooftapTile size={small ? 'sm' : 'md'} working={working} />
+    );
   const open = () => {
     haptics.select();
     onOpen();
@@ -485,10 +483,7 @@ function BackToChat({
       <View pointerEvents="box-none" className="absolute inset-x-0 items-center px-4" style={{ bottom: insets.bottom + 84 }}>
         <View className="flex-row items-center gap-1 rounded-full border border-border bg-popover p-1" style={{ boxShadow: material.cardShadow }}>
           <Pressable onPress={open} accessibilityRole="button" className="min-h-11 flex-row items-center gap-2 rounded-full pl-1 pr-3 active:bg-muted">
-            <View>
-              <RooftapTile size="sm" working={working} />
-              {badge}
-            </View>
+            {mark(true)}
             <Text className="text-sm font-medium text-foreground">Back to {label}</Text>
           </Pressable>
           <Pressable onPress={onDismiss} accessibilityRole="button" accessibilityLabel="Dismiss" hitSlop={6} className="h-9 w-9 items-center justify-center rounded-full active:bg-muted">
@@ -512,10 +507,7 @@ function BackToChat({
         className="h-14 w-14 items-center justify-center rounded-full border border-border bg-popover"
         style={{ boxShadow: material.cardShadow }}
       >
-        <View>
-          <RooftapTile size="md" working={working} />
-          {badge}
-        </View>
+        {mark(false)}
       </Pressable>
     </View>
   );

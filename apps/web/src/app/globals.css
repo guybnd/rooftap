@@ -1172,6 +1172,16 @@
   @media (prefers-reduced-motion: reduce) {
     .rooftap-working circle { animation: none; }
   }
+  /* A helper's mark: its module icon hops under the roof while it works. */
+  .helper-working .helper-mark-icon {
+    animation: helper-hop 840ms cubic-bezier(0.33, 0, 0.67, 1) infinite;
+  }
+  @keyframes helper-hop {
+    50% { transform: translateY(-30%); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .helper-working .helper-mark-icon { animation: none; }
+  }
 
   /* The empty Ask sheet's blocks rise in one after another (Hearth §8.1
      Arrive timings: core ARRIVE, the delay set inline from arriveDelayMs). */

@@ -9,6 +9,19 @@ export const ROOFTAP_MARK = {
   dot: { cx: 512, cy: 690, r: 86 },
 } as const;
 
+/**
+ * A module helper's mark ("Under the roof"): the spectrum roof over the
+ * helper's own module icon, in its module's colour, with no tile. On a
+ * 0 to 100 square; `icon` is where the module icon sits, as shares of it.
+ */
+export const HELPER_MARK = {
+  viewBox: '0 0 100 100',
+  roof: 'M14 50 L50 18 L86 50',
+  roofStroke: 11,
+  roofX: [14, 86],
+  icon: { x: 0.3, y: 0.48, size: 0.4 },
+} as const;
+
 /** The app icon's roof colours, left to right (public/icon.svg): coral, sun, mint, sky, lilac, rose. */
 export const ROOFTAP_SPECTRUM = ['#FF7A5C', '#FFC93D', '#5FE0B0', '#7CB8FF', '#9C8BFF', '#FF7AB8'] as const;
 

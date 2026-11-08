@@ -46,7 +46,7 @@ import { ListGroup } from "@/components/ui/list-item";
 import { Button } from "@/components/ui/button";
 import { PromptBadge } from "@/components/ui/prompt-badge";
 import { devicePosition } from "@/lib/device-position";
-import { RooftapMark, RooftapTile } from "@/components/brand/rooftap-mark";
+import { HelperMark, RooftapMark, RooftapTile } from "@/components/brand/rooftap-mark";
 import { LeadingTile } from "@/components/ui/leading-tile";
 import { sectionIconFor } from "@/lib/section-icons";
 import { useSpectrumEdge } from "@/components/spectrum-edge";
@@ -210,18 +210,12 @@ function PopupThread({
     <>
       <div className="flex items-center gap-1 border-b border-border pb-2 pl-3.5 pr-1.5 md:pt-2">
         {!showChats && (
-          <span className="relative shrink-0">
+          // A helper wears its own mark: the Rooftap roof over its module's icon.
+          helper ? (
+            <HelperMark helper={helper} Icon={sectionIconFor(helper)} working={thread.thinking} />
+          ) : (
             <RooftapTile working={thread.thinking} />
-            {/* A helper wears its module's tile as a badge. */}
-            {helper && (
-              <LeadingTile
-                sectionId={helper}
-                Icon={sectionIconFor(helper)}
-                size="sm"
-                className="absolute -bottom-1 -right-1 size-[18px] rounded-[6px] ring-2 ring-card [&_svg]:size-[11px]"
-              />
-            )}
-          </span>
+          )
         )}
         <div className={cn("min-w-0 flex-1", showChats ? "pl-0.5" : "pl-2")}>
           <p className="truncate text-[15px] font-semibold text-foreground">{title}</p>
@@ -370,23 +364,18 @@ function BackToChat({
   onOpen: () => void;
   onDismiss: () => void;
 }) {
-  const badge = helper ? (
-    <LeadingTile
-      sectionId={helper}
-      Icon={sectionIconFor(helper)}
-      size="sm"
-      className="absolute -bottom-1 -right-1 size-[18px] rounded-[6px] ring-2 ring-card [&_svg]:size-[11px]"
-    />
-  ) : null;
+  const mark = (small: boolean) =>
+    helper ? (
+      <HelperMark helper={helper} Icon={sectionIconFor(helper)} working={working} className={small ? "size-7" : undefined} />
+    ) : (
+      <RooftapTile size={small ? "sm" : "md"} working={working} />
+    );
   if (mode === "pill") {
     return (
       <div className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] z-40 flex justify-center px-4 md:hidden">
         <div className="flex items-center gap-1 rounded-full bg-popover py-1 pl-1 pr-1 shadow-[var(--card-shadow)] ring-1 ring-border">
           <button type="button" onClick={onOpen} className="flex min-h-11 items-center gap-2 rounded-full pl-1 pr-3 text-sm font-medium text-foreground hover:bg-muted">
-            <span className="relative">
-              <RooftapTile size="sm" working={working} />
-              {badge}
-            </span>
+            {mark(true)}
             Back to {label}
           </button>
           <button type="button" onClick={onDismiss} aria-label="Dismiss" className="inline-flex size-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted">
@@ -404,8 +393,7 @@ function BackToChat({
         aria-label={`Open ${label}`}
         className="relative flex size-14 items-center justify-center rounded-full bg-popover shadow-[var(--card-shadow)] ring-1 ring-border"
       >
-        <RooftapTile working={working} />
-        {badge}
+        {mark(false)}
       </button>
       <button
         type="button"
