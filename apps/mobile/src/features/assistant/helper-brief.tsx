@@ -9,18 +9,48 @@
 import * as React from 'react';
 import { Pressable, View } from 'react-native';
 import { Sparkles } from 'lucide-react-native';
-import { ArriveScope, ArriveView, ListGroup, ListItem, Text, cn, haptics, toast } from '@homeup/ui';
+import { ArriveScope, ArriveView, ListGroup, ListItem, ListItemContent, ListItemMeta, ListItemTitle, ListItemTrailing, Text, cn, haptics, toast } from '@homeup/ui';
+import { useOpenRoute } from '@/lib/tab-routes';
 import {
   SHOWN_ITEMS_FOLD,
   briefItemIds,
   moduleHelper,
   useHelperBrief,
   type AssistantShown,
+  type BriefRow,
   type BriefSection,
   type HelperBriefState,
 } from '@homeup/core';
 import { ChatChanges, SuggestLine } from './chat-changes';
 import { useDataCache } from '@/lib/data-cache';
+
+/** A row that is a fact (a night, an occasion): its line, opening its screen. */
+function InfoLine({ row }: { row: Extract<BriefRow, { kind: 'item' }> }) {
+  const openRoute = useOpenRoute();
+  return (
+    <ListItem
+      className="items-center gap-3"
+      onPress={row.href ? () => openRoute(row.href!) : undefined}
+      accessibilityRole={row.href ? 'link' : undefined}
+    >
+      <ListItemContent>
+        <ListItemTitle numberOfLines={1}>{row.title}</ListItemTitle>
+        {row.meta ? (
+          <ListItemMeta>
+            <Text className="text-caption text-muted-foreground">{row.meta}</Text>
+          </ListItemMeta>
+        ) : null}
+      </ListItemContent>
+      {row.trailing ? (
+        <ListItemTrailing className="mt-0">
+          <Text className={cn('text-xs', row.warn ? 'font-medium text-warning' : 'text-muted-foreground')} style={{ fontVariant: ['tabular-nums'] }}>
+            {row.trailing}
+          </Text>
+        </ListItemTrailing>
+      ) : null}
+    </ListItem>
+  );
+}
 
 function SuggestSection({ section, state }: { section: BriefSection; state: HelperBriefState | null }) {
   const [all, setAll] = React.useState(false);
@@ -28,7 +58,10 @@ function SuggestSection({ section, state }: { section: BriefSection; state: Help
   const hidden = section.rows.length - rows.length;
   return (
     <ListGroup>
-      {rows.map((row) => (
+      {rows.map((row) =>
+        row.kind === 'item' && !row.action ? (
+          <InfoLine key={row.id} row={row} />
+        ) : (
         <SuggestLine
           key={row.kind === 'suggest' ? `s:${row.key}` : row.id}
           title={row.title}
@@ -37,7 +70,8 @@ function SuggestSection({ section, state }: { section: BriefSection; state: Help
           onAdd={() => (row.kind === 'suggest' ? state?.add(row.key) : state?.act(row.id))}
           onDismiss={() => state?.dismiss(row)}
         />
-      ))}
+        )
+      )}
       {hidden > 0 ? (
         <ListItem className="items-center justify-center" onPress={() => setAll(true)} accessibilityRole="button">
           <Text className="text-sm font-medium text-foreground">Show all {section.rows.length}</Text>

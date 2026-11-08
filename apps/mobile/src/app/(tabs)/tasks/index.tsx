@@ -29,6 +29,7 @@
 // measure()'s page-relative delta into a content-relative scroll target, a
 // non-issue once the target is addressed by flattened-data index instead of a
 // live-measured ref.
+import { HelperButton } from '@/components/helper-button';
 import * as React from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 import { FlashList, type FlashListRef, type ListRenderItem } from '@shopify/flash-list';
@@ -248,6 +249,7 @@ function TasksListHeader({
               <Search size={16} className={searchOpen || search ? 'text-primary' : 'text-muted-foreground'} />
             </Pressable>
           )}
+          <HelperButton module="household" />
           {/* Overflow — occasional actions (refresh, generate) live here, not the primary row */}
           <Pressable
             onPress={onOpenActionSheet}

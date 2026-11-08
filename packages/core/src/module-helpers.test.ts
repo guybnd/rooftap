@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { HOLD_CHOICE_PX, chatChoices, helperCanShare, helperForPath, helperInstructions, helperPromptText, helperShared, holdChoiceAt, holdChoices, isHouseholdThread, moduleHelper, stepChoice } from './module-helpers';
+import { HOLD_CHOICE_PX, MODULE_HELPERS, chatChoices, helperCanShare, helperForPath, helperInstructions, helperPromptText, helperShared, holdChoiceAt, holdChoices, isHouseholdThread, moduleHelper, stepChoice } from './module-helpers';
 import { HELPER_INSTRUCTIONS_MAX, parseAssistantSettings, wantsAssistantReply } from './modules/assistant/assistant';
 import { conversationTitle, groupConversations } from './modules/assistant/assistant-view';
 import type { AssistantConversation } from './modules/assistant/assistant-api';
@@ -72,23 +72,30 @@ describe('getting in and out', () => {
     expect(helperForPath('/groceries', on)?.id).toBe('groceries');
     expect(helperForPath('/groceries/list', on)?.id).toBe('groceries');
     expect(helperForPath('/groceriesx', on)).toBeNull();
-    expect(helperForPath('/tasks', on)).toBeNull();
+    expect(helperForPath('/tasks', on)?.id).toBe('household');
+    expect(helperForPath('/settings', on)).toBeNull();
     expect(helperForPath('/groceries', (id) => id !== 'groceries')).toBeNull();
   });
 
   it('lists the chats to hop between, Rooftap first', () => {
-    expect(chatChoices(on).map((c) => c.helper)).toEqual([null, 'groceries']);
+    const helpers = MODULE_HELPERS.map((h) => h.id);
+    expect(helpers).toEqual(expect.arrayContaining(['groceries', 'costs', 'household', 'recipes', 'occasions']));
+    expect(chatChoices(on).map((c) => c.helper)).toEqual([null, ...helpers]);
+    expect(chatChoices((id) => id === 'assistant' || id === 'groceries').map((c) => c.helper)).toEqual([null, 'groceries']);
     expect(chatChoices((id) => id !== 'assistant')).toEqual([{ helper: null, label: 'Rooftap' }]);
     const choices = chatChoices(on);
-    expect(stepChoice(choices, null, 1)?.helper).toBe('groceries');
-    expect(stepChoice(choices, 'groceries', 1)?.helper).toBeNull();
-    expect(stepChoice(choices, null, -1)?.helper).toBe('groceries');
+    expect(stepChoice(choices, null, 1)?.helper).toBe(helpers[0]);
+    expect(stepChoice(choices, helpers[helpers.length - 1], 1)?.helper).toBeNull();
+    expect(stepChoice(choices, null, -1)?.helper).toBe(helpers[helpers.length - 1]);
     expect(stepChoice([{ helper: null, label: 'Rooftap' }], null, 1)).toBeNull();
   });
 
   it('puts the screen helper first and Ask Rooftap next to the + when holding', () => {
     const choices = holdChoices('/groceries', on);
-    expect(choices.map((c) => c.label)).toEqual(['Groceries helper', 'Ask Rooftap']);
+    expect(choices[0].label).toBe('Groceries helper');
+    expect(choices[choices.length - 1].label).toBe('Ask Rooftap');
+    expect(choices).toHaveLength(MODULE_HELPERS.length + 1);
+    expect(holdChoices('/costs', on)[0].label).toBe('Money helper');
     expect(holdChoiceAt(0, 2)).toBe(1);
     expect(holdChoiceAt(-HOLD_CHOICE_PX, 2)).toBe(0);
     expect(holdChoiceAt(-HOLD_CHOICE_PX * 5, 2)).toBe(0);

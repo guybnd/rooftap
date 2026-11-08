@@ -16,6 +16,7 @@
 import { useMemo, useState, type MouseEvent, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import { HelperButton } from '@/components/helper-button';
 import { ChevronDown, ChevronRight, FileText, Landmark, List, MessageSquare, MoreHorizontal, PenLine, Plus, Repeat, Settings, Sparkles, Wallet, type LucideIcon } from 'lucide-react';
 import {
   CADENCE_LABEL,
@@ -360,6 +361,7 @@ export function CostsOverview(props: CostsOverviewProps) {
         ) : (
           <span className={cn(LABEL, 'flex-1')}>Costs</span>
         )}
+        <HelperButton module="costs" />
         <button
           type="button"
           aria-label="Add a cost"

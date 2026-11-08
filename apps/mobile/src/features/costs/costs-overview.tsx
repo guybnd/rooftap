@@ -12,6 +12,7 @@
 // Web twin: apps/web/src/app/costs/costs-overview.tsx.
 import * as React from 'react';
 import { Pressable, View } from 'react-native';
+import { HelperButton } from '@/components/helper-button';
 import { Archive, ArrowRight, ChevronDown, ChevronRight, EyeOff, FileText, Landmark, MessageSquare, MoreHorizontal, PenLine, Plus, Repeat, Settings, Sparkles, Wallet, List, type LucideIcon } from 'lucide-react-native';
 import { BottomSheet, Cheer, CheerGlow, SwipeActions, Text, cn, haptics, toast } from '@homeup/ui';
 import {
@@ -241,6 +242,7 @@ export function CostsOverview(props: CostsOverviewProps) {
         ) : (
           <Text className={cn(LABEL, 'flex-1')}>Costs</Text>
         )}
+        <HelperButton module="costs" />
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Add a cost"

@@ -1,6 +1,7 @@
 'use client';
 
 import { HeroLede } from '@/components/ui/hero-lede';
+import { HelperButton } from '@/components/helper-button';
 import { LeadingTile } from '@/components/ui/leading-tile';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { use$ } from '@legendapp/state/react';
@@ -427,6 +428,7 @@ export default function TasksPage() {
           }
         />
         <div className="flex items-center gap-2">
+          <HelperButton module="household" />
           {tasks.length > 0 && (
             <button
               onClick={() => setSearchOpen((v) => !v)}

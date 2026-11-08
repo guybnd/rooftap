@@ -7,6 +7,7 @@
 // database drops it), so on their own day a member sees only their wishlist.
 // Native twin: apps/mobile/src/app/(tabs)/occasions/index.tsx.
 import { useCallback, useState } from 'react';
+import { HelperButton } from '@/components/helper-button';
 import { ChevronDown, Gift, Plus } from 'lucide-react';
 import {
   OCCASIONS_PREVIEW,
@@ -87,6 +88,7 @@ export default function OccasionsPage() {
         trailing={
           <>
             {!isOnline && <OfflineHint />}
+            <HelperButton module="occasions" />
             <button
               type="button"
               onClick={() => setEditingOccasion({ id: null })}

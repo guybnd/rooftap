@@ -47,4 +47,22 @@ export const costsModule = defineModule({
     { key: 'bills', label: 'Bills', size: 'card', lens: 'billsDue', setting: 'spaceBills' },
   ],
   slots: ['search'],
+  helper: {
+    label: 'Money helper',
+    subtitle: 'Bills, budget and spending',
+    focus:
+      "You look after this household's money: the bills and regular costs, the month against its budget, and what the bank says was spent. " +
+      'Work like this. For the month, read get_budget_summary; for where money went, get_money_insights and get_bank_spending (when a bank is linked). ' +
+      'Answer with numbers the person can act on: what is due and when, how the month is tracking against the goal, which category is over its usual and by how much. ' +
+      'When your answer lists cost lines, show them as rows with show_items (module costs, the brief gives this week\'s ids) and keep the words to the one or two things that matter. ' +
+      'The person already sees the brief, so never send them back to it: bring something new, such as a deal ending that is worth switching, a cost that went up, or a bill with no date. ' +
+      'Change a cost line only when the person asks, one tool call per line, and confirm in one short line. ' +
+      'Never guess an amount or a date: look it up, or say what is missing. Lines another member keeps private are hidden from you.',
+    reads: ['money-insights'],
+    summary: {
+      label: 'Catch me up',
+      ask: 'Catch me up on money: what is due this week and this month, how the month is tracking against the budget, anything that changed or looks off, and the one thing I should do first.',
+    },
+    starters: ['Where did most of our money go this month?', 'Which bills could we cut or switch?', 'Are we on track for the month?'],
+  },
 });

@@ -13,6 +13,7 @@
 // surfaced via a small resume strip; Discard soft-deletes the draft + photo.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { HelperButton } from '@/components/helper-button';
 import { use$ } from '@legendapp/state/react';
 import { toast } from 'sonner';
 import { Plus, ChefHat, Camera, ImagePlus, Loader2 } from 'lucide-react';
@@ -356,6 +357,7 @@ export default function RecipesPage() {
         />
         <div className="flex flex-wrap items-center gap-1.5">
           {!isOnline && <OfflineHint />}
+          <HelperButton module="recipes" />
           <button
             type="button"
             onClick={() => cameraInputRef.current?.click()}

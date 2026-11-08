@@ -104,6 +104,8 @@ export type BriefRow =
       /** Draws the trailing fact as a warning (something going off). */
       warn?: boolean;
       action?: 'readd' | null;
+      /** A row that is only a fact (a night, an occasion): where a tap goes. */
+      href?: string | null;
     };
 
 export interface BriefSection {

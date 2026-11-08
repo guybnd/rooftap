@@ -1,7 +1,15 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   briefMissing,
+  dinnersBrief,
+  giftsBrief,
   groceriesBrief,
+  moneyBrief,
+  weekBrief,
+  type CostItem,
+  type GiftIdea,
+  type HouseholdTask,
+  type Occasion,
   stapleKeys,
   type GroceryItem,
   type HelperBrief,
@@ -11,7 +19,7 @@ import {
   type RecipeIngredient,
   type RecipeStaple,
 } from "@homeup/core";
-import { visibleGroceryItems } from "@/lib/pat";
+import { visibleGroceryItems, visibleTasks } from "@/lib/pat";
 import { todayIn } from "@/lib/meal-plan-server";
 
 // A module helper's brief on the server (core module-helpers.ts): the same
@@ -72,7 +80,52 @@ async function groceries(ctx: HelperBriefContext): Promise<HelperBrief> {
   return groceriesBrief({ items, today, missing });
 }
 
-const BRIEFS: Partial<Record<string, (ctx: HelperBriefContext) => Promise<HelperBrief>>> = { groceries };
+/** Cost lines anyone keeps private stay out of a shared chat; the Money brief has no private rows of its own. */
+async function money(ctx: HelperBriefContext): Promise<HelperBrief> {
+  const { data } = await ctx.admin.from("cost_items").select("*").eq("group_id", ctx.groupId).eq("deleted", false);
+  return moneyBrief({ items: (data ?? []) as CostItem[], today: todayIn(ctx.timeZone, ctx.now) });
+}
+
+async function week(ctx: HelperBriefContext): Promise<HelperBrief> {
+  const { data } = await ctx.admin.from("household_tasks").select("*").eq("group_id", ctx.groupId).eq("deleted", false).eq("done", false);
+  const visible = visibleTasks((data ?? []) as HouseholdTask[], ctx.userId);
+  const tasks = ctx.shared ? visible.filter((t) => !t.private) : visible;
+  return weekBrief({ tasks, today: todayIn(ctx.timeZone, ctx.now), me: ctx.userId });
+}
+
+async function dinners(ctx: HelperBriefContext): Promise<HelperBrief | null> {
+  if (!ctx.enabled.has("meals" as ModuleId)) return null;
+  const today = todayIn(ctx.timeZone, ctx.now);
+  const last = new Date(Date.parse(`${today}T00:00:00Z`) + 6 * 86_400_000).toISOString().slice(0, 10);
+  const [entryRes, recipeRes] = await Promise.all([
+    ctx.admin.from("meal_plan_entries").select("*").eq("group_id", ctx.groupId).eq("deleted", false).gte("date", today).lte("date", last),
+    ctx.admin.from("recipes").select("*").eq("group_id", ctx.groupId).eq("deleted", false),
+  ]);
+  return dinnersBrief({ entries: (entryRes.data ?? []) as MealPlanEntry[], recipes: (recipeRes.data ?? []) as Recipe[], today });
+}
+
+/** Occasions and ideas kept from this person (hidden_from) never count; the Gifts chat is never shared. */
+async function gifts(ctx: HelperBriefContext): Promise<HelperBrief> {
+  const [occRes, ideaRes] = await Promise.all([
+    ctx.admin.from("occasions").select("*").eq("group_id", ctx.groupId).eq("deleted", false),
+    ctx.admin.from("gift_ideas").select("*").eq("group_id", ctx.groupId).eq("deleted", false),
+  ]);
+  const seen = <T extends { hidden_from?: string[] | null }>(rows: T[]) => rows.filter((r) => !(r.hidden_from ?? []).includes(ctx.userId));
+  return giftsBrief({
+    occasions: seen((occRes.data ?? []) as Occasion[]),
+    ideas: seen((ideaRes.data ?? []) as GiftIdea[]),
+    today: todayIn(ctx.timeZone, ctx.now),
+    me: ctx.userId,
+  });
+}
+
+const BRIEFS: Partial<Record<string, (ctx: HelperBriefContext) => Promise<HelperBrief | null>>> = {
+  groceries,
+  costs: money,
+  household: week,
+  recipes: dinners,
+  occasions: gifts,
+};
 
 /** The helper's brief, or null when it has none or the read fails (the chat goes on without it). */
 export async function loadHelperBrief(helper: string, ctx: HelperBriefContext): Promise<HelperBrief | null> {

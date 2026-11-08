@@ -9,6 +9,7 @@
 // stores. Under it, the helper's catch-up ask leads its starters, which send as asks.
 // Native twin: apps/mobile/src/features/assistant/helper-brief.tsx.
 import { useState, type CSSProperties } from 'react';
+import { useRouter } from 'next/navigation';
 import { Sparkles } from 'lucide-react';
 import {
   SHOWN_ITEMS_FOLD,
@@ -17,15 +18,46 @@ import {
   moduleHelper,
   useHelperBrief,
   type AssistantShown,
+  type BriefRow,
   type BriefSection,
   type HelperBriefState,
 } from '@homeup/core';
 import { toast } from 'sonner';
 import { ListGroup, ListItem, ListItemContent, ListItemMeta, ListItemTitle, ListItemTrailing } from '@/components/ui/list-item';
 import { useDataCache } from '@/lib/data-cache';
+import { cn } from '@/lib/utils';
 import { ChatChanges, SuggestLine } from './chat-changes';
 
 const arrive = (i: number) => ({ '--arrive-delay': `${arriveDelayMs(i)}ms` }) as CSSProperties;
+
+/** A row that is a fact (a night, an occasion): its line, opening its screen. */
+function InfoLine({ row }: { row: Extract<BriefRow, { kind: 'item' }> }) {
+  const router = useRouter();
+  const body = (
+    <>
+      <ListItemContent>
+        <ListItemTitle>
+          <span className="text-foreground">{row.title}</span>
+        </ListItemTitle>
+        {row.meta && <ListItemMeta>{row.meta}</ListItemMeta>}
+      </ListItemContent>
+      {row.trailing && (
+        <ListItemTrailing>
+          <span className={cn('text-xs tabular-nums', row.warn ? 'font-medium text-warning' : 'text-muted-foreground')}>{row.trailing}</span>
+        </ListItemTrailing>
+      )}
+    </>
+  );
+  return row.href ? (
+    <ListItem asChild>
+      <button type="button" className="cursor-pointer text-left" onClick={() => router.push(row.href!)}>
+        {body}
+      </button>
+    </ListItem>
+  ) : (
+    <ListItem>{body}</ListItem>
+  );
+}
 
 function SuggestSection({ section, state }: { section: BriefSection; state: HelperBriefState | null }) {
   const [all, setAll] = useState(false);
@@ -33,7 +65,10 @@ function SuggestSection({ section, state }: { section: BriefSection; state: Help
   const hidden = section.rows.length - rows.length;
   return (
     <ListGroup>
-      {rows.map((row) => (
+      {rows.map((row) =>
+        row.kind === 'item' && !row.action ? (
+          <InfoLine key={row.id} row={row} />
+        ) : (
         <SuggestLine
           key={row.kind === 'suggest' ? `s:${row.key}` : row.id}
           title={row.title}
@@ -42,7 +77,8 @@ function SuggestSection({ section, state }: { section: BriefSection; state: Help
           onAdd={() => (row.kind === 'suggest' ? state?.add(row.key) : state?.act(row.id))}
           onDismiss={() => state?.dismiss(row)}
         />
-      ))}
+        )
+      )}
       {hidden > 0 && (
         <ListItem asChild>
           <button type="button" className="cursor-pointer justify-center text-sm font-medium text-foreground" onClick={() => setAll(true)}>

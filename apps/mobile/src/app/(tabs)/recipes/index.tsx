@@ -16,6 +16,7 @@
 // uses the SectionScreen shell; the lede/drafts-strip/search/filters hoist
 // into ListHeaderComponent, with ScreenBackground + safe-area padding applied
 // directly (matching tasks/groceries/costs/appointments/checklists).
+import { HelperButton } from '@/components/helper-button';
 import * as React from 'react';
 import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -411,6 +412,7 @@ export default function RecipesSectionScreen() {
               parity). They no longer compete with the empty state's CTA because
               that one's `secondaryAction` renders as a text link, not a button —
               so Hearth §11's one-CTA rule still holds. */}
+          <HelperButton module="recipes" />
           <Button
             variant="outline"
             size="sm"

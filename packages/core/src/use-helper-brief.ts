@@ -9,6 +9,7 @@ import { todayISO } from './date-utils';
 import { showsBrief, type HelperBriefState } from './module-helpers';
 import { useModules } from './modules-store';
 import { useGroceriesHelper } from './modules/groceries/use-groceries-helper';
+import { useDinnersHelper, useGiftsHelper, useMoneyHelper, useWeekHelper } from './use-module-briefs';
 
 export function useHelperBrief(input: {
   helper: string | null | undefined;
@@ -23,8 +24,25 @@ export function useHelperBrief(input: {
     today,
     mealsLinked: modules.feature('meals.groceries'),
   });
-  if (input.helper === 'groceries') return groceries;
-  return null;
+  const own = (id: string) => (input.helper === id ? input.groupId : undefined);
+  const money = useMoneyHelper({ groupId: own('costs'), currentUserId: input.currentUserId, today });
+  const week = useWeekHelper({ groupId: own('household'), currentUserId: input.currentUserId, today });
+  const dinners = useDinnersHelper({ groupId: modules.isEnabled('meals') ? own('recipes') : undefined, currentUserId: input.currentUserId, today });
+  const gifts = useGiftsHelper({ groupId: own('occasions'), currentUserId: input.currentUserId, today });
+  switch (input.helper) {
+    case 'groceries':
+      return groceries;
+    case 'costs':
+      return money;
+    case 'household':
+      return week;
+    case 'recipes':
+      return dinners;
+    case 'occasions':
+      return gifts;
+    default:
+      return null;
+  }
 }
 
 /** Messages this close before the chat opened still count as this visit's (server and device clocks differ). */

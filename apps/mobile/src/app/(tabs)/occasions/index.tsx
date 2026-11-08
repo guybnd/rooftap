@@ -4,6 +4,7 @@
 // the wishlists. A gift kept from someone never reaches their device (the
 // database drops it), so on their own day a member sees only their wishlist.
 // Web twin: apps/web/src/app/occasions/page.tsx.
+import { HelperButton } from '@/components/helper-button';
 import * as React from 'react';
 import { ActivityIndicator, Linking, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -132,6 +133,7 @@ export default function OccasionsScreen() {
                 <Text className="text-xs text-muted-foreground">Offline</Text>
               </View>
             )}
+            <HelperButton module="occasions" />
             <Button size="sm" onPress={() => occasionSheet.show({ id: null })}>
               <Plus size={14} className="text-primary-foreground" />
               <Text className="text-sm font-medium text-primary-foreground">Add</Text>
