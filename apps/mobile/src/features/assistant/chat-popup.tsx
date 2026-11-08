@@ -19,11 +19,14 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaFrame, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePathname } from 'expo-router';
-import { ChevronDown, Maximize2, MessagesSquare, SquarePen, Trash2 } from 'lucide-react-native';
+import { ChevronDown, Maximize2, MessagesSquare, SquarePen, Trash2, X } from 'lucide-react-native';
 import {
   MOTION_DURATIONS_MS,
+  chatChoices,
   deleteConversation,
+  moduleHelper,
   openAssistantPopup,
+  stepChoice,
   popupStatus,
   popupTitle,
   useAssistantPopupState,
@@ -33,9 +36,10 @@ import {
   useModules,
   type AssistantConversation,
   type AssistantEdgePace,
+  type ChatChoice,
   type ThreadTarget,
 } from '@homeup/core';
-import { Button, LeadingTile, ListGroup, SpectrumEdge, Text, toast, useKeyboardOffset, useThemeMaterial, useStillMotion } from '@homeup/ui';
+import { Button, LeadingTile, ListGroup, SpectrumEdge, Text, cn, haptics, toast, useKeyboardOffset, useThemeMaterial, useStillMotion } from '@homeup/ui';
 import { useDataCache } from '@/lib/data-cache';
 import { sectionIconFor } from '@/lib/section-icons';
 import { useOpenRoute } from '@/lib/tab-routes';
@@ -62,7 +66,7 @@ export function AssistantChatPopup() {
   const modules = useModules();
   const { group } = useDataCache();
   const on = modules.isEnabled('assistant') && !!group?.id;
-  const { state, minimize, fresh, remember } = useAssistantPopupState(on);
+  const { state, minimize, dismissBack, fresh, remember } = useAssistantPopupState(on);
 
   if (!on) return null;
   return (
@@ -71,7 +75,10 @@ export function AssistantChatPopup() {
       open={state.open}
       target={state.target}
       ask={state.ask}
+      back={state.back}
       onMinimize={minimize}
+      onNavigateAway={() => minimize('navigate')}
+      onDismissBack={dismissBack}
       onFresh={fresh}
       onConversation={remember}
     />
@@ -82,14 +89,21 @@ function PopupThread({
   open,
   target,
   ask,
+  back,
   onMinimize,
+  onNavigateAway,
+  onDismissBack,
   onFresh,
   onConversation,
 }: {
   open: boolean;
   target: ThreadTarget;
   ask?: string;
+  back: 'pill' | 'bubble' | null;
   onMinimize: () => void;
+  /** A tap in the chat opened another screen: put the chat away and offer it back. */
+  onNavigateAway: () => void;
+  onDismissBack: () => void;
   onFresh: () => void;
   onConversation: (c: AssistantConversation | null) => void;
 }) {
@@ -98,13 +112,16 @@ function PopupThread({
   // The screen behind the chat, so "this" in a question can mean what is open.
   const pathname = usePathname();
   const pathRef = React.useRef(pathname);
-  React.useEffect(() => {
-    pathRef.current = pathname;
-  }, [pathname]);
   const openRef = React.useRef(open);
   React.useEffect(() => {
     openRef.current = open;
   }, [open]);
+  React.useEffect(() => {
+    // A tap in the chat (a row, a link) opened another screen behind it: the
+    // item shows as usual, and a "Back to chat" pill brings the chat back.
+    if (pathRef.current !== pathname && openRef.current) onNavigateAway();
+    pathRef.current = pathname;
+  }, [pathname, onNavigateAway]);
 
   const thread = useAssistantThread(target, {
     api: assistantApi,
@@ -115,7 +132,8 @@ function PopupThread({
   });
   const { conversation, loadError, send, reload } = thread;
   // A delete can be taken back on servers that have archiving.
-  const canUndo = useModules().server('assistant.archive');
+  const modules = useModules();
+  const canUndo = modules.server('assistant.archive');
 
   usePopupThreadLifecycle({ open, ask, conversation, loadError, send, reload, onConversation });
 
@@ -146,6 +164,17 @@ function PopupThread({
 
   const helper = conversation?.helper ?? target.helper ?? null;
   const title = popupTitle(showChats, conversation, target.id, helper);
+  // The chats it can hop between (Rooftap and each helper): a strip under the header, and a sideways swipe on it.
+  const choices = modules.server('assistant.helpers') ? chatChoices((id) => modules.isEnabled(id)) : [];
+  const hop = React.useCallback(
+    (step: 1 | -1) => {
+      const next = stepChoice(choices, helper, step);
+      if (!next) return;
+      haptics.select();
+      openAssistantPopup(next.helper ? { helper: next.helper } : { plain: true });
+    },
+    [choices, helper]
+  );
   const [listening, setListening] = React.useState(false);
   // Re-read each minute so a quick ask's "more min" counts down while the pop-up is open.
   const [, tick] = React.useReducer((n: number) => n + 1, 0);
@@ -157,12 +186,25 @@ function PopupThread({
   const status = showChats ? null : listening ? 'Listening' : popupStatus(conversation, target.id, new Date(), helper);
 
   return (
+    <>
+    {!open && back ? (
+      <BackToChat
+        mode={back}
+        label={popupTitle(false, conversation, target.id, helper) || 'Rooftap'}
+        helper={helper}
+        working={thread.thinking}
+        onOpen={() => openAssistantPopup()}
+        onDismiss={onDismissBack}
+      />
+    ) : null}
     <PopupSurface
       open={open}
       pace={thread.thinking ? 'thinking' : listening ? 'listening' : 'rest'}
       onMinimize={onMinimize}
+      onSwipe={!showChats && choices.length > 1 ? hop : undefined}
       scrollY={scrollY}
       header={
+        <View>
         <View className="flex-row items-center gap-1 pb-2 pl-3.5 pr-1.5">
           {!showChats && (
             <View>
@@ -216,6 +258,8 @@ function PopupThread({
             <ChevronDown size={20} className="text-muted-foreground" />
           </Pressable>
         </View>
+        {!showChats && choices.length > 1 ? <HelperStrip choices={choices} current={helper} /> : null}
+        </View>
       }
     >
       {showChats ? (
@@ -227,6 +271,121 @@ function PopupThread({
         </>
       )}
     </PopupSurface>
+    </>
+  );
+}
+
+/**
+ * The chats the pop-up can hop between: plain Rooftap, then each helper that
+ * is on (core chatChoices). The one on show is filled; a tap, or a sideways
+ * swipe on the header, opens another where it was left.
+ */
+function HelperStrip({ choices, current }: { choices: ChatChoice[]; current: string | null }) {
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-1.5 px-3.5 pb-2" accessibilityRole="tablist">
+      {choices.map((c) => {
+        const on = c.helper === current;
+        return (
+          <Pressable
+            key={c.helper ?? 'rooftap'}
+            onPress={() => {
+              if (on) return;
+              haptics.select();
+              openAssistantPopup(c.helper ? { helper: c.helper } : { plain: true });
+            }}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: on }}
+            className={cn('h-8 flex-row items-center gap-1.5 rounded-full px-3', on ? 'bg-foreground' : 'bg-muted active:bg-muted/70')}
+          >
+            {c.helper ? (
+              <View style={{ transform: [{ scale: 0.6 }] }} className="-mx-1.5">
+                <LeadingTile sectionId={c.helper} Icon={sectionIconFor(c.helper)} size="sm" />
+              </View>
+            ) : (
+              <View style={{ transform: [{ scale: 0.6 }] }} className="-mx-1.5">
+                <RooftapTile size="sm" />
+              </View>
+            )}
+            <Text className={cn('text-xs font-medium', on ? 'text-background' : 'text-foreground')}>
+              {c.helper ? moduleHelper(c.helper)?.label.replace(/ helper$/, '') ?? c.label : c.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </ScrollView>
+  );
+}
+
+/**
+ * The chat, put away, offering itself back: a "Back to <chat>" pill after a
+ * tap in the chat opened an item, or a bubble at the edge for a helper chat
+ * swiped away. Either one opens the chat where it was; the x lets it go (the
+ * chat stays behind the +).
+ */
+function BackToChat({
+  mode,
+  label,
+  helper,
+  working,
+  onOpen,
+  onDismiss,
+}: {
+  mode: 'pill' | 'bubble';
+  label: string;
+  helper: string | null;
+  working: boolean;
+  onOpen: () => void;
+  onDismiss: () => void;
+}) {
+  const insets = useSafeAreaInsets();
+  const material = useThemeMaterial();
+  const badge = helper ? (
+    <View className="absolute -bottom-2.5 -right-2.5" style={{ transform: [{ scale: 0.64 }] }}>
+      <LeadingTile sectionId={helper} Icon={sectionIconFor(helper)} size="sm" />
+    </View>
+  ) : null;
+  const open = () => {
+    haptics.select();
+    onOpen();
+  };
+  if (mode === 'pill') {
+    return (
+      <View pointerEvents="box-none" className="absolute inset-x-0 items-center px-4" style={{ bottom: insets.bottom + 84 }}>
+        <View className="flex-row items-center gap-1 rounded-full border border-border bg-popover p-1" style={{ boxShadow: material.cardShadow }}>
+          <Pressable onPress={open} accessibilityRole="button" className="min-h-11 flex-row items-center gap-2 rounded-full pl-1 pr-3 active:bg-muted">
+            <View>
+              <RooftapTile size="sm" working={working} />
+              {badge}
+            </View>
+            <Text className="text-sm font-medium text-foreground">Back to {label}</Text>
+          </Pressable>
+          <Pressable onPress={onDismiss} accessibilityRole="button" accessibilityLabel="Dismiss" hitSlop={6} className="h-9 w-9 items-center justify-center rounded-full active:bg-muted">
+            <X size={16} className="text-muted-foreground" />
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+  return (
+    <View pointerEvents="box-none" className="absolute right-3" style={{ bottom: insets.bottom + 92 }}>
+      <Pressable
+        onPress={open}
+        onLongPress={() => {
+          haptics.remove();
+          onDismiss();
+        }}
+        accessibilityRole="button"
+        accessibilityLabel={`Open ${label}`}
+        accessibilityHint="Hold to close the bubble"
+        className="h-14 w-14 items-center justify-center rounded-full border border-border bg-popover"
+        style={{ boxShadow: material.cardShadow }}
+      >
+        <View>
+          <RooftapTile size="md" working={working} />
+          {badge}
+        </View>
+      </Pressable>
+    </View>
   );
 }
 
@@ -286,11 +445,14 @@ function PopupSurface({
   open,
   pace,
   onMinimize,
+  onSwipe,
   scrollY,
   header,
   children,
 }: {
   open: boolean;
+  /** A sideways swipe on the header: the next (1) or previous (-1) chat. */
+  onSwipe?: (step: 1 | -1) => void;
   /** How far the body is scrolled; a drag down on the body closes the card only from the top. */
   scrollY: SharedValue<number>;
   /** How busy Rooftap is: the spectrum edge turns faster while it works. */
@@ -339,6 +501,20 @@ function PopupSurface({
       if (event.translationY > DISMISS_PX || event.velocityY > DISMISS_VELOCITY) runOnJS(onMinimize)();
       else drag.value = withTiming(0, { duration: MOTION_DURATIONS_MS.base, easing: SWIFT_OUT });
     });
+
+  // Sideways on the header hops to the next or previous chat, like turning a page.
+  const hasSwipe = !!onSwipe;
+  const swipe = React.useCallback((step: 1 | -1) => onSwipe?.(step), [onSwipe]);
+  const headerSwipe = Gesture.Pan()
+    .enabled(hasSwipe)
+    .activeOffsetX([-24, 24])
+    .failOffsetY([-14, 14])
+    .onEnd((event) => {
+      'worklet';
+      if (event.translationX < -60 || event.velocityX < -600) runOnJS(swipe)(1);
+      else if (event.translationX > 60 || event.velocityX > 600) runOnJS(swipe)(-1);
+    });
+  const headerGesture = Gesture.Race(headerDrag, headerSwipe);
 
   // The same drag anywhere on the body, once nothing above is left to scroll
   // to (an empty ask never scrolls). It decides by hand: down from the top
@@ -419,7 +595,7 @@ function PopupSurface({
         >
           {/* Hearth §13 "Living edge": the Rooftap spectrum round the card, turning faster while Rooftap works. */}
           <SpectrumEdge pace={pace} active={visible} radius={28} fill={material.glassBg} />
-          <GestureDetector gesture={headerDrag}>
+          <GestureDetector gesture={headerGesture}>
             <View className="border-b border-border">
               <View className="items-center pb-1 pt-2.5">
                 <View className="h-1.5 w-10 rounded-full bg-foreground/20" />

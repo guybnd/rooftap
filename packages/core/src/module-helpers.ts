@@ -185,3 +185,64 @@ export function briefCount(brief: HelperBrief | null | undefined): number {
   if (!brief) return 0;
   return brief.sections.reduce((n, s) => n + s.rows.filter((r) => r.kind === 'suggest' || r.action).length, 0);
 }
+
+// ── Getting in and out ──────────────────────────────────────────────────────
+
+/** The helper that belongs to the screen at `path` (its module's section), or null. */
+export function helperForPath(path: string | null | undefined, isEnabled: (id: ModuleId) => boolean): ModuleHelper | null {
+  if (!path) return null;
+  for (const helper of MODULE_HELPERS) {
+    const base = ALL_MANIFESTS.find((m) => m.id === helper.id)?.section?.basePath;
+    if (base && (path === base || path.startsWith(`${base}/`)) && helperAvailable(helper.id, isEnabled)) return helper;
+  }
+  return null;
+}
+
+/** One place the chat can open on: a helper, or plain Rooftap (helper null). */
+export interface ChatChoice {
+  helper: string | null;
+  label: string;
+}
+
+/**
+ * The chats the pop-up can hop between (the helper strip, swiping): plain
+ * Rooftap first, then each helper that is on, in manifest order.
+ */
+export function chatChoices(isEnabled: (id: ModuleId) => boolean): ChatChoice[] {
+  return [
+    { helper: null, label: 'Rooftap' },
+    ...MODULE_HELPERS.filter((h) => helperAvailable(h.id, isEnabled)).map((h) => ({ helper: h.id, label: h.label })),
+  ];
+}
+
+/**
+ * What holding + offers, top to bottom: the helper for the screen you are on,
+ * the other helpers, then Ask Rooftap next to the +, so letting go without
+ * sliding asks Rooftap as before. Just Ask Rooftap when no helper is on.
+ */
+export function holdChoices(path: string | null | undefined, isEnabled: (id: ModuleId) => boolean): ChatChoice[] {
+  const here = helperForPath(path, isEnabled);
+  const helpers = MODULE_HELPERS.filter((h) => helperAvailable(h.id, isEnabled));
+  const ordered = here ? [here, ...helpers.filter((h) => h.id !== here.id)] : helpers;
+  return [...ordered.map((h) => ({ helper: h.id, label: h.label })), { helper: null, label: 'Ask Rooftap' }];
+}
+
+/** The height of one row of the hold menu, in px: sliding up this far moves to the next. */
+export const HOLD_CHOICE_PX = 48;
+
+/**
+ * Which hold choice the finger is on after sliding `dy` px (negative is up):
+ * the last one (Ask Rooftap, next to the +) until it slides a row up.
+ */
+export function holdChoiceAt(dy: number, count: number): number {
+  if (count <= 0) return 0;
+  const rows = Math.floor(Math.max(0, -dy) / HOLD_CHOICE_PX);
+  return Math.max(0, count - 1 - rows);
+}
+
+/** The next or previous chat in `choices` from the one on show, wrapping round. */
+export function stepChoice(choices: readonly ChatChoice[], current: string | null | undefined, step: 1 | -1): ChatChoice | null {
+  if (choices.length < 2) return null;
+  const at = Math.max(0, choices.findIndex((c) => c.helper === (current ?? null)));
+  return choices[(at + step + choices.length) % choices.length];
+}

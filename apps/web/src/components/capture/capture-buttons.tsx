@@ -9,17 +9,22 @@
 
 // The mobile "+" (assistant on) is also the way into the pop-up chat
 // (components/assistant-chat-popup.tsx): swipe up from it, or hold it and the
-// slide's zipper ramps up into the pop that opens the chat. A tap still opens
-// the sheet. Native twin: apps/mobile/src/components/nav/capture-fab.tsx.
+// slide's zipper ramps up into the pop that opens the chat. With a module
+// helper on, the hold grows a short list of chats instead (core holdChoices):
+// the helper for this page first, then Ask Rooftap next to the +; slide up
+// to one and let go. A tap still opens the sheet.
+// Native twin: apps/mobile/src/components/nav/capture-fab.tsx.
 
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
-import { useRouter } from "next/navigation";
-import { ASK_HOLD_MS, askHoldZipperMs, openAssistantPopup, sectionHue, useAssistantUnread, useModules } from "@homeup/core";
+import { usePathname, useRouter } from "next/navigation";
+import { ASK_HOLD_MS, askHoldZipperMs, holdChoiceAt, holdChoices, openAssistantPopup, sectionHue, useAssistantUnread, useModules, type ChatChoice } from "@homeup/core";
 import { cn } from "@/lib/utils";
 import { commit, pop, tick, zipper } from "@/lib/haptics";
 import { useDataCache } from "@/lib/data-cache";
 import { useCapture } from "@/components/capture/capture-context";
-import { RooftapMark } from "@/components/brand/rooftap-mark";
+import { RooftapMark, RooftapTile } from "@/components/brand/rooftap-mark";
+import { LeadingTile } from "@/components/ui/leading-tile";
+import { sectionIconFor } from "@/lib/section-icons";
 
 const HOLD_SLOP_PX = 10;
 /** How far up a swipe must travel to open the chat. */
@@ -80,6 +85,13 @@ function CaptureFab({ dock = false }: { dock?: boolean }) {
   const swiping = useRef(false);
   const armed = useRef(false);
   const handled = useRef(false);
+  // The hold's list of chats while it is up, and the one under the finger.
+  const pathname = usePathname();
+  const choices = canAsk && modules.server("assistant.helpers") ? holdChoices(pathname, (id) => modules.isEnabled(id)) : [];
+  const [fan, setFan] = useState(false);
+  const fanOpen = useRef(false);
+  const [pick, setPick] = useState(0);
+  const pickRef = useRef(0);
 
   const stop = () => {
     timers.current.forEach(clearTimeout);
@@ -92,13 +104,16 @@ function CaptureFab({ dock = false }: { dock?: boolean }) {
     armed.current = false;
     setCharge(0);
     setLift(0);
+    fanOpen.current = false;
+    setFan(false);
   };
   useEffect(() => stop, []);
 
-  const openChat = () => {
+  const openChat = (choice?: ChatChoice) => {
     handled.current = true;
     reset();
-    if (!openAssistantPopup()) router.push("/assistant/new?kind=quick");
+    const request = choice?.helper ? { helper: choice.helper } : choice ? { plain: true } : {};
+    if (!openAssistantPopup(request)) router.push("/assistant/new?kind=quick");
   };
 
   const gestureHandlers = canAsk
@@ -114,7 +129,15 @@ function CaptureFab({ dock = false }: { dock?: boolean }) {
           timers.current.push(
             setTimeout(() => {
               pop();
-              openChat();
+              // With helpers on, the hold grows the list; letting go picks.
+              if (choices.length > 1) {
+                fanOpen.current = true;
+                handled.current = true;
+                pickRef.current = choices.length - 1;
+                setPick(choices.length - 1);
+                setFan(true);
+                setCharge(0);
+              } else openChat();
             }, ASK_HOLD_MS)
           );
         },
@@ -122,6 +145,15 @@ function CaptureFab({ dock = false }: { dock?: boolean }) {
           const s = start.current;
           if (!s) return;
           const dy = e.clientY - s.y;
+          if (fanOpen.current) {
+            const at = holdChoiceAt(dy, choices.length);
+            if (at !== pickRef.current) {
+              pickRef.current = at;
+              setPick(at);
+              tick();
+            }
+            return;
+          }
           if (!swiping.current && Math.hypot(e.clientX - s.x, dy) > HOLD_SLOP_PX) {
             // Moving ends the hold; moving up turns it into the swipe.
             stop();
@@ -139,6 +171,11 @@ function CaptureFab({ dock = false }: { dock?: boolean }) {
           }
         },
         onPointerUp: () => {
+          if (fanOpen.current) {
+            commit();
+            openChat(choices[pickRef.current]);
+            return;
+          }
           if (swiping.current) {
             if (armed.current) {
               commit();
@@ -185,6 +222,7 @@ function CaptureFab({ dock = false }: { dock?: boolean }) {
       )}
     >
       <RooftapMark className={dock ? "h-7 w-7" : "h-6 w-6"} />
+      {fan && <HoldChoices choices={choices} pick={pick} dock={dock} />}
       {/* A reply you haven't opened yet: the assistant's glow, in a small dose. */}
       {canAsk && unread > 0 && (
         <span
@@ -194,5 +232,41 @@ function CaptureFab({ dock = false }: { dock?: boolean }) {
         />
       )}
     </button>
+  );
+}
+
+/**
+ * The hold's list of chats, rising above the +: one row per chat, the one
+ * under the finger filled. Ask Rooftap sits next to the +.
+ */
+function HoldChoices({ choices, pick, dock }: { choices: ChatChoice[]; pick: number; dock: boolean }) {
+  return (
+    <span
+      role="listbox"
+      aria-label="Open a chat"
+      className={cn(
+        "pointer-events-none absolute bottom-[calc(100%+12px)] flex w-56 flex-col gap-1 rounded-2xl bg-popover p-1.5 text-left shadow-[var(--card-shadow)] ring-1 ring-border",
+        dock ? "right-0" : "left-1/2 -translate-x-1/2"
+      )}
+    >
+      {choices.map((c, i) => (
+        <span
+          key={c.helper ?? "rooftap"}
+          role="option"
+          aria-selected={i === pick}
+          className={cn(
+            "flex h-11 items-center gap-2.5 rounded-xl px-2.5 text-sm font-medium",
+            i === pick ? "bg-muted text-foreground" : "text-muted-foreground"
+          )}
+        >
+          {c.helper ? (
+            <LeadingTile sectionId={c.helper} Icon={sectionIconFor(c.helper)} size="sm" />
+          ) : (
+            <RooftapTile size="sm" />
+          )}
+          {c.label}
+        </span>
+      ))}
+    </span>
   );
 }

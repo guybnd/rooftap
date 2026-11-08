@@ -3,7 +3,10 @@
 // thumb zone"). A tap opens the capture sheet. With `onAsk` (assistant on),
 // the + is also the way into the pop-up chat (features/assistant/chat-popup.tsx):
 // swipe up from it, or hold it and the slide's zipper ramps up under the
-// thumb into the pop that opens the chat. Web twin: MobileCaptureFab.
+// thumb into the pop that opens the chat. With module helpers on (`choices`),
+// the hold grows a short list of chats instead (core holdChoices): the helper
+// for this screen first, Ask Rooftap next to the +; slide up to one and let
+// go. Web twin: MobileCaptureFab.
 import * as React from 'react';
 import { View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -14,9 +17,10 @@ import Animated, {
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
-import { ASK_HOLD_MS, askHoldZipperMs, sectionHueSwatch } from '@homeup/core';
-import { cn, haptics, useThemeMaterial, useStillMotion } from '@homeup/ui';
-import { RooftapMark } from '@/components/brand/rooftap-mark';
+import { ASK_HOLD_MS, askHoldZipperMs, holdChoiceAt, sectionHueSwatch, type ChatChoice } from '@homeup/core';
+import { LeadingTile, Text, cn, haptics, useThemeMaterial, useStillMotion } from '@homeup/ui';
+import { RooftapMark, RooftapTile } from '@/components/brand/rooftap-mark';
+import { sectionIconFor } from '@/lib/section-icons';
 
 /** How far up a swipe must travel (or how fast) to open the chat. */
 const SWIPE_OPEN_PX = 40;
@@ -31,10 +35,13 @@ export interface CaptureFabProps {
   unread?: boolean;
   /** Opens the chat on a hold or a swipe up; leave out to make the + tap-only. */
   onAsk?: () => void;
+  /** The chats a hold can open (core holdChoices); with more than one the hold shows them to pick from. */
+  choices?: ChatChoice[];
+  onChoose?: (choice: ChatChoice) => void;
   className?: string;
 }
 
-export function CaptureFab({ onPress, onAsk, unread, className }: CaptureFabProps) {
+export function CaptureFab({ onPress, onAsk, unread, choices, onChoose, className }: CaptureFabProps) {
   const { scheme, still: flat } = useThemeMaterial();
   const still = useStillMotion();
   const hue = sectionHueSwatch('assistant', scheme);
@@ -46,11 +53,20 @@ export function CaptureFab({ onPress, onAsk, unread, className }: CaptureFabProp
   // isn't rebuilt on every tab bar render.
   const pressRef = React.useRef(onPress);
   const askRef = React.useRef(onAsk);
+  const chooseRef = React.useRef(onChoose);
+  const choicesRef = React.useRef(choices ?? []);
   React.useEffect(() => {
     pressRef.current = onPress;
     askRef.current = onAsk;
-  }, [onPress, onAsk]);
+    chooseRef.current = onChoose;
+    choicesRef.current = choices ?? [];
+  }, [onPress, onAsk, onChoose, choices]);
   const canAsk = !!onAsk;
+  const fanned = canAsk && (choices?.length ?? 0) > 1;
+  // The hold's list while it is up, and the row under the finger.
+  const [fan, setFan] = React.useState(false);
+  const [pick, setPick] = React.useState(0);
+  const pickRef = React.useRef(0);
 
   const ramp = React.useRef<ReturnType<typeof setTimeout>[]>([]);
   const stopRamp = React.useCallback(() => {
@@ -75,6 +91,29 @@ export function CaptureFab({ onPress, onAsk, unread, className }: CaptureFabProp
     askRef.current?.();
   }, [stopRamp]);
   const tick = React.useCallback(() => haptics.tick(), []);
+  const showFan = React.useCallback(() => {
+    stopRamp();
+    haptics.pop();
+    const last = Math.max(0, choicesRef.current.length - 1);
+    pickRef.current = last;
+    setPick(last);
+    setFan(true);
+  }, [stopRamp]);
+  const moveFan = React.useCallback((dy: number) => {
+    const at = holdChoiceAt(dy, choicesRef.current.length);
+    if (at === pickRef.current) return;
+    pickRef.current = at;
+    setPick(at);
+    haptics.tick();
+  }, []);
+  const chooseFan = React.useCallback(() => {
+    const choice = choicesRef.current[pickRef.current];
+    setFan(false);
+    if (!choice) return;
+    haptics.commit();
+    chooseRef.current?.(choice);
+  }, []);
+  const hideFan = React.useCallback(() => setFan(false), []);
 
   const gesture = React.useMemo(() => {
     const tap = Gesture.Tap()
@@ -84,6 +123,32 @@ export function CaptureFab({ onPress, onAsk, unread, className }: CaptureFabProp
         if (success) runOnJS(press)();
       });
     if (!canAsk) return tap;
+    // With helpers on: hold, then slide up the list and let go on a chat.
+    const fanHold = Gesture.Pan()
+      .activateAfterLongPress(ASK_HOLD_MS)
+      .onBegin(() => {
+        'worklet';
+        charge.value = withTiming(1, { duration: ASK_HOLD_MS });
+        runOnJS(startRamp)();
+      })
+      .onStart(() => {
+        'worklet';
+        runOnJS(showFan)();
+      })
+      .onUpdate((event) => {
+        'worklet';
+        runOnJS(moveFan)(event.translationY);
+      })
+      .onEnd(() => {
+        'worklet';
+        runOnJS(chooseFan)();
+      })
+      .onFinalize(() => {
+        'worklet';
+        charge.value = withTiming(0, { duration: 150 });
+        runOnJS(stopRamp)();
+        runOnJS(hideFan)();
+      });
     const hold = Gesture.LongPress()
       .minDuration(ASK_HOLD_MS)
       .onBegin(() => {
@@ -121,8 +186,8 @@ export function CaptureFab({ onPress, onAsk, unread, className }: CaptureFabProp
         armed.value = false;
         lift.value = withSpring(0, { damping: 18, stiffness: 260 });
       });
-    return Gesture.Race(swipe, hold, tap);
-  }, [canAsk, press, startRamp, stopRamp, holdOpen, swipeOpen, tick, charge, lift, armed]);
+    return Gesture.Race(swipe, fanned ? fanHold : hold, tap);
+  }, [canAsk, fanned, press, startRamp, stopRamp, holdOpen, swipeOpen, tick, showFan, moveFan, chooseFan, hideFan, charge, lift, armed]);
 
   const fabStyle = useAnimatedStyle(() => ({
     transform: still ? [] : [{ translateY: lift.value }, { scale: 1 + 0.14 * charge.value - lift.value / 400 }],
@@ -165,7 +230,27 @@ export function CaptureFab({ onPress, onAsk, unread, className }: CaptureFabProp
             style={{ backgroundColor: hue.glow }}
           />
         )}
+        {fan && choices ? <HoldChoices choices={choices} pick={pick} /> : null}
       </Animated.View>
     </GestureDetector>
+  );
+}
+
+/** The hold's list of chats, rising above the +: the row under the finger is filled; Ask Rooftap sits next to the +. */
+function HoldChoices({ choices, pick }: { choices: ChatChoice[]; pick: number }) {
+  const { cardShadow } = useThemeMaterial();
+  return (
+    <View
+      pointerEvents="none"
+      className="absolute w-56 gap-1 rounded-2xl border border-border bg-popover p-1.5"
+      style={{ bottom: 60, left: 24 - 112, boxShadow: cardShadow }}
+    >
+      {choices.map((c, i) => (
+        <View key={c.helper ?? 'rooftap'} className={cn('h-11 flex-row items-center gap-2.5 rounded-xl px-2.5', i === pick && 'bg-muted')}>
+          {c.helper ? <LeadingTile sectionId={c.helper} Icon={sectionIconFor(c.helper)} size="sm" /> : <RooftapTile size="sm" />}
+          <Text className={cn('text-sm font-medium', i === pick ? 'text-foreground' : 'text-muted-foreground')}>{c.label}</Text>
+        </View>
+      ))}
+    </View>
   );
 }

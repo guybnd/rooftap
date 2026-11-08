@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { helperCanShare, helperInstructions, helperPromptText, helperShared, isHouseholdThread, moduleHelper } from './module-helpers';
+import { HOLD_CHOICE_PX, chatChoices, helperCanShare, helperForPath, helperInstructions, helperPromptText, helperShared, holdChoiceAt, holdChoices, isHouseholdThread, moduleHelper, stepChoice } from './module-helpers';
 import { HELPER_INSTRUCTIONS_MAX, parseAssistantSettings, wantsAssistantReply } from './modules/assistant/assistant';
 import { conversationTitle, groupConversations } from './modules/assistant/assistant-view';
 import type { AssistantConversation } from './modules/assistant/assistant-api';
@@ -62,5 +62,36 @@ describe('shared helper chats', () => {
     expect(groups.chats.map((c) => c.id)).toEqual(['s']);
     expect(conversationTitle(shop)).toBe('Groceries helper');
     expect(conversationTitle(room)).toBe('Household');
+  });
+});
+
+describe('getting in and out', () => {
+  const on = () => true;
+
+  it('finds the helper for the screen you are on', () => {
+    expect(helperForPath('/groceries', on)?.id).toBe('groceries');
+    expect(helperForPath('/groceries/list', on)?.id).toBe('groceries');
+    expect(helperForPath('/groceriesx', on)).toBeNull();
+    expect(helperForPath('/tasks', on)).toBeNull();
+    expect(helperForPath('/groceries', (id) => id !== 'groceries')).toBeNull();
+  });
+
+  it('lists the chats to hop between, Rooftap first', () => {
+    expect(chatChoices(on).map((c) => c.helper)).toEqual([null, 'groceries']);
+    expect(chatChoices((id) => id !== 'assistant')).toEqual([{ helper: null, label: 'Rooftap' }]);
+    const choices = chatChoices(on);
+    expect(stepChoice(choices, null, 1)?.helper).toBe('groceries');
+    expect(stepChoice(choices, 'groceries', 1)?.helper).toBeNull();
+    expect(stepChoice(choices, null, -1)?.helper).toBe('groceries');
+    expect(stepChoice([{ helper: null, label: 'Rooftap' }], null, 1)).toBeNull();
+  });
+
+  it('puts the screen helper first and Ask Rooftap next to the + when holding', () => {
+    const choices = holdChoices('/groceries', on);
+    expect(choices.map((c) => c.label)).toEqual(['Groceries helper', 'Ask Rooftap']);
+    expect(holdChoiceAt(0, 2)).toBe(1);
+    expect(holdChoiceAt(-HOLD_CHOICE_PX, 2)).toBe(0);
+    expect(holdChoiceAt(-HOLD_CHOICE_PX * 5, 2)).toBe(0);
+    expect(holdChoiceAt(30, 2)).toBe(1);
   });
 });

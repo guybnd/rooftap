@@ -11,9 +11,11 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ChevronDown, Maximize2, MessagesSquare, SquarePen, Trash2 } from "lucide-react";
+import { ChevronDown, Maximize2, MessagesSquare, SquarePen, Trash2, X } from "lucide-react";
 import {
+  chatChoices,
   deleteConversation,
+  moduleHelper,
   openAssistantPopup,
   popupStatus,
   popupTitle,
@@ -25,6 +27,7 @@ import {
   useModules,
   type AssistantConversation,
   type AssistantEdgePace,
+  type ChatChoice,
   type ThreadTarget,
 } from "@homeup/core";
 import { cn } from "@/lib/utils";
@@ -39,7 +42,7 @@ import { ListGroup } from "@/components/ui/list-item";
 import { Button } from "@/components/ui/button";
 import { PromptBadge } from "@/components/ui/prompt-badge";
 import { devicePosition } from "@/lib/device-position";
-import { RooftapTile } from "@/components/brand/rooftap-mark";
+import { RooftapMark, RooftapTile } from "@/components/brand/rooftap-mark";
 import { LeadingTile } from "@/components/ui/leading-tile";
 import { sectionIconFor } from "@/lib/section-icons";
 import { useSpectrumEdge } from "@/components/spectrum-edge";
@@ -50,7 +53,7 @@ export function AssistantChatPopup() {
   const modules = useModules();
   const { group } = useDataCache();
   const on = modules.isEnabled("assistant") && !!group?.id;
-  const { state, minimize, fresh, remember } = useAssistantPopupState(on);
+  const { state, minimize, dismissBack, fresh, remember } = useAssistantPopupState(on);
 
   if (!on) return null;
   return (
@@ -59,7 +62,10 @@ export function AssistantChatPopup() {
       open={state.open}
       target={state.target}
       ask={state.ask}
+      back={state.back}
       onMinimize={minimize}
+      onNavigateAway={() => minimize("navigate")}
+      onDismissBack={dismissBack}
       onFresh={fresh}
       onConversation={remember}
     />
@@ -70,14 +76,21 @@ function PopupThread({
   open,
   target,
   ask,
+  back,
   onMinimize,
+  onNavigateAway,
+  onDismissBack,
   onFresh,
   onConversation,
 }: {
   open: boolean;
   target: ThreadTarget;
   ask?: string;
+  back: "pill" | "bubble" | null;
   onMinimize: () => void;
+  /** A tap in the chat opened another page: put the chat away and offer it back. */
+  onNavigateAway: () => void;
+  onDismissBack: () => void;
   onFresh: () => void;
   onConversation: (c: AssistantConversation | null) => void;
 }) {
@@ -91,9 +104,14 @@ function PopupThread({
   // The screen behind the chat, so "this" in a question can mean what is open.
   const pathname = usePathname();
   const pathRef = useRef(pathname);
+  // Docked on a desktop the page behind stays usable; on a phone the card covers it.
+  const docked = useMediaQuery("(min-width: 768px)");
   useEffect(() => {
+    // A tap in the chat (a row, a link) opened another page: the item opens as
+    // usual, and a "Back to chat" pill brings the chat back.
+    if (pathRef.current !== pathname && openRef.current && !docked) onNavigateAway();
     pathRef.current = pathname;
-  }, [pathname]);
+  }, [pathname, docked, onNavigateAway]);
   const thread = useAssistantThread(target, {
     api: assistantApi,
     presence: () => (document.visibilityState !== "visible" ? "background" : openRef.current ? "here" : "away"),
@@ -103,7 +121,8 @@ function PopupThread({
   });
   const { conversation, loadError, send, reload } = thread;
   // A delete can be taken back on servers that have archiving.
-  const canUndo = useModules().server("assistant.archive");
+  const modules = useModules();
+  const canUndo = modules.server("assistant.archive");
 
   usePopupThreadLifecycle({ open, ask, conversation, loadError, send, reload, onConversation });
 
@@ -128,6 +147,8 @@ function PopupThread({
 
   const helper = conversation?.helper ?? target.helper ?? null;
   const title = popupTitle(showChats, conversation, target.id, helper);
+  // The chats it can hop between (Rooftap and each helper), shown as a strip under the header.
+  const choices = modules.server("assistant.helpers") ? chatChoices((id) => modules.isEnabled(id)) : [];
   const [listening, setListening] = useState(false);
   // Re-read each minute so a quick ask's "more min" counts down while the pop-up is open.
   const [, setMinute] = useState(0);
@@ -141,6 +162,17 @@ function PopupThread({
     "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground";
 
   return (
+    <>
+    {!open && back && (
+      <BackToChat
+        mode={back}
+        label={popupTitle(false, conversation, target.id, helper) || "Rooftap"}
+        helper={helper}
+        working={thread.thinking}
+        onOpen={() => openAssistantPopup()}
+        onDismiss={onDismissBack}
+      />
+    )}
     <PopupSurface open={open} pace={thread.thinking ? "thinking" : listening ? "listening" : "rest"} onMinimize={onMinimize} title={title || "Rooftap"}>
       <div className="flex items-center gap-1 border-b border-border pb-2 pl-3.5 pr-1.5 md:pt-2">
         {!showChats && (
@@ -194,6 +226,7 @@ function PopupThread({
           <ChevronDown className="h-5 w-5" />
         </button>
       </div>
+      {!showChats && choices.length > 1 && <HelperStrip choices={choices} current={helper} />}
       {showChats ? (
         <PopupChats currentId={conversation?.id ?? null} onPick={pick} onAll={allChats} />
       ) : (
@@ -212,6 +245,112 @@ function PopupThread({
         </>
       )}
     </PopupSurface>
+    </>
+  );
+}
+
+/**
+ * The chats the pop-up can hop between: plain Rooftap, then each helper that
+ * is on (core chatChoices). The one on show is filled; a tap opens another,
+ * carrying on where it was left.
+ */
+function HelperStrip({ choices, current }: { choices: ChatChoice[]; current: string | null }) {
+  return (
+    <div role="tablist" aria-label="Chats" className="flex gap-1.5 overflow-x-auto border-b border-border px-3.5 py-2 [scrollbar-width:none]">
+      {choices.map((c) => {
+        const on = c.helper === current;
+        return (
+          <button
+            key={c.helper ?? "rooftap"}
+            type="button"
+            role="tab"
+            aria-selected={on}
+            onClick={() => !on && openAssistantPopup(c.helper ? { helper: c.helper } : { plain: true })}
+            className={cn(
+              "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-xs font-medium",
+              on ? "bg-foreground text-background" : "bg-muted text-foreground hover:bg-muted/70"
+            )}
+          >
+            {c.helper ? (
+              <LeadingTile sectionId={c.helper} Icon={sectionIconFor(c.helper)} size="sm" className="size-4 rounded-[5px] [&_svg]:size-[10px]" />
+            ) : (
+              <RooftapMark className="size-3.5" />
+            )}
+            {c.helper ? moduleHelper(c.helper)?.label.replace(/ helper$/, "") ?? c.label : c.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * The chat, put away, offering itself back: a "Back to <chat>" pill after a
+ * tap in the chat opened an item, or a bubble at the edge for a helper chat
+ * swiped away. Either one opens the chat where it was; the x lets it go (the
+ * chat stays behind the +).
+ */
+function BackToChat({
+  mode,
+  label,
+  helper,
+  working,
+  onOpen,
+  onDismiss,
+}: {
+  mode: "pill" | "bubble";
+  label: string;
+  helper: string | null;
+  working: boolean;
+  onOpen: () => void;
+  onDismiss: () => void;
+}) {
+  const badge = helper ? (
+    <LeadingTile
+      sectionId={helper}
+      Icon={sectionIconFor(helper)}
+      size="sm"
+      className="absolute -bottom-1 -right-1 size-[18px] rounded-[6px] ring-2 ring-card [&_svg]:size-[11px]"
+    />
+  ) : null;
+  if (mode === "pill") {
+    return (
+      <div className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] z-40 flex justify-center px-4 md:hidden">
+        <div className="flex items-center gap-1 rounded-full bg-popover py-1 pl-1 pr-1 shadow-[var(--card-shadow)] ring-1 ring-border">
+          <button type="button" onClick={onOpen} className="flex min-h-11 items-center gap-2 rounded-full pl-1 pr-3 text-sm font-medium text-foreground hover:bg-muted">
+            <span className="relative">
+              <RooftapTile size="sm" working={working} />
+              {badge}
+            </span>
+            Back to {label}
+          </button>
+          <button type="button" onClick={onDismiss} aria-label="Dismiss" className="inline-flex size-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted">
+            <X className="size-4" />
+          </button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="group fixed bottom-[calc(env(safe-area-inset-bottom)+6rem)] right-3 z-40 md:bottom-24 md:right-6">
+      <button
+        type="button"
+        onClick={onOpen}
+        aria-label={`Open ${label}`}
+        className="relative flex size-14 items-center justify-center rounded-full bg-popover shadow-[var(--card-shadow)] ring-1 ring-border"
+      >
+        <RooftapTile working={working} />
+        {badge}
+      </button>
+      <button
+        type="button"
+        onClick={onDismiss}
+        aria-label={`Close ${label} bubble`}
+        className="absolute -left-2 -top-2 inline-flex size-6 items-center justify-center rounded-full bg-muted text-muted-foreground ring-2 ring-background"
+      >
+        <X className="size-3" />
+      </button>
+    </div>
   );
 }
 

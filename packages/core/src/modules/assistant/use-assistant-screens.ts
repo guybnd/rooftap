@@ -107,6 +107,12 @@ export interface AssistantPopupState {
   key: number;
   target: ThreadTarget;
   ask?: string;
+  /**
+   * How the minimised chat offers itself back: `pill` ("Back to chat") after
+   * a tap in the chat opened an item, `bubble` for a helper chat swiped away.
+   * Null once it is back up or dismissed.
+   */
+  back: 'pill' | 'bubble' | null;
 }
 
 /**
@@ -115,9 +121,11 @@ export interface AssistantPopupState {
  * show (or a plain reopen) resumes it rather than restarting.
  */
 export function useAssistantPopupState(on: boolean) {
-  const [state, setState] = useState<AssistantPopupState>({ open: false, key: 0, target: { id: 'new', kind: 'quick' } });
+  const [state, setState] = useState<AssistantPopupState>({ open: false, key: 0, target: { id: 'new', kind: 'quick' }, back: null });
   // The conversation on show, so a request for it (or a plain reopen) resumes rather than restarts.
   const current = useRef<AssistantConversation | null>(null);
+  // The last plain (not helper) conversation, for hopping back to Rooftap from a helper.
+  const lastPlain = useRef<string | null>(null);
 
   useEffect(() => {
     if (!on) return;
@@ -126,35 +134,52 @@ export function useAssistantPopupState(on: boolean) {
         const shown = current.current;
         if (request.helper) {
           // The helper's chat already on show just comes back up.
-          if (prev.target.helper === request.helper || (shown && shown.helper === request.helper)) return { ...prev, open: true, ask: undefined };
+          if (prev.target.helper === request.helper || (shown && shown.helper === request.helper)) return { ...prev, open: true, ask: undefined, back: null };
           current.current = null;
-          return { open: true, key: prev.key + 1, target: { id: 'new', kind: 'chat', helper: request.helper } };
+          return { open: true, key: prev.key + 1, target: { id: 'new', kind: 'chat', helper: request.helper }, back: null };
         }
-        if (request.conversationId) {
-          if (shown?.id === request.conversationId) return { ...prev, open: true, ask: undefined };
+        // Plain Rooftap: the last conversation that was not a helper's, or a new quick ask.
+        const conversationId = request.conversationId ?? (request.plain && !request.ask && !request.fresh ? lastPlain.current : null);
+        if (conversationId) {
+          if (shown?.id === conversationId) return { ...prev, open: true, ask: undefined, back: null };
           current.current = null;
-          return { open: true, key: prev.key + 1, target: { id: request.conversationId } };
+          return { open: true, key: prev.key + 1, target: { id: conversationId }, back: null };
         }
         // A quick ask that has since closed stays on show: its footer offers Continue or Start fresh.
-        if (request.ask || request.fresh) {
+        const onHelper = !!(prev.target.helper || shown?.helper);
+        if (request.ask || request.fresh || (request.plain && onHelper)) {
           current.current = null;
-          return { open: true, key: prev.key + 1, target: { id: 'new', kind: 'quick' }, ask: request.ask };
+          return { open: true, key: prev.key + 1, target: { id: 'new', kind: 'quick' }, ask: request.ask, back: null };
         }
-        return { ...prev, open: true };
+        return { ...prev, open: true, back: null };
       });
     });
   }, [on]);
 
-  const minimize = useCallback(() => setState((prev) => ({ ...prev, open: false })), []);
+  /**
+   * Puts the chat away. `navigate`: a tap in the chat opened an item, so a
+   * "Back to chat" pill offers it back. A helper chat put away by hand leaves
+   * a bubble. Anything else shrinks into the + as before.
+   */
+  const minimize = useCallback((reason?: 'navigate') => {
+    setState((prev) => {
+      if (!prev.open) return prev;
+      const helper = !!(prev.target.helper || current.current?.helper);
+      return { ...prev, open: false, back: reason === 'navigate' ? 'pill' : helper ? 'bubble' : null };
+    });
+  }, []);
+  /** Drops the pill or bubble; the chat itself stays, behind the +. */
+  const dismissBack = useCallback(() => setState((prev) => (prev.back ? { ...prev, back: null } : prev)), []);
   const fresh = useCallback(() => {
     current.current = null;
-    setState((prev) => ({ open: true, key: prev.key + 1, target: { id: 'new', kind: 'quick' } }));
+    setState((prev) => ({ open: true, key: prev.key + 1, target: { id: 'new', kind: 'quick' }, back: null }));
   }, []);
   const remember = useCallback((c: AssistantConversation | null) => {
     current.current = c;
+    if (c && !c.helper) lastPlain.current = c.id;
   }, []);
 
-  return { state, minimize, fresh, remember };
+  return { state, minimize, dismissBack, fresh, remember };
 }
 
 /**

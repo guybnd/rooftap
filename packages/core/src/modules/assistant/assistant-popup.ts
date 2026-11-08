@@ -12,6 +12,8 @@ export interface AssistantPopupRequest {
   fresh?: boolean;
   /** Open a module helper's chat (module-helpers.ts), resuming this person's chat with it. */
   helper?: string;
+  /** Plain Rooftap (from a helper): the last chat that was not a helper's, or a new quick ask. */
+  plain?: boolean;
 }
 
 type PopupListener = (request: AssistantPopupRequest) => void;

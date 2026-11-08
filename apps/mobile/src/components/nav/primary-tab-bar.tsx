@@ -35,6 +35,7 @@ import { Text, cn, haptics, TabGlide, useThemeMaterial, useStillMotion } from '@
 import {
   MOTION_DURATIONS_MS,
   assignTabSlot,
+  holdChoices,
   initRecentSections,
   initUpOverviewMemory,
   openAssistantPopup,
@@ -146,7 +147,8 @@ export function PrimaryTabBar() {
   const insets = useSafeAreaInsets();
   const { group, updateUserSettings, isOnline } = useDataCache();
   // Holding + offers Ask while the assistant is on (capture-fab.tsx).
-  const canAsk = useModules().feature('capture.ask') && isOnline;
+  const modules = useModules();
+  const canAsk = modules.feature('capture.ask') && isOnline;
   const assistantUnread = useAssistantUnread();
   const { openCapture } = useCapture();
   const overdueCount = useOverdueTaskCount(group?.id);
@@ -316,6 +318,8 @@ export function PrimaryTabBar() {
           <CaptureFab
             onPress={() => { haptics.commit(); openCapture(); }}
             onAsk={canAsk ? () => openAssistantPopup() || openRoute('/assistant/new?kind=quick') : undefined}
+            choices={canAsk && modules.server('assistant.helpers') ? holdChoices(pathname, (id) => modules.isEnabled(id)) : undefined}
+            onChoose={(c) => openAssistantPopup(c.helper ? { helper: c.helper } : { plain: true }) || openRoute('/assistant/new?kind=quick')}
             unread={canAsk && assistantUnread > 0}
           />
         </View>
