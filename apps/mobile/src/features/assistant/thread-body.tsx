@@ -20,12 +20,12 @@ import {
   cn,
   haptics,
 } from '@homeup/ui';
-import { askGreeting, askStarters, getSectionByPath, mentionOptions, minutesLeft, moduleHelper, useBriefSlot, useModules, type AssistantThread } from '@homeup/core';
+import { askGreeting, askStarters, getSectionByPath, mentionOptions, minutesLeft, moduleHelper, useBriefOnShow, useBriefSlot, useModules, type AssistantThread } from '@homeup/core';
 import { sectionIconFor } from '@/lib/section-icons';
 import { useDataCache } from '@/lib/data-cache';
 import { Composer, MessageBubble, Thinking } from './assistant-parts';
 import { AssistantNotice } from './assistant-notice';
-import { HelperBrief } from './helper-brief';
+import { HelperAskChips, HelperBrief } from './helper-brief';
 
 /** A thread still loading: faint lines where the conversation will be, not the thinking dots (nothing is thinking yet). */
 function ThreadLoading() {
@@ -155,7 +155,7 @@ export function ThreadMessages({
   // The brief is the last thing on show (nothing asked this visit): the chat
   // opens at its top, not its end, and stays put while its rows load. Once
   // the person asks, the chat follows the answer to the end again.
-  const briefLast = !!helper && !sending && !thinking && (messages.length === 0 || briefSlot === messages.length);
+  const briefLast = useBriefOnShow(thread);
   const briefTop = React.useRef<number | null>(null);
   const brief = helper ? (
     <View
@@ -167,7 +167,7 @@ export function ThreadMessages({
         if (briefLast) scrollRef.current?.scrollTo({ y: Math.max(0, y - 16), animated: false });
       }}
     >
-      <HelperBrief helper={helper} onAsk={(text) => void send(text)} disabled={offline || !!blocked} />
+      <HelperBrief helper={helper} />
     </View>
   ) : null;
   return (
@@ -259,6 +259,7 @@ export function ThreadFooter({
   onFresh?: () => void;
 }) {
   const { conversation, kind, blocked, sending, send, closed, resume, helper } = thread;
+  const briefOnShow = useBriefOnShow(thread);
   // A helper chat the household shares answers every message, so it needs no tags.
   const room = kind === 'household' && !helper;
   const left = conversation && !closed ? minutesLeft(conversation) : null;
@@ -275,6 +276,9 @@ export function ThreadFooter({
       ) : (
         <>
           {lookingAt && !thread.messages.length && !thread.loading && <LookingAt path={lookingAt} />}
+          {helper && briefOnShow ? (
+            <HelperAskChips helper={helper} onAsk={(text) => void send(text)} disabled={offline || !!blocked} />
+          ) : null}
           <Composer
             placeholder={
               room

@@ -4,10 +4,10 @@
 // chat's answers show, plus "Not now"; a suggested row (a missing
 // ingredient) adds with its + or a swipe, and swipes away as "Have it". The
 // section's header link does every row. Long sections fold under Show all. Rows leave as they are done, because the brief is read live from the
-// stores. Under it, the helper's catch-up ask leads its starters, which send as asks.
+// stores. The helper's asks (HelperAskChips) sit above the text box, not in the chat.
 // Web twin: apps/web/src/app/assistant/helper-brief.tsx.
 import * as React from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { Sparkles } from 'lucide-react-native';
 import { ArriveScope, ArriveView, ListGroup, ListItem, ListItemContent, ListItemMeta, ListItemTitle, ListItemTrailing, Text, cn, haptics, toast } from '@homeup/ui';
 import { useOpenRoute } from '@/lib/tab-routes';
@@ -81,7 +81,7 @@ function SuggestSection({ section, state }: { section: BriefSection; state: Help
   );
 }
 
-export function HelperBrief({ helper, onAsk, disabled }: { helper: string; onAsk: (text: string) => void; disabled: boolean }) {
+export function HelperBrief({ helper }: { helper: string }) {
   const { group, currentUserId } = useDataCache();
   const state = useHelperBrief({ helper, groupId: group?.id, currentUserId });
   const def = moduleHelper(helper);
@@ -132,35 +132,47 @@ export function HelperBrief({ helper, onAsk, disabled }: { helper: string; onAsk
             )}
           </ArriveView>
         ))}
-        <ArriveView className="flex-row flex-wrap gap-1.5 pt-1">
-          <Pressable
-            disabled={disabled}
-            onPress={() => {
-              haptics.select();
-              onAsk(def.summary.ask);
-            }}
-            accessibilityRole="button"
-            className={cn('flex-row items-center gap-1.5 rounded-full border border-primary/50 bg-primary/10 px-3 py-1.5 active:bg-primary/15', disabled && 'opacity-50')}
-          >
-            <Sparkles size={14} className="text-primary" />
-            <Text className="text-xs font-semibold text-primary">{def.summary.label}</Text>
-          </Pressable>
-          {def.starters.map((text) => (
-            <Pressable
-              key={text}
-              disabled={disabled}
-              onPress={() => {
-                haptics.select();
-                onAsk(text);
-              }}
-              accessibilityRole="button"
-              className={cn('rounded-full border border-border bg-card px-3 py-1.5 active:bg-muted', disabled && 'opacity-50')}
-            >
-              <Text className="text-xs text-foreground">{text}</Text>
-            </Pressable>
-          ))}
-        </ArriveView>
       </View>
     </ArriveScope>
+  );
+}
+
+/**
+ * The helper's asks: its catch-up first, then its starters, each sent as it
+ * is. They sit in a row just above the text box while the brief is on show,
+ * so they are in reach however long the brief is.
+ */
+export function HelperAskChips({ helper, onAsk, disabled }: { helper: string; onAsk: (text: string) => void; disabled: boolean }) {
+  const def = moduleHelper(helper);
+  if (!def) return null;
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" className="-mx-4" contentContainerClassName="gap-1.5 px-4">
+      <Pressable
+        disabled={disabled}
+        onPress={() => {
+          haptics.select();
+          onAsk(def.summary.ask);
+        }}
+        accessibilityRole="button"
+        className={cn('flex-row items-center gap-1.5 rounded-full border border-primary/50 bg-primary/10 px-3 py-1.5 active:bg-primary/15', disabled && 'opacity-50')}
+      >
+        <Sparkles size={14} className="text-primary" />
+        <Text className="text-xs font-semibold text-primary">{def.summary.label}</Text>
+      </Pressable>
+      {def.starters.map((text) => (
+        <Pressable
+          key={text}
+          disabled={disabled}
+          onPress={() => {
+            haptics.select();
+            onAsk(text);
+          }}
+          accessibilityRole="button"
+          className={cn('rounded-full border border-border bg-card px-3 py-1.5 active:bg-muted', disabled && 'opacity-50')}
+        >
+          <Text className="text-xs text-foreground">{text}</Text>
+        </Pressable>
+      ))}
+    </ScrollView>
   );
 }

@@ -6,7 +6,7 @@
 // chat's answers show, plus "Not now"; a suggested row (a missing
 // ingredient) adds with its + or a swipe, and swipes away as "Have it". The
 // section's header link does every row. Long sections fold under Show all. Rows leave as they are done, because the brief is read live from the
-// stores. Under it, the helper's catch-up ask leads its starters, which send as asks.
+// stores. The helper's asks (HelperAskChips) sit above the text box, not in the chat.
 // Native twin: apps/mobile/src/features/assistant/helper-brief.tsx.
 import { useState, type CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
@@ -90,7 +90,7 @@ function SuggestSection({ section, state }: { section: BriefSection; state: Help
   );
 }
 
-export function HelperBrief({ helper, onAsk, disabled }: { helper: string; onAsk: (text: string) => void; disabled: boolean }) {
+export function HelperBrief({ helper }: { helper: string }) {
   const { group, currentUserId } = useDataCache();
   const state = useHelperBrief({ helper, groupId: group?.id, currentUserId });
   const def = moduleHelper(helper);
@@ -143,28 +143,40 @@ export function HelperBrief({ helper, onAsk, disabled }: { helper: string; onAsk
           )}
         </div>
       ))}
-      <div className="ask-arrive flex flex-wrap gap-1.5 pt-1" style={arrive(i++)}>
+    </div>
+  );
+}
+
+/**
+ * The helper's asks: its catch-up first, then its starters, each sent as it
+ * is. They sit in a row just above the text box while the brief is on show,
+ * so they are in reach however long the brief is.
+ */
+export function HelperAskChips({ helper, onAsk, disabled }: { helper: string; onAsk: (text: string) => void; disabled: boolean }) {
+  const def = moduleHelper(helper);
+  if (!def) return null;
+  return (
+    <div className="flex gap-1.5 overflow-x-auto [scrollbar-width:none]">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => onAsk(def.summary.ask)}
+        className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-primary/50 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/15 disabled:opacity-50"
+      >
+        <Sparkles className="size-3.5" />
+        {def.summary.label}
+      </button>
+      {def.starters.map((text) => (
         <button
+          key={text}
           type="button"
           disabled={disabled}
-          onClick={() => onAsk(def.summary.ask)}
-          className="inline-flex items-center gap-1.5 rounded-full border border-primary/50 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/15 disabled:opacity-50"
+          onClick={() => onAsk(text)}
+          className="shrink-0 rounded-full border border-border bg-card px-3 py-1.5 text-xs text-foreground hover:bg-muted disabled:opacity-50"
         >
-          <Sparkles className="size-3.5" />
-          {def.summary.label}
+          {text}
         </button>
-        {def.starters.map((text) => (
-          <button
-            key={text}
-            type="button"
-            disabled={disabled}
-            onClick={() => onAsk(text)}
-            className="rounded-full border border-border bg-card px-3 py-1.5 text-xs text-foreground hover:bg-muted disabled:opacity-50"
-          >
-            {text}
-          </button>
-        ))}
-      </div>
+      ))}
     </div>
   );
 }

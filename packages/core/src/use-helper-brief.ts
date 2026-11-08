@@ -66,3 +66,20 @@ export function useBriefSlot(helper: string | null | undefined, messages: readon
   const lastAt = before > 0 ? messages[before - 1].created_at : null;
   return showsBrief(lastAt, openedAt.current) ? before : null;
 }
+
+/**
+ * Whether a helper chat's brief is the last thing on show (nothing asked this
+ * visit): the chat opens at the brief's top, with the helper's asks above the
+ * text box. Once the person asks, the chat follows the answer as usual.
+ */
+export function useBriefOnShow(thread: {
+  helper: string | null | undefined;
+  messages: readonly { created_at: string }[];
+  sending: boolean;
+  thinking: boolean;
+  loading: boolean;
+}): boolean {
+  const { helper, messages, sending, thinking, loading } = thread;
+  const briefSlot = useBriefSlot(helper, messages);
+  return !!helper && !loading && !sending && !thinking && (messages.length === 0 || briefSlot === messages.length);
+}

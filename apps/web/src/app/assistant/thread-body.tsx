@@ -14,6 +14,7 @@ import {
   mentionOptions,
   minutesLeft,
   moduleHelper,
+  useBriefOnShow,
   useBriefSlot,
   useModules,
   type AssistantThread,
@@ -26,7 +27,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Composer, MessageBubble, Thinking } from './assistant-parts';
 import { AssistantNotice } from './assistant-notice';
-import { HelperBrief } from './helper-brief';
+import { HelperAskChips, HelperBrief } from './helper-brief';
 
 /** A thread still loading: faint lines where the conversation will be, not the thinking dots (nothing is thinking yet). */
 function ThreadLoading() {
@@ -151,11 +152,11 @@ export function ThreadMessages({ thread, className, offline = false }: { thread:
   const briefRef = useRef<HTMLDivElement>(null);
   const brief = helper ? (
     <div key="brief" ref={briefRef}>
-      <HelperBrief helper={helper} onAsk={(text) => void send(text)} disabled={offline || !!blocked} />
+      <HelperBrief helper={helper} />
     </div>
   ) : null;
   // The brief is the last thing on show (nothing asked this visit): the chat opens at its top, not its end.
-  const briefLast = !!helper && !sending && !thinking && (messages.length === 0 || briefSlot === messages.length);
+  const briefLast = useBriefOnShow(thread);
   const endRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (briefLast) briefRef.current?.scrollIntoView({ block: 'start' });
@@ -239,6 +240,7 @@ export function ThreadFooter({
   className?: string;
 }) {
   const { conversation, kind, blocked, sending, send, closed, resume, helper } = thread;
+  const briefOnShow = useBriefOnShow(thread);
   // A helper chat the household shares answers every message, so it needs no tags.
   const room = kind === 'household' && !helper;
   const left = conversation && !closed ? minutesLeft(conversation) : null;
@@ -255,6 +257,7 @@ export function ThreadFooter({
       ) : (
         <>
           {lookingAt && !thread.messages.length && !thread.loading && <LookingAt path={lookingAt} />}
+          {helper && briefOnShow && <HelperAskChips helper={helper} onAsk={(text) => void send(text)} disabled={offline || !!blocked} />}
           <Composer
             placeholder={
               room
