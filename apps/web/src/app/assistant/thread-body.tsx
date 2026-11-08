@@ -148,11 +148,19 @@ export function ThreadMessages({ thread, className, offline = false }: { thread:
   const { loading, loadError, reload, messages, sending, thinking, draft, kind, showCost, deciding, decide, send, blocked, helper } = thread;
   // A helper chat opens on today's brief, kept above what this visit asked (useBriefSlot).
   const briefSlot = useBriefSlot(helper, messages);
-  const brief = helper ? <HelperBrief key="brief" helper={helper} onAsk={(text) => void send(text)} disabled={offline || !!blocked} /> : null;
+  const briefRef = useRef<HTMLDivElement>(null);
+  const brief = helper ? (
+    <div key="brief" ref={briefRef}>
+      <HelperBrief helper={helper} onAsk={(text) => void send(text)} disabled={offline || !!blocked} />
+    </div>
+  ) : null;
+  // The brief is the last thing on show (nothing asked this visit): the chat opens at its top, not its end.
+  const briefLast = !!helper && !sending && !thinking && (messages.length === 0 || briefSlot === messages.length);
   const endRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    endRef.current?.scrollIntoView({ block: 'end' });
-  }, [messages.length, sending, loading, draft?.text.length, draft?.status]);
+    if (briefLast) briefRef.current?.scrollIntoView({ block: 'start' });
+    else endRef.current?.scrollIntoView({ block: 'end' });
+  }, [briefLast, messages.length, sending, loading, draft?.text.length, draft?.status]);
   return (
     <div className={cn('space-y-5 py-4', className)}>
       {loadError && !loading && <LoadFailed message={loadError} onRetry={() => void reload()} />}
@@ -164,7 +172,7 @@ export function ThreadMessages({ thread, className, offline = false }: { thread:
             The household chat. Talk to each other here, and tag @Rooftap when you want it to look something up or make a change.
           </p>
         ) : helper ? (
-          <HelperBrief helper={helper} onAsk={(text) => void send(text)} disabled={offline || !!blocked} />
+          brief
         ) : (
           <AskEmpty onAsk={(text) => void send(text)} disabled={offline || !!blocked} />
         )

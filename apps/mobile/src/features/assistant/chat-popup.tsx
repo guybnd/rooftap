@@ -42,6 +42,7 @@ import {
   type PopupSlot,
   type ThreadTarget,
 } from '@homeup/core';
+import { useKeyboardHandler } from 'react-native-keyboard-controller';
 import { Button, LeadingTile, ListGroup, SpectrumEdge, Text, cn, haptics, toast, useKeyboardOffset, useThemeMaterial, useStillMotion } from '@homeup/ui';
 import { useDataCache } from '@/lib/data-cache';
 import { sectionIconFor } from '@/lib/section-icons';
@@ -554,6 +555,25 @@ function PopupSurface({
   const material = useThemeMaterial();
   const still = useStillMotion();
   const keyboardOffset = useKeyboardOffset(insets.bottom);
+  // The card's height follows where the keyboard is going, not each frame of
+  // it: a card resized every frame reflows the whole chat and the messages
+  // jump. Rising, it takes its short height at the start and slides up;
+  // falling, it slides down and takes its full height at the end.
+  const sizedFor = useSharedValue(0);
+  const bottomInset = insets.bottom;
+  useKeyboardHandler(
+    {
+      onStart: (e) => {
+        'worklet';
+        if (e.height > 0) sizedFor.value = Math.max(0, e.height - bottomInset);
+      },
+      onEnd: (e) => {
+        'worklet';
+        sizedFor.value = Math.max(0, e.height - bottomInset);
+      },
+    },
+    [bottomInset]
+  );
   const [visible, setVisible] = React.useState(open);
   const progress = useSharedValue(0);
   const drag = useSharedValue(0);
@@ -638,7 +658,7 @@ function PopupSurface({
   const cardStyle = useAnimatedStyle(() => {
     const p = progress.value;
     const lift = keyboardOffset.value;
-    const room = frame.height - insets.top - 12 - (insets.bottom + CARD_GAP + lift);
+    const room = frame.height - insets.top - 12 - (insets.bottom + CARD_GAP + Math.max(lift, sizedFor.value));
     const height = Math.min(restingHeight, room);
     if (still) return { height, opacity: p, transform: [{ translateY: drag.value - lift }] };
     return {

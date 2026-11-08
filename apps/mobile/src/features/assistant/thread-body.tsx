@@ -151,15 +151,38 @@ export function ThreadMessages({
   const { loading, loadError, reload, messages, sending, thinking, draft, kind, showCost, deciding, decide, send, blocked, helper } = thread;
   // A helper chat opens on today's brief, kept above what this visit asked (useBriefSlot).
   const briefSlot = useBriefSlot(helper, messages);
-  const brief = helper ? <HelperBrief key="brief" helper={helper} onAsk={(text) => void send(text)} disabled={offline || !!blocked} /> : null;
   const scrollRef = React.useRef<ScrollView>(null);
+  // The brief is the last thing on show (nothing asked this visit): the chat
+  // opens at its top, not its end, and stays put while its rows load. Once
+  // the person asks, the chat follows the answer to the end again.
+  const briefLast = !!helper && !sending && !thinking && (messages.length === 0 || briefSlot === messages.length);
+  const briefTop = React.useRef<number | null>(null);
+  const brief = helper ? (
+    <View
+      key="brief"
+      onLayout={(e) => {
+        const y = e.nativeEvent.layout.y;
+        if (briefTop.current === y) return;
+        briefTop.current = y;
+        if (briefLast) scrollRef.current?.scrollTo({ y: Math.max(0, y - 16), animated: false });
+      }}
+    >
+      <HelperBrief helper={helper} onAsk={(text) => void send(text)} disabled={offline || !!blocked} />
+    </View>
+  ) : null;
   return (
     <ScrollView
       ref={scrollRef}
       className={className ?? 'flex-1'}
       contentContainerClassName="gap-5 px-4 py-4"
       keyboardShouldPersistTaps="handled"
-      onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: !loading })}
+      onContentSizeChange={() => {
+        if (!briefLast) scrollRef.current?.scrollToEnd({ animated: !loading });
+      }}
+      // The keyboard shortens the chat: keep the newest message in sight.
+      onLayout={() => {
+        if (!briefLast) scrollRef.current?.scrollToEnd({ animated: false });
+      }}
       scrollEventThrottle={onScrollY ? 16 : undefined}
       onScroll={onScrollY ? (e) => onScrollY(e.nativeEvent.contentOffset.y) : undefined}
     >
@@ -172,7 +195,7 @@ export function ThreadMessages({
             The household chat. Talk to each other here, and tag @Rooftap when you want it to look something up or make a change.
           </Text>
         ) : helper ? (
-          <HelperBrief helper={helper} onAsk={(text) => void send(text)} disabled={offline || !!blocked} />
+          brief
         ) : (
           <AskEmpty onAsk={(text) => void send(text)} disabled={offline || !!blocked} />
         )
