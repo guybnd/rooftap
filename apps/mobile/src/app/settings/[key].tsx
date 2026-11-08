@@ -1,30 +1,35 @@
-// HOUP-84: native counterpart of apps/web's settings/[key]/page.tsx —
-// resolves `key` against either a global-menu key or an enabled app-section
-// id and renders that key's panel list via SettingsContent.
+// HOUP-84: native counterpart of apps/web's settings/[key]/page.tsx. A tab
+// id or an old menu key (core settingsTabForKey) opens Settings on that tab
+// (HOUP-616); an enabled section's id opens that module's settings.
 import * as React from 'react';
 import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
 import { Text, ScreenBackground } from '@homeup/ui';
-import { getSection, getEnabledSections, useModules } from '@homeup/core';
+import { getSection, getEnabledSections, settingsTabForKey, useModules } from '@homeup/core';
 import { SettingsContent } from '@/features/settings/settings-content';
-import { globalMenus, moduleSettingsTabComponents, visiblePanels } from '@/features/settings/settings-registry';
+import { moduleSettingsTabComponents } from '@/features/settings/settings-registry';
+import { SettingsHome } from '@/features/settings/settings-home';
 
 export default function SettingsKeyScreen() {
+  const { key } = useLocalSearchParams<{ key: string }>();
+  const tab = settingsTabForKey(key);
+  if (tab) return <SettingsHome initialTab={tab} />;
+  return <ModuleSettingsScreen moduleKey={key ?? ''} />;
+}
+
+function ModuleSettingsScreen({ moduleKey: key }: { moduleKey: string }) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { key } = useLocalSearchParams<{ key: string }>();
   const modules = useModules();
 
-  const menu = globalMenus.find((m) => m.key === key);
-  const section = !menu ? getSection(key ?? '') : undefined;
+  const section = getSection(key);
   const sectionEnabled = section ? getEnabledSections(modules.enabled).some((s) => s.id === section.id) : false;
 
-  const label = menu?.label ?? (sectionEnabled ? section?.label : undefined) ?? 'Settings';
-  const tabs = !menu && sectionEnabled ? moduleSettingsTabComponents(key ?? '', modules.enabled) : undefined;
-  const panels = menu ? visiblePanels(menu.panels, modules.enabled) : [];
-  const notFound = !menu && !sectionEnabled;
+  const label = (sectionEnabled ? section?.label : undefined) ?? 'Settings';
+  const tabs = sectionEnabled ? moduleSettingsTabComponents(key, modules.enabled) : undefined;
+  const notFound = !sectionEnabled;
 
   return (
     <ScreenBackground style={{ paddingTop: insets.top }}>
@@ -47,7 +52,7 @@ export default function SettingsKeyScreen() {
           <Text className="text-body text-muted-foreground">Not found</Text>
         </View>
       ) : (
-        <SettingsContent panels={panels} tabs={tabs} emptyLabel={label} />
+        <SettingsContent panels={[]} tabs={tabs} emptyLabel={label} />
       )}
     </ScreenBackground>
   );

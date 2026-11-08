@@ -14,13 +14,10 @@ import {
   LogOut,
   User,
   ArrowLeft,
-  Bell,
   Blocks,
-  KeyRound,
+  CircleUser,
+  Info,
   Plug,
-  Palette,
-  Sparkles,
-  SlidersHorizontal,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -35,9 +32,8 @@ import { ServerUpdateToast } from "@/components/server-update";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { OfflineIndicator } from "@/components/offline-indicator";
 import { RevalidatingIndicator } from "@/components/revalidating-indicator";
-import { clearThreadCache, clearUpOverviewCache, sections, assignTabSlot, reorderVisibleSections, getSectionByPath, getEnabledSections, getModuleIdForPath, orderSections, settingsMenuHue, tabTravelDirection, glowDriftX, useModules, hasModuleSettings } from "@homeup/core";
+import { clearThreadCache, clearUpOverviewCache, sections, assignTabSlot, reorderVisibleSections, getSectionByPath, getEnabledSections, getModuleIdForPath, orderSections, settingsMenuHue, tabTravelDirection, glowDriftX, useModules, SETTINGS_TABS, settingsTabForKey, settingsTabHref, type SettingsTabId } from "@homeup/core";
 import { sectionIcons } from "@/lib/section-icons";
-import { globalMenus, visiblePanels } from "@/app/settings/settings-registry";
 import { SectionSwitcherGrid, SectionTabBar } from "@/components/section-switcher";
 import { useSectionSettings } from "@/lib/use-section";
 import { useOverdueTaskCount } from "@/hooks/use-overdue-task-count";
@@ -56,32 +52,32 @@ function OfflineBanner() {
   return <OfflineIndicator />;
 }
 
-// Glyph for each General settings row; the tile colour comes from core's
-// SETTINGS_MENU_HUES so web and the app's Settings screen match.
-const GLOBAL_MENU_ICONS: Record<string, LucideIcon> = {
-  global: SlidersHorizontal,
-  modules: Blocks,
-  users: Users,
-  appearance: Palette,
-  notifications: Bell,
-  connectors: Plug,
-  integrations: KeyRound,
-  "whats-new": Sparkles,
+// Glyph for each Settings tab in the left column; the tile colour comes from
+// core's SETTINGS_MENU_HUES.
+const SETTINGS_TAB_ICONS: Record<SettingsTabId, LucideIcon> = {
+  you: CircleUser,
+  house: Users,
+  tiles: Blocks,
+  connected: Plug,
+  about: Info,
 };
 
-// HOUP-48: the settings menu (General + App sections) — shared by the
-// desktop nav and the mobile drawer so there is one source of truth for
-// "what settings screens exist" instead of two hand-kept lists.
+/** The Settings tab a /settings path belongs to: a module's settings page sits under Tiles. */
+function settingsTabForPath(pathname: string): SettingsTabId | null {
+  if (!pathname.startsWith("/settings")) return null;
+  const key = pathname.split("/")[2];
+  return key ? (settingsTabForKey(key) ?? "tiles") : "you";
+}
+
+// HOUP-616: the Settings tabs as a menu, shared by the desktop left column
+// and the mobile drawer. The settings page shows the same tabs as a row at
+// phone width (app/settings/settings-home.tsx).
 function SettingsMenuNav({
-  settingsSectionRows,
-  isActive,
   onNavigate,
   compact = false,
   backLabel,
   onBack,
 }: {
-  settingsSectionRows: ReturnType<typeof getEnabledSections>;
-  isActive: (href: string) => boolean;
   onNavigate?: () => void;
   compact?: boolean;
   /** HOUP-50: label for the "back to section" row — set only when the menu was
@@ -90,6 +86,8 @@ function SettingsMenuNav({
   backLabel?: string;
   onBack?: () => void;
 }) {
+  const pathname = usePathname();
+  const activeTab = settingsTabForPath(pathname);
   const itemClass = (active: boolean) =>
     cn(
       "relative flex items-center gap-3 rounded-lg px-3 font-medium transition-all duration-150",
@@ -115,47 +113,25 @@ function SettingsMenuNav({
         </button>
       )}
       <div className="px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-sidebar-foreground/50">
-        General
+        Settings
       </div>
-      {globalMenus.map((menu) => {
-        const href = menu.key === "global" ? "/settings" : `/settings/${menu.key}`;
+      {SETTINGS_TABS.map((tab) => {
+        const href = settingsTabHref(tab.id);
+        const active = activeTab === tab.id;
         return (
           <Link
-            key={menu.key}
+            key={tab.id}
             href={href}
             prefetch={true}
             onClick={onNavigate}
-            className={itemClass(isActive(href))}
+            aria-current={active ? "page" : undefined}
+            className={itemClass(active)}
           >
-            <LeadingTile hue={settingsMenuHue(menu.key)} Icon={GLOBAL_MENU_ICONS[menu.key] ?? SlidersHorizontal} size="sm" />
-            {menu.label}
+            <LeadingTile hue={settingsMenuHue(tab.id)} Icon={SETTINGS_TAB_ICONS[tab.id]} size="sm" />
+            {tab.label}
           </Link>
         );
       })}
-
-      {settingsSectionRows.length > 0 && (
-        <>
-          <div className="px-3 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-[0.1em] text-sidebar-foreground/50">
-            App sections
-          </div>
-          {settingsSectionRows.map((section) => {
-            const href = `/settings/${section.id}`;
-            const Icon = sectionIcons[section.iconId];
-            return (
-              <Link
-                key={section.id}
-                href={href}
-                prefetch={true}
-                onClick={onNavigate}
-                className={itemClass(isActive(href))}
-              >
-                <LeadingTile sectionId={section.id} Icon={Icon} size="sm" />
-                {section.label}
-              </Link>
-            );
-          })}
-        </>
-      )}
     </>
   );
 }
@@ -221,11 +197,8 @@ export function AppSidebar({ children }: { children: React.ReactNode }) {
   // HOUP-50: the Settings tap opens the menu in place — it no longer computes
   // a deep-link href for the tap itself (see `openSettingsMenu` below).
   // HOUP-42: on /settings/** routes the mobile drawer shows the settings menu
-  // (General + App sections) instead of the current section's nav items —
+  // (the Settings tabs) instead of the current section's nav items —
   // this is the single drawer everywhere, contextual by route.
-  const settingsSectionRows = getEnabledSections(modules.enabled).filter(
-    (s) => hasModuleSettings(s.id, modules.enabled)
-  );
 
   // Modules (.docs/modules.md): a switched-off module's routes are gone for
   // this household, including deep links and stale tabs. Send them home.
@@ -369,8 +342,6 @@ export function AppSidebar({ children }: { children: React.ReactNode }) {
         <nav className="flex-1 flex flex-col gap-px p-2.5 pt-3 overflow-y-auto min-h-0">
           {onSettings || showSettingsMenu ? (
             <SettingsMenuNav
-              settingsSectionRows={settingsSectionRows}
-              isActive={isActive}
               compact
               backLabel={settingsMenuOrigin?.label}
               onBack={closeSettingsMenu}
@@ -484,8 +455,6 @@ export function AppSidebar({ children }: { children: React.ReactNode }) {
         <nav className="flex-1 flex flex-col gap-px p-2.5 pt-3 overflow-y-auto min-h-0">
           {onSettings || showSettingsMenu ? (
             <SettingsMenuNav
-              settingsSectionRows={settingsSectionRows}
-              isActive={isActive}
               onNavigate={() => setOpen(false)}
               backLabel={settingsMenuOrigin?.label}
               onBack={closeSettingsMenu}
@@ -621,7 +590,7 @@ export function AppSidebar({ children }: { children: React.ReactNode }) {
                 // sidebar becomes the settings screens' own left column.
                 <div className="md:mx-auto md:flex md:w-full md:max-w-5xl md:gap-2">
                   <nav aria-label="Settings" className="desk-top hidden w-56 shrink-0 flex-col gap-px self-start px-2 pt-8 md:sticky md:top-0 md:flex">
-                    <SettingsMenuNav settingsSectionRows={settingsSectionRows} isActive={isActive} compact />
+                    <SettingsMenuNav compact />
                   </nav>
                   <div className="min-w-0 flex-1">{children}</div>
                 </div>

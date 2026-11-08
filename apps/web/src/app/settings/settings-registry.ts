@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import { CONNECTORS, moduleSettingsTabs, type ConnectorPanelId, type ModuleId, type SettingsPanelId } from "@homeup/core";
+import { CONNECTORS, SETTINGS_TABS, moduleSettingsTabs, type ConnectorPanelId, type ModuleId, type SettingsPanelId, type SettingsTabId } from "@homeup/core";
 import { AppearanceSettings } from "@/components/appearance-settings";
 import { SectionPreferences } from "@/components/section-preferences";
 import { GroupManager } from "@/components/group-manager";
@@ -43,24 +43,32 @@ const CONNECTOR_PANELS: Record<ConnectorPanelId, ComponentType> = {
   "bank-import": BankImportSettings,
 };
 
-export interface GlobalMenu {
-  key: string;
+export interface SettingsTab {
+  id: SettingsTabId;
   label: string;
+  /** Fold each panel to its header row, one open at a time (HOUP-616). */
+  fold: boolean;
   panels: ComponentType[];
 }
 
-// HOUP-42: the flat 10-panel global stack, regrouped into 5 named menus reached
-// through the settings drawer. "global" is first — it's the default landing.
-export const globalMenus: GlobalMenu[] = [
-  { key: "global", label: "Global settings", panels: [SectionPreferences, HomeProfileSettings, NavigationSettings] },
-  { key: "modules", label: "Tiles", panels: [ModulesSettings] },
-  { key: "users", label: "Under this roof", panels: [GroupManager, UsersManager] },
-  { key: "appearance", label: "Appearance", panels: [AppearanceSettings] },
-  { key: "notifications", label: "Notifications", panels: [NotificationsSettings, NotificationKinds] },
-  { key: "connectors", label: "Connectors", panels: CONNECTORS.map((c) => CONNECTOR_PANELS[c.panel]) },
-  { key: "integrations", label: "Integrations & keys", panels: [HouseholdAiKeys, AiProvidersSettings, ApiKeysSettings, FeedbackInbox, PatSettings, McpSettings] },
-  { key: "whats-new", label: "About & updates", panels: [VersionSettings, WhatsNewHistory, CrashReportsSettings] },
-];
+// HOUP-616: Settings opens on these tabs (ids and labels in core
+// settings-layout.ts). The phone lists the same panels per tab in
+// apps/mobile/src/features/settings/settings-registry.ts.
+const TAB_PANELS: Record<SettingsTabId, Pick<SettingsTab, "fold" | "panels">> = {
+  you: {
+    fold: true,
+    panels: [AppearanceSettings, NotificationsSettings, NotificationKinds, NavigationSettings, SectionPreferences, PatSettings, McpSettings],
+  },
+  house: { fold: false, panels: [GroupManager, UsersManager, HomeProfileSettings] },
+  tiles: { fold: false, panels: [ModulesSettings] },
+  connected: {
+    fold: true,
+    panels: [...CONNECTORS.map((c) => CONNECTOR_PANELS[c.panel]), HouseholdAiKeys, AiProvidersSettings, ApiKeysSettings, FeedbackInbox],
+  },
+  about: { fold: false, panels: [VersionSettings, WhatsNewHistory, CrashReportsSettings] },
+};
+
+export const settingsTabs: SettingsTab[] = SETTINGS_TABS.map((meta) => ({ ...meta, ...TAB_PANELS[meta.id] }));
 
 // Every module settings panel by its core id (module-settings.ts). The
 // Settings page and the module screen's settings sheet both render

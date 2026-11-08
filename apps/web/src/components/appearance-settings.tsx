@@ -5,6 +5,8 @@ import { setNavSpeed, useNavSpeed, type NavSpeed } from "@homeup/core";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { SettingsChoiceRow, SettingsInset, SettingsLabel, SettingsPanel } from "@/components/settings-panel";
 import { setDesktopLayout, useDesktopLayout } from "@/lib/desktop-layout";
+import { useTheme } from "@/components/theme-provider";
+import { themePreferenceLabel } from "@/lib/themes";
 
 const NAV_SPEED_CHOICES: { id: NavSpeed; title: string; description: string }[] = [
   { id: "fast", title: "Fast", description: "Pages snap into place" },
@@ -14,8 +16,9 @@ const NAV_SPEED_CHOICES: { id: NavSpeed; title: string; description: string }[] 
 export function AppearanceSettings() {
   const layout = useDesktopLayout();
   const speed = useNavSpeed();
+  const { preference } = useTheme();
   return (
-    <SettingsPanel icon={Palette} title="Appearance">
+    <SettingsPanel icon={Palette} title="Appearance" summary={themePreferenceLabel(preference)}>
       <ThemeSwitcher />
       {/* Hearth §13 "Desktop shell": per browser, and only on wide screens (phones keep the tab bar). */}
       <div className="hidden space-y-2 md:block">

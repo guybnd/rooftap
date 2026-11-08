@@ -6,14 +6,37 @@
 // deliberately neutral: section identity hues belong to LeadingTile + the
 // glow only (H2), and Settings is not a section.
 import * as React from 'react';
-import { View } from 'react-native';
-import { Check, type LucideIcon } from 'lucide-react-native';
+import { Pressable, View } from 'react-native';
+import { Check, ChevronDown, type LucideIcon } from 'lucide-react-native';
 import { Card, ListGroup, ListItem, ListItemContent, ListItemLeading, ListItemTrailing, Switch, Text, cn, haptics } from '@homeup/ui';
+
+/**
+ * Settings tabs fold their panels (HOUP-616): inside a `SettingsFold` each
+ * panel shows as its header row only, and one opens at a time under its
+ * header. Module settings sheets and pages have no fold, so they show open.
+ */
+const FoldContext = React.createContext<{ open: string | null; toggle: (id: string) => void } | null>(null);
+
+export function SettingsFold({ children }: { children: React.ReactNode }) {
+  const [open, setOpen] = React.useState<string | null>(null);
+  const toggle = React.useCallback((id: string) => setOpen((cur) => (cur === id ? null : id)), []);
+  const value = React.useMemo(() => ({ open, toggle }), [open, toggle]);
+  // One group with hairlines between the folded rows (H4: one border level).
+  return (
+    <FoldContext.Provider value={value}>
+      <Card className="gap-0 rounded-3xl py-0">
+        {/* Every folded row draws its own top hairline; this hides the first. */}
+        <View style={{ marginTop: -1 }}>{children}</View>
+      </Card>
+    </FoldContext.Provider>
+  );
+}
 
 export function SettingsPanel({
   icon: Icon,
   title,
   description,
+  summary,
   action,
   className,
   children,
@@ -22,11 +45,73 @@ export function SettingsPanel({
   /** A string renders at the Title step; pass a node for an editable title. */
   title: React.ReactNode;
   description?: React.ReactNode;
+  /** The current value, shown on the folded row (E2). */
+  summary?: string | null;
   /** Right-aligned header control (e.g. "Add agent"). */
   action?: React.ReactNode;
   className?: string;
   children?: React.ReactNode;
 }) {
+  const fold = React.useContext(FoldContext);
+  const id = React.useId();
+  if (fold) {
+    const open = fold.open === id;
+    const label = typeof title === 'string' ? title : undefined;
+    return (
+      <View className={cn('border-t border-border', className)}>
+        <Pressable
+          onPress={() => {
+            haptics.select();
+            fold.toggle(id);
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={label}
+          accessibilityState={{ expanded: open }}
+          className="min-h-14 flex-row items-center gap-3 px-4 py-2.5 active:bg-accent/30"
+        >
+          {Icon && (
+            <View className="size-9 items-center justify-center rounded-[11px] bg-muted">
+              <Icon size={18} strokeWidth={2.1} className="text-muted-foreground" />
+            </View>
+          )}
+          <View className="min-w-0 flex-1 flex-row items-center gap-1.5">
+            {typeof title === 'string' ? (
+              <Text numberOfLines={1} className="font-heading text-title font-semibold text-foreground">
+                {title}
+              </Text>
+            ) : (
+              title
+            )}
+          </View>
+          {!!summary && !open && (
+            <Text numberOfLines={1} className="max-w-[45%] text-caption text-muted-foreground">
+              {summary}
+            </Text>
+          )}
+          <View style={{ transform: [{ rotate: open ? '180deg' : '0deg' }] }}>
+            <ChevronDown size={16} className="text-muted-foreground" />
+          </View>
+        </Pressable>
+        {open && (
+          <View className="gap-4 px-4 pb-4">
+            {(description || action) && (
+              <View className="flex-row items-start gap-3">
+                <View className="min-w-0 flex-1">
+                  {typeof description === 'string' ? (
+                    <Text className="text-body text-muted-foreground">{description}</Text>
+                  ) : (
+                    description
+                  )}
+                </View>
+                {action}
+              </View>
+            )}
+            {children}
+          </View>
+        )}
+      </View>
+    );
+  }
   return (
     <Card className={cn('gap-4 rounded-3xl px-4', className)}>
       <View className="gap-2">

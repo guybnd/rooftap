@@ -1048,7 +1048,7 @@ function HomeSectionBody() {
               {sky && (
                 <SkyBlock weather={sky} headline={skyLine} open={ribbonOpen} onToggle={toggleRibbon} canExpand={ribbon.length > 0} />
               )}
-              {skyNote && <SkyNote reason={skyNote} onSetLocation={() => router.push('/settings/global')} />}
+              {skyNote && <SkyNote reason={skyNote} onSetLocation={() => router.push('/settings/house')} />}
             </View>
           )}
           {sky && ribbonOpen && ribbon.length > 0 && <DayRibbon hours={ribbon} />}

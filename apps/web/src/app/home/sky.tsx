@@ -304,7 +304,7 @@ export function SkyNote({ reason }: { reason: 'noLocation' | 'unavailable' }) {
     );
   }
   return (
-    <Link href="/settings/global" className={cn(className, 'font-medium text-primary hover:bg-card')}>
+    <Link href="/settings/house" className={cn(className, 'font-medium text-primary hover:bg-card')}>
       <MapPin className="size-5" aria-hidden />
       <span>Add your home address for weather</span>
     </Link>

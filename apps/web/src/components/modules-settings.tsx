@@ -4,14 +4,18 @@
 // features on and off for everyone. A module that's off disappears from nav,
 // the hub, capture and search; its data is kept. Applies live, no Save (M4);
 // switching off offers an undo instead of a confirm, since nothing is lost.
+// HOUP-616: this is the Settings > Tiles tab, so a tile's name opens its own
+// settings.
+import Link from "next/link";
 import { toast } from "sonner";
-import { Blocks } from "lucide-react";
+import { Blocks, ChevronRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useDataCache } from "@/lib/data-cache";
 import { sectionIcons } from "@/lib/section-icons";
 import { toastUndoAction } from "@/lib/undo-toast";
 import { SettingsPanel } from "@/components/settings-panel";
 import { Switch } from "@/components/ui/switch";
+import { LeadingTile } from "@/components/ui/leading-tile";
 import {
   ListGroup,
   ListItem,
@@ -21,7 +25,7 @@ import {
   ListItemTitle,
   ListItemTrailing,
 } from "@/components/ui/list-item";
-import { dependantsOf, saveModuleSwitch, serverUpdateNote, useModules, type ModuleId } from "@homeup/core";
+import { dependantsOf, getSection, hasModuleSettings, saveModuleSwitch, serverUpdateNote, useModules, type ModuleId } from "@homeup/core";
 
 export function ModulesSettings() {
   const { group, isGroupOwner, currentUserId, groupMembers, memberProfiles } = useDataCache();
@@ -52,8 +56,8 @@ export function ModulesSettings() {
         isGroupOwner
           ? "Choose what your household uses. A tile you turn off disappears for everyone, and its data is kept for when you turn it back on."
           : ownerName
-            ? `${ownerName} manages these for your household. You can still hide sections just for yourself under Global settings.`
-            : "Your household owner manages these. You can still hide sections just for yourself under Global settings."
+            ? `${ownerName} manages these for your household. You can still hide sections just for yourself under You, in Navigation.`
+            : "Your household owner manages these. You can still hide sections just for yourself under You, in Navigation."
       }
     >
       {/* Hearth H4: the panel owns the border; the list is an inset fill. */}
@@ -63,13 +67,27 @@ export function ModulesSettings() {
           const usedBy = on ? dependantsOf(m.id, modules.enabled) : [];
           const locked = usedBy.length > 0;
           const Icon = sectionIcons[m.iconId];
+          // A tile with settings of its own opens them (/settings/<section>).
+          const opensSettings = on && !!getSection(m.id) && hasModuleSettings(m.id, modules.enabled);
           return (
-            <ListItem key={m.id} className="min-h-[52px] gap-3 px-3.5 py-3">
+            <ListItem key={m.id} className="relative min-h-[52px] gap-3 px-3.5 py-3">
               <ListItemLeading>
-                {Icon && <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />}
+                {Icon && <LeadingTile sectionId={m.id} Icon={Icon} size="sm" />}
               </ListItemLeading>
               <ListItemContent>
-                <ListItemTitle>{m.label}</ListItemTitle>
+                <ListItemTitle>
+                  {opensSettings ? (
+                    <Link
+                      href={`/settings/${m.id}`}
+                      className="inline-flex items-center gap-1 hover:underline focus-visible:outline-none after:absolute after:inset-y-0 after:left-0 after:right-20"
+                    >
+                      {m.label}
+                      <ChevronRight aria-hidden className="size-3.5 text-muted-foreground" />
+                    </Link>
+                  ) : (
+                    m.label
+                  )}
+                </ListItemTitle>
                 <ListItemMeta>
                   {locked ? `${usedBy.map((d) => d.label).join(", ")} uses this` : m.description}
                 </ListItemMeta>

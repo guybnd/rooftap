@@ -1,22 +1,24 @@
 "use client";
 
+import Link from "next/link";
 import { useParams, notFound } from "next/navigation";
-import { getSection, getEnabledSections, useModules } from "@homeup/core";
+import { ChevronLeft } from "lucide-react";
+import { getSection, getEnabledSections, settingsTabForKey, useModules } from "@homeup/core";
 import { SettingsContent } from "../settings-content";
-import { globalMenus, moduleSettingsTabComponents, visiblePanels } from "../settings-registry";
+import { SettingsHome } from "../settings-home";
+import { moduleSettingsTabComponents } from "../settings-registry";
 
-// Resolves either a global-menu key (users, appearance, notifications,
-// integrations) or an enabled app-section id (search, setup, ...) through one
-// dynamic segment, so the drawer can link to both with a single href shape.
+// One dynamic segment for both kinds of settings page: a Settings tab (or an
+// old menu key such as "integrations", core settingsTabForKey) opens
+// Settings on that tab (HOUP-616); an enabled section's id opens that
+// module's settings, reached from the Tiles tab.
 export default function SettingsKeyPage() {
   const params = useParams<{ key: string }>();
   const key = params.key;
   const modules = useModules();
 
-  const menu = globalMenus.find((m) => m.key === key);
-  if (menu) {
-    return <SettingsContent panels={visiblePanels(menu.panels, modules.enabled)} emptyLabel={menu.label} />;
-  }
+  const tab = settingsTabForKey(key);
+  if (tab) return <SettingsHome tab={tab} />;
 
   const section = getSection(key);
   // Only enabled sections (module on for this household) get a settings
@@ -26,6 +28,18 @@ export default function SettingsKeyPage() {
   }
 
   return (
-    <SettingsContent tabs={moduleSettingsTabComponents(key, modules.enabled)} emptyLabel={section.label} />
+    <SettingsContent
+      lede={
+        <div className="space-y-1 md:hidden">
+          <Link href="/settings/tiles" className="-ml-1 inline-flex min-h-11 items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground">
+            <ChevronLeft aria-hidden className="size-4" />
+            Tiles
+          </Link>
+          <h1 className="px-1 font-heading text-2xl font-semibold">{section.label}</h1>
+        </div>
+      }
+      tabs={moduleSettingsTabComponents(key, modules.enabled)}
+      emptyLabel={section.label}
+    />
   );
 }

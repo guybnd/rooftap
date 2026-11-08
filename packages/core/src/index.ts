@@ -63,6 +63,7 @@ export * from './modules/setup/use-setup-list';
 export * from './modules/setup/setup-item-form';
 export * from './sections';
 export * from './module-settings';
+export * from './settings-layout';
 export * from './connector';
 export * from './connectors';
 export * from './recent-sections';

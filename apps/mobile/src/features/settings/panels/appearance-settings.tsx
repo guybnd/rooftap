@@ -21,7 +21,7 @@ import {
 } from '@homeup/core';
 import { useHapticsPref } from '@/lib/haptics-pref';
 import { useAppTheme } from '@/lib/theme-context';
-import { themeMeta, themeModes } from '@/lib/theme-meta';
+import { themeMeta, themeModes, themePreferenceLabel } from '@/lib/theme-meta';
 import { SettingsChoiceRow, SettingsInset, SettingsPanel, SettingsSwitchRow } from './settings-panel';
 
 // Preview tile: the theme's real ground with a dot of its accent (the same
@@ -52,7 +52,7 @@ export function AppearanceSettings() {
   const mode = preferenceMode(preference);
 
   return (
-    <SettingsPanel icon={Palette} title="Appearance">
+    <SettingsPanel icon={Palette} title="Appearance" summary={themePreferenceLabel(preference)}>
       {/* H6: the control sits with the list it changes, above it. */}
       <View className="gap-1.5">
         <SegmentedControl<ThemeMode>

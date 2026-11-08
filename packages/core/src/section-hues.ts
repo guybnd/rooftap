@@ -322,6 +322,12 @@ export function sectionHue(sectionId: string): SectionHue {
  * not sections. Keys are the settings-registry menu keys of both apps.
  */
 export const SETTINGS_MENU_HUES: Readonly<Record<string, NamedHue>> = {
+  // The Settings tabs (settings-layout.ts), in the web's left column.
+  you: 'rose',
+  house: 'lilac',
+  tiles: 'orchid',
+  connected: 'fern',
+  // The menu keys from before the tabs.
   global: 'indigo',
   modules: 'orchid',
   users: 'lilac',

@@ -1,9 +1,7 @@
 "use client";
 
-import { SettingsContent } from "./settings-content";
-import { globalMenus } from "./settings-registry";
-import { HouseholdHeader } from "./household-header";
+import { SettingsHome } from "./settings-home";
 
 export default function SettingsPage() {
-  return <SettingsContent panels={globalMenus[0].panels} gateOnDataCache={false} lede={<HouseholdHeader />} />;
+  return <SettingsHome tab="you" />;
 }

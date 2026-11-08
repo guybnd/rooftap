@@ -5,7 +5,7 @@
 // packages/core/scripts/check-import-boundary.mjs and this map holds live
 // component refs).
 import type { ComponentType } from 'react';
-import { CONNECTORS, moduleSettingsTabs, type ConnectorPanelId, type ModuleId, type SettingsPanelId } from '@homeup/core';
+import { CONNECTORS, SETTINGS_TABS, moduleSettingsTabs, type ConnectorPanelId, type ModuleId, type SettingsPanelId, type SettingsTabId } from '@homeup/core';
 import { AppearanceSettings, HapticsSettings, MotionSettings } from './panels/appearance-settings';
 import { SectionPreferences } from './panels/section-preferences';
 import { HomeProfileSettings } from './panels/home-profile-settings';
@@ -39,6 +39,7 @@ import { CalendarSetup } from './panels/calendar-setup';
 import { AppUpdates } from './panels/app-updates';
 import { CrashReportsSettings } from './panels/crash-reports-settings';
 import { ShopperSettings } from './panels/shopper-settings';
+import { ServerSettings, SignOutRow } from './panels/server-settings';
 
 // Every connector's Settings > Connectors panel by its core id (connectors.ts,
 // .docs/connectors.md). The Connectors menu lists them in registry order, and
@@ -48,22 +49,32 @@ const CONNECTOR_PANELS: Record<ConnectorPanelId, ComponentType> = {
   'bank-import': BankImportSettings,
 };
 
-export interface GlobalMenu {
-  key: string;
+export interface SettingsTab {
+  id: SettingsTabId;
   label: string;
+  /** Fold each panel to its header row, one open at a time (HOUP-616). */
+  fold: boolean;
   panels: ComponentType[];
 }
 
-export const globalMenus: GlobalMenu[] = [
-  { key: 'global', label: 'Global settings', panels: [SectionPreferences, HomeProfileSettings, NavigationSettings] },
-  { key: 'modules', label: 'Tiles', panels: [ModulesSettings] },
-  { key: 'users', label: 'Under this roof', panels: [GroupManager, UsersManager] },
-  { key: 'appearance', label: 'Appearance', panels: [AppearanceSettings, MotionSettings, HapticsSettings] },
-  { key: 'notifications', label: 'Notifications', panels: [NotificationsSettings, NotificationKinds] },
-  { key: 'connectors', label: 'Connectors', panels: CONNECTORS.map((c) => CONNECTOR_PANELS[c.panel]) },
-  { key: 'integrations', label: 'Integrations & keys', panels: [HouseholdAiKeys, AiProvidersSettings, ApiKeysSettings, FeedbackInbox, PatSettings, McpSettings] },
-  { key: 'about', label: 'About & updates', panels: [AppUpdates, CrashReportsSettings] },
-];
+// HOUP-616: Settings opens on these tabs (ids and labels in core
+// settings-layout.ts). Web lists the same panels per tab in
+// apps/web/src/app/settings/settings-registry.ts.
+const TAB_PANELS: Record<SettingsTabId, Pick<SettingsTab, 'fold' | 'panels'>> = {
+  you: {
+    fold: true,
+    panels: [AppearanceSettings, MotionSettings, HapticsSettings, NotificationsSettings, NotificationKinds, NavigationSettings, SectionPreferences, PatSettings, McpSettings],
+  },
+  house: { fold: false, panels: [GroupManager, UsersManager, HomeProfileSettings] },
+  tiles: { fold: false, panels: [ModulesSettings] },
+  connected: {
+    fold: true,
+    panels: [...CONNECTORS.map((c) => CONNECTOR_PANELS[c.panel]), HouseholdAiKeys, AiProvidersSettings, ApiKeysSettings, FeedbackInbox, ServerSettings],
+  },
+  about: { fold: false, panels: [AppUpdates, CrashReportsSettings, SignOutRow] },
+};
+
+export const settingsTabs: SettingsTab[] = SETTINGS_TABS.map((meta) => ({ ...meta, ...TAB_PANELS[meta.id] }));
 
 // Every module settings panel by its core id (module-settings.ts). The
 // Settings page and the module screen's settings sheet both render

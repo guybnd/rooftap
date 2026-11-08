@@ -10,16 +10,38 @@
 // Native twin: apps/mobile/src/features/settings/panels/settings-panel.tsx.
 
 import * as React from "react";
-import { Check } from "lucide-react";
+import { Check, ChevronDown } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
 type PanelIcon = React.ComponentType<{ className?: string; strokeWidth?: number }>;
 
+/**
+ * Settings tabs fold their panels (HOUP-616): inside a `SettingsFold` each
+ * panel shows as its header row only, and one opens at a time under its
+ * header. Module settings sheets and pages have no fold, so they show open.
+ */
+const FoldContext = React.createContext<{ open: string | null; toggle: (id: string) => void } | null>(null);
+
+export function SettingsFold({ children }: { children: React.ReactNode }) {
+  const [open, setOpen] = React.useState<string | null>(null);
+  const toggle = React.useCallback((id: string) => setOpen((cur) => (cur === id ? null : id)), []);
+  const value = React.useMemo(() => ({ open, toggle }), [open, toggle]);
+  // One group with hairlines between the folded rows (H4: one border level).
+  return (
+    <FoldContext.Provider value={value}>
+      <div className="divide-y divide-border/60 overflow-hidden rounded-3xl border border-border/60 bg-card text-card-foreground shadow-[var(--card-shadow)] empty:hidden">
+        {children}
+      </div>
+    </FoldContext.Provider>
+  );
+}
+
 export function SettingsPanel({
   icon: Icon,
   title,
   description,
+  summary,
   action,
   className,
   children,
@@ -27,11 +49,60 @@ export function SettingsPanel({
   icon?: PanelIcon;
   title: React.ReactNode;
   description?: React.ReactNode;
+  /** The current value, shown on the folded row (E2). */
+  summary?: React.ReactNode;
   /** Right-aligned header control (e.g. "Add agent"). */
   action?: React.ReactNode;
   className?: string;
   children?: React.ReactNode;
 }) {
+  const fold = React.useContext(FoldContext);
+  const id = React.useId();
+  if (fold) {
+    const open = fold.open === id;
+    const bodyId = `${id}-body`;
+    return (
+      <section className={className}>
+        <h2 className="m-0">
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={bodyId}
+          onClick={() => fold.toggle(id)}
+          className="flex min-h-14 w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-accent/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:px-5"
+        >
+          {Icon && (
+            <span
+              aria-hidden
+              className="flex size-9 shrink-0 items-center justify-center rounded-[11px] bg-muted text-muted-foreground"
+            >
+              <Icon className="size-[18px]" strokeWidth={2.1} />
+            </span>
+          )}
+          <span className="flex min-w-0 flex-1 items-center gap-1.5 font-heading text-base font-semibold text-foreground">
+            {title}
+          </span>
+          {summary && !open && <span className="max-w-[45%] truncate text-sm text-muted-foreground">{summary}</span>}
+          <ChevronDown
+            aria-hidden
+            className={cn("size-4 shrink-0 text-muted-foreground transition-transform duration-[var(--motion-fast)]", open && "rotate-180")}
+          />
+        </button>
+        </h2>
+        {open && (
+          <div id={bodyId} className="space-y-4 px-4 pb-4 sm:px-5 sm:pb-5">
+            {(description || action) && (
+              <div className="flex items-start gap-3">
+                {description && <p className="min-w-0 flex-1 text-sm text-muted-foreground">{description}</p>}
+                {action && <div className="ml-auto shrink-0">{action}</div>}
+              </div>
+            )}
+            {children}
+          </div>
+        )}
+      </section>
+    );
+  }
   return (
     <section
       className={cn(
