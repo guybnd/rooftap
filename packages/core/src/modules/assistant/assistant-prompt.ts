@@ -27,6 +27,18 @@ export const ASSISTANT_PERSONA =
   'Keep replies short, warm and plain, like a capable family ' +
   'member. Use the names of household members, never ids.';
 
+/**
+ * Added in the app (not Telegram), where replies can show items as their
+ * live rows: lists of things the household has go out as rows, not text.
+ */
+export const SHOW_ITEMS_PROMPT =
+  '## Showing items\n' +
+  'The app can show household items under your reply as their real rows, which the person can tick, open and edit. ' +
+  'When your answer lists items the household has (grocery items, tasks, costs, setup items, recipes, checklists, Shopper watches), ' +
+  'call show_items with their ids instead of writing them out: one call per group, each with a short title such as an aisle, ' +
+  '"On the list" or "Running low". Keep your text to a line or two around the rows, with what matters (a count, the one thing to do first), ' +
+  'and never list the shown items again in words. Things that are not items yet (a missing ingredient, an idea) stay as text.';
+
 export const REMEMBER_INSTRUCTION =
   'You can keep a lasting fact about the household for next time (a preference, a routine, who usually ' +
   'does what) by including <remember>the fact</remember> anywhere in your reply. It is saved and the ' +

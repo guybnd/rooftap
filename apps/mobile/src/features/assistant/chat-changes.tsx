@@ -14,8 +14,10 @@ import { Check, ChevronRight, Undo2 } from 'lucide-react-native';
 import { LeadingTile, ListGroup, ListItem, ListItemContent, ListItemTitle, ListItemTrailing, SpectrumOnce, Text, cn, haptics } from '@homeup/ui';
 import {
   CHANGES_SHOWN,
+  SHOWN_ITEMS_FOLD,
   changeCaption,
   changeGroups,
+  shownGroups,
   checklists$,
   costItems$,
   groceryItems$,
@@ -29,6 +31,7 @@ import {
   useReconnectSync,
   useStoreHelpers,
   type AssistantChange,
+  type AssistantShown,
   type ChangeGroup,
   type Checklist,
   type CostItem,
@@ -49,13 +52,14 @@ import { useLiveRowRenderer, type LiveRowRef } from '@/components/capture/captur
 const UNDOABLE_ROWS = new Set(['tasks', 'groceries', 'costs', 'setup']);
 
 /** `fresh`: the reply just arrived, so its cards arrive with one turn of the spectrum edge (Hearth §8 "Spectrum once"). */
-export function ChatChanges({ changes, fresh = false }: { changes: AssistantChange[] | undefined; fresh?: boolean }) {
-  const groups = React.useMemo(() => changeGroups(changes), [changes]);
+export function ChatChanges({ changes, shown, fresh = false }: { changes: AssistantChange[] | undefined; shown?: AssistantShown[]; fresh?: boolean }) {
+  // What the reply shows (show_items) first: it is the answer; then what it changed.
+  const groups = React.useMemo(() => [...shownGroups(shown), ...changeGroups(changes)], [changes, shown]);
   if (!groups.length) return null;
   return (
     <FreshContext.Provider value={fresh}>
       <View className="mt-2.5 gap-2.5">
-        {groups.some((g) => g.rowKind) ? <LiveChanges groups={groups} /> : groups.map((g) => <ChangeCard key={g.module} group={g} renderRow={null} />)}
+        {groups.some((g) => g.rowKind) ? <LiveChanges groups={groups} /> : groups.map((g) => <ChangeCard key={g.key} group={g} renderRow={null} />)}
       </View>
     </FreshContext.Provider>
   );
@@ -164,10 +168,10 @@ function LiveChanges({ groups }: { groups: ChangeGroup[] }) {
     <>
       {groups.map((g) => (
         <ChangeCard
-          key={g.module}
+          key={g.key}
           group={g}
           renderRow={renderRow}
-          onUndo={UNDOABLE_ROWS.has(g.rowKind ?? '') && g.changes.every((c) => c.verb === 'added' && c.id) ? () => undoAdded(g) : undefined}
+          onUndo={!g.title && UNDOABLE_ROWS.has(g.rowKind ?? '') && g.changes.every((c) => c.verb === 'added' && c.id) ? () => undoAdded(g) : undefined}
         />
       ))}
     </>
@@ -188,8 +192,11 @@ function ChangeCard({
   const fresh = React.useContext(FreshContext);
   const [all, setAll] = React.useState(false);
   const [undone, setUndone] = React.useState(false);
-  const shown = all ? group.changes : group.changes.slice(0, CHANGES_SHOWN);
-  const hidden = group.changes.length - shown.length;
+  // A shown group (show_items) lists only the items this person's stores hold, and folds later.
+  const listed = group.title && renderRow ? group.changes.filter((c) => c.id && renderRow({ section: group.rowKind!, id: c.id })) : group.changes;
+  const shown = all ? listed : listed.slice(0, group.title ? SHOWN_ITEMS_FOLD : CHANGES_SHOWN);
+  const hidden = listed.length - shown.length;
+  if (group.title && listed.length === 0) return null;
   const Icon = sectionIconFor(group.module);
   const line = (c: AssistantChange, i: number) => {
     const live = renderRow && group.rowKind && c.id ? renderRow({ section: group.rowKind, id: c.id }) : null;
@@ -219,12 +226,18 @@ function ChangeCard({
   return (
     <View className="gap-1.5">
       <View className="flex-row items-center gap-1.5 px-1">
-        <View className={cn('size-4 items-center justify-center rounded-full', undone ? 'bg-muted-foreground' : 'bg-success')}>
-          {undone ? <Undo2 size={9} className="text-card" /> : <Check size={10} strokeWidth={3} className="text-card" />}
-        </View>
-        <Text className="min-w-0 flex-1 text-xs font-medium text-muted-foreground">
-          {undone ? 'Undone' : changeCaption(group.changes, group.label)}
-        </Text>
+        {group.title ? (
+          <Text className="min-w-0 flex-1 text-micro-label uppercase text-muted-foreground">{group.title}</Text>
+        ) : (
+          <>
+            <View className={cn('size-4 items-center justify-center rounded-full', undone ? 'bg-muted-foreground' : 'bg-success')}>
+              {undone ? <Undo2 size={9} className="text-card" /> : <Check size={10} strokeWidth={3} className="text-card" />}
+            </View>
+            <Text className="min-w-0 flex-1 text-xs font-medium text-muted-foreground">
+              {undone ? 'Undone' : changeCaption(group.changes, group.label)}
+            </Text>
+          </>
+        )}
         {onUndo && !undone ? (
           <Pressable
             onPress={() => {
@@ -247,7 +260,7 @@ function ChangeCard({
             {shown.map(line)}
             {hidden > 0 && (
               <ListItem className="items-center justify-center" onPress={() => setAll(true)} accessibilityRole="button">
-                <Text className="text-sm font-medium text-foreground">Show all {group.changes.length}</Text>
+                <Text className="text-sm font-medium text-foreground">Show all {listed.length}</Text>
               </ListItem>
             )}
           </ListGroup>

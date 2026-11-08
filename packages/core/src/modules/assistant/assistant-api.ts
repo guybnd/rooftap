@@ -71,6 +71,18 @@ export interface AssistantMessage {
   photos?: AssistantPhoto[];
   /** Changes this reply made without asking (trust Act), shown as the items' own rows. Missing from servers before inline changes. */
   changes?: AssistantChange[];
+  /** Items a reply shows as their live rows (the show_items tool), in titled groups. Missing from servers before it. */
+  shown?: AssistantShown[];
+}
+
+/** The tool a reply uses to show household items as their live rows under it. */
+export const SHOW_ITEMS_TOOL = 'show_items';
+
+/** One titled group of items a reply shows, e.g. "Dairy" with three grocery ids. */
+export interface AssistantShown {
+  title: string;
+  module: AssistantScope;
+  ids: string[];
 }
 
 /** One change a reply made: which item, so the app can show its live row. */
@@ -520,7 +532,10 @@ export function describeProposal(tool: string, module: AssistantScope, args: Rec
  * reply being written: "Checking Groceries and Calendar" for lookups, the
  * change itself (as its proposal card would say) for a change.
  */
-export function toolStatus(calls: { tool: string; module: AssistantScope; lookup?: boolean; args: Record<string, unknown> }[]): string | null {
+export function toolStatus(all: { tool: string; module: AssistantScope; lookup?: boolean; args: Record<string, unknown> }[]): string | null {
+  // Showing rows is laying out the answer, not a lookup.
+  const calls = all.filter((c) => c.tool !== SHOW_ITEMS_TOOL);
+  if (calls.length === 0) return all.length ? 'Laying out the items' : null;
   const change = calls.find((c) => !c.lookup);
   if (change) {
     const more = calls.filter((c) => !c.lookup).length - 1;

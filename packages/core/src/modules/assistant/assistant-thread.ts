@@ -23,6 +23,7 @@ import {
 import { createDraftPacer, type AssistantDraft } from './assistant-stream';
 import { isConversationOpen, wantsAssistantReply, type ConversationKind } from './assistant';
 import { deviceKeyValue } from '../../data/store-environment';
+import { helperShared, isHouseholdThread } from '../../module-helpers';
 
 interface CachedThread {
   conversation: AssistantConversation;
@@ -90,7 +91,7 @@ function saveSoon(): void {
 export function rememberThread(conversation: AssistantConversation, messages: AssistantMessage[]): void {
   hydrate();
   const entry = { conversation, messages };
-  for (const key of conversation.kind === 'household' ? [conversation.id, 'household'] : [conversation.id]) {
+  for (const key of isHouseholdThread(conversation) ? [conversation.id, 'household'] : [conversation.id]) {
     threadCache.delete(key);
     threadCache.set(key, entry);
   }
@@ -249,10 +250,13 @@ export function useAssistantThread(target: ThreadTarget, host: ThreadHost) {
   const reload = useCallback(async ({ quiet = false }: { quiet?: boolean } = {}) => {
     const { api } = hostRef.current;
     let id: string | undefined = conversationIdRef.current ?? (isNew ? undefined : target.id);
-    // A helper's chat carries on where this person left it.
+    // A helper's chat carries on where it was left: this person's own, or the
+    // one the household shares when owners chose that (Settings > Assistant).
     if (!id && target.helper) {
       try {
-        id = (await api.conversations()).find((c) => c.helper === target.helper && c.kind !== 'household')?.id;
+        const [list, settings] = await Promise.all([api.conversations(), api.settings().catch(() => null)]);
+        const shared = helperShared(settings?.settings, target.helper);
+        id = list.find((c) => c.helper === target.helper && (c.kind === 'household') === shared)?.id;
       } catch {
         // Offline: the brief still shows, and the first message finds the chat on the server.
       }
@@ -265,7 +269,7 @@ export function useAssistantThread(target: ThreadTarget, host: ThreadHost) {
     // A retry with nothing on screen shows the skeleton again; a refresh under messages doesn't.
     if (!quiet && shownCount.current === 0) setLoading(true);
     try {
-      if (id === 'household') id = (await api.conversations()).find((c) => c.kind === 'household')?.id;
+      if (id === 'household') id = (await api.conversations()).find((c) => isHouseholdThread(c))?.id;
       if (id) {
         const res = await api.messages(id);
         // A message going out meanwhile would vanish from the list; the send brings it back with the rest.
@@ -313,7 +317,7 @@ export function useAssistantThread(target: ThreadTarget, host: ThreadHost) {
       setMessages((m) => [...m, local]);
       setSending(true);
       sendingRef.current = true;
-      setThinking(wantsAssistantReply(kind, 'app', text));
+      setThinking(wantsAssistantReply(kind, 'app', text, conversation?.helper ?? target.helper));
       const withPhotos = photos.length ? { photos: photos.map((p) => p.path) } : {};
       try {
         const pacer = createDraftPacer(setDraft);
@@ -370,7 +374,7 @@ export function useAssistantThread(target: ThreadTarget, host: ThreadHost) {
         setDraft(null);
       }
     },
-    [kind, target.helper]
+    [kind, target.helper, conversation?.helper]
   );
 
   const decide = useCallback(

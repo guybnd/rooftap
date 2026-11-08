@@ -330,6 +330,7 @@ describe('server schema', () => {
       'importing bank statements',
       'repeating tasks on calendar dates, like the 1st of every month',
       'helper chats for single modules, such as the Groceries helper',
+      'helper chats the whole household shares, and notes for each helper',
     ]);
 
     act(() => setServerSchema('20261020050000_mcp_oauth'));
@@ -379,6 +380,7 @@ describe('server schema', () => {
         'importing bank statements',
         'repeating tasks on calendar dates, like the 1st of every month',
         'helper chats for single modules, such as the Groceries helper',
+        'helper chats the whole household shares, and notes for each helper',
       ]);
     } finally {
       delete mcp.minSchema;

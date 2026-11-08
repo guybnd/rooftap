@@ -13,6 +13,7 @@ import {
   conversationRowMeta,
   conversationTitle,
   deleteConversation,
+  moduleHelper,
   dialog,
   sectionHue,
   unarchiveConversation,
@@ -20,6 +21,7 @@ import {
   type AssistantConversation,
 } from '@homeup/core';
 import { archiveToast } from '@/lib/archive-toast';
+import { sectionIconFor } from '@/lib/section-icons';
 import { assistantApi } from '@/lib/assistant-client';
 import { useRowContextMenu } from '@/components/ui/row-context-menu';
 import { LeadingTile } from '@/components/ui/leading-tile';
@@ -46,13 +48,15 @@ export function ConversationRow({
   // Archiving, and taking a delete back, need a server that has them.
   const canArchive = useModules().server('assistant.archive');
   const kind = conversation?.kind ?? 'household';
-  const Icon = kind === 'household' ? Users : kind === 'quick' ? Zap : MessageCircle;
+  // A helper chat wears its module's tile; the Household thread the Assistant's.
+  const helper = moduleHelper(conversation?.helper)?.id ?? null;
+  const Icon = helper ? sectionIconFor(helper) : kind === 'household' ? Users : kind === 'quick' ? Zap : MessageCircle;
   const meta = conversationRowMeta(conversation, current);
   const body = (
     <>
         <ListItemLeading>
-          {kind === 'household' ? (
-            <LeadingTile sectionId="assistant" Icon={Icon} size="md" />
+          {kind === 'household' || helper ? (
+            <LeadingTile sectionId={helper ?? 'assistant'} Icon={Icon} size="md" />
           ) : (
             <span className="flex size-9 items-center justify-center rounded-[11px] bg-muted">
               <Icon className="size-[18px]" />
@@ -104,7 +108,7 @@ export function ConversationRow({
     conversation
       ? {
           title: conversationTitle(conversation),
-          kind: kind === 'household' ? 'Household thread' : kind === 'quick' ? 'Quick ask' : 'Chat',
+          kind: helper ? 'Helper chat' : kind === 'household' ? 'Household thread' : kind === 'quick' ? 'Quick ask' : 'Chat',
           actions: [
             { id: 'open', label: 'Open', group: 'open', icon: 'open', run: () => (onSelect ? onSelect() : href && router.push(href)) },
             conversation.unread && {

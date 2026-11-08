@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { isTrustLevel, isModuleId, parseAssistantSettings, type AssistantSettings } from "@homeup/core";
+import { helperCanShare, isTrustLevel, isModuleId, moduleHelper, parseAssistantSettings, parseHelperSettings, type AssistantSettings } from "@homeup/core";
 import { resolveServerKeys } from "@/lib/admin-config";
 import { householdKeys } from "@/lib/ai/household-keys";
 import { SERVER_BRAIN_KEYS, assistantModelChoices, isAllowedModelPick } from "@/lib/assistant/provider";
@@ -56,6 +56,18 @@ export async function PUT(request: Request) {
   if (typeof body.atLimit === "string" && AT_LIMIT.has(body.atLimit)) row.at_limit = body.atLimit;
   if (typeof body.warnAtPercent === "number") row.warn_at_percent = Math.min(100, Math.max(1, Math.round(body.warnAtPercent)));
   if (typeof body.showCostPerReply === "boolean") row.show_cost_per_reply = body.showCostPerReply;
+  // Module helpers (core module-helpers.ts): each one given is merged over what is stored.
+  // A helper that can never be shared (Gifts) stays private whatever is sent.
+  if (body.helpers && typeof body.helpers === "object") {
+    const helpers: Record<string, unknown> = { ...current.helpers };
+    for (const [id, patch] of Object.entries(body.helpers)) {
+      const helper = moduleHelper(id);
+      if (!helper || !patch || typeof patch !== "object") continue;
+      const next = parseHelperSettings({ ...current.helpers[helper.id], ...patch });
+      helpers[helper.id] = { ...next, shared: next.shared && helperCanShare(helper) };
+    }
+    row.helpers = helpers;
+  }
 
   const { data, error } = await ctx.admin.from("assistant_settings").upsert(row, { onConflict: "group_id" }).select("*").single();
   if (error) return assistantErrorResponse(500, error.message);

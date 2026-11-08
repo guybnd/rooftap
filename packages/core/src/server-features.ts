@@ -145,6 +145,10 @@ export const SERVER_FEATURES = {
     minSchema: '20261108020000_assistant_helpers',
     label: 'helper chats for single modules, such as the Groceries helper',
   },
+  'assistant.shared-helpers': {
+    minSchema: '20261108030000_shared_helper_chats',
+    label: 'helper chats the whole household shares, and notes for each helper',
+  },
 } as const satisfies Record<string, ServerFeatureDef>;
 
 export type ServerFeatureId = keyof typeof SERVER_FEATURES;

@@ -15,6 +15,8 @@ import {
   describeProposal,
   changeFromRun,
   type AssistantChange,
+  type AssistantShown,
+  SHOW_ITEMS_PROMPT,
   entitlementTier,
   getModule,
   MCP_TOOLS,
@@ -53,7 +55,9 @@ import {
   assistantPhotoKeepDays,
   type WebHere,
   helperAvailable,
+  helperInstructions,
   helperKeepsTool,
+  helperShared,
   helperPromptText,
   helperReads,
   moduleHelper,
@@ -74,6 +78,7 @@ import { householdKeys } from "@/lib/ai/household-keys";
 import { assistantTools } from "./tools";
 import { homeAssistantTools } from "./home-assistant";
 import { feedbackTool } from "./feedback-tool";
+import { showItemsTool } from "./show-items-tool";
 import { webTools } from "./web-tools";
 import { isUnread, markConversationRead, readStates } from "./reads";
 import { memberNames } from "@/lib/member-names";
@@ -218,7 +223,7 @@ interface MessageRow {
   content: string;
   tool_calls: unknown;
   /** Held changes (items), plus the changes the turn made without asking (changes, since inline changes). */
-  proposal: { items?: (Proposal & { summary?: string })[]; changes?: AssistantChange[] } | null;
+  proposal: { items?: (Proposal & { summary?: string })[]; changes?: AssistantChange[]; shown?: AssistantShown[] } | null;
   proposal_state: ProposalState | null;
   channel: MessageChannel;
   cost_micros: number | null;
@@ -269,6 +274,7 @@ export function toMessage(row: MessageRow, names: Map<string, string>, viewerId?
     created_at: row.created_at,
     proposal: row.proposal && row.proposal_state ? { items: proposalItems(row), state: row.proposal_state } : null,
     ...(row.proposal?.changes?.length ? { changes: row.proposal.changes } : {}),
+    ...(row.proposal?.shown?.length ? { shown: row.proposal.shown } : {}),
     cost_micros: row.cost_micros,
     ...(row.photos?.length ? { photos: row.photos.map((p) => ({ url: urls?.get(p) ?? null })) } : {}),
   };
@@ -454,6 +460,7 @@ async function householdThread(ctx: Pick<AssistantContext, "admin" | "groupId">)
     .select("*")
     .eq("group_id", ctx.groupId)
     .eq("kind", "household")
+    .is("helper", null)
     .eq("deleted", false)
     .maybeSingle();
   if (existing) return existing as ConversationRow;
@@ -469,6 +476,7 @@ async function householdThread(ctx: Pick<AssistantContext, "admin" | "groupId">)
       .select("*")
       .eq("group_id", ctx.groupId)
       .eq("kind", "household")
+      .is("helper", null)
       .eq("deleted", false)
       .single();
     return again as ConversationRow;
@@ -520,25 +528,28 @@ async function startConversation(ctx: AssistantContext, kind: Exclude<Conversati
 }
 
 /**
- * This person's chat with a module helper: the one they have (brought back
- * if archived), or a new one. The partial unique index keeps it to one.
+ * The chat with a module helper: this person's own (brought back if
+ * archived), or, when the household shares the helper (Settings >
+ * Assistant), the one chat everyone in the home writes in. A new one is
+ * made when there is none. Partial unique indexes keep each to one.
  */
-async function helperChat(ctx: AssistantContext, helper: ModuleHelper): Promise<ConversationRow> {
-  const find = () =>
-    ctx.admin
-      .from("assistant_conversations")
-      .select("*")
-      .eq("group_id", ctx.groupId)
-      .eq("owner_id", ctx.userId)
-      .eq("kind", "chat")
-      .eq("helper", helper.id)
-      .eq("deleted", false)
-      .maybeSingle();
+async function helperChat(ctx: AssistantContext, helper: ModuleHelper, shared = false): Promise<ConversationRow> {
+  const find = () => {
+    const query = ctx.admin.from("assistant_conversations").select("*").eq("group_id", ctx.groupId).eq("helper", helper.id).eq("deleted", false);
+    return (shared ? query.eq("kind", "household").is("owner_id", null) : query.eq("kind", "chat").eq("owner_id", ctx.userId)).maybeSingle();
+  };
   const { data: existing } = await find();
   if (existing) return existing as ConversationRow;
   const { data, error } = await ctx.admin
     .from("assistant_conversations")
-    .insert({ group_id: ctx.groupId, owner_id: ctx.userId, kind: "chat", title: helper.label, helper: helper.id, pinned: false })
+    .insert({
+      group_id: ctx.groupId,
+      owner_id: shared ? null : ctx.userId,
+      kind: shared ? "household" : "chat",
+      title: helper.label,
+      helper: helper.id,
+      pinned: false,
+    })
     .select("*")
     .single();
   if (error || !data) {
@@ -729,9 +740,19 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
     const h = moduleHelper(input.conversationId ? found?.helper : input.helper);
     return h && helperAvailable(h.id, (id) => ctx.enabled.has(id)) ? h : null;
   })();
+  // A helper chat the household shares: everyone reads it, so it is read and answered like the household thread.
+  const sharedHelper = helper ? (input.conversationId ? found?.kind === "household" : helperShared(settings, helper.id)) : false;
   const briefing = helper
     ? userTimeZone(ctx.admin, ctx.userId).then((timeZone) =>
-        loadHelperBrief(helper.id, { admin: ctx.admin, groupId: ctx.groupId, userId: ctx.userId, enabled: ctx.enabled, timeZone, now: deps.now })
+        loadHelperBrief(helper.id, {
+          admin: ctx.admin,
+          groupId: ctx.groupId,
+          userId: ctx.userId,
+          enabled: ctx.enabled,
+          timeZone,
+          now: deps.now,
+          shared: sharedHelper,
+        })
       )
     : Promise.resolve(null);
   briefing.catch(() => {});
@@ -739,7 +760,8 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
   // The household thread is the members' chat room: a message that doesn't
   // tag Rooftap is just posted, with no model, key or budget involved.
   const roomKind = input.conversationId ? found?.kind : input.kind;
-  if (roomKind === "household" && !wantsAssistantReply("household", input.channel ?? "app", text)) {
+  const roomHelper = input.conversationId ? found?.helper : input.helper;
+  if (roomKind === "household" && !wantsAssistantReply("household", input.channel ?? "app", text, roomHelper)) {
     if (input.conversationId && !found) return { ok: false, status: 404, error: "Not found" };
     if (photos.length && !(await preparing)) return { ok: false, status: 400, error: PHOTO_MISSING };
     return postToHousehold(ctx, found ?? (await householdThread(ctx)), text, input.channel ?? "app", deps.now ?? new Date(), photos);
@@ -771,7 +793,7 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
   // the conversation and its history are read.
   const toolsStarted = Date.now();
   // In the household thread every member reads the reply (shared).
-  const gathering = turnTools(ctx, settings, limits.readOnly, { deviceId: input.cook?.deviceId, shared: roomKind === "household", here: input.here }).then(
+  const gathering = turnTools(ctx, settings, limits.readOnly, { deviceId: input.cook?.deviceId, shared: roomKind === "household" || sharedHelper, here: input.here }).then(
     (r) => ({ ...r, ms: Date.now() - toolsStarted })
   );
   // Settled here so a failed read below can't leave it rejecting unheard.
@@ -785,10 +807,10 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
       return { ok: false, status: 409, error: "This quick ask has closed. Start a new one.", code: "assistant_conversation_closed" };
     }
     conversation = found;
+  } else if (helper) {
+    conversation = await helperChat(ctx, helper, sharedHelper);
   } else if (input.kind === "household") {
     conversation = await householdThread(ctx);
-  } else if (helper) {
-    conversation = await helperChat(ctx, helper);
   } else {
     conversation = await startConversation(ctx, input.kind === "chat" ? "chat" : "quick", text || "Photo", settings.quickAskIdleMinutes);
   }
@@ -833,9 +855,15 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
   // A helper keeps its own module's tools, lookups in the modules it reads,
   // and the tools that belong to no module; Home Assistant stays with plain Rooftap.
   const readable = helper ? helperReads(helper, (id) => ctx.enabled.has(id)) : [];
-  const tools = helper
-    ? gathered.tools.filter((t) => helperKeepsTool(helper, readable, { name: t.name, module: t.module, lookup: t.lookup, moduleless: t.module === "assistant" }))
-    : gathered.tools;
+  // In the app a reply can show items as their live rows (show_items); Telegram has no rows.
+  const shown: AssistantShown[] = [];
+  const showsRows = (input.channel ?? "app") === "app";
+  const tools = [
+    ...(helper
+      ? gathered.tools.filter((t) => helperKeepsTool(helper, readable, { name: t.name, module: t.module, lookup: t.lookup, moduleless: t.module === "assistant" }))
+      : gathered.tools),
+    ...(showsRows ? [showItemsTool(shown, ctx.enabled)] : []),
+  ];
   const homeAssistant = helper ? null : gathered.homeAssistant;
   const brief = await briefing;
   // read_page opens the links people sent in this chat, never one the model
@@ -871,7 +899,10 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
     screen: input.screen,
     web,
   }) +
-    (helper ? `\n\n${helperPromptText(helper, { reads: readable, brief })}` : "") +
+    (helper
+      ? `\n\n${helperPromptText(helper, { reads: readable, brief, shared: household, instructions: helperInstructions(settings, helper.id) })}`
+      : "") +
+    (showsRows ? `\n\n${SHOW_ITEMS_PROMPT}` : "") +
     (photos.length || lookAgain ? PHOTO_PROMPT : "");
 
   const channel = input.channel ?? "app";
@@ -969,7 +1000,10 @@ export async function runChat(ctx: AssistantContext, input: ChatInput, deps: Cha
       user_id: ctx.userId,
       role: "assistant",
       content: turn.reply,
-      proposal: items.length || changes.length ? { items, ...(changes.length ? { changes } : {}) } : null,
+      proposal:
+        items.length || changes.length || shown.length
+          ? { items, ...(changes.length ? { changes } : {}), ...(shown.length ? { shown } : {}) }
+          : null,
       proposal_state: items.length ? "pending" : null,
       channel,
       model,

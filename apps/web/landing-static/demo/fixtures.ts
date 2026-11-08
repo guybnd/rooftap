@@ -1086,6 +1086,7 @@ export const assistantStatus: AssistantStatus = { access: "unlimited", ready: tr
 /** Self-hosted: Gemini Flash for chats, a local Llama for quick asks, no budget. */
 export const assistantSettings: AssistantSettings = {
   trust: { groceries: "act", household: "ask", calendar: "ask", costs: "read" },
+  helpers: {},
   chatModel: "gemini-3.1-flash-lite",
   quickModel: "ollama/llama3.1:8b",
   contextMessages: 12,

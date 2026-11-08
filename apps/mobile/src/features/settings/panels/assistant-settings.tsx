@@ -6,11 +6,16 @@
 // Web twin: apps/web/src/components/assistant-settings.tsx.
 import { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
-import { Bell, Brain, Cpu, ShieldCheck, Trash2 } from 'lucide-react-native';
+import { Bell, Brain, Cpu, ShieldCheck, Sparkles, Trash2 } from 'lucide-react-native';
 import { Button, Input, SearchablePicker, SegmentedControl, Text, toast } from '@homeup/ui';
 import {
   DEFAULT_TRUST,
+  HELPER_INSTRUCTIONS_MAX,
+  MODULE_HELPERS,
   TRUST_OPTIONS,
+  helperAvailable,
+  helperCanShare,
+  parseHelperSettings,
   aiModelPickerOptions,
   shownModelPick,
   type AiModelChoices,
@@ -197,6 +202,8 @@ export function AssistantSettings() {
         )}
       </SettingsPanel>
 
+      {settings && modules.server('assistant.shared-helpers') && <HelperSettings settings={settings} isOwner={isOwner} save={save} />}
+
       {modules.server('assistant.reply-notifications') && <ReplyNotifications />}
 
       <SettingsPanel icon={Brain} title="Memories" description="Facts the assistant keeps about your home. It adds its own as it learns; remove any you don't want.">
@@ -237,6 +244,85 @@ export function AssistantSettings() {
         </View>
       </SettingsPanel>
     </View>
+  );
+}
+
+type HelperShare = 'me' | 'home';
+const SHARE_OPTIONS: { value: HelperShare; label: string }[] = [
+  { value: 'me', label: 'Just me' },
+  { value: 'home', label: 'Household' },
+];
+
+/**
+ * Module helpers (core module-helpers.ts): who sees each helper's chat, and
+ * the household's own notes for it. Owners set both; notes only add to the
+ * helper's rules, never replace them.
+ */
+function HelperSettings({ settings, isOwner, save }: { settings: Settings; isOwner: boolean; save: (patch: Partial<Settings>) => Promise<void> }) {
+  const modules = useModules();
+  const helpers = MODULE_HELPERS.filter((h) => helperAvailable(h.id, (id) => modules.isEnabled(id)));
+  const [notes, setNotes] = useState<Record<string, string>>({});
+  if (helpers.length === 0) return null;
+  const stored = (id: string) => parseHelperSettings(settings.helpers[id]);
+  const saveHelper = (id: string, patch: { shared?: boolean; instructions?: string }) =>
+    save({ helpers: { ...settings.helpers, [id]: { ...stored(id), ...patch } } });
+  return (
+    <SettingsPanel
+      icon={Sparkles}
+      title="Helpers"
+      description={
+        isOwner
+          ? 'Household gives everyone one chat with the helper, so anyone can chime in. Notes add to how the helper works and never change its privacy rules.'
+          : "Set by the household's owners."
+      }
+    >
+      <View className="gap-3">
+        {helpers.map((h) => {
+          const current = stored(h.id);
+          const draft = notes[h.id] ?? current.instructions;
+          return (
+            <SettingsInset key={h.id}>
+              <View className="min-h-[52px] flex-row items-center gap-3 px-3.5 py-2.5">
+                <View className="min-w-0 flex-1">
+                  <Text className="text-sm font-medium text-foreground">{h.label}</Text>
+                  <Text className="text-xs text-muted-foreground">{helperCanShare(h) ? 'Who sees this chat' : 'Always just you'}</Text>
+                </View>
+                {helperCanShare(h) && (
+                  <SegmentedControl<HelperShare>
+                    accessibilityLabel={`Who sees the ${h.label} chat`}
+                    value={current.shared ? 'home' : 'me'}
+                    options={SHARE_OPTIONS}
+                    onChange={(v) => {
+                      if (isOwner) void saveHelper(h.id, { shared: v === 'home' });
+                    }}
+                  />
+                )}
+              </View>
+              <View className="gap-1 px-3.5 pb-3">
+                <Input
+                  value={draft}
+                  editable={isOwner}
+                  maxLength={HELPER_INSTRUCTIONS_MAX}
+                  multiline
+                  numberOfLines={2}
+                  textAlignVertical="top"
+                  accessibilityLabel={`Notes for the ${h.label}`}
+                  placeholder={isOwner ? 'e.g. We shop at Aldi on Saturdays. No pork.' : 'No notes'}
+                  onChangeText={(text) => setNotes((n) => ({ ...n, [h.id]: text }))}
+                  onEndEditing={() => {
+                    if (draft.trim() !== current.instructions) void saveHelper(h.id, { instructions: draft.trim() });
+                  }}
+                  className="h-auto min-h-16 py-2"
+                />
+                {isOwner && draft.length > HELPER_INSTRUCTIONS_MAX - 80 ? (
+                  <Text className="px-1 text-[11px] tabular-nums text-muted-foreground">{HELPER_INSTRUCTIONS_MAX - draft.length} left</Text>
+                ) : null}
+              </View>
+            </SettingsInset>
+          );
+        })}
+      </View>
+    </SettingsPanel>
   );
 }
 

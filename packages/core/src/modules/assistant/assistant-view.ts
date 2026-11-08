@@ -4,12 +4,12 @@
 // links only), so web and native render the same reply the same way.
 
 import { isConversationOpen } from './assistant';
-import type { AssistantChange, AssistantConversation, AssistantStatus } from './assistant-api';
+import { SHOW_ITEMS_TOOL, type AssistantChange, type AssistantConversation, type AssistantShown, type AssistantStatus } from './assistant-api';
 import { timeAgo } from '../../relative-time';
 import { MCP_TOOLS } from '../../mcp-tools';
 import { getModule, type ModuleId } from '../../modules';
 import { ALL_MANIFESTS } from '../../module-manifests';
-import { moduleHelper } from '../../module-helpers';
+import { isHouseholdThread, moduleHelper } from '../../module-helpers';
 
 /** Modules the assistant has tools for, in tool order, that are switched on. */
 export function assistantModules(enabled: ReadonlySet<string>): { id: ModuleId; label: string; readOnly: boolean }[] {
@@ -32,9 +32,10 @@ export interface ConversationGroups {
 /** Splits the chat list into the sections the Assistant screen shows. */
 export function groupConversations(conversations: AssistantConversation[], now: Date = new Date()): ConversationGroups {
   const byRecent = (a: AssistantConversation, b: AssistantConversation) => b.last_active_at.localeCompare(a.last_active_at);
-  const household = conversations.find((c) => c.kind === 'household') ?? null;
+  const household = conversations.find((c) => isHouseholdThread(c)) ?? null;
+  // Helper chats the household shares sit with the chats.
   const chats = conversations
-    .filter((c) => c.kind === 'chat')
+    .filter((c) => c.kind === 'chat' || (c.kind === 'household' && !!c.helper))
     .sort((a, b) => Number(b.pinned) - Number(a.pinned) || byRecent(a, b));
   const quick = conversations.filter((c) => c.kind === 'quick').sort(byRecent);
   return {
@@ -46,8 +47,10 @@ export function groupConversations(conversations: AssistantConversation[], now: 
 }
 
 /** A conversation's name in lists and headers. */
-export function conversationTitle(c: Pick<AssistantConversation, 'kind' | 'title'>): string {
-  if (c.kind === 'household') return 'Household';
+export function conversationTitle(c: Pick<AssistantConversation, 'kind' | 'title' | 'helper'>): string {
+  if (isHouseholdThread(c)) return 'Household';
+  const helper = moduleHelper(c.helper);
+  if (helper) return helper.label;
   return c.title?.trim() || (c.kind === 'quick' ? 'Quick ask' : 'New chat');
 }
 
@@ -180,6 +183,7 @@ export function conversationRowMeta(
 ): string | null {
   const kind = conversation?.kind ?? 'household';
   if (current) return 'Showing now';
+  if (kind === 'household' && conversation?.helper) return `Shared with the home · ${timeAgo(conversation.last_active_at)}`;
   if (kind === 'household') return 'Everyone in the home';
   const left = conversation ? minutesLeft(conversation, now) : null;
   if (left != null && left > 0) return `Open for ${left} min`;
@@ -268,7 +272,7 @@ export function askGreeting(name: string | null | undefined, now: Date = new Dat
 /** The pop-up header's second line: what kind of conversation this is and, for a quick ask, how long it stays open. */
 export function popupStatus(conversation: AssistantConversation | null, targetId: string, now: Date = new Date(), helper?: string | null): string | null {
   const h = moduleHelper(helper ?? conversation?.helper);
-  if (h) return h.subtitle;
+  if (h) return conversation?.kind === 'household' ? 'Shared with the home' : h.subtitle;
   if (!conversation) return targetId === 'new' ? 'New quick ask' : null;
   if (conversation.kind === 'household') return 'Everyone in the home';
   if (conversation.kind === 'chat' || conversation.pinned) return 'Pinned chat';
@@ -349,8 +353,15 @@ const CHANGE_ROW: Partial<Record<ModuleId, string>> = {
   shopper: 'shopper',
 };
 
+/** The modules whose items a reply can show as rows (show_items). */
+export const SHOWABLE_MODULES = Object.keys(CHANGE_ROW) as ModuleId[];
+
 /** A reply's changes by module, in the order they happened, each with what its rows need. */
 export interface ChangeGroup {
+  /** A stable key for the card. */
+  key: string;
+  /** Set for items a reply shows (show_items): the group's own title, with no undo or "Added to" caption. */
+  title?: string | null;
   module: ModuleId;
   /** The module's short name, e.g. "Tasks". */
   label: string;
@@ -369,6 +380,7 @@ export function changeGroups(changes: AssistantChange[] | undefined): ChangeGrou
     if (!group) {
       const manifest = ALL_MANIFESTS.find((m) => m.id === module);
       group = {
+        key: module,
         module,
         label: manifest?.section?.shortLabel ?? manifest?.label ?? 'Rooftap',
         href: manifest?.section?.basePath ?? null,
@@ -386,3 +398,32 @@ export function changeGroups(changes: AssistantChange[] | undefined): ChangeGrou
 
 /** How many changed items show in full before the rest fold under "Show all". */
 export const CHANGES_SHOWN = 3;
+
+/** How many items a shown group lists before the rest fold under "Show all". */
+export const SHOWN_ITEMS_FOLD = 8;
+
+/**
+ * The groups a reply shows (show_items), as cards like the changes': each
+ * keeps its title, and its ids draw as the items' live rows. Unknown modules
+ * and empty groups are left out, and an id shows once per group.
+ */
+export function shownGroups(shown: AssistantShown[] | undefined): ChangeGroup[] {
+  return (shown ?? []).flatMap((s, i) => {
+    const module = s.module as ModuleId;
+    const rowKind = CHANGE_ROW[module];
+    const ids = [...new Set((s.ids ?? []).filter((id) => typeof id === 'string' && id))];
+    if (!rowKind || ids.length === 0) return [];
+    const manifest = ALL_MANIFESTS.find((m) => m.id === module);
+    return [
+      {
+        key: `shown:${i}`,
+        title: s.title?.trim() || manifest?.section?.shortLabel || manifest?.label || 'Items',
+        module,
+        label: manifest?.section?.shortLabel ?? manifest?.label ?? 'Rooftap',
+        href: manifest?.section?.basePath ?? null,
+        rowKind,
+        changes: ids.map((id) => ({ tool: SHOW_ITEMS_TOOL, module: s.module, verb: 'changed' as const, id, summary: '' })),
+      },
+    ];
+  });
+}

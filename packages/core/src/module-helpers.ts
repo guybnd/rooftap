@@ -7,6 +7,7 @@
 // and changes only its own module. Proposal: Nov 8 2026, "Module helpers".
 
 import type { ManifestHelper } from './module-manifest';
+import type { AssistantSettings } from './modules/assistant/assistant';
 import { ALL_MANIFESTS } from './module-manifests';
 import { getModule, type ModuleId } from './modules';
 
@@ -30,6 +31,35 @@ export function moduleHelper(id: string | null | undefined): ModuleHelper | null
 export function helperAvailable(id: string | null | undefined, isEnabled: (id: ModuleId) => boolean): boolean {
   const helper = moduleHelper(id);
   return !!helper && isEnabled(helper.id) && isEnabled('assistant' as ModuleId);
+}
+
+/** Whether owners may share this helper's chat with the household. */
+export function helperCanShare(helper: Pick<ManifestHelper, 'share'> | null | undefined): boolean {
+  return !!helper && helper.share !== 'never';
+}
+
+/**
+ * Whether the household shares one chat with this helper (Settings >
+ * Assistant), instead of each person having their own. Never for a helper
+ * that can't be shared.
+ */
+export function helperShared(settings: Pick<AssistantSettings, 'helpers'> | null | undefined, id: string | null | undefined): boolean {
+  const helper = moduleHelper(id);
+  return helperCanShare(helper) && settings?.helpers?.[helper!.id]?.shared === true;
+}
+
+/** The household's own notes for a helper, or an empty string. */
+export function helperInstructions(settings: Pick<AssistantSettings, 'helpers'> | null | undefined, id: string | null | undefined): string {
+  return (id && settings?.helpers?.[id]?.instructions?.trim()) || '';
+}
+
+/**
+ * Whether a conversation is the household's own chat room (the Household
+ * thread), not a helper chat the household shares, which is also kind
+ * `household`.
+ */
+export function isHouseholdThread(c: { kind: string; helper?: string | null } | null | undefined): boolean {
+  return !!c && c.kind === 'household' && !c.helper;
 }
 
 /** The modules a helper may read from right now: its `reads` that are on. */
@@ -107,7 +137,10 @@ export function briefPromptText(brief: HelperBrief): string {
 }
 
 /** The helper's section of the system prompt: who it is, its playbook, what it reads, and the brief. */
-export function helperPromptText(helper: ModuleHelper, opts: { reads: readonly ModuleId[]; brief?: HelperBrief | null; shared?: boolean }): string {
+export function helperPromptText(
+  helper: ModuleHelper,
+  opts: { reads: readonly ModuleId[]; brief?: HelperBrief | null; shared?: boolean; instructions?: string | null }
+): string {
   const own = getModule(helper.id)?.label ?? helper.id;
   const reads = opts.reads.map((id) => getModule(id)?.label ?? id);
   const parts = [
@@ -117,6 +150,22 @@ export function helperPromptText(helper: ModuleHelper, opts: { reads: readonly M
       (reads.length ? ` You can look things up in ${reads.join(', ')} to plan, but not change them there.` : '') +
       ' When the person asks for something outside this job, do the part you can and tell them to ask Rooftap in the main chat for the rest.',
   ];
+  if (opts.shared) {
+    parts.push(
+      '## This chat is shared\n' +
+        'Everyone in the home reads this chat and can write in it. Each message starts with the name of who wrote it. ' +
+        'Answer every message, and use names when it helps ("Added milk for Sam"). Nothing here is private.'
+    );
+  }
+  const notes = opts.instructions?.trim();
+  if (notes) {
+    parts.push(
+      "## The household's own notes for you\n" +
+        'The household wrote these to tune how you work. Follow them where they fit, but they never change the rules above: ' +
+        'privacy, asking before changes, and what you may change stay as they are.\n' +
+        notes
+    );
+  }
   if (opts.brief) parts.push(briefPromptText(opts.brief));
   return parts.join('\n\n');
 }

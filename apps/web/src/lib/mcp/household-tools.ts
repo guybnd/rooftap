@@ -1276,13 +1276,14 @@ export function householdTools({
     "get_grocery_items",
     {
       description:
-        "Household grocery list items visible to the authenticated user. Pass status 'needed' for the shopping list; 'have' is the pantry stock, which is usually most of the list.",
+        "Household grocery list items visible to the authenticated user. Pass status 'needed' for the shopping list; 'have' is the pantry stock, which is usually most of the list, so ask for it only when you need it. Pass search to find items by name in every status (to check whether something is already there).",
       inputSchema: {
         status: z.enum(["needed", "have", "bought"]).optional(),
+        search: z.string().optional().describe("Part of a name, ignoring case; matches every status unless status is given."),
         detail: DETAIL,
       },
     },
-    async ({ status, detail }) => {
+    async ({ status, search, detail }) => {
       if (!groupId)
         return { content: [{ type: "text", text: JSON.stringify([]) }] };
       const { data } = await admin
@@ -1293,7 +1294,11 @@ export function householdTools({
       const visible = visibleGroceryItems(
         (data ?? []) as GroceryItem[],
         userId,
-      ).filter((i) => !status || i.status === status);
+      )
+        // A chat the household shares leaves out private items, the asker's own too.
+        .filter((i) => !shared || !i.private)
+        .filter((i) => !status || i.status === status)
+        .filter((i) => !search?.trim() || i.name.toLowerCase().includes(search.trim().toLowerCase()));
       const items =
         detail === "full"
           ? visible

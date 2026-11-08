@@ -9,10 +9,15 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Bell, Brain, Cpu, ShieldCheck, Trash2 } from "lucide-react";
+import { Bell, Brain, Cpu, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
 import {
   DEFAULT_TRUST,
+  HELPER_INSTRUCTIONS_MAX,
+  MODULE_HELPERS,
   TRUST_OPTIONS,
+  helperAvailable,
+  helperCanShare,
+  parseHelperSettings,
   aiModelPickerOptions,
   shownModelPick,
   type AiModelChoices,
@@ -193,6 +198,8 @@ export function AssistantSettings() {
         )}
       </SettingsPanel>
 
+      {settings && modules.server("assistant.shared-helpers") && <HelperSettings settings={settings} isOwner={isOwner} save={save} />}
+
       {modules.server("assistant.reply-notifications") && <ReplyNotifications />}
 
       <SettingsPanel icon={Brain} title="Memories" description="Facts the assistant keeps about your home. It adds its own as it learns; remove any you don't want.">
@@ -236,6 +243,80 @@ export function AssistantSettings() {
         </form>
       </SettingsPanel>
     </div>
+  );
+}
+
+type HelperShare = "me" | "home";
+const SHARE_OPTIONS: { value: HelperShare; label: string }[] = [
+  { value: "me", label: "Just me" },
+  { value: "home", label: "Household" },
+];
+
+/**
+ * Module helpers (core module-helpers.ts): who sees each helper's chat, and
+ * the household's own notes for it. Owners set both; notes only add to the
+ * helper's rules, never replace them.
+ */
+function HelperSettings({ settings, isOwner, save }: { settings: Settings; isOwner: boolean; save: (patch: Partial<Settings>) => Promise<void> }) {
+  const modules = useModules();
+  const helpers = MODULE_HELPERS.filter((h) => helperAvailable(h.id, (id) => modules.isEnabled(id)));
+  const [notes, setNotes] = useState<Record<string, string>>({});
+  if (helpers.length === 0) return null;
+  const stored = (id: string) => parseHelperSettings(settings.helpers[id]);
+  const saveHelper = (id: string, patch: { shared?: boolean; instructions?: string }) =>
+    save({ helpers: { ...settings.helpers, [id]: { ...stored(id), ...patch } } });
+  return (
+    <SettingsPanel
+      icon={Sparkles}
+      title="Helpers"
+      description={
+        isOwner
+          ? "Household gives everyone one chat with the helper, so anyone can chime in. Notes add to how the helper works and never change its privacy rules."
+          : "Set by the household's owners."
+      }
+    >
+      <div className="space-y-3">
+        {helpers.map((h) => {
+          const current = stored(h.id);
+          const draft = notes[h.id] ?? current.instructions;
+          return (
+            <SettingsInset key={h.id}>
+              <div className="flex min-h-[52px] items-center gap-3 px-3.5 py-2.5">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-foreground">{h.label}</p>
+                  <p className="text-xs text-muted-foreground">{helperCanShare(h) ? "Who sees this chat" : "Always just you"}</p>
+                </div>
+                {helperCanShare(h) && (
+                  <SegmentedControl<HelperShare>
+                    ariaLabel={`Who sees the ${h.label} chat`}
+                    size="sm"
+                    value={current.shared ? "home" : "me"}
+                    options={SHARE_OPTIONS}
+                    onChange={(v) => isOwner && void saveHelper(h.id, { shared: v === "home" })}
+                  />
+                )}
+              </div>
+              <div className="space-y-1 px-3.5 pb-3">
+                <textarea
+                  value={draft}
+                  disabled={!isOwner}
+                  maxLength={HELPER_INSTRUCTIONS_MAX}
+                  rows={2}
+                  aria-label={`Notes for the ${h.label}`}
+                  placeholder={isOwner ? "e.g. We shop at Aldi on Saturdays. No pork." : "No notes"}
+                  onChange={(e) => setNotes((n) => ({ ...n, [h.id]: e.target.value }))}
+                  onBlur={() => draft.trim() !== current.instructions && void saveHelper(h.id, { instructions: draft.trim() })}
+                  className="w-full resize-none rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm placeholder:text-muted-foreground focus:outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60 dark:bg-input/30"
+                />
+                {isOwner && draft.length > HELPER_INSTRUCTIONS_MAX - 80 && (
+                  <p className="px-1 text-[11px] tabular-nums text-muted-foreground">{HELPER_INSTRUCTIONS_MAX - draft.length} left</p>
+                )}
+              </div>
+            </SettingsInset>
+          );
+        })}
+      </div>
+    </SettingsPanel>
   );
 }
 

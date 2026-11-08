@@ -96,10 +96,11 @@ export function mentionsRooftap(text: string): boolean {
  * Whether a message gets an answer from the model. The household thread in
  * the app is the members' own chat room: Rooftap only answers when tagged.
  * Everywhere else (quick asks, chats, Telegram, which talks to the bot
- * directly) every message is for Rooftap.
+ * directly) every message is for Rooftap. A helper chat the household
+ * shares (kind `household` with a `helper`) answers every message too.
  */
-export function wantsAssistantReply(kind: ConversationKind, channel: MessageChannel, text: string): boolean {
-  return kind !== 'household' || channel !== 'app' || mentionsRooftap(text);
+export function wantsAssistantReply(kind: ConversationKind, channel: MessageChannel, text: string, helper?: string | null): boolean {
+  return kind !== 'household' || !!helper || channel !== 'app' || mentionsRooftap(text);
 }
 
 /** When a quick ask closes if nothing more is said, counted from `lastActive`. */
@@ -128,6 +129,28 @@ export interface AssistantSettings {
   /** Warn once spending reaches this share of a budget. */
   warnAtPercent: number;
   showCostPerReply: boolean;
+  /** Per module helper (module-helpers.ts), keyed by helper id; missing helpers use the defaults. */
+  helpers: Record<string, HelperSettings>;
+}
+
+/** How a household runs one module helper. Owners set it. */
+export interface HelperSettings {
+  /** One chat everyone in the home shares, instead of one chat per person. */
+  shared: boolean;
+  /** The household's own notes for the helper, added after Rooftap's rules. */
+  instructions: string;
+}
+
+/** The longest extra instructions a helper takes. */
+export const HELPER_INSTRUCTIONS_MAX = 500;
+
+/** Cleans one helper's stored settings: a real boolean and trimmed, capped text. */
+export function parseHelperSettings(value: unknown): HelperSettings {
+  const v = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>;
+  return {
+    shared: v.shared === true,
+    instructions: typeof v.instructions === 'string' ? v.instructions.trim().slice(0, HELPER_INSTRUCTIONS_MAX) : '',
+  };
 }
 
 // Permissive on purpose: no budget and no hard stop unless an owner sets one.
@@ -141,6 +164,7 @@ export const DEFAULT_ASSISTANT_SETTINGS: AssistantSettings = {
   atLimit: 'warn',
   warnAtPercent: 80,
   showCostPerReply: false,
+  helpers: {},
 };
 
 /** An `assistant_settings` row as stored. */
@@ -155,6 +179,8 @@ export interface AssistantSettingsRow {
   at_limit: string | null;
   warn_at_percent: number | null;
   show_cost_per_reply: boolean | null;
+  /** 20261108030000; missing on older servers. */
+  helpers?: Record<string, unknown> | null;
 }
 
 function clampInt(value: number | null | undefined, min: number, max: number, fallback: number): number {
@@ -165,7 +191,7 @@ function clampInt(value: number | null | undefined, min: number, max: number, fa
 /** Reads a settings row (or no row) into settings, falling back to defaults field by field. */
 export function parseAssistantSettings(row: Partial<AssistantSettingsRow> | null | undefined): AssistantSettings {
   const d = DEFAULT_ASSISTANT_SETTINGS;
-  if (!row) return { ...d, trust: {} };
+  if (!row) return { ...d, trust: {}, helpers: {} };
   const trust: Partial<Record<ModuleId, TrustLevel>> = {};
   for (const [module, level] of Object.entries(row.trust ?? {})) {
     if (isTrustLevel(level)) trust[module as ModuleId] = level;
@@ -182,6 +208,7 @@ export function parseAssistantSettings(row: Partial<AssistantSettingsRow> | null
     atLimit,
     warnAtPercent: clampInt(row.warn_at_percent, 1, 100, d.warnAtPercent),
     showCostPerReply: row.show_cost_per_reply ?? d.showCostPerReply,
+    helpers: Object.fromEntries(Object.entries(row.helpers ?? {}).map(([id, v]) => [id, parseHelperSettings(v)])),
   };
 }
 

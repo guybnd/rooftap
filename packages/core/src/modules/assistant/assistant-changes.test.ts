@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { changeCaption, changeFromRun, changeVerb } from './assistant-api';
-import { changeGroups } from './assistant-view';
+import { SHOW_ITEMS_TOOL, changeCaption, changeFromRun, changeVerb, toolStatus } from './assistant-api';
+import { SHOWABLE_MODULES, changeGroups, shownGroups } from './assistant-view';
 
 describe('changeFromRun', () => {
   it('takes the new id from a create result', () => {
@@ -46,5 +46,24 @@ describe('changeGroups', () => {
     ]);
     expect(groups[0].label).toBe('Tasks');
     expect(groups[0].href).toBe('/tasks');
+  });
+});
+
+describe('shown items (show_items)', () => {
+  it('turns shown groups into titled cards of live rows, dropping unknown modules and empty groups', () => {
+    const groups = shownGroups([
+      { title: 'Dairy', module: 'groceries', ids: ['a', 'b', 'a'] },
+      { title: 'Nights', module: 'meals' as never, ids: ['x'] },
+      { title: 'Empty', module: 'groceries', ids: [] },
+    ]);
+    expect(groups).toHaveLength(1);
+    expect(groups[0]).toMatchObject({ key: 'shown:0', title: 'Dairy', rowKind: 'groceries' });
+    expect(groups[0].changes.map((c) => c.id)).toEqual(['a', 'b']);
+    expect(SHOWABLE_MODULES).toContain('groceries');
+  });
+
+  it('says it is laying out items rather than checking the app', () => {
+    expect(toolStatus([{ tool: SHOW_ITEMS_TOOL, module: 'assistant' as never, lookup: true, args: {} }])).toBe('Laying out the items');
+    expect(toolStatus([])).toBeNull();
   });
 });

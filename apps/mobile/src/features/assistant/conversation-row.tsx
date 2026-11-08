@@ -13,6 +13,7 @@ import {
   conversationRowMeta,
   conversationTitle,
   deleteConversation,
+  moduleHelper,
   sectionHueSwatch,
   unarchiveConversation,
   useModules,
@@ -20,6 +21,7 @@ import {
 } from '@homeup/core';
 import { assistantApi } from '@/features/assistant/assistant-api';
 import { archiveToast } from '@/lib/archive-toast';
+import { sectionIconFor } from '@/lib/section-icons';
 
 export function ConversationRow({
   conversation,
@@ -35,12 +37,14 @@ export function ConversationRow({
   // Archiving, and taking a delete back, need a server that has them.
   const canArchive = useModules().server('assistant.archive') && canArchiveConversation(conversation);
   const kind = conversation?.kind ?? 'household';
-  const Icon = kind === 'household' ? Users : kind === 'quick' ? Zap : MessageCircle;
+  // A helper chat wears its module's tile; the Household thread the Assistant's.
+  const helper = moduleHelper(conversation?.helper)?.id ?? null;
+  const Icon = helper ? sectionIconFor(helper) : kind === 'household' ? Users : kind === 'quick' ? Zap : MessageCircle;
   const meta = conversationRowMeta(conversation, current);
   const row = (
     <ListItem onPress={onPress}>
-      {kind === 'household' ? (
-        <LeadingTile sectionId="assistant" Icon={Icon} size="md" />
+      {kind === 'household' || helper ? (
+        <LeadingTile sectionId={helper ?? 'assistant'} Icon={Icon} size="md" />
       ) : (
         <View className="size-9 items-center justify-center rounded-[11px] bg-muted">
           <Icon size={18} className="text-muted-foreground" />

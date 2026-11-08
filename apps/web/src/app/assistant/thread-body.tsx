@@ -13,7 +13,8 @@ import {
   getSectionByPath,
   mentionOptions,
   minutesLeft,
-  showsBrief,
+  moduleHelper,
+  useBriefSlot,
   useModules,
   type AssistantThread,
 } from '@homeup/core';
@@ -145,9 +146,9 @@ function LookingAt({ path }: { path: string }) {
 
 export function ThreadMessages({ thread, className, offline = false }: { thread: AssistantThread; className?: string; offline?: boolean }) {
   const { loading, loadError, reload, messages, sending, thinking, draft, kind, showCost, deciding, decide, send, blocked, helper } = thread;
-  // A helper chat picked up after a quiet spell starts from today's brief again.
-  const lastAt = messages[messages.length - 1]?.created_at;
-  const briefAfter = !!helper && messages.length > 0 && !sending && !thinking && showsBrief(lastAt);
+  // A helper chat opens on today's brief, kept above what this visit asked (useBriefSlot).
+  const briefSlot = useBriefSlot(helper, messages);
+  const brief = helper ? <HelperBrief key="brief" helper={helper} onAsk={(text) => void send(text)} disabled={offline || !!blocked} /> : null;
   const endRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'end' });
@@ -158,7 +159,7 @@ export function ThreadMessages({ thread, className, offline = false }: { thread:
       {loading ? (
         <ThreadLoading />
       ) : loadError && messages.length === 0 ? null : messages.length === 0 && !sending ? (
-        kind === 'household' ? (
+        kind === 'household' && !helper ? (
           <p className="px-1 py-10 text-center text-sm text-muted-foreground">
             The household chat. Talk to each other here, and tag @Rooftap when you want it to look something up or make a change.
           </p>
@@ -168,7 +169,8 @@ export function ThreadMessages({ thread, className, offline = false }: { thread:
           <AskEmpty onAsk={(text) => void send(text)} disabled={offline || !!blocked} />
         )
       ) : (
-        messages.map((m) => (
+        messages.map((m, i) => [
+          i === briefSlot ? brief : null,
           <MessageBubble
             key={m.id}
             message={m}
@@ -176,10 +178,10 @@ export function ThreadMessages({ thread, className, offline = false }: { thread:
             showCost={showCost}
             busy={deciding === m.id}
             onDecide={(mid, d, picks) => void decide(mid, d, picks)}
-          />
-        ))
+          />,
+        ])
       )}
-      {briefAfter && helper && <HelperBrief helper={helper} onAsk={(text) => void send(text)} disabled={offline || !!blocked} />}
+      {messages.length > 0 && briefSlot === messages.length && !sending && brief}
       {thinking && <Thinking draft={draft} />}
       <div ref={endRef} />
     </div>
@@ -228,12 +230,14 @@ export function ThreadFooter({
   onListening?: (on: boolean) => void;
   className?: string;
 }) {
-  const { conversation, kind, blocked, sending, send, closed, resume } = thread;
+  const { conversation, kind, blocked, sending, send, closed, resume, helper } = thread;
+  // A helper chat the household shares answers every message, so it needs no tags.
+  const room = kind === 'household' && !helper;
   const left = conversation && !closed ? minutesLeft(conversation) : null;
   const { groupMembers, memberProfiles, currentUserId } = useDataCache();
   const mentions = useMemo(
-    () => (kind === 'household' ? mentionOptions(groupMembers, memberProfiles, currentUserId) : undefined),
-    [kind, groupMembers, memberProfiles, currentUserId]
+    () => (room ? mentionOptions(groupMembers, memberProfiles, currentUserId) : undefined),
+    [room, groupMembers, memberProfiles, currentUserId]
   );
   return (
     <div className={cn('flex flex-col gap-2', band && 'border-t border-border bg-muted/40 pt-2.5', className)}>
@@ -244,8 +248,18 @@ export function ThreadFooter({
         <>
           {lookingAt && !thread.messages.length && !thread.loading && <LookingAt path={lookingAt} />}
           <Composer
-            placeholder={kind === 'household' ? 'Message the household, tag @Rooftap to ask it' : conversation ? 'Ask a follow-up' : 'Ask Rooftap anything'}
-            disabled={offline || blocked === 'assistant_requires_plus' || (blocked === 'assistant_not_configured' && kind !== 'household')}
+            placeholder={
+              room
+                ? 'Message the household, tag @Rooftap to ask it'
+                : helper && kind === 'household'
+                  ? 'Ask the helper, everyone at home sees it'
+                  : helper
+                    ? `Ask the ${moduleHelper(helper)?.label ?? 'helper'}`
+                    : conversation
+                      ? 'Ask a follow-up'
+                      : 'Ask Rooftap anything'
+            }
+            disabled={offline || blocked === 'assistant_requires_plus' || (blocked === 'assistant_not_configured' && !room)}
             busy={sending}
             autoFocus={autoFocus || thread.resumed}
             photos={thread.photos}

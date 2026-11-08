@@ -17,7 +17,8 @@ import { todayIn } from "@/lib/meal-plan-server";
 // A module helper's brief on the server (core module-helpers.ts): the same
 // pure function the apps run on their stores, fed from the database with the
 // asking person's view (private rows of others left out), so the prompt says
-// what the chat shows. The admin client bypasses RLS, so every read is scoped
+// what the chat shows. In a chat the household shares, nobody's private rows
+// go in, since everyone reads the replies. The admin client bypasses RLS, so every read is scoped
 // to the group by hand, like the household tools.
 
 export interface HelperBriefContext {
@@ -27,6 +28,8 @@ export interface HelperBriefContext {
   enabled: ReadonlySet<ModuleId>;
   timeZone: string;
   now?: Date;
+  /** The chat is one the household shares: rows anyone keeps private stay out, the asker's too. */
+  shared?: boolean;
 }
 
 /** The week's missing ingredients need Recipes and Meals on with Groceries (feature meals.groceries). */
@@ -47,7 +50,8 @@ async function groceries(ctx: HelperBriefContext): Promise<HelperBrief> {
     linked ? ctx.admin.from("recipe_ingredients").select("*").eq("group_id", ctx.groupId).eq("deleted", false) : Promise.resolve({ data: [] }),
     linked ? ctx.admin.from("recipe_staples").select("*").eq("group_id", ctx.groupId).eq("deleted", false) : Promise.resolve({ data: [] }),
   ]);
-  const items = visibleGroceryItems((itemRes.data ?? []) as GroceryItem[], ctx.userId);
+  const visible = visibleGroceryItems((itemRes.data ?? []) as GroceryItem[], ctx.userId);
+  const items = ctx.shared ? visible.filter((i) => !i.private) : visible;
   let missing = null;
   if (linked) {
     const recipes = (recipeRes.data ?? []) as Recipe[];

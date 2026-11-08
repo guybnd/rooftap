@@ -139,6 +139,12 @@ export interface ManifestHelper {
   summary: { label: string; ask: string };
   /** Asks offered under the brief, in the person's own words. */
   starters: readonly string[];
+  /**
+   * Whether owners may make the helper's chat one the whole household shares
+   * (Settings > Assistant). `never` for a helper about things kept from others,
+   * such as gifts. Default `optional`.
+   */
+  share?: 'optional' | 'never';
 }
 
 export interface ModuleManifest {

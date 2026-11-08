@@ -157,7 +157,7 @@ export async function notifyHousehold(
   );
   const author = message.author ?? "Someone";
   const payload = (preview: boolean, mentioned: boolean): PushPayload => ({
-    title: mentioned ? `${author} mentioned you` : `${author} in Household`,
+    title: mentioned ? `${author} mentioned you` : `${author} in ${conversationTitle(conversation)}`,
     body: preview ? replyPreview(message.content) || "Tap to read it." : "Tap to read it.",
     url: `/assistant/${conversation.id}`,
     tag: `assistant-${conversation.id}`,
