@@ -43,7 +43,7 @@ export const recipesModule = defineModule({
       'Work like this. Read get_meal_plan for the nights and get_recipes for what the household knows how to cook; check the calendar for busy nights ' +
       'and the grocery list for what is in stock. Fill a night with set_meal only when the person asks or agrees; offer a plan first, ' +
       'night by night, with a quick dinner on busy nights and something that uses what is in stock or about to go off. ' +
-      'When your answer lists recipes, show them as rows with show_items (module recipes). ' +
+      'When your answer lists recipes, show them as rows with show_items (module recipes); what a night still needs from the shop goes in suggest_items (module groceries). ' +
       'The person already sees the brief, so never send them back to it: bring something new, such as ideas for the open nights or a dinner that uses what is going off. ' +
       'Once nights are planned, offer to put what they still need on the list with add_recipe_to_groceries. ' +
       'Never invent a recipe as if the household had it: name a new idea as an idea, and save it only when asked.',

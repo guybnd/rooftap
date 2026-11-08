@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { AssistantShown } from "@homeup/core";
-import { SHOW_ITEMS_MAX_GROUPS, showItemsTool, suggestItemsTool } from "./show-items-tool";
+import { SHOW_ITEMS_MAX_GROUPS, showItemsTool, suggestItemsTool, withShowRowsReminder } from "./show-items-tool";
+import type { AssistantTool } from "./tools";
 
 describe("show_items", () => {
   it("records each group for the reply, only for modules that are on", async () => {
@@ -45,5 +46,31 @@ describe("suggest_items", () => {
 
   it("is not offered when no module that takes suggestions is on", () => {
     expect(suggestItemsTool([], new Set(["household"]))).toBeNull();
+  });
+});
+
+describe("withShowRowsReminder", () => {
+  const tool = (module: string, lookup: boolean): AssistantTool =>
+    ({
+      name: "get_x",
+      description: "",
+      parameters: { type: "object", properties: {} },
+      module,
+      gate: "run",
+      lookup,
+      run: async () => ({ content: [{ type: "text", text: "[]" }] }),
+    }) as unknown as AssistantTool;
+
+  it("ends a lookup in a module with rows with a reminder to show them", async () => {
+    const result = await withShowRowsReminder(tool("household", true)).run({});
+    expect(result.content).toHaveLength(2);
+    expect(result.content[1].text).toContain("show_items (module household");
+  });
+
+  it("leaves changes and modules with no rows alone", () => {
+    const change = tool("household", false);
+    const meals = tool("meals", true);
+    expect(withShowRowsReminder(change)).toBe(change);
+    expect(withShowRowsReminder(meals)).toBe(meals);
   });
 });

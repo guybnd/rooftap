@@ -294,9 +294,29 @@ function PopupThread({
  * is on (core chatChoices). The one on show is filled; a tap opens another,
  * carrying on where it was left.
  */
+// Where the strip was scrolled. Each chat draws its own header, so a hop
+// mounts a new strip: it starts where the last one was, not back at the start.
+let stripX = 0;
+
 function HelperStrip({ choices, current }: { choices: ChatChoice[]; current: string | null }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const strip = ref.current;
+    if (!strip) return;
+    strip.scrollLeft = stripX;
+    // The chip on show comes into view if the last strip had it off to one side.
+    strip.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+  }, []);
   return (
-    <div role="tablist" aria-label="Chats" className="flex gap-1.5 overflow-x-auto border-b border-border px-3.5 py-2 [scrollbar-width:none]">
+    <div
+      ref={ref}
+      role="tablist"
+      aria-label="Chats"
+      onScroll={(e) => {
+        stripX = e.currentTarget.scrollLeft;
+      }}
+      className="flex gap-1.5 overflow-x-auto border-b border-border px-3.5 py-2 [scrollbar-width:none]"
+    >
       {choices.map((c) => {
         const on = c.helper === current;
         return (

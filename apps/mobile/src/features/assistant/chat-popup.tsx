@@ -323,14 +323,57 @@ function PopupThread({
  * is on (core chatChoices). The one on show is filled; a tap, or a sideways
  * swipe on the header, opens another where it was left.
  */
+// Where the strip was scrolled. Each chat draws its own header, so a hop
+// mounts a new strip: it starts where the last one was, not back at the start.
+let stripX = 0;
+/** The strip's inset from the card's sides, clear of the widest spectrum edge (3.5px plus its wobble). */
+const STRIP_INSET = 5;
+
 function HelperStrip({ choices, current }: { choices: ChatChoice[]; current: string | null }) {
+  const ref = React.useRef<ScrollView>(null);
+  const width = React.useRef(0);
+  const chips = React.useRef(new Map<string, { x: number; w: number }>());
+  const shown = React.useRef(false);
+  const currentKey = current ?? 'rooftap';
+  // Once the strip and the chip on show are measured, bring that chip into view if it is not.
+  const reveal = () => {
+    const chip = chips.current.get(currentKey);
+    if (shown.current || !chip || !width.current) return;
+    shown.current = true;
+    const pad = 12;
+    if (chip.x - pad < stripX) ref.current?.scrollTo({ x: Math.max(0, chip.x - pad), animated: true });
+    else if (chip.x + chip.w + pad > stripX + width.current) ref.current?.scrollTo({ x: chip.x + chip.w + pad - width.current, animated: true });
+  };
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-1.5 px-3.5 pb-2" accessibilityRole="tablist">
+    <View style={{ marginHorizontal: STRIP_INSET }} className="overflow-hidden">
+    <ScrollView
+      ref={ref}
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentOffset={{ x: stripX, y: 0 }}
+      onScroll={(e) => {
+        stripX = e.nativeEvent.contentOffset.x;
+      }}
+      scrollEventThrottle={32}
+      onLayout={(e) => {
+        width.current = e.nativeEvent.layout.width;
+        if (!shown.current) ref.current?.scrollTo({ x: stripX, animated: false });
+        reveal();
+      }}
+      contentContainerStyle={{ paddingHorizontal: 14 - STRIP_INSET }}
+      contentContainerClassName="gap-1.5 pb-2"
+      accessibilityRole="tablist"
+    >
       {choices.map((c) => {
         const on = c.helper === current;
+        const key = c.helper ?? 'rooftap';
         return (
           <Pressable
-            key={c.helper ?? 'rooftap'}
+            key={key}
+            onLayout={(e) => {
+              chips.current.set(key, { x: e.nativeEvent.layout.x, w: e.nativeEvent.layout.width });
+              if (key === currentKey) reveal();
+            }}
             onPress={() => {
               if (on) return;
               haptics.select();
@@ -356,6 +399,7 @@ function HelperStrip({ choices, current }: { choices: ChatChoice[]; current: str
         );
       })}
     </ScrollView>
+    </View>
   );
 }
 

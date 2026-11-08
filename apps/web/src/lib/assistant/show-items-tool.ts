@@ -129,3 +129,23 @@ export function suggestItemsTool(collect: AssistantShown[], enabled: ReadonlySet
     },
   };
 }
+
+/**
+ * Models still write a found list out as bullets, even with show_items on
+ * offer. So in the app every lookup in a module whose items draw as rows
+ * ends with a reminder, read right when the model holds the ids.
+ */
+export function withShowRowsReminder(tool: AssistantTool): AssistantTool {
+  if (!tool.lookup || !(SHOWABLE_MODULES as string[]).includes(tool.module)) return tool;
+  const note =
+    `If your reply names any of these items, show them with ${SHOW_ITEMS_TOOL} (module ${tool.module}, their ids) ` +
+    "and keep your text to a line or two. Never write them out as a list.";
+  return {
+    ...tool,
+    run: async (args) => {
+      const result = await tool.run(args);
+      if (result.isError) return result;
+      return { ...result, content: [...result.content, { type: "text" as const, text: note }] };
+    },
+  };
+}
