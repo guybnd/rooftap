@@ -1299,33 +1299,77 @@
 .heroText .ctaRow {
   margin-top: 6px;
 }
-/* Two rows of two equal buttons, each row under its own small label. */
+/* The two main paths side by side, each in its own colour, with Android
+   and the source as plain links under them. */
 .heroCtas {
+  display: grid;
+  gap: 12px;
+  width: min(100%, 460px);
+  margin-top: 6px;
+}
+.heroCtaMain {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
-  width: min(100%, 440px);
-  margin-top: 6px;
 }
-.heroCtas > a {
-  justify-content: center;
-  gap: 8px;
+.heroCtaMain > a {
+  height: 52px;
   padding-inline: 12px;
+  font-size: 16px;
   white-space: nowrap;
 }
-.heroCtaLabel {
-  grid-column: 1 / -1;
-  margin-bottom: -4px;
-  font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 13px;
-  letter-spacing: 0.02em;
+/* The second main button: the page's own ink, inverted, so it reads as a
+   button as strong as coral without a section hue (H2). */
+.buttonAlt {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 20px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 15px;
+  background: var(--foreground);
+  color: var(--background);
+  transition: transform var(--motion-fast, 150ms) ease;
+}
+.buttonAlt:active {
+  transform: scale(0.97);
+}
+.buttonAlt:focus-visible,
+.heroCtaLink:focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 3px;
+}
+.heroCtaNote {
+  font-size: 14px;
+  line-height: 1.45;
   color: var(--muted-foreground);
 }
-.heroCtaLabel:not(:first-child) {
-  margin-top: 6px;
+.heroCtaMore {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 20px;
+}
+.heroCtaLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--foreground);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in oklab, var(--foreground) 35%, transparent);
+  text-underline-offset: 4px;
+}
+.heroCtaLink:hover {
+  text-decoration-color: currentColor;
 }
 @media (max-width: 380px) {
-  .heroCtas {
+  .heroCtaMain {
     grid-template-columns: minmax(0, 1fr);
   }
 }

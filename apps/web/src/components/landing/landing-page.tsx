@@ -117,23 +117,27 @@ export function LandingPage({
                 <p className={cn(styles.sectionLede, styles.heroMore)}>
                   Run it on a machine you own with one script. The web app and the Android app point at your server. A household assistant runs there too, with your model and your Telegram bot.
                 </p>
-                {/* Two labelled pairs of equal buttons: host it, or try it first. */}
+                {/* Two main paths, each its own colour: use the hosted app now,
+                    or run your own server. Android and the source sit below. */}
                 <div className={styles.heroCtas}>
-                  <span className={styles.heroCtaLabel}>Host it</span>
-                  <a href="#self-host" className={styles.button}>
-                    Run your own
-                  </a>
-                  <a href={REPO_URL} className={styles.ghost}>
-                    <GitHubMark />
-                    View on GitHub
-                  </a>
-                  <span className={styles.heroCtaLabel}>Try it</span>
-                  <a href={WEB_APP_URL} className={styles.ghost}>
-                    Open the web app
-                  </a>
-                  <a href={APK_URL} className={styles.ghost}>
-                    Android APK
-                  </a>
+                  <div className={styles.heroCtaMain}>
+                    <a href={WEB_APP_URL} className={styles.button}>
+                      Use the app
+                    </a>
+                    <a href="#self-host" className={styles.buttonAlt}>
+                      Run your own
+                    </a>
+                  </div>
+                  <p className={styles.heroCtaNote}>The web app is the full app, not a demo. Run your own to keep your data under your own roof.</p>
+                  <div className={styles.heroCtaMore}>
+                    <a href={APK_URL} className={styles.heroCtaLink}>
+                      Android app
+                    </a>
+                    <a href={REPO_URL} className={styles.heroCtaLink}>
+                      <GitHubMark />
+                      View on GitHub
+                    </a>
+                  </div>
                 </div>
                 <p className={cn(styles.heroFacts, styles.heroMore)}>
                   {HERO_FACTS.map((line) => (
