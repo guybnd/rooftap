@@ -7,14 +7,17 @@
 // the + dot and shows the "Rooftap answered" toast, and reopening shows it. core's
 // openAssistantPopup() reaches this one host, mounted inside the app shell.
 // Native twin: apps/mobile/src/features/assistant/chat-popup.tsx.
-import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ChevronDown, Maximize2, MessagesSquare, SquarePen, Trash2, X } from "lucide-react";
 import {
   announceAnswer,
+  bubbleSpot,
   chatChoices,
+  setBubbleSpot,
+  snapBubble,
   deleteConversation,
   moduleHelper,
   ROOFTAP_SPECTRUM,
@@ -411,15 +414,7 @@ function BackToChat({
     );
   }
   return (
-    <div className="group fixed bottom-[calc(env(safe-area-inset-bottom)+6rem)] right-3 z-40 md:bottom-24 md:right-6">
-      <button
-        type="button"
-        onClick={onOpen}
-        aria-label={waiting ? `${label} replied, open it` : `Open ${label}`}
-        className="relative flex size-14 items-center justify-center rounded-full bg-popover shadow-[var(--card-shadow)] ring-1 ring-border"
-      >
-        {mark(false)}
-      </button>
+    <DraggableBubble label={waiting ? `${label} replied, open it` : `Open ${label}`} onOpen={onOpen} face={mark(false)}>
       <button
         type="button"
         onClick={onDismiss}
@@ -428,6 +423,118 @@ function BackToChat({
       >
         <X className="size-3" />
       </button>
+    </DraggableBubble>
+  );
+}
+
+const BUBBLE_SPOT_KEY = "rooftap:bubble-spot";
+/** Room kept free above the bubble's highest spot. */
+const BUBBLE_TOP_ROOM = 72;
+
+function savedBubbleSpot() {
+  try {
+    const raw = window.localStorage.getItem(BUBBLE_SPOT_KEY);
+    const v = raw ? JSON.parse(raw) : null;
+    if (v && (v.side === "left" || v.side === "right") && typeof v.lift === "number") setBubbleSpot(v);
+  } catch {
+    // No storage: the bubble starts at its home spot.
+  }
+  return bubbleSpot();
+}
+
+/**
+ * The chat bubble: a click opens the chat; a drag moves it, and on letting
+ * go it snaps to the nearer side, at the height it was let go (core
+ * snapBubble). The spot is kept in the browser. Its children (the x) ride along.
+ */
+function DraggableBubble({ label, onOpen, face, children }: { label: string; onOpen: () => void; face: ReactNode; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [spot, setSpot] = useState(() => (typeof window === "undefined" ? bubbleSpot() : savedBubbleSpot()));
+  const [drag, setDrag] = useState<{ dx: number; dy: number } | null>(null);
+  const press = useRef<{ x: number; y: number; moved: boolean } | null>(null);
+  // Where it was let go: after the snap re-anchors it, it glides from there to its new spot.
+  const dropped = useRef<{ left: number; top: number } | null>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    const from = dropped.current;
+    dropped.current = null;
+    if (!el || !from) return;
+    const to = el.getBoundingClientRect();
+    const target = el.style.transform;
+    el.style.transition = "none";
+    el.style.transform = `translate(${from.left - to.left}px, ${from.top - to.top - spot.lift}px)`;
+    void el.offsetWidth;
+    el.style.transition = "";
+    el.style.transform = target;
+  }, [spot]);
+  const end = (e: ReactPointerEvent) => {
+    const p = press.current;
+    press.current = null;
+    if (!p) return;
+    if (!p.moved) {
+      setDrag(null);
+      onOpen();
+      return;
+    }
+    const el = ref.current;
+    const rect = el?.getBoundingClientRect();
+    const home = rect ? rect.bottom - (drag?.dy ?? 0) + spot.lift : window.innerHeight;
+    const lift = rect ? home - rect.bottom : 0;
+    const next = snapBubble(rect ? rect.left + rect.width / 2 : e.clientX, window.innerWidth, lift, home - BUBBLE_TOP_ROOM - (rect?.height ?? 56));
+    dropped.current = rect ? { left: rect.left, top: rect.top } : null;
+    setBubbleSpot(next);
+    try {
+      window.localStorage.setItem(BUBBLE_SPOT_KEY, JSON.stringify(next));
+    } catch {
+      // Kept for this visit only.
+    }
+    setSpot(next);
+    setDrag(null);
+  };
+  return (
+    <div
+      ref={ref}
+      className={cn(
+        "group fixed bottom-[calc(env(safe-area-inset-bottom)+6rem)] z-40 md:bottom-24",
+        spot.side === "left" ? "left-3 md:left-6" : "right-3 md:right-6",
+        !drag && "transition-transform duration-200 ease-out"
+      )}
+      style={{ transform: `translate(${drag?.dx ?? 0}px, ${(drag?.dy ?? 0) - spot.lift}px)${drag ? " scale(1.08)" : ""}` }}
+    >
+      <button
+        type="button"
+        aria-label={label}
+        title="Drag to move it"
+        onPointerDown={(e) => {
+          if (e.button !== 0) return;
+          e.currentTarget.setPointerCapture(e.pointerId);
+          press.current = { x: e.clientX, y: e.clientY, moved: false };
+        }}
+        onPointerMove={(e) => {
+          const p = press.current;
+          if (!p) return;
+          const dx = e.clientX - p.x;
+          const dy = e.clientY - p.y;
+          if (!p.moved && Math.hypot(dx, dy) < 8) return;
+          p.moved = true;
+          setDrag({ dx, dy });
+        }}
+        onPointerUp={end}
+        onPointerCancel={() => {
+          press.current = null;
+          setDrag(null);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onOpen();
+          }
+        }}
+        className="relative flex size-14 touch-none select-none items-center justify-center rounded-full bg-popover shadow-[var(--card-shadow)] ring-1 ring-border"
+      >
+        {face}
+      </button>
+      {children}
     </div>
   );
 }

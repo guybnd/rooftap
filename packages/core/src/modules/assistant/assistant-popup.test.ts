@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { assistantConversationFromUrl, onAssistantPopup, openAssistantPopup } from './assistant-popup';
+import { assistantConversationFromUrl, onAssistantPopup, openAssistantPopup, snapBubble } from './assistant-popup';
 
 describe('assistant popup', () => {
   it('opens only with a host listening', () => {
@@ -18,5 +18,13 @@ describe('assistant popup', () => {
     expect(assistantConversationFromUrl('/assistant/new')).toBeNull();
     expect(assistantConversationFromUrl('/assistant')).toBeNull();
     expect(assistantConversationFromUrl('/tasks?focus=1')).toBeNull();
+  });
+});
+
+describe('snapBubble', () => {
+  it('snaps to the nearer side and keeps the lift in range', () => {
+    expect(snapBubble(100, 400, 50, 300)).toEqual({ side: 'left', lift: 50 });
+    expect(snapBubble(300, 400, -20, 300)).toEqual({ side: 'right', lift: 0 });
+    expect(snapBubble(250, 400, 900, 300)).toEqual({ side: 'right', lift: 300 });
   });
 });

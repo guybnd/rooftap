@@ -25,6 +25,9 @@ import {
   chatChoices,
   deleteConversation,
   announceAnswer,
+  bubbleSpot,
+  setBubbleSpot,
+  snapBubble,
   moduleHelper,
   openAssistantPopup,
   stepChoice,
@@ -477,16 +480,12 @@ function BackToChat({
     );
   }
   return (
-    <View pointerEvents="box-none" className="absolute right-3" style={{ bottom: insets.bottom + 92 }}>
-      <Pressable
-        onPress={open}
-        accessibilityRole="button"
-        accessibilityLabel={waiting ? `${label} replied, open it` : `Open ${label}`}
-        className="h-14 w-14 items-center justify-center rounded-full border border-border bg-popover"
-        style={{ boxShadow: material.cardShadow }}
-      >
-        {mark(false)}
-      </Pressable>
+    <DraggableBubble
+      label={waiting ? `${label} replied, open it` : `Open ${label}`}
+      onOpen={open}
+      shadow={material.cardShadow}
+      face={mark(false)}
+    >
       {/* Its own small x puts the bubble away; the chat stays behind the +. */}
       <Pressable
         onPress={() => {
@@ -500,7 +499,108 @@ function BackToChat({
       >
         <X size={12} className="text-muted-foreground" />
       </Pressable>
-    </View>
+    </DraggableBubble>
+  );
+}
+
+const BUBBLE = 56;
+const BUBBLE_EDGE = 12;
+/** Room kept free above the bubble's highest spot (under the status bar). */
+const BUBBLE_TOP_ROOM = 72;
+
+/**
+ * The chat bubble: a tap opens the chat; a drag moves it, and on letting go
+ * it snaps to the nearer side, at the height it was let go (core snapBubble),
+ * and stays there while the app is open. Its children (the x) ride along.
+ */
+function DraggableBubble({
+  label,
+  onOpen,
+  shadow,
+  face,
+  children,
+}: {
+  label: string;
+  onOpen: () => void;
+  shadow: string | undefined;
+  face: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  const insets = useSafeAreaInsets();
+  const frame = useSafeAreaFrame();
+  const bottom = insets.bottom + 92;
+  // Across: 0 is the right edge spot, -travel the left one. Up: lift in px, negative translateY.
+  const travel = frame.width - BUBBLE - BUBBLE_EDGE * 2;
+  const maxLift = frame.height - insets.top - bottom - BUBBLE - BUBBLE_TOP_ROOM;
+  const start = bubbleSpot();
+  const x = useSharedValue(start.side === 'left' ? -travel : 0);
+  const y = useSharedValue(-Math.min(start.lift, Math.max(maxLift, 0)));
+  const from = useSharedValue({ x: 0, y: 0 });
+  const lifted = useSharedValue(0);
+  const settle = React.useCallback(
+    (centerX: number, lift: number) => {
+      const spot = snapBubble(centerX, frame.width, lift, maxLift);
+      setBubbleSpot(spot);
+      haptics.select();
+      x.value = withTiming(spot.side === 'left' ? -travel : 0, { duration: 220, easing: Easing.out(Easing.cubic) });
+      y.value = withTiming(-spot.lift, { duration: 220, easing: Easing.out(Easing.cubic) });
+    },
+    [frame.width, maxLift, travel, x, y]
+  );
+  const pickUp = React.useCallback(() => haptics.select(), []);
+  const gesture = React.useMemo(() => {
+    const drag = Gesture.Pan()
+      .minDistance(8)
+      .onStart(() => {
+        'worklet';
+        from.value = { x: x.value, y: y.value };
+        lifted.value = withTiming(1, { duration: 120 });
+        runOnJS(pickUp)();
+      })
+      .onUpdate((e) => {
+        'worklet';
+        x.value = from.value.x + e.translationX;
+        y.value = from.value.y + e.translationY;
+      })
+      .onEnd(() => {
+        'worklet';
+        // The bubble's centre across the screen, from its right-edge home.
+        const centerX = frame.width - BUBBLE_EDGE - BUBBLE / 2 + x.value;
+        runOnJS(settle)(centerX, -y.value);
+      })
+      .onFinalize(() => {
+        'worklet';
+        lifted.value = withTiming(0, { duration: 160 });
+      });
+    const tap = Gesture.Tap().onEnd((_e, ok) => {
+      'worklet';
+      if (ok) runOnJS(onOpen)();
+    });
+    return Gesture.Exclusive(drag, tap);
+  }, [frame.width, from, lifted, onOpen, pickUp, settle, x, y]);
+  const style = useAnimatedStyle(() => ({
+    transform: [{ translateX: x.value }, { translateY: y.value }, { scale: 1 + 0.08 * lifted.value }],
+  }));
+  return (
+    <Animated.View pointerEvents="box-none" className="absolute" style={[{ right: BUBBLE_EDGE, bottom }, style]}>
+      <GestureDetector gesture={gesture}>
+        <View
+          accessible
+          accessibilityRole="button"
+          accessibilityLabel={label}
+          accessibilityHint="Drag to move it"
+          accessibilityActions={[{ name: 'activate' }]}
+          onAccessibilityAction={(e) => {
+            if (e.nativeEvent.actionName === 'activate') onOpen();
+          }}
+          className="h-14 w-14 items-center justify-center rounded-full border border-border bg-popover"
+          style={{ boxShadow: shadow }}
+        >
+          {face}
+        </View>
+      </GestureDetector>
+      {children}
+    </Animated.View>
   );
 }
 

@@ -38,3 +38,32 @@ export function assistantConversationFromUrl(url: string): string | null {
   const m = /^\/assistant\/([^/?#]+)\/?(?:[?#].*)?$/.exec(url);
   return m && m[1] !== 'new' ? decodeURIComponent(m[1]) : null;
 }
+
+/**
+ * Where the chat bubble sits after a drag: the side it snapped to and how
+ * far up from its home spot (px). Kept for the session, so a bubble that
+ * comes back sits where it was left; web also keeps it in the browser.
+ */
+export type BubbleSpot = { side: 'left' | 'right'; lift: number };
+
+let bubbleSpotNow: BubbleSpot = { side: 'right', lift: 0 };
+
+export function bubbleSpot(): BubbleSpot {
+  return bubbleSpotNow;
+}
+
+export function setBubbleSpot(spot: BubbleSpot): void {
+  bubbleSpotNow = spot;
+}
+
+/**
+ * Where a dragged bubble lands. `centerX` is the bubble's centre across a
+ * screen `width` wide; it snaps to the nearer side. `lift` (px up from home)
+ * stays within 0 and `maxLift`.
+ */
+export function snapBubble(centerX: number, width: number, lift: number, maxLift: number): BubbleSpot {
+  return {
+    side: centerX < width / 2 ? 'left' : 'right',
+    lift: Math.round(Math.min(Math.max(lift, 0), Math.max(maxLift, 0))),
+  };
+}
