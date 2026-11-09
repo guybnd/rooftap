@@ -262,7 +262,8 @@ export function buildHeroItems(opts: {
         dueTime: ev.is_all_day ? null : `${pad2(when.getHours())}:${pad2(when.getMinutes())}`,
         overdue: false, // events, not to-dos
         done: false,
-        assignedTo: ev.created_by,
+        // Who the event is for; one for everyone shows who added it.
+        assignedTo: ev.assigned_to ?? ev.created_by,
         sourceLabel: ev.location?.trim() || 'Event',
         groupEvent: ev,
       });
