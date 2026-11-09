@@ -37,7 +37,24 @@ export interface FeatureGroup {
 /** The hero's small print: one line each, wrapping only between facts. */
 export const HERO_FACTS: readonly (readonly string[])[] = [
   ["Web app (PWA) for every OS", "Native Android", "Native iOS coming soon"],
-  ["Free to self-host", "Elastic License 2.0"],
+];
+
+/** The tiles named under the hero headline, each in its section's colour. */
+export const HERO_TILES: ReadonlyArray<[label: string, section: string]> = [
+  ["Tasks", "household"],
+  ["Groceries", "groceries"],
+  ["Meal plan", "recipes"],
+  ["Recipes", "recipes"],
+  ["Costs", "costs"],
+  ["Calendar", "calendar"],
+  ["Bin night", "bins"],
+  ["Home care", "setup"],
+  ["Gifts", "occasions"],
+  ["Documents", "documents"],
+  ["Checklists", "checklists"],
+  ["Shopper", "shopper"],
+  ["Rewards", "rewards"],
+  ["Assistant", "assistant"],
 ];
 
 /** Every feature, by tile. */

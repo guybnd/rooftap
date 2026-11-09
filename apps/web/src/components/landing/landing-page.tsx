@@ -1,10 +1,11 @@
 "use client";
 
 import { Fragment, useEffect, useRef, type MouseEvent } from "react";
+import { sectionHue } from "@homeup/core";
 import { cn } from "@/lib/utils";
 import { AskPanel } from "./ask";
 import { SectionTile } from "./cards";
-import { APK_URL, ASSISTANT_ENV, ASSISTANT_FACTS, COMPARE, FAQ, HERO_FACTS, FEATURE_GROUPS, EINK_FACTS, LAYOUT_FACTS, LICENCE_URL, REPO_URL, SELF_HOST_FACTS, SELF_HOST_STEPS, WEB_APP_URL } from "./content";
+import { APK_URL, ASSISTANT_ENV, ASSISTANT_FACTS, COMPARE, FAQ, HERO_FACTS, HERO_TILES, FEATURE_GROUPS, EINK_FACTS, LAYOUT_FACTS, LICENCE_URL, REPO_URL, SELF_HOST_FACTS, SELF_HOST_STEPS, WEB_APP_URL } from "./content";
 import { HeroPhone } from "./hero-phone";
 import { ModuleMap } from "./module-map";
 import { DESKTOP_ALT, EINK_ALT, EINK_H, EINK_W, SCREEN_ALT, desktopScreenSrc, einkScreenSrc, screenSrc } from "./screens";
@@ -109,14 +110,17 @@ export function LandingPage({
             <div className={cn(styles.wrap, styles.heroInner)}>
               <div className={styles.heroText}>
                 <h1 id="hero-title" className={cn(styles.display, styles.heroTitle)}>
-                  Your home, your server.
+                  Everything under one roof.
                 </h1>
-                <p className={styles.sectionLede}>
-                  One shared app for the tasks, groceries, costs, calendar, recipes, documents, checklists and shopping of a household. It also plans meals, gifts, bin nights and home upkeep. Everyone in the house sees each change as it happens.
-                </p>
-                <p className={cn(styles.sectionLede, styles.heroMore)}>
-                  Run it on a machine you own with one script. The web app and the Android app point at your server. A household assistant runs there too, with your model and your Telegram bot.
-                </p>
+                <p className={styles.sectionLede}>Share it with the people you live with. Turn on the tiles you need.</p>
+                <ul className={styles.heroChips} aria-label="Tiles">
+                  {HERO_TILES.map(([label, section]) => (
+                    <li key={label} data-hue={sectionHue(section)}>
+                      {label}
+                    </li>
+                  ))}
+                  <li className={styles.heroChipMore}>and more</li>
+                </ul>
                 {/* Two main paths, each its own colour: use the hosted app now,
                     or run your own server. Android and the source sit below. */}
                 <div className={styles.heroCtas}>
@@ -128,7 +132,7 @@ export function LandingPage({
                       Run your own
                     </a>
                   </div>
-                  <p className={styles.heroCtaNote}>The web app is the full app, not a demo. Run your own to keep your data under your own roof.</p>
+                  <p className={styles.heroCtaNote}>Use it on the web or on Android. Or run it on your own server.</p>
                   <div className={styles.heroCtaMore}>
                     <a href={APK_URL} className={styles.heroCtaLink}>
                       Android app

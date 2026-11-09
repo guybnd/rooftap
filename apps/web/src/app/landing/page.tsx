@@ -8,16 +8,16 @@ const DESCRIPTION =
   "One shared app for the tasks, groceries, costs, calendar, recipes, documents and checklists of a household. A web app (PWA) for every OS, a native Android app, iOS coming soon. Free to self-host.";
 
 export const metadata: Metadata = {
-  title: "Rooftap · Your home, your server",
+  title: "Rooftap · Everything under one roof",
   description: DESCRIPTION,
   openGraph: {
     type: "website",
     siteName: "Rooftap",
-    title: "Rooftap · Your home, your server",
+    title: "Rooftap · Everything under one roof",
     description: DESCRIPTION,
     images: [{ url: "/landing/og.png", width: 1200, height: 630, alt: "Rooftap: Your home, your server. The Home and Groceries screens of the app." }],
   },
-  twitter: { card: "summary_large_image", title: "Rooftap · Your home, your server", description: DESCRIPTION, images: ["/landing/og.png"] },
+  twitter: { card: "summary_large_image", title: "Rooftap · Everything under one roof", description: DESCRIPTION, images: ["/landing/og.png"] },
 };
 
 export default function Landing() {
