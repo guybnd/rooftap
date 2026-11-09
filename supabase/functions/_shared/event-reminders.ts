@@ -5,8 +5,8 @@
 /** Days before an event a reminder goes out when the event doesn't choose. */
 export const DEFAULT_EVENT_REMINDER_DAYS = [7, 1];
 
-/** The furthest-out reminder the event form offers (core's EVENT_REMINDER_OPTIONS). */
-export const MAX_REMINDER_DAYS = 7;
+/** The furthest-out reminder an event can choose (core's MAX_EVENT_REMINDER_DAYS). */
+export const MAX_REMINDER_DAYS = 30;
 
 export interface ReminderEvent {
   title: string;
@@ -74,7 +74,12 @@ export function eventReminderPayload(
   const at = event.is_all_day ? "" : ` at ${clock(start, timeZone)}`;
   const where = event.location?.trim() ? `, ${event.location.trim()}` : "";
   return {
-    title: daysBefore === 7 ? `Next week: ${event.title}` : event.title,
+    title:
+      daysBefore === 7
+        ? `Next week: ${event.title}`
+        : daysBefore >= 2
+          ? `In ${daysBefore} days: ${event.title}`
+          : event.title,
     body: `${when}${at}${where}`,
   };
 }

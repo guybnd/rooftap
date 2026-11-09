@@ -29,10 +29,19 @@ import { TimeScrollField } from '@/components/time-scroll-field';
 import { ItemFormSheet, FormSection, FieldRow } from '@/components/ui/item-form-sheet';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { SearchablePicker } from '@/components/ui/searchable-picker';
+import { AnyoneFace, PeoplePicker, type PersonOption } from '@/components/ui/item-sheet';
+import { memberLabel } from '../setup/member-label';
+import { Avatar } from '../setup/assignee-picker';
 import {
   EVENT_CATEGORY_PICKER_OPTIONS,
   EVENT_DURATION_OPTIONS,
   EVENT_REMINDER_OPTIONS,
+  MAX_EVENT_REMINDER_DAYS,
+  addReminderDay,
+  customReminderDays,
+  parseReminderDays,
+  personFirstName,
+  reminderDayLabel,
   eventDurationChoice,
   eventDurationMinutes,
   eventEndText,
@@ -112,8 +121,22 @@ export function EventModal({
   const showDocuments = useModules().feature('calendar.event-documents');
 
   // Time to leave: new events start on Drive when the household's home is set.
-  const { group, userSettings } = useDataCache();
+  const { group, userSettings, groupMembers, memberProfiles } = useDataCache();
   const hasHome = group?.home_lat != null && group?.home_lng != null;
+  // Who: needs the events.assigned_to column, and someone else to pick.
+  const assignees = useModules().server('calendar.event-assignee');
+  const showWho = assignees && groupMembers.length > 1;
+  const people = useMemo<PersonOption[]>(
+    () => [
+      { id: '', name: 'Everyone', face: <AnyoneFace /> },
+      ...groupMembers.map((m) => ({
+        id: m.user_id,
+        name: personFirstName(memberLabel(m.user_id, memberProfiles)),
+        face: <Avatar userId={m.user_id} profiles={memberProfiles} size={34} />,
+      })),
+    ],
+    [groupMembers, memberProfiles]
+  );
 
   const buildInitialForm = useCallback(() => {
     const form = initialEventForm(event, { defaultDate, defaultTime, costCents, hasHome });
@@ -125,12 +148,28 @@ export function EventModal({
 
   const [formData, setFormData] = useState(buildInitialForm);
 
+  // A custom reminder: any whole number of days before.
+  const [customOpen, setCustomOpen] = useState(false);
+  const [customText, setCustomText] = useState('');
+
   // Reseed on every closed→open transition (FLUX-186 pattern from household-task-modal).
   const wasOpen = useRef(isOpen);
   useEffect(() => {
-    if (isOpen && !wasOpen.current) setFormData(buildInitialForm());
+    if (isOpen && !wasOpen.current) {
+      setFormData(buildInitialForm());
+      setCustomOpen(false);
+      setCustomText('');
+    }
     wasOpen.current = isOpen;
   }, [isOpen, buildInitialForm]);
+
+  const customDays = parseReminderDays(customText);
+  const addCustomReminder = () => {
+    if (customDays == null) return;
+    setFormData((f) => ({ ...f, reminder_days: addReminderDay(f.reminder_days, customDays) }));
+    setCustomText('');
+    setCustomOpen(false);
+  };
 
   // ── Attachment (pick existing / upload new) ──────────────────────────────
   const [groupDocuments, setGroupDocuments] = useState<Document[]>([]);
@@ -324,7 +363,7 @@ export function EventModal({
     );
 
   const handleSubmit = () => {
-    const saved = eventFromForm(formData, { event, groupId, newId: crypto.randomUUID(), showBudget, travelMinutes: travel.minutes });
+    const saved = eventFromForm(formData, { event, groupId, newId: crypto.randomUUID(), showBudget, travelMinutes: travel.minutes, assignees });
     if (!saved) return;
     onSave(saved.event, saved.costCents);
     if (!event?.id && showDocuments && pendingAttachment) void linkPendingAttachment(saved.event.id);
@@ -436,6 +475,16 @@ export function EventModal({
           />
         </FieldRow>
 
+        {showWho && (
+          <FieldRow label="Who">
+            <PeoplePicker
+              people={people}
+              value={formData.assigned_to ?? ''}
+              onChange={(id) => setFormData((f) => ({ ...f, assigned_to: id || null }))}
+            />
+          </FieldRow>
+        )}
+
         <FieldRow label="Starts" required>
           {/* Date and time share one row. */}
           <div className="flex flex-wrap items-start justify-center gap-x-6 py-2">
@@ -503,7 +552,52 @@ export function EventModal({
                 </button>
               );
             })}
+            {customReminderDays(formData.reminder_days).map((day) => (
+              <button
+                key={day}
+                type="button"
+                role="checkbox"
+                aria-checked
+                title="Turn this reminder off"
+                onClick={() => setFormData((f) => ({ ...f, reminder_days: toggleReminderDay(f.reminder_days, day) }))}
+                className={chipClass(true)}
+              >
+                {reminderDayLabel(day)}
+              </button>
+            ))}
+            <button type="button" aria-expanded={customOpen} onClick={() => setCustomOpen((o) => !o)} className={chipClass(customOpen)}>
+              Custom
+            </button>
           </div>
+          {customOpen && (
+            <div className="mt-2 flex items-center gap-2">
+              <Input
+                className="w-20"
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={MAX_EVENT_REMINDER_DAYS}
+                value={customText}
+                onChange={(e) => setCustomText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addCustomReminder();
+                  }
+                }}
+                placeholder="5"
+                aria-label="Days before"
+                autoFocus
+              />
+              <span className="flex-1 text-sm text-muted-foreground">days before</span>
+              <Button type="button" size="sm" disabled={customDays == null} onClick={addCustomReminder}>
+                Add
+              </Button>
+            </div>
+          )}
+          {customOpen && customText.trim() !== '' && customDays == null && (
+            <p className="mt-1 text-xs text-destructive">Use a whole number from 1 to {MAX_EVENT_REMINDER_DAYS}.</p>
+          )}
         </FieldRow>
 
         <FieldRow

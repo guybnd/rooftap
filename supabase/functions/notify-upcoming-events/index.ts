@@ -43,7 +43,7 @@ Deno.serve(async (req) => {
   try {
     const admin = createAdmin();
     const now = new Date();
-    // The furthest reminder the form offers is a week out; a day either side
+    // The furthest reminder an event can choose is MAX_REMINDER_DAYS out; a day either side
     // covers every reader's timezone.
     const from = new Date(now.getTime() - 86_400_000);
     const to = new Date(now.getTime() + (MAX_REMINDER_DAYS + 2) * 86_400_000);

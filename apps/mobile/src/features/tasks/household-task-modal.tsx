@@ -5,12 +5,13 @@
 // (./repeat-field) keeps its Google Calendar style rules.
 import * as React from 'react';
 import { TextInput, View } from 'react-native';
-import { StickyNote, CalendarDays, Clock, Flag, Repeat, UserRound } from 'lucide-react-native';
+import { StickyNote, CalendarDays, Clock, Flag, Repeat } from 'lucide-react-native';
 import {
   Avatar,
   DueEditor,
   ItemSheet,
   memberLabel,
+  AnyoneFace,
   PeoplePicker,
   PropertyGroup,
   PropertyIcon,
@@ -374,11 +375,4 @@ function WhoEditor({ people, value, onChange }: { people: PersonOption[]; value:
   );
 }
 
-function AnyoneFace({ size = 34 }: { size?: number }) {
-  return (
-    <View style={{ width: size, height: size, borderRadius: size / 2 }} className="items-center justify-center bg-muted">
-      <UserRound size={size * 0.5} className="text-muted-foreground" />
-    </View>
-  );
-}
 

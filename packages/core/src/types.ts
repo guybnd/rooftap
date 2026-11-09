@@ -647,6 +647,8 @@ export interface GroupEvent {
   location: string | null;
   notes: string | null;
   private: boolean;
+  /** The household member the event is for; null = everyone. Absent on servers older than 'calendar.event-assignee'. */
+  assigned_to?: string | null;
   /** Days before the event a push reminder goes out (0 = on the day). Null or absent = a week and a day before (event-reminders.ts); [] = none. */
   reminder_days?: number[] | null;
   /** The Budget line for this event's tickets (cost_items, category "outing"), when there is one. */

@@ -24,7 +24,7 @@ import {
   type KeyboardEvent,
   type LayoutChangeEvent,
 } from 'react-native';
-import { ChevronRight, CircleAlert, Ellipsis, ArrowUp, X, type LucideIcon } from 'lucide-react-native';
+import { ChevronRight, CircleAlert, Ellipsis, ArrowUp, UserRound, X, type LucideIcon } from 'lucide-react-native';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -836,6 +836,15 @@ export interface PersonOption {
 }
 
 /** Faces to tap (Who editor). */
+/** The face for "Anyone" in a people picker: a muted circle with a person outline. */
+export function AnyoneFace({ size = 34 }: { size?: number }) {
+  return (
+    <View style={{ width: size, height: size, borderRadius: size / 2 }} className="items-center justify-center bg-muted">
+      <UserRound size={size * 0.5} className="text-muted-foreground" />
+    </View>
+  );
+}
+
 export function PeoplePicker({
   people,
   value,

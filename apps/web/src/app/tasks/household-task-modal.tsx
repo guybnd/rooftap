@@ -9,7 +9,7 @@
 // onSave/onDelete; the parent routes writes through the Legend store.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CalendarDays, Clock, Flag, Repeat, StickyNote, UserRound } from 'lucide-react';
+import { CalendarDays, Clock, Flag, Repeat, StickyNote } from 'lucide-react';
 import {
   dueValueLabel,
   itemSheetDrafts,
@@ -33,6 +33,7 @@ import { Avatar } from '../setup/assignee-picker';
 import {
   DueEditor,
   ItemSheet,
+  AnyoneFace,
   PeoplePicker,
   PropertyGroup,
   PropertyIcon,
@@ -360,11 +361,4 @@ function WhoEditor({ people, value, onChange }: { people: PersonOption[]; value:
   );
 }
 
-function AnyoneFace({ size = 34 }: { size?: number }) {
-  return (
-    <span className="grid place-items-center rounded-full bg-muted text-muted-foreground" style={{ width: size, height: size }}>
-      <UserRound style={{ width: size * 0.5, height: size * 0.5 }} />
-    </span>
-  );
-}
 

@@ -15,10 +15,33 @@
 import * as React from 'react';
 import { ActivityIndicator, Linking, View } from 'react-native';
 import { Link2, Ticket } from 'lucide-react-native';
-import { Text, Button, DateScrollField, DragNumberField, FieldRow, ItemFormSheet, Input, SegmentedControl, TimeScrollField, haptics, toast } from '@homeup/ui';
+import {
+  AnyoneFace,
+  Avatar,
+  Text,
+  Button,
+  DateScrollField,
+  DragNumberField,
+  FieldRow,
+  ItemFormSheet,
+  Input,
+  PeoplePicker,
+  SegmentedControl,
+  TimeScrollField,
+  haptics,
+  memberLabel,
+  toast,
+  type PersonOption,
+} from '@homeup/ui';
 import {
   EVENT_CATEGORY_META,
   EVENT_REMINDER_OPTIONS,
+  addReminderDay,
+  customReminderDays,
+  parseReminderDays,
+  personFirstName,
+  reminderDayLabel,
+  MAX_EVENT_REMINDER_DAYS,
   applyParsedEvent,
   looksLikeEventLink,
   mapsSearchUrl,
@@ -103,7 +126,7 @@ export function EventModal({
   // The caller remounts this component on `event?.id ?? 'new'` (mirrors
   // household-task-modal.tsx), so these initializers alone re-seed the form.
   // Time to leave: new events start on Drive when the household's home is set.
-  const { group, userSettings } = useDataCache();
+  const { group, userSettings, groupMembers, memberProfiles } = useDataCache();
   const [initial] = React.useState(() =>
     initialEventForm(event, { defaultDate, defaultTime, costCents, hasHome: group?.home_lat != null && group?.home_lng != null })
   );
@@ -123,6 +146,9 @@ export function EventModal({
   // Dollars on the form; the Budget keeps cents.
   const [cost, setCost] = React.useState<number | null>(initial.cost);
   const [reminderDays, setReminderDays] = React.useState<number[]>(initial.reminder_days);
+  const [customOpen, setCustomOpen] = React.useState(false);
+  const [customText, setCustomText] = React.useState('');
+  const [assignedTo, setAssignedTo] = React.useState<string | null>(initial.assigned_to);
 
   // The forecast once the event is within range, for the place as typed (debounced).
   const forecast = useEventForecast(
@@ -144,6 +170,28 @@ export function EventModal({
   // Tickets kept with the event (event-tickets.tsx); a new event links its
   // `pendingTickets` when it saves.
   const showDocuments = useModules().feature('calendar.event-documents');
+  // Who: needs the events.assigned_to column, and someone else to pick.
+  const assignees = useModules().server('calendar.event-assignee');
+  const showWho = assignees && groupMembers.length > 1;
+  const people = React.useMemo<PersonOption[]>(
+    () => [
+      { id: '', name: 'Everyone', face: <AnyoneFace /> },
+      ...groupMembers.map((m) => ({
+        id: m.user_id,
+        name: personFirstName(memberLabel(m.user_id, memberProfiles)),
+        face: <Avatar userId={m.user_id} profiles={memberProfiles} size={34} />,
+      })),
+    ],
+    [groupMembers, memberProfiles]
+  );
+  const customDays = parseReminderDays(customText);
+  const addCustomReminder = () => {
+    if (customDays == null) return;
+    haptics.tick();
+    setReminderDays((days) => addReminderDay(days, customDays));
+    setCustomText('');
+    setCustomOpen(false);
+  };
   const [pendingTickets, setPendingTickets] = React.useState<Document[]>(initialTickets ?? []);
   const [ticketsVersion, setTicketsVersion] = React.useState(0);
 
@@ -275,10 +323,11 @@ export function EventModal({
         location,
         notes,
         reminder_days: reminderDays,
+        assigned_to: assignedTo,
         cost,
         travel_mode: travelMode,
       },
-      { event, groupId, newId: randomUUID(), showBudget, travelMinutes: travel.minutes }
+      { event, groupId, newId: randomUUID(), showBudget, travelMinutes: travel.minutes, assignees }
     );
     if (!saved) return;
     onSave(saved.event, saved.costCents);
@@ -359,6 +408,12 @@ export function EventModal({
         />
       </FieldRow>
 
+      {showWho && (
+        <FieldRow label="Who">
+          <PeoplePicker people={people} value={assignedTo ?? ''} onChange={(id) => setAssignedTo(id || null)} />
+        </FieldRow>
+      )}
+
       <FieldRow label="Starts">
         {/* Date and time share one card, side by side. */}
         <View className="flex-row flex-wrap items-start justify-center gap-x-4 rounded-lg bg-muted/30 py-2">
@@ -415,7 +470,55 @@ export function EventModal({
               {option.label}
             </Button>
           ))}
+          {customReminderDays(reminderDays).map((day) => (
+            <Button
+              key={day}
+              variant="default"
+              size="xs"
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: true }}
+              accessibilityHint="Turns this reminder off"
+              onPress={() => {
+                haptics.tick();
+                setReminderDays((days) => toggleReminderDay(days, day));
+              }}
+            >
+              {reminderDayLabel(day)}
+            </Button>
+          ))}
+          <Button
+            variant={customOpen ? 'default' : 'outline'}
+            size="xs"
+            accessibilityState={{ expanded: customOpen }}
+            onPress={() => {
+              haptics.tick();
+              setCustomOpen((o) => !o);
+            }}
+          >
+            Custom
+          </Button>
         </View>
+        {customOpen && (
+          <View className="mt-2 flex-row items-center gap-2">
+            <Input
+              className="w-20"
+              keyboardType="number-pad"
+              value={customText}
+              onChangeText={setCustomText}
+              onSubmitEditing={addCustomReminder}
+              placeholder="5"
+              accessibilityLabel="Days before"
+              autoFocus
+            />
+            <Text className="flex-1 text-sm text-muted-foreground">days before</Text>
+            <Button size="sm" disabled={customDays == null} onPress={addCustomReminder}>
+              Add
+            </Button>
+          </View>
+        )}
+        {customOpen && customText.trim() !== '' && customDays == null && (
+          <Text className="mt-1 text-xs text-destructive">Use a whole number from 1 to {MAX_EVENT_REMINDER_DAYS}.</Text>
+        )}
       </FieldRow>
 
       <FieldRow

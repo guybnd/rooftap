@@ -16,6 +16,7 @@ import {
   addDaysISO,
   toISODate,
   itemLink,
+  MAX_EVENT_REMINDER_DAYS,
   type ModuleId,
 } from "@homeup/core";
 import { memberNames } from "@/lib/member-names";
@@ -403,6 +404,7 @@ const EVENT_BASIC = [
   "is_all_day",
   "location",
   "notes",
+  "assigned_to",
 ] as const;
 const GROCERY_BASIC = [
   "id",
@@ -1151,6 +1153,31 @@ export function householdTools({
     },
   );
 
+  const eventAssigneeSchema = z
+    .string()
+    .nullable()
+    .optional()
+    .describe("The household member (user id) the event is for; null for everyone.");
+  const reminderDaysSchema = z
+    .array(z.number().int().min(0).max(MAX_EVENT_REMINDER_DAYS))
+    .max(10)
+    .optional()
+    .describe(
+      `Days before the event a reminder goes out (0 = on the day, up to ${MAX_EVENT_REMINDER_DAYS}). Left out on a new event: a week and a day before. [] = no reminders.`,
+    );
+  const notAMember = async (personId: string | null | undefined) => {
+    if (!personId || !groupId) return false;
+    const { data } = await admin
+      .from("group_members")
+      .select("user_id")
+      .eq("group_id", groupId)
+      .eq("user_id", personId)
+      .maybeSingle();
+    return !data;
+  };
+  const sortedDays = (days: number[]) =>
+    [...new Set(days)].sort((a, b) => b - a);
+
   tool(
     "create_event",
     {
@@ -1165,6 +1192,8 @@ export function householdTools({
         location: z.string().optional(),
         notes: z.string().optional(),
         private: z.boolean().optional(),
+        assigned_to: eventAssigneeSchema,
+        reminder_days: reminderDaysSchema,
       },
     },
     async ({
@@ -1176,8 +1205,12 @@ export function householdTools({
       location,
       notes,
       private: isPrivate,
+      assigned_to,
+      reminder_days,
     }) => {
       if (!groupId) return noGroupError();
+      if (await notAMember(assigned_to))
+        return toolError("That person is not in this household");
       const row: Record<string, unknown> = {
         id: crypto.randomUUID(),
         group_id: groupId,
@@ -1190,6 +1223,8 @@ export function householdTools({
         location: location ?? null,
         notes: notes ?? null,
         private: isPrivate ?? false,
+        assigned_to: assigned_to ?? null,
+        ...(reminder_days ? { reminder_days: sortedDays(reminder_days) } : {}),
         deleted: false,
       };
       const { error } = await admin.from("events").insert(row);
@@ -1202,7 +1237,7 @@ export function householdTools({
     "update_event",
     {
       description:
-        "Update fields on an existing native Rooftap calendar event (title, times, category, all-day flag, location, notes, private flag). Only the fields provided are changed; omit a field to leave it as-is.",
+        "Update fields on an existing native Rooftap calendar event (title, times, category, all-day flag, location, notes, private flag, who it is for, reminders). Only the fields provided are changed; omit a field to leave it as-is.",
       inputSchema: {
         event_id: z.string(),
         title: z.string().min(1).optional(),
@@ -1213,13 +1248,18 @@ export function householdTools({
         location: z.string().nullable().optional(),
         notes: z.string().nullable().optional(),
         private: z.boolean().optional(),
+        assigned_to: eventAssigneeSchema,
+        reminder_days: reminderDaysSchema,
       },
     },
-    async ({ event_id, ...patch }) => {
+    async ({ event_id, reminder_days, ...patch }) => {
       if (!groupId) return noGroupError();
       const event = await findVisibleEvent(admin, groupId, userId, event_id);
       if (!event) return toolError("Event not found");
+      if (await notAMember(patch.assigned_to))
+        return toolError("That person is not in this household");
       const updates: Record<string, unknown> = {};
+      if (reminder_days) updates.reminder_days = sortedDays(reminder_days);
       for (const key of [
         "title",
         "starts_at",
@@ -1229,6 +1269,7 @@ export function householdTools({
         "location",
         "notes",
         "private",
+        "assigned_to",
       ] as const) {
         if (patch[key] !== undefined) updates[key] = patch[key];
       }

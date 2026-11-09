@@ -331,6 +331,7 @@ describe('server schema', () => {
       'repeating tasks on calendar dates, like the 1st of every month',
       'helper chats for single modules, such as the Groceries helper',
       'helper chats the whole household shares, and notes for each helper',
+      'choosing who a calendar event is for',
     ]);
 
     act(() => setServerSchema('20261020050000_mcp_oauth'));
@@ -381,6 +382,7 @@ describe('server schema', () => {
         'repeating tasks on calendar dates, like the 1st of every month',
         'helper chats for single modules, such as the Groceries helper',
         'helper chats the whole household shares, and notes for each helper',
+        'choosing who a calendar event is for',
       ]);
     } finally {
       delete mcp.minSchema;

@@ -149,6 +149,10 @@ export const SERVER_FEATURES = {
     minSchema: '20261108030000_shared_helper_chats',
     label: 'helper chats the whole household shares, and notes for each helper',
   },
+  'calendar.event-assignee': {
+    minSchema: '20261109040000_event_assignee',
+    label: 'choosing who a calendar event is for',
+  },
 } as const satisfies Record<string, ServerFeatureDef>;
 
 export type ServerFeatureId = keyof typeof SERVER_FEATURES;

@@ -14,7 +14,7 @@
 
 import * as React from "react";
 import { Dialog as SheetPrimitive } from "@base-ui/react/dialog";
-import { ArrowUp, ChevronRight, CircleAlert, Ellipsis, X, type LucideIcon } from "lucide-react";
+import { ArrowUp, ChevronRight, CircleAlert, Ellipsis, UserRound, X, type LucideIcon } from "lucide-react";
 import {
   dialog,
   dueQuickChoices,
@@ -769,6 +769,15 @@ export interface PersonOption {
 }
 
 /** Faces to tap (Who editor). */
+/** The face for "Anyone" in a people picker: a muted circle with a person outline. */
+export function AnyoneFace({ size = 34 }: { size?: number }) {
+  return (
+    <span className="grid place-items-center rounded-full bg-muted text-muted-foreground" style={{ width: size, height: size }}>
+      <UserRound style={{ width: size * 0.5, height: size * 0.5 }} />
+    </span>
+  );
+}
+
 export function PeoplePicker({ people, value, onChange }: { people: PersonOption[]; value: string; onChange: (id: string) => void }) {
   return (
     <div role="radiogroup" aria-label="Who" className="flex gap-3 overflow-x-auto py-1 [scrollbar-width:none]">
