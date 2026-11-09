@@ -3,6 +3,7 @@
 // of each tab (component refs stay app-level); this file holds the ids, the
 // labels and the old menu keys that still open the right tab, so links such
 // as /settings/integrations keep working on both platforms.
+import type { NamedHue } from './section-hues';
 
 export type SettingsTabId = 'you' | 'house' | 'tiles' | 'connected' | 'about';
 
@@ -15,7 +16,7 @@ export const SETTINGS_TABS: readonly SettingsTabMeta[] = [
   { id: 'you', label: 'You' },
   { id: 'house', label: 'Home' },
   { id: 'tiles', label: 'Tiles' },
-  { id: 'connected', label: 'Connected' },
+  { id: 'connected', label: 'Linked' },
   { id: 'about', label: 'About' },
 ];
 
@@ -42,4 +43,46 @@ export function settingsTabForKey(key: string | null | undefined): SettingsTabId
 /** The path of a Settings tab. You is the plain /settings. */
 export function settingsTabHref(id: SettingsTabId): string {
   return id === 'you' ? '/settings' : `/settings/${id}`;
+}
+
+/**
+ * The hue of a settings panel's leading tile in the Settings tabs (Guy,
+ * 2026-11-08: the tabs read drab, so each panel wears a colour). Keyed by
+ * the panel's title; a title not listed here gets a steady hue from its
+ * letters, so a new panel is never grey.
+ */
+const PANEL_HUES: Readonly<Record<string, NamedHue>> = {
+  Appearance: 'rose',
+  'Animation speed': 'sky',
+  Haptics: 'mint',
+  'Push notifications': 'coral',
+  'What you get': 'sun',
+  Navigation: 'indigo',
+  'Section preferences': 'teal',
+  'Bot API key': 'olive',
+  'MCP server': 'lime',
+  'Up Bank': 'peach',
+  'Bank statement': 'sun',
+  'Household AI keys': 'lilac',
+  'AI providers': 'orchid',
+  'API keys': 'olive',
+  Feedback: 'cherry',
+  Server: 'teal',
+  'Home profile': 'fern',
+  'Create a user': 'lilac',
+  'Pending invitations': 'coral',
+  Tiles: 'orchid',
+  Version: 'sky',
+  Updates: 'sky',
+  "What's new": 'mint',
+};
+
+const FALLBACK_HUES: readonly NamedHue[] = ['coral', 'lilac', 'mint', 'sun', 'sky', 'peach', 'rose', 'teal', 'lime', 'orchid', 'fern', 'indigo'];
+
+export function settingsPanelHue(title: string): NamedHue {
+  const listed = PANEL_HUES[title];
+  if (listed) return listed;
+  let sum = 0;
+  for (const ch of title) sum = (sum * 31 + ch.charCodeAt(0)) >>> 0;
+  return FALLBACK_HUES[sum % FALLBACK_HUES.length];
 }

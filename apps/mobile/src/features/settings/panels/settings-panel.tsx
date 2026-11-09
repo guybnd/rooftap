@@ -2,13 +2,14 @@
 // components/settings-panel.tsx): one bordered rounded-3xl card per panel
 // (H4), a header of a neutral 36px glyph tile + a Title-step name (+ optional
 // trailing action), an optional muted description, then the body. Rows sit on
-// an inset fill (`SettingsInset`), never a second border. The glyph tile is
-// deliberately neutral: section identity hues belong to LeadingTile + the
-// glow only (H2), and Settings is not a section.
+// an inset fill (`SettingsInset`), never a second border. Inside the Settings
+// tabs (`SettingsTint`) the glyph tile wears the panel's own hue (core
+// settingsPanelHue); in a module's settings sheet it stays neutral.
 import * as React from 'react';
 import { Pressable, View } from 'react-native';
 import { Check, ChevronDown, type LucideIcon } from 'lucide-react-native';
-import { Card, ListGroup, ListItem, ListItemContent, ListItemLeading, ListItemTrailing, Switch, Text, cn, haptics } from '@homeup/ui';
+import { Card, LeadingTile, ListGroup, ListItem, ListItemContent, ListItemLeading, ListItemTrailing, Switch, Text, cn, haptics } from '@homeup/ui';
+import { settingsPanelHue, type SectionHue } from '@homeup/core';
 
 /**
  * Settings tabs fold their panels (HOUP-616): inside a `SettingsFold` each
@@ -29,6 +30,22 @@ export function SettingsFold({ children }: { children: React.ReactNode }) {
         <View style={{ marginTop: -1 }}>{children}</View>
       </Card>
     </FoldContext.Provider>
+  );
+}
+
+/** The Settings tabs colour each panel's tile (Guy, 2026-11-08: the tabs read drab). */
+const TintContext = React.createContext(false);
+
+export function SettingsTint({ children }: { children: React.ReactNode }) {
+  return <TintContext.Provider value>{children}</TintContext.Provider>;
+}
+
+function PanelTile({ Icon, hue }: { Icon: LucideIcon; hue?: SectionHue }) {
+  if (hue) return <LeadingTile hue={hue} Icon={Icon} size="md" />;
+  return (
+    <View className="size-9 items-center justify-center rounded-[11px] bg-muted">
+      <Icon size={18} strokeWidth={2.1} className="text-muted-foreground" />
+    </View>
   );
 }
 
@@ -53,6 +70,7 @@ export function SettingsPanel({
   children?: React.ReactNode;
 }) {
   const fold = React.useContext(FoldContext);
+  const tint = React.useContext(TintContext);
   const id = React.useId();
   if (fold) {
     const open = fold.open === id;
@@ -69,11 +87,7 @@ export function SettingsPanel({
           accessibilityState={{ expanded: open }}
           className="min-h-14 flex-row items-center gap-3 px-4 py-2.5 active:bg-accent/30"
         >
-          {Icon && (
-            <View className="size-9 items-center justify-center rounded-[11px] bg-muted">
-              <Icon size={18} strokeWidth={2.1} className="text-muted-foreground" />
-            </View>
-          )}
+          {Icon && <PanelTile Icon={Icon} hue={tint && typeof title === 'string' ? settingsPanelHue(title) : undefined} />}
           <View className="min-w-0 flex-1 flex-row items-center gap-1.5">
             {typeof title === 'string' ? (
               <Text numberOfLines={1} className="font-heading text-title font-semibold text-foreground">
@@ -116,11 +130,7 @@ export function SettingsPanel({
     <Card className={cn('gap-4 rounded-3xl px-4', className)}>
       <View className="gap-2">
         <View className="min-h-9 flex-row items-center gap-3">
-          {Icon && (
-            <View className="size-9 items-center justify-center rounded-[11px] bg-muted">
-              <Icon size={18} strokeWidth={2.1} className="text-muted-foreground" />
-            </View>
-          )}
+          {Icon && <PanelTile Icon={Icon} hue={tint && typeof title === 'string' ? settingsPanelHue(title) : undefined} />}
           <View className="min-w-0 flex-1 flex-row items-center gap-1.5">
             {typeof title === 'string' ? (
               <Text numberOfLines={1} className="font-heading text-title font-semibold text-foreground">

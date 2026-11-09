@@ -1,16 +1,18 @@
 // HOUP-616: Settings opens straight on its tabs (You, Home, Tiles,
-// Connected, About), with no hub page first. Each tab stacks its panels;
+// Connected, About), with no hub page first. The tabs are five coloured
+// tiles (settings-tab-bar.tsx). Each tab stacks its panels;
 // You and Connected fold every panel to its header row (SettingsFold), so a
 // tab reads as a short list and one panel opens at a time. A module's own
 // settings stay on /settings/<module>, reached from the Tiles tab.
 // Web twin: apps/web/src/app/settings/settings-home.tsx.
 import * as React from 'react';
-import { ActivityIndicator, ScrollView, View } from 'react-native';
-import { SectionScreen, SegmentedControl, Text } from '@homeup/ui';
+import { ActivityIndicator, View } from 'react-native';
+import { SectionScreen, Text } from '@homeup/ui';
 import { useModules, type SettingsTabId } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
 import { settingsTabs, visiblePanels } from './settings-registry';
-import { SettingsFold } from './panels/settings-panel';
+import { SettingsFold, SettingsTint } from './panels/settings-panel';
+import { SettingsTabBar } from './settings-tab-bar';
 
 export function SettingsHome({ initialTab = 'you' }: { initialTab?: SettingsTabId }) {
   const [tabId, setTabId] = React.useState<SettingsTabId>(initialTab);
@@ -25,15 +27,7 @@ export function SettingsHome({ initialTab = 'you' }: { initialTab?: SettingsTabI
       lede={
         <View className="gap-4">
           <Text className="px-1 text-display font-semibold text-foreground">Settings</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} className="-mx-4 grow-0" contentContainerClassName="px-4">
-            <SegmentedControl
-              fitContent
-              accessibilityLabel="Settings tabs"
-              value={tab.id}
-              options={settingsTabs.map((t) => ({ value: t.id, label: t.label }))}
-              onChange={(next) => setTabId(next as SettingsTabId)}
-            />
-          </ScrollView>
+          <SettingsTabBar active={tab.id} onChange={setTabId} />
         </View>
       }
       bottomClearance={24}
@@ -44,9 +38,11 @@ export function SettingsHome({ initialTab = 'you' }: { initialTab?: SettingsTabI
           <ActivityIndicator />
         </View>
       ) : (
-        <View key={tab.id} className={tab.fold ? 'gap-3' : 'gap-6'}>
-          {tab.fold ? <SettingsFold>{body}</SettingsFold> : body}
-        </View>
+        <SettingsTint>
+          <View key={tab.id} className={tab.fold ? 'gap-3' : 'gap-6'}>
+            {tab.fold ? <SettingsFold>{body}</SettingsFold> : body}
+          </View>
+        </SettingsTint>
       )}
     </SectionScreen>
   );

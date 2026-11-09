@@ -121,6 +121,8 @@ function directions(url: URL) {
 
 const answers: [RegExp, Answer][] = [
   [/^\/api\/directions/, directions],
+  // Settings > Linked: no statements imported yet.
+  [/^\/api\/bank-import/, () => ({ accounts: [], shareMode: "joint", autoCosts: true, upConnected: false })],
   [/^\/api\/weather/, () => weather],
   [/^\/api\/calendar\/status/, () => ({ connected: true, settings: { selected_calendar_ids: ["primary"], suggest_mode: "both", dedicated_calendar_id: null, keywords: [], pull_enabled: true, push_todos_enabled: true } })],
   [/^\/api\/calendar\/calendars/, () => ({ calendars: [{ id: "primary", summary: "ava@example.com", primary: true, selected: true }, { id: "family", summary: "Family", selected: true }] })],

@@ -5,13 +5,16 @@
 // of a neutral 36px glyph tile + a Title-step name (+ optional trailing
 // action), an optional muted description, then the panel body. Inside, rows
 // sit on an inset fill (`SettingsInset`), never a second border.
-// The glyph tile is deliberately neutral: section identity hues belong to
-// LeadingTile + the glow only (H2), and Settings is not a section.
+// Inside the Settings tabs (`SettingsTint`) the glyph tile wears the panel's
+// own hue (core settingsPanelHue); in a module's settings sheet it stays
+// neutral.
 // Native twin: apps/mobile/src/features/settings/panels/settings-panel.tsx.
 
 import * as React from "react";
 import { Check, ChevronDown } from "lucide-react";
+import { settingsPanelHue, type SectionHue } from "@homeup/core";
 import { Switch } from "@/components/ui/switch";
+import { LeadingTile } from "@/components/ui/leading-tile";
 import { cn } from "@/lib/utils";
 
 type PanelIcon = React.ComponentType<{ className?: string; strokeWidth?: number }>;
@@ -37,6 +40,29 @@ export function SettingsFold({ children }: { children: React.ReactNode }) {
   );
 }
 
+/**
+ * The Settings tabs colour each panel's tile (Guy, 2026-11-08: the tabs read
+ * drab). A module's settings sheet has no tint, so its panels keep the
+ * neutral tile under the module's own colour.
+ */
+const TintContext = React.createContext(false);
+
+export function SettingsTint({ children }: { children: React.ReactNode }) {
+  return <TintContext.Provider value>{children}</TintContext.Provider>;
+}
+
+function PanelTile({ Icon, hue }: { Icon: PanelIcon; hue?: SectionHue }) {
+  if (hue) return <LeadingTile hue={hue} Icon={Icon} size="md" />;
+  return (
+    <span
+      aria-hidden
+      className="flex size-9 shrink-0 items-center justify-center rounded-[11px] bg-muted text-muted-foreground"
+    >
+      <Icon className="size-[18px]" strokeWidth={2.1} />
+    </span>
+  );
+}
+
 export function SettingsPanel({
   icon: Icon,
   title,
@@ -57,6 +83,7 @@ export function SettingsPanel({
   children?: React.ReactNode;
 }) {
   const fold = React.useContext(FoldContext);
+  const tint = React.useContext(TintContext);
   const id = React.useId();
   if (fold) {
     const open = fold.open === id;
@@ -71,14 +98,7 @@ export function SettingsPanel({
           onClick={() => fold.toggle(id)}
           className="flex min-h-14 w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-accent/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:px-5"
         >
-          {Icon && (
-            <span
-              aria-hidden
-              className="flex size-9 shrink-0 items-center justify-center rounded-[11px] bg-muted text-muted-foreground"
-            >
-              <Icon className="size-[18px]" strokeWidth={2.1} />
-            </span>
-          )}
+          {Icon && <PanelTile Icon={Icon} hue={tint && typeof title === "string" ? settingsPanelHue(title) : undefined} />}
           <span className="flex min-w-0 flex-1 items-center gap-1.5 font-heading text-base font-semibold text-foreground">
             {title}
           </span>
@@ -112,14 +132,7 @@ export function SettingsPanel({
     >
       <div className="space-y-2">
         <div className="flex min-h-9 items-center gap-3">
-          {Icon && (
-            <span
-              aria-hidden
-              className="flex size-9 shrink-0 items-center justify-center rounded-[11px] bg-muted text-muted-foreground"
-            >
-              <Icon className="size-[18px]" strokeWidth={2.1} />
-            </span>
-          )}
+          {Icon && <PanelTile Icon={Icon} hue={tint && typeof title === "string" ? settingsPanelHue(title) : undefined} />}
           <h2 className="flex min-w-0 flex-1 items-center gap-1.5 font-heading text-base font-semibold text-foreground">
             {title}
           </h2>

@@ -14,17 +14,12 @@ import {
   LogOut,
   User,
   ArrowLeft,
-  Blocks,
-  CircleUser,
-  Info,
-  Plug,
-  Users,
-  type LucideIcon,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { DataCacheProvider } from "@/lib/data-cache";
+import { SETTINGS_TAB_ICONS } from "@/components/settings-tab-bar";
 import { LegendSyncBootstrap } from "@/lib/legend/sync-status";
 import { ModulePicker } from "@/components/module-picker";
 import { WhatsNewDialog } from "@/components/whats-new";
@@ -51,16 +46,6 @@ import { LeadingTile } from "@/components/ui/leading-tile";
 function OfflineBanner() {
   return <OfflineIndicator />;
 }
-
-// Glyph for each Settings tab in the left column; the tile colour comes from
-// core's SETTINGS_MENU_HUES.
-const SETTINGS_TAB_ICONS: Record<SettingsTabId, LucideIcon> = {
-  you: CircleUser,
-  house: Users,
-  tiles: Blocks,
-  connected: Plug,
-  about: Info,
-};
 
 /** The Settings tab a /settings path belongs to: a module's settings page sits under Tiles. */
 function settingsTabForPath(pathname: string): SettingsTabId | null {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SETTINGS_TABS, settingsTabForKey, settingsTabHref } from './settings-layout';
+import { SETTINGS_TABS, settingsPanelHue, settingsTabForKey, settingsTabHref } from './settings-layout';
 import { getSection } from './sections';
 
 describe('settings tabs', () => {
@@ -27,5 +27,11 @@ describe('settings tabs', () => {
   it('puts You at the plain path', () => {
     expect(settingsTabHref('you')).toBe('/settings');
     expect(settingsTabHref('about')).toBe('/settings/about');
+  });
+
+  it('gives every panel a colour, steady across renders', () => {
+    expect(settingsPanelHue('Appearance')).toBe('rose');
+    expect(settingsPanelHue('A panel nobody listed')).toBe(settingsPanelHue('A panel nobody listed'));
+    expect(settingsPanelHue('A panel nobody listed')).not.toBe('slate');
   });
 });
