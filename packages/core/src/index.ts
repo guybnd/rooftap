@@ -257,6 +257,7 @@ export * from './modules/assistant/assistant-usage';
 export * from './modules/assistant/assistant-telegram';
 export * from './modules/assistant/assistant-answers';
 export * from './modules/assistant/assistant-popup';
+export * from './modules/assistant/use-thread-window';
 export * from './brand-mark';
 export * from './word-pop';
 export * from './touches';

@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { ChevronDown, Maximize2, MessagesSquare, SquarePen, Trash2, X } from "lucide-react";
 import {
   announceAnswer,
+  bubbleMenuChoices,
   bubbleSpot,
   chatChoices,
   setBubbleSpot,
@@ -222,6 +223,7 @@ function PopupThread({
         helper={helper}
         working={thread.thinking}
         waiting={waiting}
+        choices={choices}
         onOpen={() => openAssistantPopup()}
         onDismiss={onDismissBack}
       />
@@ -317,6 +319,9 @@ const CHIP_SPECTRUM = `linear-gradient(90deg, ${ROOFTAP_SPECTRUM.join(", ")})`;
 let stripX = 0;
 
 function HelperStrip({ choices, current }: { choices: ChatChoice[]; current: string | null }) {
+  // The chip clicked lights at once; the chat behind it swaps on the next frame, so the click never waits on it.
+  const [picked, setPicked] = useState<string | null | undefined>(undefined);
+  const lit = picked === undefined ? current : picked;
   const ref = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const strip = ref.current;
@@ -336,14 +341,18 @@ function HelperStrip({ choices, current }: { choices: ChatChoice[]; current: str
       className="flex gap-1.5 overflow-x-auto border-b border-border px-3.5 py-2 [scrollbar-width:none]"
     >
       {choices.map((c) => {
-        const on = c.helper === current;
+        const on = c.helper === lit;
         return (
           <button
             key={c.helper ?? "rooftap"}
             type="button"
             role="tab"
             aria-selected={on}
-            onClick={() => !on && openAssistantPopup(c.helper ? { helper: c.helper } : { plain: true })}
+            onClick={() => {
+              if (on) return;
+              setPicked(c.helper);
+              requestAnimationFrame(() => setTimeout(() => openAssistantPopup(c.helper ? { helper: c.helper } : { plain: true }), 0));
+            }}
             className={cn(
               "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-xs text-foreground",
               on ? "border-[1.5px] border-transparent font-semibold" : "bg-muted font-medium hover:bg-muted/70"
@@ -376,6 +385,7 @@ function BackToChat({
   helper,
   working,
   waiting,
+  choices,
   onOpen,
   onDismiss,
 }: {
@@ -385,9 +395,12 @@ function BackToChat({
   working: boolean;
   /** A reply landed while it was put away: a dot until it opens. */
   waiting: boolean;
+  /** The chats a still hold (or a right-click) on the bubble offers to swap to (core chatChoices). */
+  choices: ChatChoice[];
   onOpen: () => void;
   onDismiss: () => void;
 }) {
+  const [menu, setMenu] = useState<{ below: boolean } | null>(null);
   const mark = (small: boolean) => (
     <span className="relative inline-flex">
       {helper ? (
@@ -413,8 +426,64 @@ function BackToChat({
       </div>
     );
   }
+  const swap = bubbleMenuChoices(choices, helper);
   return (
-    <DraggableBubble label={waiting ? `${label} replied, open it` : `Open ${label}`} onOpen={onOpen} face={mark(false)}>
+    <>
+    {/* A click anywhere else puts the hold menu away. */}
+    {menu && <div className="fixed inset-0 z-40" onPointerDown={() => setMenu(null)} aria-hidden />}
+    <DraggableBubble
+      label={waiting ? `${label} replied, open it` : `Open ${label}`}
+      onOpen={() => {
+        setMenu(null);
+        onOpen();
+      }}
+      onHold={(below) => setMenu({ below })}
+      onDragStart={() => setMenu(null)}
+      face={mark(false)}
+      menu={
+        menu && (
+          <div
+            role="menu"
+            className={cn(
+              "absolute flex w-56 flex-col gap-0.5 rounded-2xl bg-popover p-1.5 text-left shadow-[var(--card-shadow)] ring-1 ring-border",
+              menu.below ? "top-[calc(100%+8px)]" : "bottom-[calc(100%+8px)]",
+              bubbleSpot().side === "left" ? "left-0" : "right-0"
+            )}
+          >
+            {swap.map((c) => (
+              <button
+                key={c.helper ?? "rooftap"}
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setMenu(null);
+                  openAssistantPopup(c.helper ? { helper: c.helper } : { plain: true });
+                }}
+                className="flex h-11 items-center gap-2.5 rounded-xl px-2.5 text-sm font-medium text-foreground hover:bg-muted"
+              >
+                {c.helper ? <LeadingTile sectionId={c.helper} Icon={sectionIconFor(c.helper)} size="sm" /> : <RooftapTile size="sm" />}
+                {c.label}
+              </button>
+            ))}
+            {swap.length > 0 && <span className="mx-2.5 my-1 h-px bg-border" aria-hidden />}
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setMenu(null);
+                onDismiss();
+              }}
+              className="flex h-11 items-center gap-2.5 rounded-xl px-2.5 text-sm font-medium text-foreground hover:bg-muted"
+            >
+              <span className="inline-flex size-7 items-center justify-center text-muted-foreground">
+                <X className="size-4" />
+              </span>
+              Close
+            </button>
+          </div>
+        )
+      }
+    >
       <button
         type="button"
         onClick={onDismiss}
@@ -424,6 +493,7 @@ function BackToChat({
         <X className="size-3" />
       </button>
     </DraggableBubble>
+    </>
   );
 }
 
@@ -442,16 +512,41 @@ function savedBubbleSpot() {
   return bubbleSpot();
 }
 
+/** How long a still press on the bubble takes to open its menu. */
+const BUBBLE_HOLD_MS = 450;
+
 /**
  * The chat bubble: a click opens the chat; a drag moves it, and on letting
  * go it snaps to the nearer side, at the height it was let go (core
- * snapBubble). The spot is kept in the browser. Its children (the x) ride along.
+ * snapBubble). The spot is kept in the browser. A still hold or a
+ * right-click opens its menu (`onHold`, told whether to open it below).
+ * Its children (the x) and the menu ride along.
  */
-function DraggableBubble({ label, onOpen, face, children }: { label: string; onOpen: () => void; face: ReactNode; children: ReactNode }) {
+function DraggableBubble({
+  label,
+  onOpen,
+  onHold,
+  onDragStart,
+  face,
+  menu,
+  children,
+}: {
+  label: string;
+  onOpen: () => void;
+  onHold: (below: boolean) => void;
+  onDragStart: () => void;
+  face: ReactNode;
+  menu: ReactNode;
+  children: ReactNode;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const [spot, setSpot] = useState(() => (typeof window === "undefined" ? bubbleSpot() : savedBubbleSpot()));
   const [drag, setDrag] = useState<{ dx: number; dy: number } | null>(null);
-  const press = useRef<{ x: number; y: number; moved: boolean } | null>(null);
+  const press = useRef<{ x: number; y: number; moved: boolean; held: boolean; timer: number } | null>(null);
+  const hold = () => {
+    const rect = ref.current?.getBoundingClientRect();
+    onHold(rect ? rect.top + rect.height / 2 < window.innerHeight / 2 : false);
+  };
   // Where it was let go: after the snap re-anchors it, it glides from there to its new spot.
   const dropped = useRef<{ left: number; top: number } | null>(null);
   useLayoutEffect(() => {
@@ -471,6 +566,8 @@ function DraggableBubble({ label, onOpen, face, children }: { label: string; onO
     const p = press.current;
     press.current = null;
     if (!p) return;
+    window.clearTimeout(p.timer);
+    if (p.held) return;
     if (!p.moved) {
       setDrag(null);
       onOpen();
@@ -504,23 +601,38 @@ function DraggableBubble({ label, onOpen, face, children }: { label: string; onO
       <button
         type="button"
         aria-label={label}
-        title="Drag to move it"
+        title="Drag to move it, hold for other chats"
         onPointerDown={(e) => {
           if (e.button !== 0) return;
           e.currentTarget.setPointerCapture(e.pointerId);
-          press.current = { x: e.clientX, y: e.clientY, moved: false };
+          const p = { x: e.clientX, y: e.clientY, moved: false, held: false, timer: 0 };
+          p.timer = window.setTimeout(() => {
+            p.held = true;
+            hold();
+          }, BUBBLE_HOLD_MS);
+          press.current = p;
+        }}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          if (press.current) press.current.held = true;
+          hold();
         }}
         onPointerMove={(e) => {
           const p = press.current;
           if (!p) return;
           const dx = e.clientX - p.x;
           const dy = e.clientY - p.y;
-          if (!p.moved && Math.hypot(dx, dy) < 8) return;
+          if (p.held || (!p.moved && Math.hypot(dx, dy) < 8)) return;
+          if (!p.moved) {
+            window.clearTimeout(p.timer);
+            onDragStart();
+          }
           p.moved = true;
           setDrag({ dx, dy });
         }}
         onPointerUp={end}
         onPointerCancel={() => {
+          if (press.current) window.clearTimeout(press.current.timer);
           press.current = null;
           setDrag(null);
         }}
@@ -535,6 +647,7 @@ function DraggableBubble({ label, onOpen, face, children }: { label: string; onO
         {face}
       </button>
       {children}
+      {menu}
     </div>
   );
 }

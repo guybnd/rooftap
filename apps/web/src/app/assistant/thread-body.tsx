@@ -16,6 +16,7 @@ import {
   moduleHelper,
   useBriefOnShow,
   useBriefSlot,
+  useThreadWindow,
   useModules,
   type AssistantThread,
 } from '@homeup/core';
@@ -149,6 +150,8 @@ export function ThreadMessages({ thread, className, offline = false }: { thread:
   const { loading, loadError, reload, messages, sending, thinking, draft, kind, showCost, deciding, decide, send, blocked, helper } = thread;
   // A helper chat opens on today's brief, kept above what this visit asked (useBriefSlot).
   const briefSlot = useBriefSlot(helper, messages);
+  // A long chat opens on its latest messages; older ones wait behind Show earlier, so it paints at once.
+  const { start, showEarlier } = useThreadWindow(messages.length, briefSlot);
   const briefRef = useRef<HTMLDivElement>(null);
   const brief = helper ? (
     <div key="brief" ref={briefRef}>
@@ -178,7 +181,17 @@ export function ThreadMessages({ thread, className, offline = false }: { thread:
           <AskEmpty onAsk={(text) => void send(text)} disabled={offline || !!blocked} />
         )
       ) : (
-        messages.map((m, i) => [
+        [
+          start > 0 ? (
+            <div key="earlier" className="flex justify-center">
+              <button type="button" onClick={showEarlier} className="h-9 rounded-full px-3 text-xs font-medium text-muted-foreground hover:bg-muted">
+                Show earlier
+              </button>
+            </div>
+          ) : null,
+          ...messages.slice(start).map((m, j) => {
+          const i = start + j;
+          return [
           i === briefSlot ? brief : null,
           <MessageBubble
             key={m.id}
@@ -188,7 +201,9 @@ export function ThreadMessages({ thread, className, offline = false }: { thread:
             busy={deciding === m.id}
             onDecide={(mid, d, picks) => void decide(mid, d, picks)}
           />,
-        ])
+          ];
+          }),
+        ]
       )}
       {messages.length > 0 && briefSlot === messages.length && !sending && brief}
       {thinking && <Thinking draft={draft} />}

@@ -25,6 +25,8 @@ import {
   chatChoices,
   deleteConversation,
   announceAnswer,
+  bubbleMenuBelow,
+  bubbleMenuChoices,
   bubbleSpot,
   setBubbleSpot,
   snapBubble,
@@ -258,6 +260,7 @@ function PopupThread({
         helper={helper}
         working={thread.thinking}
         waiting={waiting}
+        choices={choices}
         onOpen={() => openAssistantPopup()}
         onDismiss={onDismissBack}
       />
@@ -350,6 +353,9 @@ let stripX = 0;
 const STRIP_INSET = 5;
 
 function HelperStrip({ choices, current }: { choices: ChatChoice[]; current: string | null }) {
+  // The chip tapped lights at once; the chat behind it swaps on the next frame, so the tap never waits on it.
+  const [picked, setPicked] = React.useState<string | null | undefined>(undefined);
+  const lit = picked === undefined ? current : picked;
   const ref = React.useRef<ScrollView>(null);
   const width = React.useRef(0);
   const chips = React.useRef(new Map<string, { x: number; w: number }>());
@@ -385,7 +391,7 @@ function HelperStrip({ choices, current }: { choices: ChatChoice[]; current: str
       accessibilityRole="tablist"
     >
       {choices.map((c) => {
-        const on = c.helper === current;
+        const on = c.helper === lit;
         const key = c.helper ?? 'rooftap';
         return (
           <Pressable
@@ -397,7 +403,8 @@ function HelperStrip({ choices, current }: { choices: ChatChoice[]; current: str
             onPress={() => {
               if (on) return;
               haptics.select();
-              openAssistantPopup(c.helper ? { helper: c.helper } : { plain: true });
+              setPicked(c.helper);
+              requestAnimationFrame(() => setTimeout(() => openAssistantPopup(c.helper ? { helper: c.helper } : { plain: true }), 0));
             }}
             accessibilityRole="tab"
             accessibilityState={{ selected: on }}
@@ -436,6 +443,7 @@ function BackToChat({
   helper,
   working,
   waiting,
+  choices,
   onOpen,
   onDismiss,
 }: {
@@ -445,11 +453,15 @@ function BackToChat({
   working: boolean;
   /** A reply landed while it was put away: a dot until it opens. */
   waiting: boolean;
+  /** The chats a still hold on the bubble offers to swap to (core chatChoices). */
+  choices: ChatChoice[];
   onOpen: () => void;
   onDismiss: () => void;
 }) {
   const insets = useSafeAreaInsets();
+  const frame = useSafeAreaFrame();
   const material = useThemeMaterial();
+  const [menu, setMenu] = React.useState(false);
   const mark = (small: boolean) => (
     <View>
       {helper ? (
@@ -479,10 +491,31 @@ function BackToChat({
       </View>
     );
   }
+  const spot = bubbleSpot();
+  const below = bubbleMenuBelow(spot, insets.bottom + 92, BUBBLE, frame.height);
+  // The gap from the screen's bottom to the bubble's bottom edge, where it sits now.
+  const home = insets.bottom + 92 + spot.lift;
+  const swap = bubbleMenuChoices(choices, helper);
+  const close = () => {
+    setMenu(false);
+    haptics.remove();
+    onDismiss();
+  };
   return (
+    <>
+    {/* A tap anywhere else puts the hold menu away. */}
+    {menu ? <Pressable className="absolute inset-0" onPress={() => setMenu(false)} accessibilityLabel="Close the menu" /> : null}
     <DraggableBubble
       label={waiting ? `${label} replied, open it` : `Open ${label}`}
-      onOpen={open}
+      onOpen={() => {
+        setMenu(false);
+        open();
+      }}
+      onHold={() => {
+        haptics.commit();
+        setMenu(true);
+      }}
+      onDragStart={() => setMenu(false)}
       shadow={material.cardShadow}
       face={mark(false)}
     >
@@ -500,6 +533,41 @@ function BackToChat({
         <X size={12} className="text-muted-foreground" />
       </Pressable>
     </DraggableBubble>
+    {menu ? (
+      <View
+        className="absolute w-56 gap-0.5 rounded-2xl border border-border bg-popover p-1.5"
+        style={[
+          { boxShadow: material.cardShadow },
+          below ? { top: frame.height - home + 8 } : { bottom: home + BUBBLE + 8 },
+          spot.side === 'left' ? { left: BUBBLE_EDGE } : { right: BUBBLE_EDGE },
+        ]}
+        accessibilityRole="menu"
+      >
+        {swap.map((c) => (
+          <Pressable
+            key={c.helper ?? 'rooftap'}
+            onPress={() => {
+              haptics.select();
+              setMenu(false);
+              openAssistantPopup(c.helper ? { helper: c.helper } : { plain: true });
+            }}
+            accessibilityRole="menuitem"
+            className="h-11 flex-row items-center gap-2.5 rounded-xl px-2.5 active:bg-muted"
+          >
+            {c.helper ? <LeadingTile sectionId={c.helper} Icon={sectionIconFor(c.helper)} size="sm" /> : <RooftapTile size="sm" />}
+            <Text className="text-sm font-medium text-foreground">{c.label}</Text>
+          </Pressable>
+        ))}
+        {swap.length ? <View className="mx-2.5 my-1 h-px bg-border" /> : null}
+        <Pressable onPress={close} accessibilityRole="menuitem" className="h-11 flex-row items-center gap-2.5 rounded-xl px-2.5 active:bg-muted">
+          <View className="h-7 w-7 items-center justify-center">
+            <X size={16} className="text-muted-foreground" />
+          </View>
+          <Text className="text-sm font-medium text-foreground">Close</Text>
+        </Pressable>
+      </View>
+    ) : null}
+    </>
   );
 }
 
@@ -511,17 +579,22 @@ const BUBBLE_TOP_ROOM = 72;
 /**
  * The chat bubble: a tap opens the chat; a drag moves it, and on letting go
  * it snaps to the nearer side, at the height it was let go (core snapBubble),
- * and stays there while the app is open. Its children (the x) ride along.
+ * and stays there while the app is open. A still hold opens its menu
+ * (`onHold`). Its children (the x, the menu) ride along.
  */
 function DraggableBubble({
   label,
   onOpen,
+  onHold,
+  onDragStart,
   shadow,
   face,
   children,
 }: {
   label: string;
   onOpen: () => void;
+  onHold: () => void;
+  onDragStart: () => void;
   shadow: string | undefined;
   face: React.ReactNode;
   children: React.ReactNode;
@@ -547,7 +620,10 @@ function DraggableBubble({
     },
     [frame.width, maxLift, travel, x, y]
   );
-  const pickUp = React.useCallback(() => haptics.select(), []);
+  const pickUp = React.useCallback(() => {
+    haptics.select();
+    onDragStart();
+  }, [onDragStart]);
   const gesture = React.useMemo(() => {
     const drag = Gesture.Pan()
       .minDistance(8)
@@ -576,8 +652,16 @@ function DraggableBubble({
       'worklet';
       if (ok) runOnJS(onOpen)();
     });
-    return Gesture.Exclusive(drag, tap);
-  }, [frame.width, from, lifted, onOpen, pickUp, settle, x, y]);
+    // A still hold: the menu. Moving first makes it a drag instead.
+    const hold = Gesture.LongPress()
+      .minDuration(400)
+      .maxDistance(8)
+      .onStart(() => {
+        'worklet';
+        runOnJS(onHold)();
+      });
+    return Gesture.Race(drag, hold, tap);
+  }, [frame.width, from, lifted, onHold, onOpen, pickUp, settle, x, y]);
   const style = useAnimatedStyle(() => ({
     transform: [{ translateX: x.value }, { translateY: y.value }, { scale: 1 + 0.08 * lifted.value }],
   }));
@@ -588,10 +672,11 @@ function DraggableBubble({
           accessible
           accessibilityRole="button"
           accessibilityLabel={label}
-          accessibilityHint="Drag to move it"
-          accessibilityActions={[{ name: 'activate' }]}
+          accessibilityHint="Drag to move it, hold for other chats"
+          accessibilityActions={[{ name: 'activate' }, { name: 'longpress', label: 'Other chats' }]}
           onAccessibilityAction={(e) => {
             if (e.nativeEvent.actionName === 'activate') onOpen();
+            else if (e.nativeEvent.actionName === 'longpress') onHold();
           }}
           className="h-14 w-14 items-center justify-center rounded-full border border-border bg-popover"
           style={{ boxShadow: shadow }}

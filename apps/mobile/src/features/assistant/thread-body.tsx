@@ -3,7 +3,7 @@
 // out of the + (chat-popup.tsx). State comes from core's useAssistantThread.
 // Web twin: apps/web/src/app/assistant/thread-body.tsx.
 import * as React from 'react';
-import { ScrollView, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { ChevronRight } from 'lucide-react-native';
 import {
   ArriveScope,
@@ -20,7 +20,7 @@ import {
   cn,
   haptics,
 } from '@homeup/ui';
-import { askGreeting, askStarters, getSectionByPath, mentionOptions, minutesLeft, moduleHelper, useBriefOnShow, useBriefSlot, useModules, type AssistantThread } from '@homeup/core';
+import { askGreeting, askStarters, getSectionByPath, mentionOptions, minutesLeft, moduleHelper, useBriefOnShow, useBriefSlot, useModules, useThreadWindow, type AssistantThread } from '@homeup/core';
 import { sectionIconFor } from '@/lib/section-icons';
 import { useDataCache } from '@/lib/data-cache';
 import { Composer, MessageBubble, Thinking } from './assistant-parts';
@@ -151,6 +151,10 @@ export function ThreadMessages({
   const { loading, loadError, reload, messages, sending, thinking, draft, kind, showCost, deciding, decide, send, blocked, helper } = thread;
   // A helper chat opens on today's brief, kept above what this visit asked (useBriefSlot).
   const briefSlot = useBriefSlot(helper, messages);
+  // A long chat opens on its latest messages; older ones wait behind Show earlier, so it paints at once.
+  const { start, showEarlier } = useThreadWindow(messages.length, briefSlot);
+  // Showing earlier messages grows the chat at the top: it stays where it is, not jumping to the end.
+  const keepPlace = React.useRef(false);
   const scrollRef = React.useRef<ScrollView>(null);
   // The brief is the last thing on show (nothing asked this visit): the chat
   // opens at its top, not its end, and stays put while its rows load. Once
@@ -177,6 +181,10 @@ export function ThreadMessages({
       contentContainerClassName="gap-5 px-4 py-4"
       keyboardShouldPersistTaps="handled"
       onContentSizeChange={() => {
+        if (keepPlace.current) {
+          keepPlace.current = false;
+          return;
+        }
         if (!briefLast) scrollRef.current?.scrollToEnd({ animated: !loading });
       }}
       // The keyboard shortens the chat: keep the newest message in sight.
@@ -200,7 +208,24 @@ export function ThreadMessages({
           <AskEmpty onAsk={(text) => void send(text)} disabled={offline || !!blocked} />
         )
       ) : (
-        messages.map((m, i) => [
+        [
+          start > 0 ? (
+            <Pressable
+              key="earlier"
+              onPress={() => {
+                keepPlace.current = true;
+                showEarlier();
+              }}
+              accessibilityRole="button"
+              hitSlop={6}
+              className="h-9 self-center justify-center rounded-full px-3 active:bg-muted"
+            >
+              <Text className="text-xs font-medium text-muted-foreground">Show earlier</Text>
+            </Pressable>
+          ) : null,
+          ...messages.slice(start).map((m, j) => {
+          const i = start + j;
+          return [
           i === briefSlot ? brief : null,
           <MessageBubble
             key={m.id}
@@ -210,7 +235,9 @@ export function ThreadMessages({
             busy={deciding === m.id}
             onDecide={(mid, d, picks) => void decide(mid, d, picks)}
           />,
-        ])
+          ];
+          }),
+        ]
       )}
       {messages.length > 0 && briefSlot === messages.length && !sending ? brief : null}
       {thinking && <Thinking draft={draft} />}

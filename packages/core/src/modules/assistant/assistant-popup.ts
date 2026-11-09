@@ -67,3 +67,17 @@ export function snapBubble(centerX: number, width: number, lift: number, maxLift
     lift: Math.round(Math.min(Math.max(lift, 0), Math.max(maxLift, 0))),
   };
 }
+
+/**
+ * Whether the bubble's hold menu opens below it: when the bubble sits in the
+ * top half of the screen, so the menu has room. `homeBottom` is the gap from
+ * the screen's bottom to the bubble's home spot (px), `size` its diameter.
+ */
+export function bubbleMenuBelow(spot: BubbleSpot, homeBottom: number, size: number, screenHeight: number): boolean {
+  return homeBottom + spot.lift + size / 2 > screenHeight / 2;
+}
+
+/** The chats the bubble's hold menu offers: every chat but the one put away. */
+export function bubbleMenuChoices<T extends { helper: string | null }>(choices: T[], current: string | null): T[] {
+  return choices.filter((c) => c.helper !== current);
+}
