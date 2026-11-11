@@ -435,7 +435,7 @@ const MODULE_NOUN: Partial<Record<ModuleId, string>> = {
   'money-insights': 'Money insights',
 };
 
-/** Lines for the newer modules' changes (module-tools.ts on the server), or null for another tool. */
+/** Lines for the newer modules' changes (lib/mcp/tools on the server), or null for another tool. */
 function moduleProposal(tool: string, args: Record<string, unknown>): string | null {
   switch (tool) {
     case 'add_reward_perk':

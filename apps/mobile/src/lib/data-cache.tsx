@@ -12,6 +12,7 @@
 // correct regardless of mount order and no-ops cleanly (loading=false, no
 // throw) on the first-run picker/login screens where no server is stored yet.
 import * as React from 'react';
+import { AppState } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import { usePathname, useRouter } from 'expo-router';
 import {
@@ -35,6 +36,9 @@ import { fetchPublicConfig, getStoredServer } from './server-config';
 import { getSupabaseClient, onSupabaseClientChange } from './supabase-client';
 import { readDataCacheSnapshot, writeDataCacheSnapshot } from './legend/data-cache-snapshot';
 import { useGroupTableRealtime } from './use-group-table-realtime';
+
+// Quiet retries after a failed household fetch, before the banner shows.
+const FETCH_RETRY_DELAYS_MS = [2_000, 6_000, 15_000];
 
 interface DataCache {
   group: Group | null;
@@ -127,6 +131,12 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
   // hooks-order/useCallback-size errors. Withhold `group` until the client exists.
   const [clientReady, setClientReady] = React.useState(false);
   const fetched = React.useRef(false);
+  // A failed household fetch is usually a dropped request (the phone woke up,
+  // switched networks, or the radio was still waking). Try again quietly a few
+  // times before showing the banner, so one blip does not leave it up for good.
+  const failedFetches = React.useRef(0);
+  const retryTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fetchAllRef = React.useRef<(() => Promise<void>) | null>(null);
   const router = useRouter();
   const pathname = usePathname();
   const pathnameRef = React.useRef(pathname);
@@ -217,11 +227,27 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
       // rows — keep whatever is currently painted and surface the error for
       // a Retry instead of silently collapsing to group: null, which would
       // look identical to a real "no group" state.
-      setError(result.fetchError);
       setLoading(false);
+      const attempt = failedFetches.current++;
+      const delay = FETCH_RETRY_DELAYS_MS[attempt];
+      if (retryTimer.current) clearTimeout(retryTimer.current);
+      if (delay !== undefined) {
+        retryTimer.current = setTimeout(() => {
+          retryTimer.current = null;
+          fetchAllRef.current?.();
+        }, delay);
+      } else {
+        console.warn('[data-cache] household fetch failed:', result.fetchError);
+        setError(result.fetchError);
+      }
       return;
     }
 
+    failedFetches.current = 0;
+    if (retryTimer.current) {
+      clearTimeout(retryTimer.current);
+      retryTimer.current = null;
+    }
     setError(null);
     setCurrentUserId(result.currentUserId);
     const nextGroup = result.hasMembership ? result.group : null;
@@ -249,6 +275,30 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
       serverSchema: getModulesSnapshot().schema,
     });
   }, [router, snapshot]);
+  React.useEffect(() => {
+    fetchAllRef.current = fetchAll;
+  }, [fetchAll]);
+  React.useEffect(
+    () => () => {
+      if (retryTimer.current) clearTimeout(retryTimer.current);
+    },
+    []
+  );
+
+  // Back from the background with the banner up: try again, since the
+  // network the failed fetch ran on is likely back.
+  const errorRef = React.useRef(error);
+  React.useEffect(() => {
+    errorRef.current = error;
+  }, [error]);
+  React.useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state !== 'active' || !errorRef.current) return;
+      failedFetches.current = 0;
+      fetchAll();
+    });
+    return () => sub.remove();
+  }, [fetchAll]);
 
   const userSettingsRef = React.useRef(userSettings);
   React.useEffect(() => {

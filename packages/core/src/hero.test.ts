@@ -577,7 +577,10 @@ describe('buildHeroItems: household events', () => {
   it('shows the person an event is for, else who added it', () => {
     const forSam = ev('s', new Date(2026, 9, 19, 9, 0), { created_by: 'me', assigned_to: 'sam' });
     const forAll = ev('e', new Date(2026, 9, 19, 10, 0), { created_by: 'me', assigned_to: null });
-    expect(buildHeroItems({ ...base, groupEvents: [forSam, forAll] }).map((i) => i.assignedTo)).toEqual(['sam', 'me']);
+    const forTwo = ev('t', new Date(2026, 9, 19, 11, 0), { created_by: 'me', assigned_to: 'sam', assignees: ['sam', 'kim'] });
+    const items = buildHeroItems({ ...base, groupEvents: [forSam, forAll, forTwo] });
+    expect(items.map((i) => i.assignedTo)).toEqual(['sam', 'me', 'sam']);
+    expect(items[2].assignees).toEqual(['sam', 'kim']);
   });
 
   it("hides someone else's private event", () => {

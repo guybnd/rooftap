@@ -13,4 +13,10 @@ export function mountHues() {
 /** The live demo, built into ./demo by build:landing-static. */
 export const DEMO_HREF = "./demo/?live=1&theme=ember-night";
 
-export const landingProps = () => ({ signInHref: import.meta.env.VITE_SIGN_IN_URL || null, privacyHref: "./privacy.html", demoHref: DEMO_HREF });
+const signIn = (): string | null => import.meta.env.VITE_SIGN_IN_URL || null;
+
+/** The household page's links in the static site. */
+export const landingProps = (signInHref = signIn()) => ({ signInHref, privacyHref: "./privacy.html", selfHostHref: "./self-host.html", demoHref: DEMO_HREF });
+
+/** The self-host page's links in the static site. */
+export const selfHostProps = (signInHref = signIn()) => ({ signInHref, homeHref: "./", privacyHref: "./privacy.html", demoHref: DEMO_HREF });

@@ -604,7 +604,10 @@ export interface HouseholdTask {
   completed_at: string | null; // ISO timestamp set when done→true, cleared on un-check (FLUX-164)
   /** Who ticked it off; a database trigger fills it. Missing before 20261023060000_task_completed_by. */
   completed_by?: string | null;
+  /** The first person it is for (a private to-do: its owner). */
   assigned_to: string | null;
+  /** Everyone it is for, first = assigned_to (assignees.ts). Absent on servers older than 'household.assignees'. */
+  assignees?: string[] | null;
   private: boolean;
   template_key: string | null;
   notes: string | null;
@@ -649,6 +652,8 @@ export interface GroupEvent {
   private: boolean;
   /** The household member the event is for; null = everyone. Absent on servers older than 'calendar.event-assignee'. */
   assigned_to?: string | null;
+  /** Everyone the event is for, first = assigned_to (assignees.ts). Absent on servers older than 'household.assignees'. */
+  assignees?: string[] | null;
   /** Days before the event a push reminder goes out (0 = on the day). Null or absent = a week and a day before (event-reminders.ts); [] = none. */
   reminder_days?: number[] | null;
   /** The Budget line for this event's tickets (cost_items, category "outing"), when there is one. */

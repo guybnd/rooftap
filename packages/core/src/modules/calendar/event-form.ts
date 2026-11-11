@@ -5,12 +5,13 @@ import type { EventCategory, GroupEvent } from '../../types';
 import { localDateOf, localDateTimeToISO, localTimeOf, todayISO } from '../../date-utils';
 import type { EventFormFields } from './event-import';
 import { eventReminderDays } from './event-reminders';
+import { assigneePatch, assigneesOf } from '../../assignees';
 import type { TravelMode } from './event-travel';
 
 export interface EventForm extends EventFormFields {
   private: boolean;
-  /** Who the event is for; null = everyone. */
-  assigned_to: string | null;
+  /** Who the event is for, first picked first; [] = everyone. */
+  assignees: string[];
   reminder_days: number[];
   /** Dollars on the form; the Budget keeps cents. */
   cost: number | null;
@@ -35,7 +36,7 @@ export function initialEventForm(event: GroupEvent | null | undefined, defaults:
     title: event?.title || '',
     category: (event?.category ?? 'general') as EventCategory,
     private: event?.private ?? false,
-    assigned_to: event?.assigned_to ?? null,
+    assignees: event ? assigneesOf(event) : [],
     start_date: event ? localDateOf(event.starts_at) : defaultDate || todayISO(),
     start_time: event ? localTimeOf(event.starts_at) : defaultTime || '09:00',
     end_date: event?.ends_at ? localDateOf(event.ends_at) : '',
@@ -61,6 +62,8 @@ export interface EventSaveContext {
   travelMinutes: number | null | undefined;
   /** The server has events.assigned_to ('calendar.event-assignee'); off, the field isn't written. */
   assignees?: boolean;
+  /** The server has events.assignees ('household.assignees'); off, only the first person is kept. */
+  assigneeList?: boolean;
 }
 
 /**
@@ -93,7 +96,7 @@ export function eventFromForm(form: EventForm, ctx: EventSaveContext): { event: 
     reminder_days: form.reminder_days,
     travel_mode: travelMode,
     travel_minutes,
-    ...(ctx.assignees ? { assigned_to: form.assigned_to } : {}),
+    ...(ctx.assignees ? assigneePatch(form.assignees, !!ctx.assigneeList) : {}),
   };
   const costCents = ctx.showBudget && form.cost ? Math.round(form.cost * 100) : null;
   if (event) return { event: { ...event, ...fields }, costCents };

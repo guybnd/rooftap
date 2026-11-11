@@ -4,6 +4,7 @@ export const calendarModule = defineModule({
   id: 'calendar',
   label: 'Calendar',
   description: 'Household events and everything with a date, in one view.',
+  feeds: 'Shows everything with a date from your other tiles',
   askStarters: ["Find a free evening for dinner with friends", "Block out Saturday morning for the garden"],
   iconId: 'calendar-days',
   defaultEnabled: true,

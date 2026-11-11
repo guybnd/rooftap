@@ -66,6 +66,28 @@ export function Avatar({ userId, profiles, size = 24, ringed = false }: { userId
   );
 }
 
+/** Several people's faces, overlapped, up to `max`, then "+N". One id renders a plain Avatar. */
+export function AvatarStack({ ids, profiles, size = 22, max = 3 }: { ids: readonly string[]; profiles: MemberProfiles; size?: number; max?: number }) {
+  if (ids.length === 0) return null;
+  if (ids.length === 1) return <Avatar userId={ids[0]} profiles={profiles} size={size} />;
+  const shown = ids.slice(0, max);
+  const more = ids.length - shown.length;
+  return (
+    <View className="flex-row items-center" accessibilityLabel={ids.map((id) => memberLabel(id, profiles)).join(', ')}>
+      {shown.map((id, i) => (
+        <View key={id} style={{ marginLeft: i === 0 ? 0 : -size * 0.3, borderRadius: size, padding: 1 }} className="bg-background">
+          <Avatar userId={id} profiles={profiles} size={size} />
+        </View>
+      ))}
+      {more > 0 && (
+        <View style={{ marginLeft: -size * 0.3, width: size + 2, height: size + 2, borderRadius: size }} className="items-center justify-center border border-background bg-muted">
+          <Text style={{ fontSize: size * 0.4 }} className="font-medium text-muted-foreground">+{more}</Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
 export interface AssigneePickerProps {
   value: string | null;
   groupMembers: GroupMember[];
@@ -77,6 +99,8 @@ export interface AssigneePickerProps {
   onChange: (userId: string) => void;
   showLabel?: boolean;
   className?: string;
+  /** Everyone the item is for, first = value; more than one shows their faces stacked. A pick sets one person. */
+  people?: readonly string[];
 }
 
 export function AssigneePicker({
@@ -88,6 +112,7 @@ export function AssigneePicker({
   onChange,
   showLabel = false,
   className,
+  people,
 }: AssigneePickerProps) {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState('');
@@ -114,7 +139,9 @@ export function AssigneePicker({
         accessibilityLabel={value ? `Assigned to ${memberLabel(value, memberProfiles)}` : 'Unassigned'}
         className="flex-row items-center gap-1.5 disabled:opacity-50"
       >
-        {value ? (
+        {people && people.length > 1 ? (
+          <AvatarStack ids={people} profiles={memberProfiles} size={22} max={2} />
+        ) : value ? (
           <Avatar userId={value} profiles={memberProfiles} size={22} ringed={mine} />
         ) : (
           <View className="h-[22px] w-[22px] items-center justify-center rounded-full border border-dashed border-warning/60">

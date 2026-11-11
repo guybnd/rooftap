@@ -218,7 +218,13 @@ export function AppSidebar({ children }: { children: React.ReactNode }) {
   }, [open]);
 
   const isAuthPage =
-    pathname === "/login" || pathname === "/callback" || segment === "landing" || pathname.startsWith("/oauth/");
+    pathname === "/login" ||
+    pathname === "/callback" ||
+    segment === "landing" ||
+    pathname.startsWith("/oauth/") ||
+    // Account screens that work signed out (sign up, reset, invites, deletion).
+    ["/signup", "/forgot-password", "/reset-password", "/delete-account"].includes(pathname) ||
+    pathname.startsWith("/join/");
   if (isAuthPage) return <>{children}</>;
 
   const isActive = (href: string) => {

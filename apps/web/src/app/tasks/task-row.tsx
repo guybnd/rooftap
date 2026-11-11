@@ -37,6 +37,7 @@ import { EntityComments } from '@/components/entity-comments';
 import { TaskChecklistPanel } from './task-checklist-panel';
 import { completion } from '@homeup/core';
 import { AssigneePicker } from '../setup/assignee-picker';
+import { assigneesOf } from '@homeup/core';
 import { memberLabel } from '../setup/member-label';
 import { PopMenu } from '../setup/pop-menu';
 import { SwipeActions, type SwipeConfig } from '@/components/ui/swipe-actions';
@@ -741,6 +742,7 @@ export function TaskRow({
       <ListItemTrailing>
         <AssigneePicker
           value={task.assigned_to}
+          people={assigneesOf(task)}
           groupMembers={groupMembers}
           memberProfiles={memberProfiles}
           currentUserId={currentUserId}

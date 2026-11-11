@@ -1088,12 +1088,11 @@
   }
 
   /* Hearth §13 "Living edge": the Rooftap spectrum round the Assistant's
-     chat. A conic gradient masked to a ring over the card's edge, so its
+     chat. A conic gradient masked to a ring, on its own element over the card's edge so its per-frame turn restyles only the ring. Its
      width can change without moving the content. useSpectrumEdge
      (components/spectrum-edge.ts) turns it and sets its width each frame
      from core ASSISTANT_EDGE_*; reduced motion holds it still. */
-  .spectrum-edge::before {
-    content: "";
+  .spectrum-edge {
     position: absolute;
     inset: 0;
     z-index: 1;
@@ -1105,7 +1104,7 @@
     mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
     pointer-events: none;
   }
-  [data-theme="e-ink"] .spectrum-edge::before {
+  [data-theme="e-ink"] .spectrum-edge {
     background: currentColor;
   }
 

@@ -65,6 +65,17 @@ function chainable(rows: Record<string, unknown>[], singleRow: unknown) {
       filtered = filtered.filter((r) => String(r[col]).toLowerCase() === val.toLowerCase());
       return builder;
     },
+    in: (col: string, vals: unknown[]) => {
+      filtered = filtered.filter((r) => vals.includes(r[col]));
+      return builder;
+    },
+    // The privacy layer's write guard: "private.eq.false,assigned_to.eq.<me>".
+    or: (expr: string) => {
+      const parts = expr.split(",").map((p) => p.split(".eq."));
+      filtered = filtered.filter((r) => parts.some(([col, val]) => String(r[col] ?? false) === val));
+      return builder;
+    },
+    not: () => builder,
     limit: () => builder,
     gte: () => builder,
     lte: () => builder,

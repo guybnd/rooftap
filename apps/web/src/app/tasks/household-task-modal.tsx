@@ -23,13 +23,17 @@ import {
   timeValueLabel,
   todayISO,
   useModules,
+  assigneePatch,
+  assigneesOf,
+  peopleLabel,
+  toggleAssignee,
   type HouseholdTask,
   type TaskRepeatFields,
   type TitleMatch,
 } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
 import { memberLabel } from '../setup/member-label';
-import { Avatar } from '../setup/assignee-picker';
+import { Avatar, AvatarStack } from '../setup/assignee-picker';
 import {
   DueEditor,
   ItemSheet,
@@ -64,7 +68,8 @@ interface Draft {
   dueDate: string;
   dueTime: string;
   priority: Priority;
-  assignedTo: string;
+  /** Who it is for, first picked first; [] = anyone. */
+  assignees: string[];
   repeat: TaskRepeatFields;
   notes: string;
 }
@@ -86,7 +91,13 @@ interface HouseholdTaskModalProps {
 
 export function HouseholdTaskModal({ isOpen, task, groupId, defaultTitle, defaultDueDate, defaultDueTime, onClose, onSave, onDelete }: HouseholdTaskModalProps) {
   const { groupMembers, memberProfiles, currentUserId } = useDataCache();
-  const rules = useModules().server('tasks.repeat-rules');
+  const modules = useModules();
+  const rules = modules.server('tasks.repeat-rules');
+  // Several people needs the assignees list; an older server keeps one.
+  const assigneeList = modules.server('household.assignees');
+  const nextPeople = (ids: string[], id: string) =>
+    !id ? [] : assigneeList ? toggleAssignee(ids, id) : ids[0] === id ? ids : [id];
+  const addPerson = (ids: string[], id: string) => (ids.includes(id) ? ids : assigneeList ? [...ids, id] : [id]);
   const today = todayISO();
 
   const buildInitialForm = useCallback((): Draft => {
@@ -97,7 +108,7 @@ export function HouseholdTaskModal({ isOpen, task, groupId, defaultTitle, defaul
         // Postgres `time` returns HH:MM:SS; the form keeps HH:MM. '' = all-day.
         dueTime: task.due_time ? task.due_time.slice(0, 5) : '',
         priority: (task.priority ?? 'medium') as Priority,
-        assignedTo: task.assigned_to ?? '',
+        assignees: assigneesOf(task),
         // repeat_rule rides along only when the task has one, so an older server never sees it.
         repeat: {
           recurrence_days: task.recurrence_days ?? null,
@@ -115,7 +126,7 @@ export function HouseholdTaskModal({ isOpen, task, groupId, defaultTitle, defaul
         dueDate: defaultDueDate || todayISO(),
         dueTime: defaultDueTime ?? '',
         priority: 'medium',
-        assignedTo: currentUserId ?? '',
+        assignees: currentUserId ? [currentUserId] : [],
         repeat: { recurrence_days: null },
         notes: '',
       }
@@ -159,7 +170,7 @@ export function HouseholdTaskModal({ isOpen, task, groupId, defaultTitle, defaul
       if (w.kind === 'due') {
         next = { ...next, dueDate: w.value, repeat: repeatFollowDue(next.repeat, next.dueDate || null, w.value, today, rules) };
       } else if (w.kind === 'time') next = { ...next, dueTime: w.value, dueDate: next.dueDate || today };
-      else next = { ...next, assignedTo: w.value };
+      else next = { ...next, assignees: addPerson(next.assignees, w.value) };
     }
     return next;
   };
@@ -174,9 +185,9 @@ export function HouseholdTaskModal({ isOpen, task, groupId, defaultTitle, defaul
     keepAsText('time');
     setForm((f) => ({ ...f, dueTime, dueDate: view.dueDate }));
   };
-  const pickWho = (assignedTo: string) => {
+  const pickWho = (id: string) => {
     keepAsText('who');
-    set({ assignedTo });
+    setForm((f) => ({ ...f, assignees: nextPeople(view.assignees, id) }));
   };
   // A repeat picked while a date word is lit keeps that date.
   const pickRepeat = (repeat: TaskRepeatFields) => setForm((f) => ({ ...f, repeat, dueDate: view.dueDate }));
@@ -199,7 +210,7 @@ export function HouseholdTaskModal({ isOpen, task, groupId, defaultTitle, defaul
       due_date,
       due_time: due_date ? f.dueTime || null : null,
       ...repeat,
-      assigned_to: f.assignedTo || null,
+      ...assigneePatch(f.assignees, assigneeList),
       priority: f.priority,
       notes: f.notes.trim() || null,
     };
@@ -263,10 +274,13 @@ export function HouseholdTaskModal({ isOpen, task, groupId, defaultTitle, defaul
     ],
     [groupMembers, memberProfiles]
   );
-  const whoLabel = view.assignedTo ? personFirstName(memberLabel(view.assignedTo, memberProfiles)) : 'Anyone';
+  const whoLabel = peopleLabel(
+    view.assignees.map((id) => personFirstName(memberLabel(id, memberProfiles))),
+    'Anyone'
+  );
   const whoFace = (size: number) =>
-    view.assignedTo ? <Avatar userId={view.assignedTo} profiles={memberProfiles} size={size} /> : <AnyoneFace size={size} />;
-  const whoEditor = <WhoEditor people={people} value={view.assignedTo} onChange={pickWho} />;
+    view.assignees.length > 0 ? <AvatarStack ids={view.assignees} profiles={memberProfiles} size={size} max={2} /> : <AnyoneFace size={size} />;
+  const whoEditor = <WhoEditor people={people} selected={view.assignees} many={assigneeList} onChange={pickWho} />;
 
   const quickFields: ItemSheetQuickField[] = [
     {
@@ -278,7 +292,7 @@ export function HouseholdTaskModal({ isOpen, task, groupId, defaultTitle, defaul
       trayLabel: 'Due',
       editor: <DueEditor value={view.dueDate} onChange={setDue} />,
     },
-    { id: 'who', label: whoLabel, icon: whoFace(18), set: !!view.assignedTo, lit: lit('who'), trayLabel: 'Who', editor: whoEditor },
+    { id: 'who', label: whoLabel, icon: whoFace(18), set: view.assignees.length > 0, lit: lit('who'), trayLabel: 'Who', editor: whoEditor },
   ];
 
   const firstNoteLine = form.notes.trim().split('\n')[0];
@@ -317,7 +331,7 @@ export function HouseholdTaskModal({ isOpen, task, groupId, defaultTitle, defaul
               <TimeEditor value={view.dueTime} onChange={(dueTime) => pickTime(dueTime)} />
             </PropertyRow>
           )}
-          <PropertyRow id="who" leading={whoFace(28)} label="Who" value={whoLabel} valueSet={!!view.assignedTo}>
+          <PropertyRow id="who" leading={whoFace(28)} label="Who" value={whoLabel} valueSet={view.assignees.length > 0}>
             {whoEditor}
           </PropertyRow>
           <PropertyRow id="repeat" leading={<PropertyIcon Icon={Repeat} />} label="Repeat" value={repeatValueLabel(view.repeat)} valueSet={!!view.repeat.recurrence_days}>
@@ -346,16 +360,29 @@ export function HouseholdTaskModal({ isOpen, task, groupId, defaultTitle, defaul
   );
 }
 
-/** Who: faces to tap. A pick is final, so the row (or tray) closes. */
-function WhoEditor({ people, value, onChange }: { people: PersonOption[]; value: string; onChange: (id: string) => void }) {
+/**
+ * Who: faces to tap. Each face adds or takes off a person and the row stays
+ * open; Anyone clears and closes. On an older server one pick is final.
+ */
+function WhoEditor({
+  people,
+  selected,
+  many,
+  onChange,
+}: {
+  people: PersonOption[];
+  selected: string[];
+  many: boolean;
+  onChange: (id: string) => void;
+}) {
   const close = useClosePropertyRow();
   return (
     <PeoplePicker
       people={people}
-      value={value}
+      selected={selected}
       onChange={(id) => {
         onChange(id);
-        close();
+        if (!many || !id) close();
       }}
     />
   );

@@ -78,7 +78,10 @@ export const metadata: Metadata = {
   title: "Rooftap",
   description: "Welcome home. One calm app for the whole household.",
   manifest: "/manifest.json",
-  icons: { icon: "/icon.svg" },
+  // Safari on iPhone and iPad reads the Home Screen icon, name and full-screen
+  // mode from these tags first, and older iOS versions read only these.
+  icons: { icon: "/icon.svg", apple: { url: "/apple-touch-icon.png", sizes: "180x180" } },
+  appleWebApp: { capable: true, title: "Rooftap", statusBarStyle: "default" },
 };
 
 export const viewport: Viewport = {

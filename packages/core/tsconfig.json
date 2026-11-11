@@ -1,7 +1,10 @@
 {
   "extends": "@homeup/config/tsconfig.base.json",
   "compilerOptions": {
-    "noEmit": true
+    "noEmit": true,
+    // Tests import the Edge Functions' pure helpers (supabase/functions/_shared),
+    // which Deno needs to name with their .ts extension.
+    "allowImportingTsExtensions": true
   },
   "include": ["src"]
 }

@@ -54,6 +54,7 @@ supabase/.temp/
 !.github/workflows/
 !.github/actions/
 !.github/readme/
+!.github/pull_request_template.md
 
 # OS
 .DS_Store

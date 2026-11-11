@@ -4,6 +4,7 @@ export const mcpModule = defineModule({
   id: 'mcp',
   label: 'AI assistants (MCP)',
   description: 'Lets an AI assistant read and update your household through MCP.',
+  feeds: 'Lets your own AI assistant read and update your household',
   iconId: 'bot',
   defaultEnabled: false,
   enhances: ['household', 'calendar', 'costs', 'groceries'],

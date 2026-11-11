@@ -360,6 +360,9 @@ services:
       # Whether crash reports go on to the Rooftap team (see .env.example).
       ROOFTAP_CRASH_REPORTS: ${ROOFTAP_CRASH_REPORTS:-}
       ROOFTAP_CRASH_UPSTREAM: ${ROOFTAP_CRASH_UPSTREAM:-}
+      # Terms and Privacy links on the sign-in screens (see .env.example).
+      ROOFTAP_TERMS_URL: ${ROOFTAP_TERMS_URL:-}
+      ROOFTAP_PRIVACY_URL: ${ROOFTAP_PRIVACY_URL:-}
       ASSISTANT_MODEL_PRICES: ${ASSISTANT_MODEL_PRICES:-}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-}

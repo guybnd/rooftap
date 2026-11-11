@@ -6,6 +6,7 @@ vi.mock("@/lib/member-names", () => ({ memberNames: vi.fn(async () => new Map([[
 import { MCP_TOOLS } from "@/lib/mcp-tools";
 import { costCategoryFrom, householdTools } from "./household-tools";
 import type { createAdminClient } from "@/lib/supabase/admin";
+import { fakeAdmin } from "./fake-admin";
 
 const ctx = {
   admin: {} as ReturnType<typeof createAdminClient>,
@@ -36,35 +37,7 @@ describe("householdTools", () => {
   });
 });
 
-// A tiny in-memory stand-in for the admin client: eq/in filter rows, update
-// patches the matching rows, insert appends. Enough to drive the handlers.
 type Row = Record<string, unknown>;
-function fakeAdmin(tables: Record<string, Row[]>) {
-  function builder(table: string) {
-    const filters: ((r: Row) => boolean)[] = [];
-    let op: { kind: "select" } | { kind: "update"; patch: Row } | { kind: "insert"; row: Row | Row[] } = { kind: "select" };
-    const rows = () => (tables[table] ??= []).filter((r) => filters.every((f) => f(r)));
-    const b = {
-      select: () => b,
-      eq: (k: string, v: unknown) => (filters.push((r) => r[k] === v), b),
-      in: (k: string, vs: unknown[]) => (filters.push((r) => vs.includes(r[k])), b),
-      gte: (k: string, v: string) => (filters.push((r) => String(r[k]) >= v), b),
-      lte: (k: string, v: string) => (filters.push((r) => String(r[k]) <= v), b),
-      lt: (k: string, v: string) => (filters.push((r) => String(r[k]) < v), b),
-      ilike: (k: string, v: string) => (filters.push((r) => String(r[k]).toLowerCase() === v.replace(/\\(.)/g, "$1").toLowerCase()), b),
-      maybeSingle: () => Promise.resolve({ data: rows()[0] ?? null, error: null }),
-      update: (patch: Row) => ((op = { kind: "update", patch }), b),
-      insert: (row: Row | Row[]) => ((op = { kind: "insert", row }), b),
-      then: (resolve: (v: { data: Row[] | null; error: null }) => unknown) => {
-        if (op.kind === "insert") (tables[table] ??= []).push(...(Array.isArray(op.row) ? op.row : [op.row]));
-        if (op.kind === "update") for (const r of rows()) Object.assign(r, (op as { patch: Row }).patch);
-        return Promise.resolve({ data: op.kind === "select" ? rows() : null, error: null }).then(resolve);
-      },
-    };
-    return b;
-  }
-  return { from: builder } as unknown as ReturnType<typeof createAdminClient>;
-}
 
 const run = async (tables: Record<string, Row[]>, name: string, args: Row, enabled = ctx.enabled) => {
   const t = householdTools({ ...ctx, admin: fakeAdmin(tables), groupId: "g1", enabled }).find((x) => x.name === name)!;

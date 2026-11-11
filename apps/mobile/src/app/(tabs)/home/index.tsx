@@ -70,6 +70,7 @@ import {
   TaskChecklistPanel,
   toast,
   ActionMenu,
+  AvatarStack,
   type ActionMenuAnchor,
   type NowCardPagerItem,
 } from '@homeup/ui';
@@ -141,6 +142,7 @@ import { useHeroModuleConfig } from '@/features/home/use-hero-module-config';
 import { HeroCustomizeSheet } from '@/features/home/hero-customize-sheet';
 import { FeedControls, type FeedTypeOption } from '@/features/home/feed-heading';
 import { TonightMeal } from '@/features/home/tonight-meal';
+import { FirstWeek } from '@/features/home/first-week';
 import { HOME_SPACE_VIEWS, type HomeSpaceProps } from '@/features/home/home-spaces';
 import { formatTime12h, homeFeedGates, localDateISO } from '@homeup/core';
 import { HeroTaskRow } from '@/features/tasks/task-row';
@@ -895,7 +897,11 @@ function HomeSectionBody() {
             </Pressable>
           )}
           {/* Nobody to show (an occasion, an unattributed event): no avatar, rather than a "U" for unknown. */}
-          {item.assignedTo && <PersonAvatar userId={item.assignedTo} profiles={memberProfiles} size={22} />}
+          {item.assignees && item.assignees.length > 1 ? (
+            <AvatarStack ids={item.assignees} profiles={memberProfiles} size={22} />
+          ) : (
+            item.assignedTo && <PersonAvatar userId={item.assignedTo} profiles={memberProfiles} size={22} />
+          )}
         </ListItemTrailing>
       </ListItem>
     );
@@ -1102,6 +1108,15 @@ function HomeSectionBody() {
             </View>
           )}
         </View>
+
+        {/* First week: a new household's first steps, under the lede. */}
+        <FirstWeek
+          groupId={group?.id}
+          groupCreatedAt={group?.created_at}
+          memberCount={groupMembers.length}
+          hasCost={costItemsList.length > 0}
+          style={showIf(!shownLens)}
+        />
 
         {/* Hearth v2 (Pulse): the Now card, paging through the next few
             things. Tap opens the item; only a task or reminder can be slid to

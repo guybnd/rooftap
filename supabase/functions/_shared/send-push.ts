@@ -7,6 +7,15 @@
 // client and Next app use, so no key reformatting is needed.
 import webpush from "npm:web-push@3.6.7";
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.111.0";
+import {
+  expoMessage,
+  isStaleWebPushStatus,
+  readExpoTickets,
+  type ExpoPushTicket,
+  type PushPayload,
+} from "./notify-plans.ts";
+
+export type { PushPayload };
 
 // Configure VAPID only when both keys are present. Doing this at module load with
 // `!` non-null assertions would throw on a missing secret and turn the whole
@@ -65,14 +74,6 @@ export interface PushRow {
   endpoint: string;
   p256dh: string;
   auth: string;
-}
-
-export interface PushPayload {
-  title: string;
-  body: string;
-  url: string;
-  // tag dedupes one logical notification across a user's devices.
-  tag: string;
 }
 
 /** Service-role admin client (bypasses RLS — callers must scope queries explicitly). */
@@ -143,12 +144,7 @@ export async function pruneDeviceTokens(admin: SupabaseClient, tokens: string[])
 
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 const EXPO_PUSH_CHUNK_SIZE = 100;
-
-interface ExpoPushTicket {
-  status: "ok" | "error";
-  message?: string;
-  details?: { error?: string };
-}
+const EXPO_PUSH_TIMEOUT_MS = 10_000;
 
 /**
  * Send one payload to a set of Expo push tokens, chunked at Expo's 100-message
@@ -167,29 +163,20 @@ export async function sendExpoPush(
 
   for (let i = 0; i < tokens.length; i += EXPO_PUSH_CHUNK_SIZE) {
     const chunk = tokens.slice(i, i + EXPO_PUSH_CHUNK_SIZE);
-    const messages = chunk.map((t) => ({
-      to: t.expo_push_token,
-      title: payload.title,
-      body: payload.body,
-      data: { url: payload.url },
-    }));
+    const chunkTokens = chunk.map((t) => t.expo_push_token);
     try {
       const res = await fetch(EXPO_PUSH_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify(messages),
+        body: JSON.stringify(chunkTokens.map((token) => expoMessage(token, payload))),
+        signal: AbortSignal.timeout(EXPO_PUSH_TIMEOUT_MS),
       });
       const json = await res.json().catch(() => null);
       const tickets: ExpoPushTicket[] = json?.data ?? [];
-      tickets.forEach((ticket, idx) => {
-        if (ticket.status === "ok") {
-          sent++;
-        } else if (ticket.details?.error === "DeviceNotRegistered") {
-          staleTokens.push(chunk[idx].expo_push_token);
-        } else {
-          console.error("Expo push send failed", ticket);
-        }
-      });
+      const read = readExpoTickets(chunkTokens, tickets);
+      sent += read.sent;
+      staleTokens.push(...read.stale);
+      for (const ticket of read.failed) console.error("Expo push send failed", ticket);
     } catch (err) {
       console.error("Expo push request failed", err);
     }
@@ -210,7 +197,7 @@ export async function sendWebPush(sub: PushRow, payload: PushPayload): Promise<S
     return "ok";
   } catch (err) {
     const status = (err as { statusCode?: number }).statusCode;
-    if (status === 404 || status === 410) return "stale";
+    if (isStaleWebPushStatus(status)) return "stale";
     console.error("web-push send failed", status, err);
     return "error";
   }

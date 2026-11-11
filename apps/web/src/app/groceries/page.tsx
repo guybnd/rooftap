@@ -1676,8 +1676,9 @@ export default function GroceriesPage() {
       )}
 
       {/* Add custom aisle — HOUP-317: also gated to By aisle, so a list
-          showing no aisles never offers one. */}
-      {!hideNonNeeded && !searching && !selectMode && sortMode === 'aisle' && (
+          showing no aisles never offers one. An empty list offers adding
+          an item, not arranging aisles. */}
+      {!hideNonNeeded && !searching && !selectMode && sortMode === 'aisle' && items.length > 0 && (
         <div>
           {showAddAisle ? (
             <div className="space-y-3 rounded-3xl border border-border/60 bg-card p-4 shadow-[var(--card-shadow)]">

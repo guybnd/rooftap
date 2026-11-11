@@ -5,34 +5,9 @@ vi.mock("@/lib/member-names", () => ({ memberNames: vi.fn(async () => new Map([[
 
 import { addDaysISO, type ModuleId } from "@homeup/core";
 import { householdTools } from "./household-tools";
-import type { createAdminClient } from "@/lib/supabase/admin";
+import { fakeAdmin } from "./fake-admin";
 
-// The same in-memory stand-in for the admin client as household-tools.test.ts.
 type Row = Record<string, unknown>;
-function fakeAdmin(tables: Record<string, Row[]>) {
-  function builder(table: string) {
-    const filters: ((r: Row) => boolean)[] = [];
-    let op: { kind: "select" } | { kind: "update"; patch: Row } | { kind: "insert"; row: Row | Row[] } = { kind: "select" };
-    const rows = () => (tables[table] ??= []).filter((r) => filters.every((f) => f(r)));
-    const b = {
-      select: () => b,
-      eq: (k: string, v: unknown) => (filters.push((r) => r[k] === v), b),
-      in: (k: string, vs: unknown[]) => (filters.push((r) => vs.includes(r[k])), b),
-      gte: (k: string, v: string) => (filters.push((r) => String(r[k]) >= v), b),
-      lte: (k: string, v: string) => (filters.push((r) => String(r[k]) <= v), b),
-      maybeSingle: () => Promise.resolve({ data: rows()[0] ?? null, error: null }),
-      update: (patch: Row) => ((op = { kind: "update", patch }), b),
-      insert: (row: Row | Row[]) => ((op = { kind: "insert", row }), b),
-      then: (resolve: (v: { data: Row[] | null; error: null }) => unknown) => {
-        if (op.kind === "insert") (tables[table] ??= []).push(...(Array.isArray(op.row) ? op.row : [op.row]));
-        if (op.kind === "update") for (const r of rows()) Object.assign(r, (op as { patch: Row }).patch);
-        return Promise.resolve({ data: op.kind === "select" ? rows() : null, error: null }).then(resolve);
-      },
-    };
-    return b;
-  }
-  return { from: builder } as unknown as ReturnType<typeof createAdminClient>;
-}
 
 const ALL = new Set<ModuleId>(["household", "rewards", "bins", "home-care", "shopper", "checklists", "recipes", "meals", "setup", "documents", "search"]);
 const today = new Date().toISOString().slice(0, 10);
@@ -201,7 +176,8 @@ describe("checklist, recipe and setup tools", () => {
       setup_items: [{ id: "x", group_id: "g1", name: "Secret", room: "Bedroom", private: true, assigned_to: "u2", status: "needed", sort_order: 0, ...live }],
     };
     const { body } = await run(tables, "create_setup_item", { name: "Curtain rail", room: "Bedroom", est_price: 4500 });
-    expect(tables.setup_items.at(-1)).toMatchObject({ name: "Curtain rail", status: "needed", sort_order: 1 });
+    // Ordered among the items this person sees, as the app does: the private one is not counted.
+    expect(tables.setup_items.at(-1)).toMatchObject({ name: "Curtain rail", status: "needed", sort_order: 0 });
     await run(tables, "update_setup_item", { item_id: body.id, status: "installed", actual_price: 3900 });
     expect(tables.setup_items.at(-1)).toMatchObject({ status: "installed", actual_price: 3900 });
     expect((await run(tables, "update_setup_item", { item_id: "x", status: "installed" })).res.isError).toBe(true);

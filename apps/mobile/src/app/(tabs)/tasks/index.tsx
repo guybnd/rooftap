@@ -99,6 +99,7 @@ import {
   type HouseholdTask,
   type TaskEditableField,
   type TaskRepeatFields,
+  isAssignedTo,
 } from '@homeup/core';
 // Direct path: the barrel deliberately doesn't export client hooks (they break
 // apps/web's server-route builds — see core/src/index.ts).
@@ -659,7 +660,7 @@ export default function TasksSectionScreen() {
   };
 
   // Client-side filter (mine only) — applied for display only.
-  const mineFiltered = mineOnly ? tasks.filter((t) => t.assigned_to && t.assigned_to === currentUserId) : tasks;
+  const mineFiltered = mineOnly ? tasks.filter((t) => isAssignedTo(t, currentUserId)) : tasks;
 
   // Fuzzy search narrows the already-filtered set, then feeds bucketing/grouping
   // below (FLUX-110). Empty query returns mineFiltered unchanged.

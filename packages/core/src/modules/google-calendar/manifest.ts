@@ -4,6 +4,7 @@ export const googleCalendarModule = defineModule({
   id: 'google-calendar',
   label: 'Google Calendar',
   description: 'Sends tasks and viewings to Google Calendar and shows your Google events.',
+  feeds: 'Sends your dates to Google Calendar',
   iconId: 'calendar-sync',
   defaultEnabled: false,
   requires: ['calendar'],

@@ -6,7 +6,18 @@ import * as React from 'react';
 import { Pressable, View } from 'react-native';
 import { ChevronDown, ChevronRight, Sparkles } from 'lucide-react-native';
 import { LeadingTile, ListGroup, ListItem, ListItemContent, ListItemLeading, ListItemMeta, ListItemTitle, ListItemTrailing, Text } from '@homeup/ui';
-import { fixesLabel, getModule, getSection, todayISO, whatsNewDayLabel, type WhatsNewEntry, type WhatsNewView } from '@homeup/core';
+import {
+  changesLabel,
+  fixesLabel,
+  getModule,
+  getSection,
+  initialOpenGroups,
+  todayISO,
+  whatsNewDayLabel,
+  whatsNewGroupKey,
+  type WhatsNewEntry,
+  type WhatsNewView,
+} from '@homeup/core';
 import { sectionIcons } from '@/lib/section-icons';
 
 /** The tile's section: the entry's own, or Home for app-wide changes. */
@@ -80,30 +91,58 @@ export interface WhatsNewGroupsProps {
   onOpen?: (link: string) => void;
   /** "14 more" row under the groups. */
   onMore?: () => void;
-  /** Header every group, even a single one (the history list). */
+  /** Header every group, even a single one. */
   alwaysHeaders?: boolean;
+  /** The history: only the newest release starts open, the rest fold to their header (rows aren't rendered while folded). */
+  collapsible?: boolean;
 }
 
-export function WhatsNewGroups({ view, onOpen, onMore, alwaysHeaders }: WhatsNewGroupsProps) {
+export function WhatsNewGroups({ view, onOpen, onMore, alwaysHeaders, collapsible }: WhatsNewGroupsProps) {
   const today = todayISO();
-  const headers = alwaysHeaders || view.showVersions;
+  const headers = alwaysHeaders || collapsible || view.showVersions;
   const footer = view.moreCount > 0 || view.fixes.length > 0;
+  const [openKeys, setOpenKeys] = React.useState(() => initialOpenGroups(view));
+  const toggle = (key: string) =>
+    setOpenKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   return (
     <View className="gap-4">
-      {view.groups.map((g) => (
-        <View key={g.version ?? 'latest'}>
-          {headers && (
-            <Text className={MICRO_LABEL}>
-              {g.version ?? 'Latest'} · {whatsNewDayLabel(g.date, today)}
-            </Text>
-          )}
-          <ListGroup bordered={false} className="overflow-hidden rounded-[20px] bg-muted">
-            {g.entries.map((e) => (
-              <WhatsNewRow key={e.id} entry={e} onOpen={onOpen} />
-            ))}
-          </ListGroup>
-        </View>
-      ))}
+      {view.groups.map((g) => {
+        const key = whatsNewGroupKey(g);
+        const label = `${g.version ?? 'Latest'} · ${whatsNewDayLabel(g.date, today)}`;
+        const open = !collapsible || openKeys.has(key);
+        const Chevron = open ? ChevronDown : ChevronRight;
+        return (
+          <View key={key}>
+            {collapsible ? (
+              <Pressable
+                onPress={() => toggle(key)}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: open }}
+                accessibilityLabel={`${label}, ${changesLabel(g.entries.length)}`}
+                className="min-h-11 flex-row items-center gap-1.5 px-1 pb-1.5"
+              >
+                <Chevron size={14} className="text-muted-foreground" />
+                <Text className="flex-1 text-micro-label uppercase text-muted-foreground">{label}</Text>
+                <Text className="text-caption text-muted-foreground" style={{ fontVariant: ['tabular-nums'] }}>{changesLabel(g.entries.length)}</Text>
+              </Pressable>
+            ) : (
+              headers && <Text className={MICRO_LABEL}>{label}</Text>
+            )}
+            {open && (
+              <ListGroup bordered={false} className="overflow-hidden rounded-[20px] bg-muted">
+                {g.entries.map((e) => (
+                  <WhatsNewRow key={e.id} entry={e} onOpen={onOpen} />
+                ))}
+              </ListGroup>
+            )}
+          </View>
+        );
+      })}
       {footer && (
         <ListGroup bordered={false} className="overflow-hidden rounded-[20px] bg-muted">
           {view.moreCount > 0 && (

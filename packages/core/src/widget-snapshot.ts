@@ -9,7 +9,7 @@
 // the daily rollover and the next snapshot write.
 import type { HeroItem, HeroItemType } from './hero';
 import { daysBetweenISO } from './date-utils';
-import { groupByFeedDay, heroItemOpenTarget, heroItemSectionId } from './feed';
+import { groupByFeedDay, heroItemOpenTarget, heroItemSectionId, isMine } from './feed';
 import { compareStrings } from './sort';
 import type { GroceryItem } from './types';
 
@@ -271,7 +271,7 @@ export function buildWidgetSnapshotItems(
       due_date: item.dueDate,
       due_time: item.dueTime,
       priority: item.task?.priority ?? null,
-      assignedToMe: !!item.assignedTo && item.assignedTo === currentUserId,
+      assignedToMe: isMine(item, currentUserId ?? null),
       assigned: !!item.assignedTo,
       sourceUpdatedAt: item.task?.updated_at ?? null,
       type: item.type,

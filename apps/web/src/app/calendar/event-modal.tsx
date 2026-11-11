@@ -38,6 +38,7 @@ import {
   EVENT_REMINDER_OPTIONS,
   MAX_EVENT_REMINDER_DAYS,
   addReminderDay,
+  toggleAssignee,
   customReminderDays,
   parseReminderDays,
   personFirstName,
@@ -124,8 +125,11 @@ export function EventModal({
   const { group, userSettings, groupMembers, memberProfiles } = useDataCache();
   const hasHome = group?.home_lat != null && group?.home_lng != null;
   // Who: needs the events.assigned_to column, and someone else to pick.
-  const assignees = useModules().server('calendar.event-assignee');
-  const showWho = assignees && groupMembers.length > 1;
+  const modules = useModules();
+  const hasWho = modules.server('calendar.event-assignee');
+  // Several people needs the assignees list; an older server keeps one.
+  const assigneeList = modules.server('household.assignees');
+  const showWho = hasWho && groupMembers.length > 1;
   const people = useMemo<PersonOption[]>(
     () => [
       { id: '', name: 'Everyone', face: <AnyoneFace /> },
@@ -363,7 +367,7 @@ export function EventModal({
     );
 
   const handleSubmit = () => {
-    const saved = eventFromForm(formData, { event, groupId, newId: crypto.randomUUID(), showBudget, travelMinutes: travel.minutes, assignees });
+    const saved = eventFromForm(formData, { event, groupId, newId: crypto.randomUUID(), showBudget, travelMinutes: travel.minutes, assignees: hasWho, assigneeList });
     if (!saved) return;
     onSave(saved.event, saved.costCents);
     if (!event?.id && showDocuments && pendingAttachment) void linkPendingAttachment(saved.event.id);
@@ -479,8 +483,13 @@ export function EventModal({
           <FieldRow label="Who">
             <PeoplePicker
               people={people}
-              value={formData.assigned_to ?? ''}
-              onChange={(id) => setFormData((f) => ({ ...f, assigned_to: id || null }))}
+              selected={formData.assignees}
+              onChange={(id) =>
+                setFormData((f) => ({
+                  ...f,
+                  assignees: !id ? [] : assigneeList ? toggleAssignee(f.assignees, id) : f.assignees[0] === id ? [] : [id],
+                }))
+              }
             />
           </FieldRow>
         )}

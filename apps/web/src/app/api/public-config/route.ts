@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { parseModuleList } from "@homeup/core";
 import { serverRelease } from "@/lib/app-release";
+import { serverLegalLinks } from "@/lib/legal-links";
 
 // HOUP-69: runtime server-config endpoint for the native app's first-run
 // server picker (Official vs self-host). Deliberately reads a plain runtime
@@ -42,9 +43,11 @@ export async function GET() {
   // The release this server was built from, the oldest phone build it serves
   // and the newest phone release (packages/core/src/app-release.ts).
   const { version, minAppRuntime, latestApp } = await serverRelease();
+  // Terms and Privacy Policy links for the sign-in screens (lib/legal-links.ts).
+  const legal = serverLegalLinks();
 
   return NextResponse.json(
-    { supabaseUrl, supabaseAnonKey, modules, schemaVersion, version, minAppRuntime, latestApp },
+    { supabaseUrl, supabaseAnonKey, modules, schemaVersion, version, minAppRuntime, latestApp, legal },
     {
       headers: {
         ...CORS_HEADERS,

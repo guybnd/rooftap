@@ -74,6 +74,12 @@ Registration is open until the first account exists. Then the auth server closes
 
 **More members.** The owner adds every later account in **Settings → Users**. This works with sign-up closed, because it uses the service-role admin client, not the public sign-up endpoint.
 
+**Invite links.** An owner can share an invite link or QR code from **Settings → Home**. The person who opens it can make an account on the link's page and join the home, also while sign-up is closed. The link is the permission: the web app makes the account with the service-role client. A link works for 30 days and makes at most 20 accounts. A new link replaces the old one, and the owner can turn a link off.
+
+**Sign-up and password reset.** The sign-in screens show "Make an account" only when the auth server takes new accounts, and "Forgot password?" only when it sends email. The stock stack does neither, so both links stay hidden. When you add a mail server and open registration, both links appear. Add `<your site>/reset-password` and `<your site>/login` to the auth server's allowed redirect URLs.
+
+**Deleting an account.** A person can delete their account in **Settings → About**, or on the public page `/delete-account`. A home that they share stays with the others, and the next member becomes its owner when needed. The things that they added stay with the home. A home where they are the only member is deleted, with its files.
+
 **Open registration again.** Set `GOTRUE_DISABLE_SIGNUP=false` in `.env` and restart `auth` (`docker compose up -d auth`). The app has no switch for this on purpose: a stolen admin session cannot open registration.
 
 **A locked-out owner.** The stack has no mailer, so there is no "forgot password" email. To reset the owner password, use the service-role key from a one-off script (`admin.auth.admin.updateUserById(ownerId, { password })`), or connect to Postgres in the `db` container. The app has no path for this on purpose: only a person with access to the host can recover the owner.
@@ -85,6 +91,8 @@ Registration is open until the first account exists. Then the auth server closes
 **A member who wants Google sign-in.** The owner creates the account in **Settings → Users** with the member's real Google address, not a username. At sign-in, the auth server finds the account by its email, so "Continue with Google" signs the member in. Rooftap cannot link a Google identity to an existing password account yet.
 
 **Google Calendar.** You can connect Google Calendar only while you are signed in with the same Google account. The `calendar-callback` route refuses to link a calendar to an email-and-password session.
+
+**Terms and privacy links.** The hosted service shows a line under the sign-in buttons that links its Terms and Privacy pages. Your server shows no line, because those pages describe the hosted service. To link your own pages, set both `ROOFTAP_TERMS_URL` and `ROOFTAP_PRIVACY_URL` in `.env`. The web and phone sign-in screens then show the line.
 
 **Dev access.** The login page has a "Dev access" option. It works only when `.env` sets both `BYPASS_USERNAME` and `BYPASS_PASSWORD`. Without them, the route answers `503`. The first sign-in creates the account `<BYPASS_USERNAME>@homeup.local` with `BYPASS_PASSWORD`. A later change to `BYPASS_PASSWORD` does not change the password of that account. The same name and password also work in the phone app's normal sign-in.
 

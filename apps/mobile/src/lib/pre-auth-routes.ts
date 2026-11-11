@@ -7,4 +7,5 @@
 // onAuthStateChange fires its immediate INITIAL_SESSION event with session:
 // null the instant the screen mounts and bounces straight to /login before
 // the OAuth tokens are even parsed.
-export const PRE_AUTH_ROUTES = ['/server-picker', '/login', '/callback'];
+// /signup makes an account with no session yet.
+export const PRE_AUTH_ROUTES = ['/server-picker', '/login', '/callback', '/signup'];

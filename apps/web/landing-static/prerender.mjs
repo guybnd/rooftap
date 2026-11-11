@@ -6,7 +6,7 @@ const here = (p) => fileURLToPath(new URL(p, import.meta.url));
 const { render, hues } = await import(here("./dist-ssr/entry-server.mjs"));
 const signIn = process.env.VITE_SIGN_IN_URL || null;
 
-for (const page of ["index", "privacy"]) {
+for (const page of ["index", "self-host", "privacy"]) {
   const file = here(`./dist/${page}.html`);
   const html = readFileSync(file, "utf8");
   if (!html.includes("<!--app-->")) throw new Error(`${page}.html has no <!--app--> slot`);
@@ -16,4 +16,4 @@ for (const page of ["index", "privacy"]) {
   writeFileSync(file, out);
 }
 rmSync(here("./dist-ssr"), { recursive: true, force: true });
-console.log("prerendered index.html and privacy.html");
+console.log("prerendered index.html, self-host.html and privacy.html");

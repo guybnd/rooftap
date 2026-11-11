@@ -5,8 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getModulesSnapshot, MODULES, resetModulesStore, setModuleRows, type GroupModuleRow } from "@homeup/core";
 
 // Modules (.docs/modules.md, step 9): the first-run picker shows once, to the
-// owner of a household that has never chosen, with the defaults ticked, and
-// whatever it saves (the ticks, or the defaults on Skip) is a row per module.
+// owner of a household that has never chosen, on the Everyday set (the
+// defaults), and whatever it saves (the ticks, or the defaults on Escape) is
+// a row per module.
 const cache = vi.hoisted(() => ({
   group: { id: "group-a" } as { id: string } | null,
   isGroupOwner: true,
@@ -43,7 +44,12 @@ async function mount() {
   await act(async () => root.render(<ModulePicker />));
 }
 
-const button = (text: string) => Array.from(document.querySelectorAll("button")).find((b) => b.textContent === text);
+const button = (text: string) => Array.from(document.querySelectorAll("button")).find((b) => b.textContent?.startsWith(text));
+const radio = (label: string) =>
+  Array.from(document.querySelectorAll<HTMLButtonElement>('[role="radio"]')).find((b) => b.textContent?.includes(label));
+async function openOwnList() {
+  await act(async () => button("Choose myself")!.click());
+}
 const toggle = (label: string) =>
   Array.from(document.querySelectorAll<HTMLButtonElement>('[role="switch"]')).find((b) => b.getAttribute("aria-label") === label);
 const saved = () =>
@@ -54,48 +60,74 @@ describe("ModulePicker", () => {
   it("shows for the owner of a household that has never chosen, with the defaults ticked", async () => {
     setModuleRows([]);
     await mount();
-    expect(document.body.textContent).toContain("Choose what your household uses");
+    expect(document.body.textContent).toContain("What does your household need?");
+    expect(radio("Everyday")?.getAttribute("aria-checked")).toBe("true");
+    expect(button("Start with Everyday")).toBeDefined();
+    await openOwnList();
     for (const m of MODULES) expect(toggle(m.label)?.getAttribute("aria-checked")).toBe(String(m.defaultEnabled));
   });
 
   it("stays away for a household that has chosen, a member, or someone with an invitation", async () => {
     setModuleRows([{ group_id: "group-a", module_id: "household", enabled: true, updated_by: null, updated_at: "" }]);
     await mount();
-    expect(button("Continue")).toBeUndefined();
+    expect(button("Start with")).toBeUndefined();
 
     act(() => setModuleRows([]));
     cache.isGroupOwner = false;
     await mount();
-    expect(button("Continue")).toBeUndefined();
+    expect(button("Start with")).toBeUndefined();
 
     cache.isGroupOwner = true;
     cache.pendingInvitations = [{ id: "inv-1" }];
     await mount();
-    expect(button("Continue")).toBeUndefined();
+    expect(button("Start with")).toBeUndefined();
   });
 
-  it("Continue saves the ticks as a row per module and closes", async () => {
+  it("a set saves its tiles", async () => {
     setModuleRows([]);
     await mount();
+    await act(async () => radio("Moving house")!.click());
+    await act(async () => button("Start with Moving house")!.click());
+    expect(saved()).toMatchObject({ search: true, setup: true });
+  });
+
+  it("Choose myself saves the ticks as a row per module and closes", async () => {
+    setModuleRows([]);
+    await mount();
+    await openOwnList();
+    const groceries = defaults.groceries;
     await act(async () => toggle("Groceries")!.click());
     await act(async () => toggle("Checklists")!.click());
-    await act(async () => button("Continue")!.click());
-    expect(saved()).toEqual({ ...defaults, groceries: true, checklists: false });
+    expect(button("Start with my tiles")).toBeDefined();
+    await act(async () => button("Start with my tiles")!.click());
+    expect(saved()).toEqual({ ...defaults, groceries: !groceries, checklists: false });
     expect(getModulesSnapshot().rows).toHaveLength(MODULES.length);
-    expect(button("Continue")).toBeUndefined();
+    expect(button("Start with")).toBeUndefined();
   });
 
-  it("Skip saves the defaults, whatever was ticked", async () => {
+  it("Escape saves the defaults, whatever was ticked", async () => {
     setModuleRows([]);
     await mount();
+    await openOwnList();
     await act(async () => toggle("Groceries")!.click());
-    await act(async () => button("Skip")!.click());
+    await act(async () => {
+      document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
     expect(saved()).toEqual(defaults);
+  });
+
+  it("offers a look around the sample home that links back", async () => {
+    setModuleRows([]);
+    await mount();
+    const link = Array.from(document.querySelectorAll("a")).find((a) => a.textContent === "Look around a sample home first");
+    expect(link?.getAttribute("href")).toContain("/demo/?live=1&back=");
   });
 
   it("ticking Google Calendar ticks Calendar and locks it", async () => {
     setModuleRows([]);
     await mount();
+    await openOwnList();
     await act(async () => toggle("Calendar")!.click());
     expect(toggle("Calendar")?.getAttribute("aria-checked")).toBe("false");
     await act(async () => toggle("Google Calendar")!.click());
@@ -108,9 +140,11 @@ describe("ModulePicker", () => {
     setModuleRows([]);
     upsert.mockResolvedValueOnce({ error: { message: "offline" } });
     await mount();
+    await openOwnList();
+    const groceries = defaults.groceries;
     await act(async () => toggle("Groceries")!.click());
-    await act(async () => button("Continue")!.click());
+    await act(async () => button("Start with")!.click());
     expect(getModulesSnapshot().rows).toEqual([]);
-    expect(toggle("Groceries")?.getAttribute("aria-checked")).toBe("true");
+    expect(toggle("Groceries")?.getAttribute("aria-checked")).toBe(String(!groceries));
   });
 });

@@ -5,10 +5,12 @@
 import { sectionHue, type SectionHue } from "@homeup/core";
 import { cn } from "@/lib/utils";
 
-export type LeadingTileSize = "sm" | "md" | "lg" | "xl";
+export type LeadingTileSize = "xs" | "sm" | "md" | "lg" | "xl";
 
-// lg is the feed row's 42px tile; xl heads an item sheet.
+// lg is the feed row's 42px tile; xl heads an item sheet; xs is a strip of a
+// set's tiles in the first-run picker.
 const SIZE_CLASS: Record<LeadingTileSize, { box: string; icon: string }> = {
+  xs: { box: "size-5 rounded-[6px]", icon: "size-[11px]" },
   sm: { box: "size-7 rounded-[9px]", icon: "size-[15px]" },
   md: { box: "size-9 rounded-[11px]", icon: "size-[18px]" },
   lg: { box: "size-[42px] rounded-[13px]", icon: "size-5" },

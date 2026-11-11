@@ -778,16 +778,31 @@ export function AnyoneFace({ size = 34 }: { size?: number }) {
   );
 }
 
-export function PeoplePicker({ people, value, onChange }: { people: PersonOption[]; value: string; onChange: (id: string) => void }) {
+/**
+ * Faces to tap. With `selected` it picks several people: each face toggles,
+ * and the "" option (Anyone or Everyone) is on while nobody is picked.
+ */
+export function PeoplePicker({
+  people,
+  value = "",
+  selected,
+  onChange,
+}: {
+  people: PersonOption[];
+  value?: string;
+  selected?: readonly string[];
+  onChange: (id: string) => void;
+}) {
+  const many = selected !== undefined;
   return (
-    <div role="radiogroup" aria-label="Who" className="flex gap-3 overflow-x-auto py-1 [scrollbar-width:none]">
+    <div role={many ? "group" : "radiogroup"} aria-label="Who" className="flex gap-3 overflow-x-auto py-1 [scrollbar-width:none]">
       {people.map((p) => {
-        const on = p.id === value;
+        const on = many ? (p.id ? selected.includes(p.id) : selected.length === 0) : p.id === value;
         return (
           <button
             key={p.id || "_anyone"}
             type="button"
-            role="radio"
+            role={many ? "checkbox" : "radio"}
             aria-checked={on}
             onClick={() => {
               tick();

@@ -2311,3 +2311,8 @@ button.liveHint:focus-visible {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* One main button instead of two: it keeps the button's width, not the row's. */
+.heroCtaMain.ctaOne {
+  grid-template-columns: minmax(220px, max-content);
+}

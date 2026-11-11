@@ -21,6 +21,7 @@ import {
   type ModuleId,
 } from './modules';
 import { isFeatureEnabled, type ModuleFeatureId } from './module-features';
+import { STARTING_SETS, sameModuleSet, startingSetModules, type StartingSetDef, type StartingSetId } from './first-run';
 import { missingServerFeatures, serverSupports, type ServerFeatureDef, type ServerFeatureId, type ServerSchema } from './server-features';
 
 interface ModulesState {
@@ -234,6 +235,12 @@ export interface UseModulePicker {
   /** Ticked modules that need `id`, which keep it ticked (same lock as Settings > Modules). */
   lockedBy: (id: ModuleId) => ModuleDef[];
   toggle: (id: ModuleId, on: boolean) => void;
+  /** The starting sets (first-run.ts), each with the modules it ticks on this server. */
+  sets: (StartingSetDef & { modules: ReadonlySet<ModuleId> })[];
+  /** The set the ticks match, or null once the owner has changed them by hand. */
+  set: StartingSetId | null;
+  /** Tick exactly one starting set's modules. */
+  chooseSet: (id: StartingSetId) => void;
   /** Hide the picker for the rest of this session, whether or not its save lands. */
   dismiss: () => void;
 }
@@ -252,6 +259,10 @@ export function useModulePicker(input: { isOwner: boolean; pendingInvitations: n
     [s.offered]
   );
   const chosen = picked ?? defaults;
+  const sets = useMemo(
+    () => STARTING_SETS.map((def) => ({ ...def, modules: startingSetModules(def.id, s.offered, defaults) })),
+    [s.offered, defaults]
+  );
   return {
     open: !dismissed && needsModulePicker({ rows: s.rows, ...input }),
     offered: s.offered,
@@ -259,6 +270,13 @@ export function useModulePicker(input: { isOwner: boolean; pendingInvitations: n
     defaults,
     lockedBy: (id) => dependantsOf(id, chosen),
     toggle: (id, on) => setPicked((prev) => withModuleChoice(prev ?? defaults, id, on)),
+    sets,
+    // The first set that matches wins, so Everyday shows while the ticks are the defaults.
+    set: sets.find((x) => sameModuleSet(x.modules, chosen))?.id ?? null,
+    chooseSet: (id) => {
+      const next = sets.find((x) => x.id === id);
+      if (next) setPicked(new Set(next.modules));
+    },
     dismiss: () => setDismissed(true),
   };
 }

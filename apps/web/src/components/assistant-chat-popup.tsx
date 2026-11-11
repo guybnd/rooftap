@@ -707,7 +707,10 @@ function PopupSurface({
   const [mounted, setMounted] = useState(open);
   const [shown, setShown] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
-  useSpectrumEdge(cardRef, pace, mounted);
+  // The ring is its own element: its per-frame angle and width restyle only
+  // it, not the whole chat inside the card (that restyled every message each frame).
+  const edgeRef = useRef<HTMLSpanElement>(null);
+  useSpectrumEdge(edgeRef, pace, mounted);
   const keyboardInset = useKeyboardInset(open);
   // Docked (md and up) the page behind stays usable, so the card is not modal.
   const docked = useMediaQuery("(min-width: 768px)");
@@ -764,7 +767,7 @@ function PopupSurface({
           maxHeight: keyboardInset > 0 ? `calc(100dvh - ${keyboardInset}px - 2rem)` : undefined,
         }}
         className={cn(
-          "spectrum-edge pointer-events-auto absolute inset-x-2.5 bottom-[calc(env(safe-area-inset-bottom)+0.625rem)] flex h-[min(74dvh,680px)] flex-col overflow-hidden rounded-[28px] bg-popover shadow-[var(--card-shadow)]",
+          "pointer-events-auto absolute inset-x-2.5 bottom-[calc(env(safe-area-inset-bottom)+0.625rem)] flex h-[min(74dvh,680px)] flex-col overflow-hidden rounded-[28px] bg-popover shadow-[var(--card-shadow)]",
           // Its own view-transition layer: a page change slides under it, not over it.
           "origin-bottom md:inset-x-auto md:bottom-24 md:right-6 md:h-[min(78dvh,720px)] md:w-[420px] md:origin-bottom-right [view-transition-name:chat-dock]",
           "transition-[translate,scale,opacity] will-change-transform",
@@ -777,6 +780,7 @@ function PopupSurface({
           <div className="mx-auto h-1.5 w-10 rounded-full bg-foreground/20" />
         </div>
         {children}
+        <span ref={edgeRef} aria-hidden className="spectrum-edge" />
         {/* The +'s coral, fading into the card as it grows out of it. */}
         <div
           aria-hidden

@@ -198,6 +198,7 @@ describe("module conformance", () => {
       "packages/core/src/schema-check.ts": ["schema-check"],
       "supabase/functions/_shared/module-rules.ts": ["module-defaults"],
       "apps/web/src/lib/mcp/household-tools.ts": ["tool-import", "tool-push"],
+      "apps/web/src/lib/mcp/tool-data.ts": ["tool-table"],
     };
     const missing = Object.entries(markers).flatMap(([file, slots]) =>
       slots.filter((slot) => !fs.readFileSync(path.join(ROOT, file), "utf8").includes(`new-module:${slot} `)).map((slot) => `${file}: ${slot}`),

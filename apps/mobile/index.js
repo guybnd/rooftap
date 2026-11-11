@@ -8,5 +8,9 @@
 import 'expo-router/entry';
 import { registerWidgetTaskHandler } from 'react-native-android-widget';
 import { widgetTaskHandler } from './src/widgets/widgetTaskHandler';
+// Snooze buttons on notifications: defines the background task a button tap
+// runs when the app is closed, so it has to load before any route.
+import { setUpNotificationSnooze } from './src/lib/notification-snooze';
 
 registerWidgetTaskHandler(widgetTaskHandler);
+setUpNotificationSnooze();

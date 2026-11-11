@@ -10,7 +10,9 @@ import { usePathname, useRouter } from "next/navigation";
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { ChevronDown, ChevronRight, Sparkles } from "lucide-react";
 import {
+  changesLabel,
   fixesLabel,
+  initialOpenGroups,
   getModule,
   getSection,
   todayISO,
@@ -18,6 +20,7 @@ import {
   useWhatsNew,
   useWhatsNewHistory,
   whatsNewDayLabel,
+  whatsNewGroupKey,
   whatsNewHeadline,
   type WhatsNewEntry,
   type WhatsNewView,
@@ -105,30 +108,58 @@ function WhatsNewGroups({
   onOpen,
   onMore,
   alwaysHeaders,
+  collapsible,
 }: {
   view: WhatsNewView;
   onOpen?: (link: string) => void;
   onMore?: () => void;
   alwaysHeaders?: boolean;
+  /** The history: only the newest release starts open, the rest fold to their header (rows aren't rendered while folded). */
+  collapsible?: boolean;
 }) {
   const today = todayISO();
-  const headers = alwaysHeaders || view.showVersions;
+  const headers = alwaysHeaders || collapsible || view.showVersions;
+  const [openKeys, setOpenKeys] = React.useState(() => initialOpenGroups(view));
+  const toggle = (key: string) =>
+    setOpenKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   return (
     <div className="space-y-4">
-      {view.groups.map((g) => (
-        <div key={g.version ?? "latest"}>
-          {headers && (
-            <div className={MICRO_LABEL}>
-              {g.version ?? "Latest"} · {whatsNewDayLabel(g.date, today)}
-            </div>
-          )}
-          <ListGroup className={INSET_GROUP}>
-            {g.entries.map((e) => (
-              <WhatsNewRow key={e.id} entry={e} onOpen={onOpen} />
-            ))}
-          </ListGroup>
-        </div>
-      ))}
+      {view.groups.map((g) => {
+        const key = whatsNewGroupKey(g);
+        const label = `${g.version ?? "Latest"} · ${whatsNewDayLabel(g.date, today)}`;
+        const open = !collapsible || openKeys.has(key);
+        const Chevron = open ? ChevronDown : ChevronRight;
+        return (
+          <div key={key}>
+            {collapsible ? (
+              <button
+                type="button"
+                aria-expanded={open}
+                onClick={() => toggle(key)}
+                className={`${MICRO_LABEL} flex min-h-11 w-full cursor-pointer items-center gap-1.5 pb-1.5 text-left hover:text-foreground`}
+              >
+                <Chevron className="size-3.5 shrink-0" />
+                <span className="flex-1">{label}</span>
+                <span className="font-medium normal-case tracking-normal tabular-nums">{changesLabel(g.entries.length)}</span>
+              </button>
+            ) : (
+              headers && <div className={MICRO_LABEL}>{label}</div>
+            )}
+            {open && (
+              <ListGroup className={INSET_GROUP}>
+                {g.entries.map((e) => (
+                  <WhatsNewRow key={e.id} entry={e} onOpen={onOpen} />
+                ))}
+              </ListGroup>
+            )}
+          </div>
+        );
+      })}
       {(view.moreCount > 0 || view.fixes.length > 0) && (
         <ListGroup className={INSET_GROUP}>
           {view.moreCount > 0 && (
@@ -305,7 +336,7 @@ export function WhatsNewHistory() {
       {view.total === 0 ? (
         <p className="text-sm text-muted-foreground">Nothing yet.</p>
       ) : (
-        <WhatsNewGroups view={view} alwaysHeaders onOpen={(href) => router.push(href)} />
+        <WhatsNewGroups view={view} collapsible onOpen={(href) => router.push(href)} />
       )}
     </SettingsPanel>
   );

@@ -6,6 +6,8 @@ import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.111.
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const CALENDAR_API = "https://www.googleapis.com/calendar/v3";
+/** A Google call that hangs would hold the whole sync run until the platform kills it. */
+const GOOGLE_TIMEOUT_MS = 15_000;
 
 export interface GoogleCalendarConnection {
   user_id: string;
@@ -65,6 +67,7 @@ export async function refreshAccessToken(
 ): Promise<{ access_token: string; expires_in: number }> {
   const res = await fetch(TOKEN_URL, {
     method: "POST",
+    signal: AbortSignal.timeout(GOOGLE_TIMEOUT_MS),
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
       grant_type: "refresh_token",
@@ -124,7 +127,7 @@ export async function getOrCreateRooftapCalendar(
   if (connection.homeup_calendar_id) {
     const res = await fetch(
       `${CALENDAR_API}/calendars/${encodeURIComponent(connection.homeup_calendar_id)}`,
-      { headers: { Authorization: `Bearer ${accessToken}` } },
+      { headers: { Authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(GOOGLE_TIMEOUT_MS) },
     );
     if (res.ok) return connection.homeup_calendar_id;
     if (res.status !== 404) {
@@ -135,6 +138,7 @@ export async function getOrCreateRooftapCalendar(
 
   const createRes = await fetch(`${CALENDAR_API}/calendars`, {
     method: "POST",
+    signal: AbortSignal.timeout(GOOGLE_TIMEOUT_MS),
     headers: {
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
@@ -175,6 +179,7 @@ export async function listEvents(
 
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${accessToken}` },
+    signal: AbortSignal.timeout(GOOGLE_TIMEOUT_MS),
   });
   if (!res.ok) {
     throw new Error(`listEvents failed: ${res.status} ${await res.text()}`);
@@ -216,6 +221,7 @@ async function writeEvent(
 ): Promise<{ id: string; htmlLink: string | null }> {
   const res = await fetch(`${CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}${path}`, {
     method,
+    signal: AbortSignal.timeout(GOOGLE_TIMEOUT_MS),
     headers: {
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
@@ -268,6 +274,7 @@ export async function deleteEvent(
     {
       method: "DELETE",
       headers: { Authorization: `Bearer ${accessToken}` },
+      signal: AbortSignal.timeout(GOOGLE_TIMEOUT_MS),
     },
   );
   if (!res.ok && res.status !== 404 && res.status !== 410) {
@@ -292,7 +299,7 @@ export async function deleteEventTolerant(
 
   const res = await fetch(
     `${CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
-    { method: "DELETE", headers: { Authorization: `Bearer ${accessToken}` } },
+    { method: "DELETE", headers: { Authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(GOOGLE_TIMEOUT_MS) },
   );
   if (res.ok) return;
   if (res.status !== 404 && res.status !== 410) {

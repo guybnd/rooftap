@@ -3,10 +3,11 @@
 import { useState, useEffect, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useDataCache } from "@/lib/data-cache";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SettingsInset, SettingsLabel, SettingsPanel } from "@/components/settings-panel";
-import { PlusIcon, TrashIcon, PencilIcon, CheckIcon, XIcon, UsersIcon, MailIcon } from "lucide-react";
+import { PlusIcon, TrashIcon, PencilIcon, CheckIcon, XIcon, UsersIcon, MailIcon, QrCodeIcon } from "lucide-react";
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { AcceptInvitationDialog } from "@/components/accept-invitation-dialog";
@@ -371,10 +372,14 @@ export function GroupManager() {
         {isGroupOwner && (
           <div className="space-y-1.5">
             <SettingsLabel>Invite</SettingsLabel>
+            <Link href="/invite" className={cn(buttonVariants({ variant: "outline", size: "lg" }), "w-full justify-start")}>
+              <QrCodeIcon className="h-4 w-4" />
+              Share a link or QR code
+            </Link>
             <div className="flex items-center gap-2">
               <Input
                 type="email"
-                placeholder="Email address"
+                placeholder="Or invite by email"
                 value={inviteEmail}
                 onChange={(e) => setInviteEmail(e.target.value)}
                 className="h-9 flex-1"

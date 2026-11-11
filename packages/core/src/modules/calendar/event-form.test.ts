@@ -31,7 +31,7 @@ describe('initialEventForm', () => {
       title: 'Concert',
       category: 'social',
       private: true,
-      assigned_to: null,
+      assignees: [],
       start_date: '2026-10-30',
       start_time: '19:30',
       end_date: '2026-10-30',
@@ -54,10 +54,15 @@ describe('initialEventForm', () => {
 
 describe('eventFromForm', () => {
   it('writes who the event is for only when the server has the column', () => {
-    const form = { ...initialEventForm(saved, { hasHome: false }), assigned_to: 'u2' };
-    expect(eventFromForm(form, { ...ctx, event: saved, assignees: true })?.event.assigned_to).toBe('u2');
+    const form = { ...initialEventForm(saved, { hasHome: false }), assignees: ['u2', 'u4'] };
+    expect(eventFromForm(form, { ...ctx, event: saved, assignees: true })?.event).toMatchObject({ assigned_to: 'u2' });
+    expect(eventFromForm(form, { ...ctx, event: saved, assignees: true })?.event).not.toHaveProperty('assignees');
+    expect(eventFromForm(form, { ...ctx, event: saved, assignees: true, assigneeList: true })?.event).toMatchObject({
+      assigned_to: 'u2',
+      assignees: ['u2', 'u4'],
+    });
     expect(eventFromForm(form, { ...ctx, event: saved })?.event).not.toHaveProperty('assigned_to');
-    expect(initialEventForm({ ...saved, assigned_to: 'u3' }, { hasHome: false }).assigned_to).toBe('u3');
+    expect(initialEventForm({ ...saved, assigned_to: 'u3' }, { hasHome: false }).assignees).toEqual(['u3']);
   });
 
   const form = (over: Partial<EventForm> = {}): EventForm => ({ ...initialEventForm(null, { defaultDate: '2026-11-02', hasHome: true }), title: ' Dinner ', ...over });

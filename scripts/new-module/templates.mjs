@@ -94,6 +94,9 @@ export const ${n.camel}Module = defineModule({
   id: '${n.id}',
   label: ${n.sqLabel},
   description: ${n.sqDescription},
+  // Reshape into one short line on what it does for the other tiles, for the first-run picker.
+  feeds: ${n.sqDescription},
+  startingSets: ['everything'],
   iconId: '${n.icon}',
   defaultEnabled: false,
   minSchema: '${n.migrationName}',
@@ -576,16 +579,17 @@ export default function ${n.Pascal}Screen() {
 export function webTools(n) {
   return `import { z } from "zod";
 import { sort${n.Pascal}Items, ${n.camel}ItemMeta, type ${n.Pascal}Item } from "@homeup/core";
-import type { HouseholdTool, HouseholdToolContext } from "../household-tools";
-import { compact, fail, liveRows, ok, toolRegistrar } from "../tool-kit";
+import { compact, ok, toolRegistrar, type HouseholdTool, type HouseholdToolContext } from "../tool-kit";
 
 // ${n.label}: the Assistant's household tools (.docs/modules.md section 14).
 // Each name is in MCP_TOOLS (core mcp-tools.ts), which gates it on the
-// module. The admin client skips RLS, so every read is scoped to the group by
-// hand. A module with private rows repeats its privacy rule here as well.
+// module. Household data goes through db (tool-data.ts), which scopes it to
+// the household and applies the table's privacy rule: give ${n.table} its
+// line in TOOL_TABLES.
 
-export function ${n.camel}Tools({ admin, userId, groupId }: HouseholdToolContext): HouseholdTool[] {
-  const { tools, tool } = toolRegistrar(groupId);
+export function ${n.camel}Tools(ctx: HouseholdToolContext): HouseholdTool[] {
+  const { userId } = ctx;
+  const { tools, tool, db, groupId } = toolRegistrar(ctx);
 
   tool(
     "get_${n.snake}",
@@ -593,8 +597,8 @@ export function ${n.camel}Tools({ admin, userId, groupId }: HouseholdToolContext
       description:
         "${n.label}: the household's items, open ones first. Each has an id (for add_${n.snake}_item and later tools), a title, notes and whether it is done.",
     },
-    async (_args, gid) => {
-      const items = sort${n.Pascal}Items(await liveRows<${n.Pascal}Item>(admin, "${n.table}", gid));
+    async () => {
+      const items = sort${n.Pascal}Items(await db.rows<${n.Pascal}Item>("${n.table}"));
       return ok({
         items: items.map((i) => compact({ id: i.id, title: i.title, notes: ${n.camel}ItemMeta(i), done: !!i.done_at || undefined })),
       });
@@ -611,17 +615,16 @@ export function ${n.camel}Tools({ admin, userId, groupId }: HouseholdToolContext
         notes: z.string().max(2000).optional(),
       },
     },
-    async ({ title, notes }, gid) => {
+    async ({ title, notes }) => {
       const row = {
         id: crypto.randomUUID(),
-        group_id: gid,
+        group_id: groupId,
         title: title.trim(),
         notes: notes?.trim() || null,
         created_by: userId,
         deleted: false,
       };
-      const { error } = await admin.from("${n.table}").insert(row);
-      if (error) return fail(error.message);
+      await db.insert("${n.table}", row);
       return ok({ ok: true, id: row.id, title: row.title });
     },
     null,

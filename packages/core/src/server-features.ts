@@ -153,6 +153,18 @@ export const SERVER_FEATURES = {
     minSchema: '20261109040000_event_assignee',
     label: 'choosing who a calendar event is for',
   },
+  'household.assignees': {
+    minSchema: '20261110040000_task_event_assignees',
+    label: 'putting several people on one to-do or event',
+  },
+  'household.invite-links': {
+    minSchema: '20261110050000_invite_links_and_account_deletion',
+    label: 'inviting people with a link or QR code',
+  },
+  'account.delete': {
+    minSchema: '20261110050000_invite_links_and_account_deletion',
+    label: 'deleting your account in the app',
+  },
 } as const satisfies Record<string, ServerFeatureDef>;
 
 export type ServerFeatureId = keyof typeof SERVER_FEATURES;

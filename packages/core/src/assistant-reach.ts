@@ -25,6 +25,7 @@ const PLATFORM_TABLES: Record<string, Reach> = {
   group_members: { none: 'Members are named in the prompt; changing membership stays in Settings.' },
   group_invitations: { none: ACCOUNT },
   email_lookup_hits: { none: 'A daily count of invite email lookups, kept by the server.' },
+  household_invite_links: { none: 'A household\'s invite link. Only an owner makes or stops one, in Settings, and its token stays out of reach of every tool.' },
   group_modules: { none: 'Which modules are on. The prompt names them; switching them stays with owners in Settings.' },
   group_entitlements: { none: ACCOUNT },
   user_settings: { none: 'Personal settings. Tools read the time zone and Costs goal from it.' },

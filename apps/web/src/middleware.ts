@@ -36,6 +36,16 @@ export async function middleware(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/callback") ||
     request.nextUrl.pathname.startsWith("/logout") ||
     request.nextUrl.pathname.startsWith("/privacy") ||
+    request.nextUrl.pathname.startsWith("/terms") ||
+    // Account basics: sign up, reset a password, the Play Store's deletion
+    // page, and household invite links, which work before an account exists.
+    request.nextUrl.pathname.startsWith("/signup") ||
+    request.nextUrl.pathname.startsWith("/forgot-password") ||
+    request.nextUrl.pathname.startsWith("/reset-password") ||
+    request.nextUrl.pathname.startsWith("/delete-account") ||
+    request.nextUrl.pathname.startsWith("/join/") ||
+    request.nextUrl.pathname.startsWith("/api/invite/account") ||
+    request.nextUrl.pathname === "/self-host" ||
     request.nextUrl.pathname.startsWith("/api/auth/bypass") ||
     request.nextUrl.pathname.startsWith("/api/setup/status") ||
     request.nextUrl.pathname.startsWith("/api/setup/first-user") ||
@@ -98,6 +108,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|icon.svg|manifest.json|sw.js|swe-worker).*)",
+    "/((?!_next/static|_next/image|favicon.ico|icon.svg|icon-192.png|icon-512.png|apple-touch-icon.png|manifest.json|sw.js|swe-worker).*)",
   ],
 };

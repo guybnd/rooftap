@@ -1386,7 +1386,9 @@ export default function GroceriesSectionScreen() {
       />
     ) : null;
 
-  const addAisleFooterElement = (
+  // Aisle editing waits until the list has something on it: an empty list
+  // offers adding an item, not arranging aisles.
+  const addAisleFooterElement = items.length === 0 ? null : (
     <GroceriesAddAisleFooter
       addAisleOpen={addAisleOpen}
       newAisleName={newAisleName}

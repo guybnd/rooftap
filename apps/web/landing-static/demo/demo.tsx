@@ -124,6 +124,43 @@ if (live) {
   });
 }
 
+/**
+ * Opened from the first-run picker ("Look around a sample home first"), the
+ * demo carries `back`, the picker's address. A small chip at the top says it
+ * is a sample and "Start mine" goes back there. Only http(s) addresses count.
+ */
+const back = (() => {
+  try {
+    const url = new URL(params.get("back") ?? "");
+    return url.protocol === "https:" || url.protocol === "http:" ? url.href : null;
+  } catch {
+    return null;
+  }
+})();
+if (live && back) {
+  const style = document.createElement("style");
+  style.textContent = `
+    .demo-sample { position: fixed; z-index: 60; left: 50%; translate: -50% 0; top: calc(env(safe-area-inset-top, 0px) + 8px);
+      display: flex; align-items: center; gap: 10px; padding: 6px 6px 6px 14px; border-radius: 9999px;
+      background: var(--card); color: var(--foreground); border: 1px solid var(--border); box-shadow: 0 6px 18px rgb(0 0 0 / .14);
+      font: 500 13px/1.2 var(--font-sans, system-ui); white-space: nowrap; max-width: calc(100vw - 32px); }
+    .demo-sample span { overflow: hidden; text-overflow: ellipsis; }
+    .demo-sample a { padding: 7px 12px; border-radius: 9999px; background: var(--primary); color: var(--primary-foreground); font-weight: 600; text-decoration: none; }
+  `;
+  document.head.appendChild(style);
+  const chip = document.createElement("div");
+  chip.className = "demo-sample";
+  chip.setAttribute("role", "status");
+  const text = document.createElement("span");
+  text.textContent = "Sample home. Nothing here is saved.";
+  const link = document.createElement("a");
+  link.href = back;
+  link.textContent = "Start mine";
+  // Not an in-app link: the click handler below leaves it to the browser.
+  chip.append(text, link);
+  document.body.appendChild(chip);
+}
+
 /** In the live demo, a tap on an in-app link moves the demo's route instead of the frame. */
 if (live) {
   document.addEventListener(

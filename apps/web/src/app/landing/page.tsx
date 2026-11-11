@@ -5,7 +5,7 @@ import { LandingPage } from "@/components/landing/landing-page";
 // middleware.ts (hosted deployments only; self-hosted servers keep `/` going
 // straight to sign-in), so the address bar still shows `/`.
 const DESCRIPTION =
-  "One shared app for the tasks, groceries, costs, calendar, recipes, documents and checklists of a household. A web app (PWA) for every OS, a native Android app, iOS coming soon. Free to self-host.";
+  "One shared app for the tasks, groceries, costs, calendar, recipes, documents and checklists of a household. Free during the beta. A web app for every phone and computer, an Android app, an iPhone app coming soon.";
 
 export const metadata: Metadata = {
   title: "Rooftap · Everything under one roof",
@@ -21,5 +21,5 @@ export const metadata: Metadata = {
 };
 
 export default function Landing() {
-  return <LandingPage />;
+  return <LandingPage termsHref="/terms" />;
 }

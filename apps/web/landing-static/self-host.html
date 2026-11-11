@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en" class="font-sans">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Self-host · Rooftap</title>
+    <meta name="description" content="Run Rooftap on your own server: every tile for one household in one Postgres database, in Docker. The Assistant with the model you pick, an MCP server, Home Assistant. Free to self-host." />
+    <link rel="canonical" href="%VITE_SITE_URL%self-host.html" />
+    <meta name="theme-color" content="#121016" />
+    <link rel="icon" href="./icon.svg" />
+    <style>
+      html { --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif; --font-mono: "Geist Mono Variable", ui-monospace, monospace; --font-heading: "Bricolage Grotesque Variable", var(--font-sans); }
+    </style>
+    <script>
+      // The landing page is always presented in Ember Night.
+      document.documentElement.setAttribute("data-theme", "ember-night");
+      document.documentElement.classList.add("dark");
+    </script>
+  </head>
+  <body class="antialiased noise-overlay">
+    <div id="root"><!--app--></div>
+    <script type="module" src="./self-host.tsx"></script>
+  </body>
+</html>

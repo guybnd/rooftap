@@ -46,6 +46,7 @@ import { useWeather } from './use-weather';
 import { useWideLayout } from '@/lib/desktop-layout';
 import { HOME_SPACE_VIEWS, type HomeSpaceProps } from './home-spaces';
 import { TonightMeal } from './tonight-meal';
+import { FirstWeek } from './first-week';
 import { DeskHome } from './desk-home';
 import { UpOverviewProvider, homeSpaces, isModuleShown } from '@homeup/core';
 import { upBankApi } from '@/lib/up-bank-client';
@@ -578,6 +579,7 @@ function HomeHub() {
                 onLensChange={setLens}
                 wide={wide}
               />
+              <FirstWeek groupId={group.id} groupCreatedAt={group.created_at} memberCount={groupMembers.length} hasCost={costItemsList.length > 0} />
               <TonightMeal groupId={group.id} />
             </div>
             ) },
@@ -646,6 +648,9 @@ function HomeHub() {
             onLensChange={setLens}
             wide={wide}
           />
+          {!lens && (
+            <FirstWeek groupId={group.id} groupCreatedAt={group.created_at} memberCount={groupMembers.length} hasCost={costItemsList.length > 0} />
+          )}
           {!lens && <TonightMeal groupId={group.id} />}
           {!lens && agendaVisible && (
             <TodayHero

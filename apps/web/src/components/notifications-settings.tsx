@@ -8,7 +8,15 @@ import { useDataCache } from "@/lib/data-cache";
 import { OfflineHint } from "@/components/offline-hint";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { createClient } from "@/lib/supabase/client";
-import { LEAVE_ALERT_OPTIONS, leaveAlertMinutes, useModules, type ModuleId } from "@homeup/core";
+import {
+  IOS_HOME_SCREEN_STEPS,
+  IOS_PUSH_VERSION_HINT,
+  LEAVE_ALERT_OPTIONS,
+  leaveAlertMinutes,
+  useModules,
+  webDevice,
+  type ModuleId,
+} from "@homeup/core";
 
 /**
  * FLUX-128: opt-in to Web Push task notifications. The toggle drives the browser
@@ -45,6 +53,7 @@ type Support =
   | { state: "checking" }
   | { state: "unsupported" }
   | { state: "ios-needs-install" }
+  | { state: "ios-too-old" }
   | { state: "no-active-worker" }
   | { state: "ready" };
 
@@ -68,16 +77,21 @@ export function NotificationsSettings() {
       const hasPush = "PushManager" in window;
       const hasNotif = "Notification" in window;
 
-      const ua = navigator.userAgent || "";
-      const isIOS = /iPad|iPhone|iPod/.test(ua) ||
-        // iPadOS reports as Mac; detect via touch.
-        (ua.includes("Macintosh") && "ontouchend" in document);
-      const isStandalone =
-        window.matchMedia?.("(display-mode: standalone)").matches ||
-        (navigator as Navigator & { standalone?: boolean }).standalone === true;
+      const device = webDevice({
+        userAgent: navigator.userAgent || "",
+        maxTouchPoints: navigator.maxTouchPoints || 0,
+        standalone:
+          window.matchMedia?.("(display-mode: standalone)").matches === true ||
+          (navigator as Navigator & { standalone?: boolean }).standalone === true,
+      });
 
-      if (isIOS && !isStandalone) {
+      if (device === "ios-browser") {
         if (!cancelled) setSupport({ state: "ios-needs-install" });
+        return;
+      }
+      // Opened from the Home Screen on an iPhone older than iOS 16.4: no PushManager.
+      if (device === "ios-installed" && (!hasPush || !hasNotif)) {
+        if (!cancelled) setSupport({ state: "ios-too-old" });
         return;
       }
       if (!hasSW || !hasPush || !hasNotif) {
@@ -181,11 +195,15 @@ export function NotificationsSettings() {
           <div>
             <span className="font-medium">Add Rooftap to your Home Screen</span>
             <p className="text-muted-foreground mt-0.5">
-              On iPhone and iPad, notifications only work once Rooftap is installed. In Safari, tap
-              Share, then Add to Home Screen, and open it from there.
+              On iPhone and iPad, notifications work once Rooftap is on your Home Screen.{" "}
+              {IOS_HOME_SCREEN_STEPS}
             </p>
           </div>
         </div>
+      )}
+
+      {support.state === "ios-too-old" && (
+        <p className="text-sm text-muted-foreground">{IOS_PUSH_VERSION_HINT}</p>
       )}
 
       {support.state === "unsupported" && (

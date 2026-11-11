@@ -83,8 +83,8 @@ describe('useModules', () => {
 
   it('answers named cross-module features, and outside React through getEnabledModules', () => {
     const { result } = renderHook(() => useModules());
-    act(() => setModuleRows([row('groceries', true), row('recipes', false)]));
-    expect(result.current.feature('costs.from-groceries')).toBe(false); // costs defaults off
+    act(() => setModuleRows([row('groceries', true), row('recipes', false), row('costs', false)]));
+    expect(result.current.feature('costs.from-groceries')).toBe(false);
     expect(result.current.feature('recipes.groceries')).toBe(false);
     act(() => setModuleRows([row('groceries', true), row('recipes', true)]));
     expect(result.current.feature('recipes.groceries')).toBe(true);
@@ -246,11 +246,24 @@ describe('useModulePicker', () => {
   });
 
   it('only ticks and offers what the server offers', () => {
-    setAvailableModules(['household', 'groceries']);
+    setAvailableModules(['household', 'shopper']);
     setModuleRows([]);
     const { result } = renderHook(() => useModulePicker(owner));
-    expect(result.current.offered.map((m) => m.id)).toEqual(['household', 'groceries']);
+    expect(result.current.offered.map((m) => m.id)).toEqual(['household', 'shopper']);
     expect([...result.current.chosen]).toEqual(['household']);
+  });
+
+  it('opens on Everyday, switches sets, and forgets the set once a tick changes by hand', () => {
+    setModuleRows([]);
+    const { result } = renderHook(() => useModulePicker(owner));
+    expect(result.current.sets.map((x) => x.id)).toEqual(['everyday', 'moving', 'everything']);
+    expect(result.current.set).toBe('everyday');
+    act(() => result.current.chooseSet('moving'));
+    expect(result.current.set).toBe('moving');
+    expect(result.current.chosen.has('search')).toBe(true);
+    expect(result.current.chosen.has('setup')).toBe(true);
+    act(() => result.current.toggle('search', false));
+    expect(result.current.set).toBeNull();
   });
 
   it('toggles a tick, and locks Calendar while Google Calendar is ticked', () => {
@@ -332,6 +345,9 @@ describe('server schema', () => {
       'helper chats for single modules, such as the Groceries helper',
       'helper chats the whole household shares, and notes for each helper',
       'choosing who a calendar event is for',
+      'putting several people on one to-do or event',
+      'inviting people with a link or QR code',
+      'deleting your account in the app',
     ]);
 
     act(() => setServerSchema('20261020050000_mcp_oauth'));
@@ -383,6 +399,9 @@ describe('server schema', () => {
         'helper chats for single modules, such as the Groceries helper',
         'helper chats the whole household shares, and notes for each helper',
         'choosing who a calendar event is for',
+        'putting several people on one to-do or event',
+        'inviting people with a link or QR code',
+        'deleting your account in the app',
       ]);
     } finally {
       delete mcp.minSchema;

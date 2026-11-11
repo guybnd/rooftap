@@ -22,6 +22,12 @@ vi.mock('@react-native-community/netinfo', () => ({
   },
 }));
 
+// The retry-on-foreground effect listens to AppState; the real
+// react-native module can't load in this node runner.
+vi.mock('react-native', () => ({
+  AppState: { addEventListener: vi.fn(() => ({ remove: vi.fn() })) },
+}));
+
 // data-cache.tsx imports `usePathname`/`useRouter` for its redirect-to-login
 // effect. Left unmocked, importing the real `expo-router` pulls in
 // react-native-safe-area-context, whose commonjs build ships untransformed
@@ -226,6 +232,29 @@ describe('DataCacheProvider', () => {
       groupModules: null,
       availableModules: null,
     });
+  });
+
+  it('failed fetch path: one dropped request retries quietly and never raises the error', async () => {
+    readDataCacheSnapshot.mockReturnValue(null);
+    getStoredServer.mockResolvedValue({
+      origin: 'https://example.test',
+      isOfficial: false,
+      config: { supabaseUrl: 'https://x.test', supabaseAnonKey: 'anon-key' },
+    });
+    getSupabaseClient.mockReturnValue(fakeSupabaseClient());
+    const remoteGroup = fixtureGroup('group-after-retry');
+    fetchGroupData
+      .mockResolvedValueOnce({ ...FETCH_RESULT_DEFAULTS, currentUserId: 'user-1', fetchError: 'Network request failed' })
+      .mockResolvedValue({ ...FETCH_RESULT_DEFAULTS, currentUserId: 'user-1', hasMembership: true, group: remoteGroup });
+
+    const { renderer, getValue } = await renderProvider();
+    renderers.push(renderer);
+
+    expect(getValue().error).toBeNull();
+    await waitUntil(() => fetchGroupData.mock.calls.length >= 2 && getValue().group !== null, 5000);
+    expect(fetchGroupData).toHaveBeenCalledTimes(2);
+    expect(getValue().group).toEqual(remoteGroup);
+    expect(getValue().error).toBeNull();
   });
 
   it('cache-first path: a snapshot with a group paints without waiting on fetchGroupData', async () => {

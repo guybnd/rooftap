@@ -10,6 +10,7 @@ import { taskOwnerModule, ownerScreenHref, isReminderOwner, type ReminderOwner }
 import { parseReminderKey } from './reminders';
 import { addDaysISO, daysBetweenISO, pad2 } from './date-utils';
 import { DEFAULT_UPCOMING_WINDOW_DAYS } from './modules/household/household-tasks';
+import { assigneesOf } from './assignees';
 
 /** Format a Date as a local YYYY-MM-DD (no UTC shift). */
 export function localDateISO(d: Date): string {
@@ -62,7 +63,10 @@ export interface HeroItem {
   dueTime: string | null; // HH:MM wall-clock
   overdue: boolean;
   done: boolean; // true = completed today, lingers until next day
+  /** The first person it is for (the face a row shows first). */
   assignedTo: string | null;
+  /** Everyone it is for, when that is more than one person's worth to say (to-dos and events). */
+  assignees?: string[];
   sourceLabel: string;
   /** When this to-do is backed by a dated checklist, its detail href. */
   checklistHref?: string | null;
@@ -196,6 +200,7 @@ export function buildHeroItems(opts: {
         overdue: !t.done && !!t.due_date && t.due_date < today,
         done: t.done,
         assignedTo: t.assigned_to,
+        assignees: assigneesOf(t),
         sourceLabel: checklistLink
           ? 'Checklist'
           : parsed?.kind === 'care'
@@ -263,7 +268,8 @@ export function buildHeroItems(opts: {
         overdue: false, // events, not to-dos
         done: false,
         // Who the event is for; one for everyone shows who added it.
-        assignedTo: ev.assigned_to ?? ev.created_by,
+        assignedTo: assigneesOf(ev)[0] ?? ev.created_by,
+        assignees: assigneesOf(ev),
         sourceLabel: ev.location?.trim() || 'Event',
         groupEvent: ev,
       });

@@ -26,6 +26,7 @@ import { useDataCache } from '@/lib/data-cache';
 import { Composer, MessageBubble, Thinking } from './assistant-parts';
 import { AssistantNotice } from './assistant-notice';
 import { HelperAskChips, HelperBrief } from './helper-brief';
+import { perfMark } from '@/lib/perf-log';
 
 /** A thread still loading: faint lines where the conversation will be, not the thinking dots (nothing is thinking yet). */
 function ThreadLoading() {
@@ -138,11 +139,14 @@ function LookingAt({ path }: { path: string }) {
 
 export function ThreadMessages({
   thread,
+  chatKey,
   className,
   offline = false,
   onScrollY,
 }: {
   thread: AssistantThread;
+  /** Which chat this is, where one view shows several in turn (the pop-up): a new key opens at the start again. */
+  chatKey?: React.Key;
   className?: string;
   offline?: boolean;
   /** How far the messages are scrolled (the pop-up closes on a drag down only from the top). */
@@ -153,6 +157,7 @@ export function ThreadMessages({
   const briefSlot = useBriefSlot(helper, messages);
   // A long chat opens on its latest messages; older ones wait behind Show earlier, so it paints at once.
   const { start, showEarlier } = useThreadWindow(messages.length, briefSlot);
+  React.useEffect(() => perfMark('helper:messages', `${helper ?? 'rooftap'} n=${messages.length} start=${start} loading=${loading}`), [helper, messages.length, start, loading]);
   // Showing earlier messages grows the chat at the top: it stays where it is, not jumping to the end.
   const keepPlace = React.useRef(false);
   const scrollRef = React.useRef<ScrollView>(null);
@@ -161,6 +166,25 @@ export function ThreadMessages({
   // the person asks, the chat follows the answer to the end again.
   const briefLast = useBriefOnShow(thread);
   const briefTop = React.useRef<number | null>(null);
+  // Another chat in the same view: forget this one's place, and land on the
+  // new one without a scroll animation.
+  const shownKey = React.useRef(chatKey);
+  const jumping = React.useRef(false);
+  if (shownKey.current !== chatKey) {
+    shownKey.current = chatKey;
+    briefTop.current = null;
+    keepPlace.current = false;
+    jumping.current = true;
+  }
+  React.useEffect(() => {
+    if (!jumping.current) return;
+    if (briefLast) scrollRef.current?.scrollTo({ y: 0, animated: false });
+    else scrollRef.current?.scrollToEnd({ animated: false });
+    const t = setTimeout(() => {
+      jumping.current = false;
+    }, 400);
+    return () => clearTimeout(t);
+  }, [chatKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const brief = helper ? (
     <View
       key="brief"
@@ -171,7 +195,7 @@ export function ThreadMessages({
         if (briefLast) scrollRef.current?.scrollTo({ y: Math.max(0, y - 16), animated: false });
       }}
     >
-      <HelperBrief helper={helper} />
+      <HelperBrief key={helper} helper={helper} />
     </View>
   ) : null;
   return (
@@ -185,7 +209,7 @@ export function ThreadMessages({
           keepPlace.current = false;
           return;
         }
-        if (!briefLast) scrollRef.current?.scrollToEnd({ animated: !loading });
+        if (!briefLast) scrollRef.current?.scrollToEnd({ animated: !loading && !jumping.current });
       }}
       // The keyboard shortens the chat: keep the newest message in sight.
       onLayout={() => {
@@ -266,6 +290,7 @@ function ClosedFooter({ onContinue, onFresh }: { onContinue: () => void; onFresh
 
 export function ThreadFooter({
   thread,
+  chatKey,
   offline,
   autoFocus,
   onFresh,
@@ -274,6 +299,8 @@ export function ThreadFooter({
   onListening,
 }: {
   thread: AssistantThread;
+  /** Which chat this is, where one view shows several in turn: a new key clears the text box. */
+  chatKey?: React.Key;
   offline: boolean;
   autoFocus?: boolean;
   /** The pop-up: the composer sits on its own tinted band under a hairline, and the header says how long a quick ask stays open. */
@@ -307,6 +334,7 @@ export function ThreadFooter({
             <HelperAskChips helper={helper} onAsk={(text) => void send(text)} disabled={offline || !!blocked} />
           ) : null}
           <Composer
+            key={chatKey}
             placeholder={
               room
                 ? 'Message the household, tag @Rooftap to ask it'

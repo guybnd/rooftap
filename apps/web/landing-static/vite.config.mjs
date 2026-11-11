@@ -3,7 +3,7 @@
 //   npm run build:landing-static -w apps/web   ->  apps/web/landing-static/dist
 // Set VITE_SIGN_IN_URL to the hosted app's /login to show the Sign in buttons,
 // and VITE_SITE_URL to the site's address (with a trailing slash) for the
-// canonical and link-preview tags. The build prerenders both pages
+// canonical and link-preview tags. The build prerenders every page
 // (entry-server.tsx, prerender.mjs). public/landing/og.png is the preview image.
 import { copyFileSync, cpSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -40,6 +40,6 @@ export default defineConfig({
     outDir: here("./dist"),
     emptyOutDir: true,
     assetsDir: "assets",
-    rollupOptions: { input: { index: here("./index.html"), privacy: here("./privacy.html") } },
+    rollupOptions: { input: { index: here("./index.html"), "self-host": here("./self-host.html"), privacy: here("./privacy.html") } },
   },
 });

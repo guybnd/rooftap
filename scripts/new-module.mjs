@@ -221,7 +221,8 @@ function plan(n) {
 
   // Web.
   atMarker('apps/web/src/lib/mcp/household-tools.ts', 'tool-import', `import { ${n.camel}Tools } from "./tools/${n.id}-tools";`);
-  atMarker('apps/web/src/lib/mcp/household-tools.ts', 'tool-push', `tools.push(...${n.camel}Tools({ admin, userId, groupId, enabled, shared }));`);
+  atMarker('apps/web/src/lib/mcp/household-tools.ts', 'tool-push', `...${n.camel}Tools(ctx),`);
+  atMarker('apps/web/src/lib/mcp/tool-data.ts', 'tool-table', `${n.table}: { rule: HOUSEHOLD },`);
   sectionIcon('apps/web/src/lib/section-icons.ts', n, '"');
   // The landing page's module map leaves a module out until it has a spot and demo screens.
   edit('apps/web/src/components/landing/module-map-data.ts', (s) => {
@@ -269,7 +270,7 @@ Next:
   2. Reshape the starter into the module. Keep the split:
        packages/core/src/modules/${n.id}/   types, view helpers, row menus, hooks
        apps/web/src/app/${n.id}/            and apps/mobile/src/app/(tabs)/${n.id}/: binding and layout only
-  3. Decide its privacy rule (repeat it in the tool handlers), where else it shows
+  3. Decide its privacy rule (its line in TOOL_TABLES, lib/mcp/tool-data.ts), where else it shows
      (agenda, Home, calendar, search) and its cross-module features (module-features.ts).
   4. Write the What's new entry in whats-new/ for the person using the app.
   5. npm run check

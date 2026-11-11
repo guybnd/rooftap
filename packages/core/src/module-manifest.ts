@@ -89,8 +89,13 @@ export interface ManifestTool {
   kind: 'read' | 'write';
 }
 
-/** One of a module's Ask sheet suggestions: the words it sends, and any other modules it needs. */
-export type AskStarterDef = string | { text: string; with: readonly string[] };
+/**
+ * One of a module's Ask sheet suggestions: the words it sends, and any other
+ * modules it needs. `needsData` marks an ask about the module's own rows
+ * ("When does the car insurance renew?"): an empty screen of the module never
+ * offers it, since there is nothing yet to answer from.
+ */
+export type AskStarterDef = string | { text: string; with: readonly string[]; needsData?: boolean };
 
 /**
  * A way to start an empty screen that lives on another screen (Hearth §13.9
@@ -153,6 +158,17 @@ export interface ModuleManifest {
   label: string;
   /** One line for the Settings > Modules row. Hearth copy rules apply. */
   description: string;
+  /**
+   * What the tile does for the others, one short line under its row in the
+   * first-run picker ("Fills Groceries from your dinners"). Hearth copy rules apply.
+   */
+  feeds?: string;
+  /**
+   * The first-run starting sets (core first-run.ts) that tick this module
+   * besides the ones it is on by default in. Everyday is the defaults
+   * (`defaultEnabled`), so it is never listed here.
+   */
+  startingSets?: readonly ('moving' | 'everything')[];
   /**
    * Asks the empty Ask Rooftap sheet offers while this module is on (core
    * askStarters). Short, in the person's own words, and worth asking: a plan,

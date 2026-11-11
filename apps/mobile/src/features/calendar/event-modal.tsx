@@ -37,6 +37,7 @@ import {
   EVENT_CATEGORY_META,
   EVENT_REMINDER_OPTIONS,
   addReminderDay,
+  toggleAssignee,
   customReminderDays,
   parseReminderDays,
   personFirstName,
@@ -148,7 +149,7 @@ export function EventModal({
   const [reminderDays, setReminderDays] = React.useState<number[]>(initial.reminder_days);
   const [customOpen, setCustomOpen] = React.useState(false);
   const [customText, setCustomText] = React.useState('');
-  const [assignedTo, setAssignedTo] = React.useState<string | null>(initial.assigned_to);
+  const [assignees, setAssignees] = React.useState<string[]>(initial.assignees);
 
   // The forecast once the event is within range, for the place as typed (debounced).
   const forecast = useEventForecast(
@@ -171,8 +172,13 @@ export function EventModal({
   // `pendingTickets` when it saves.
   const showDocuments = useModules().feature('calendar.event-documents');
   // Who: needs the events.assigned_to column, and someone else to pick.
-  const assignees = useModules().server('calendar.event-assignee');
-  const showWho = assignees && groupMembers.length > 1;
+  const modules = useModules();
+  const hasWho = modules.server('calendar.event-assignee');
+  // Several people needs the assignees list; an older server keeps one.
+  const assigneeList = modules.server('household.assignees');
+  const showWho = hasWho && groupMembers.length > 1;
+  const pickWho = (id: string) =>
+    setAssignees((ids) => (!id ? [] : assigneeList ? toggleAssignee(ids, id) : ids[0] === id ? [] : [id]));
   const people = React.useMemo<PersonOption[]>(
     () => [
       { id: '', name: 'Everyone', face: <AnyoneFace /> },
@@ -323,11 +329,11 @@ export function EventModal({
         location,
         notes,
         reminder_days: reminderDays,
-        assigned_to: assignedTo,
+        assignees,
         cost,
         travel_mode: travelMode,
       },
-      { event, groupId, newId: randomUUID(), showBudget, travelMinutes: travel.minutes, assignees }
+      { event, groupId, newId: randomUUID(), showBudget, travelMinutes: travel.minutes, assignees: hasWho, assigneeList }
     );
     if (!saved) return;
     onSave(saved.event, saved.costCents);
@@ -410,7 +416,7 @@ export function EventModal({
 
       {showWho && (
         <FieldRow label="Who">
-          <PeoplePicker people={people} value={assignedTo ?? ''} onChange={(id) => setAssignedTo(id || null)} />
+          <PeoplePicker people={people} selected={assignees} onChange={pickWho} />
         </FieldRow>
       )}
 

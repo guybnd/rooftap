@@ -8,28 +8,8 @@
 // Modules: nothing is sent with Bin night off.
 import { createAdmin, requireServiceRole, sendToUsers } from "../_shared/send-push.ts";
 import { createModuleLookup } from "../_shared/modules.ts";
-import { addDaysISO, binNamesPhrase, binTurn, binsCollectedOn, localDateTime, type TwinChange, type TwinStream } from "../_shared/bin-schedule.ts";
-
-const FALLBACK_TIMEZONE = "Australia/Sydney";
-
-interface PlanRow {
-  group_id: string;
-  push_at: string | null;
-  rotation: string[] | null;
-  rotation_anchor: string | null;
-  out_for: string | null;
-  timezone: string | null;
-}
-
-function zoneOrFallback(zone: string | null): string {
-  if (!zone) return FALLBACK_TIMEZONE;
-  try {
-    new Intl.DateTimeFormat("en", { timeZone: zone });
-    return zone;
-  } catch {
-    return FALLBACK_TIMEZONE;
-  }
-}
+import { addDaysISO, binsCollectedOn, type TwinChange, type TwinStream } from "../_shared/bin-schedule.ts";
+import { binNightCollection, binNightPush, binNightReaders, type BinPlanRow } from "../_shared/notify-plans.ts";
 
 Deno.serve(async (req) => {
   const denied = requireServiceRole(req);
@@ -49,13 +29,11 @@ Deno.serve(async (req) => {
     let pruned = 0;
     let nights = 0;
     const seen = new Set<string>();
-    for (const plan of (data ?? []) as PlanRow[]) {
+    for (const plan of (data ?? []) as BinPlanRow[]) {
       if (seen.has(plan.group_id) || !plan.push_at) continue;
       seen.add(plan.group_id);
-      const local = localDateTime(now, zoneOrFallback(plan.timezone));
-      if (local.time < plan.push_at) continue;
-      const collection = addDaysISO(local.date, 1);
-      if (plan.out_for === collection) continue;
+      const collection = binNightCollection(plan, now);
+      if (!collection) continue;
       if (!(await modulesFor(plan.group_id)).has("bins")) continue;
 
       const [{ data: streams, error: streamsError }, { data: changes, error: changesError }] = await Promise.all([
@@ -81,15 +59,13 @@ Deno.serve(async (req) => {
         .maybeSingle();
       if (already) continue;
 
-      const turn = binTurn(plan.rotation ?? [], plan.rotation_anchor, collection);
-      let readers: string[];
-      if (turn) {
-        readers = [turn];
-      } else {
-        const { data: members, error: membersError } = await admin.from("group_members").select("user_id").eq("group_id", plan.group_id);
+      let members: string[] = [];
+      if (!(plan.rotation ?? []).length) {
+        const { data: rows, error: membersError } = await admin.from("group_members").select("user_id").eq("group_id", plan.group_id);
         if (membersError) throw membersError;
-        readers = (members ?? []).map((m) => m.user_id as string);
+        members = (rows ?? []).map((m) => m.user_id as string);
       }
+      const readers = binNightReaders(plan, collection, members);
       if (readers.length === 0) continue;
 
       // Record first: a failed send shouldn't make the next run push twice.
@@ -99,12 +75,7 @@ Deno.serve(async (req) => {
       if (markError) throw markError;
       nights += 1;
 
-      const result = await sendToUsers(admin, readers, {
-        title: "Bins out tonight",
-        body: `${binNamesPhrase(bins)}, collected tomorrow morning.`,
-        url: "/bins",
-        tag: `bins-${plan.group_id}-${collection}`,
-      });
+      const result = await sendToUsers(admin, readers, binNightPush(plan.group_id, collection, bins));
       sent += result.sent;
       pruned += result.pruned;
     }

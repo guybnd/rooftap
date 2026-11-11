@@ -4,8 +4,9 @@
 // server picker and the no-household screen. Web twin:
 // apps/web/src/components/first-run.tsx.
 import * as React from 'react';
-import { Pressable, View } from 'react-native';
+import { Linking, Pressable, View } from 'react-native';
 import { Server } from 'lucide-react-native';
+import { SIGN_IN_LEGAL_COPY, type LegalLinks } from '@homeup/core';
 import { Text, cn, haptics } from '@homeup/ui';
 import { RooftapHero } from '@/components/brand/rooftap-mark';
 
@@ -60,3 +61,26 @@ export function FieldGroup({ children, className }: { children: React.ReactNode;
   );
 }
 FieldGroup.input = 'h-12 rounded-none border-0 bg-transparent px-4 focus:border-0';
+
+/** The Terms and Privacy Policy line under the sign-in buttons, when the server sends links. */
+export function LegalLine({ links }: { links: LegalLinks | null }) {
+  if (!links) return null;
+  const c = SIGN_IN_LEGAL_COPY;
+  const open = (url: string) => () => {
+    haptics.select();
+    void Linking.openURL(url);
+  };
+  return (
+    <Text className="px-2 text-center text-caption text-muted-foreground">
+      {c.lead}{' '}
+      <Text accessibilityRole="link" onPress={open(links.termsUrl)} className="text-caption text-muted-foreground underline">
+        {c.terms}
+      </Text>{' '}
+      {c.join}{' '}
+      <Text accessibilityRole="link" onPress={open(links.privacyUrl)} className="text-caption text-muted-foreground underline">
+        {c.privacy}
+      </Text>
+      .
+    </Text>
+  );
+}

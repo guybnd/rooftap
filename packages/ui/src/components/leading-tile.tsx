@@ -11,10 +11,12 @@ import { useSectionId } from './section-glow';
 
 export type LeadingTileIcon = React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
 
-export type LeadingTileSize = 'sm' | 'md' | 'lg' | 'xl';
+export type LeadingTileSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
 
-// lg is the feed row's 42px tile; xl heads an item sheet.
+// lg is the feed row's 42px tile; xl heads an item sheet; xs is a strip of a
+// set's tiles in the first-run picker.
 const SIZES: Record<LeadingTileSize, { box: number; radius: number; icon: number }> = {
+  xs: { box: 20, radius: 6, icon: 11 },
   sm: { box: 28, radius: 9, icon: 15 },
   md: { box: 36, radius: 11, icon: 18 },
   lg: { box: 42, radius: 13, icon: 20 },

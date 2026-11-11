@@ -4,6 +4,8 @@ export const assistantModule = defineModule({
   id: 'assistant',
   label: 'Assistant',
   description: 'A household agent you can ask or talk to, with your OK before it changes anything.',
+  feeds: 'Ask across every tile, and it asks before it changes anything',
+  startingSets: ['everything'],
   iconId: 'rooftap',
   defaultEnabled: false,
   enhances: ['household', 'calendar', 'costs', 'groceries'],

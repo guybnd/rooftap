@@ -9,6 +9,8 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     environment: 'node',
+    // Screen render tests run on react-native-web in jsdom: vitest.screens.config.ts.
+    exclude: ['**/node_modules/**', 'src/**/*.screen.test.tsx'],
     // First test to import environment.ts pays the cold-start transform cost
     // of its full dependency chain (@homeup/core -> @supabase/supabase-js,
     // @legendapp/state) — the default 5s testTimeout flaked on that one.

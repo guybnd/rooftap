@@ -1,7 +1,7 @@
-// The landing page's plain sections: the self-host steps, every feature by
-// module, and the FAQ. Each claim exists in the app (packages/core
+// The landing pages' plain sections: the household page's chain and FAQ, and
+// the self-host page's steps, every feature by module and FAQ. Each claim exists in the app (packages/core
 // module-features.ts names the cross-module links). Licence: Elastic 2.0,
-// never "open source". Platforms: a web app (PWA) for every OS, native Android, native iOS coming soon.
+// never "open source". Platforms: a web app (PWA) for every OS that installs on iPhone, native Android, native iOS later.
 
 /** Self-hosting in three steps (.docs/self-hosting.md). */
 export const SELF_HOST_STEPS: ReadonlyArray<{ title: string; text: string; code?: readonly string[] }> = [
@@ -24,7 +24,7 @@ export const SELF_HOST_FACTS: ReadonlyArray<[string, string]> = [
   ["Upgrades.", "Each upgrade backs up the database before it runs the migrations. One script restores the backup."],
   ["Remote access.", "Tailscale Funnel and Cloudflare Tunnel profiles give the phone HTTPS with no open ports."],
   ["Google optional.", "Sign-in with Google and Calendar sync are add-ons. Everything else works without them."],
-  ["Price.", "Free to self-host. Hosted plans come later."],
+  ["Price.", "Free to self-host."],
 ];
 
 export interface FeatureGroup {
@@ -36,7 +36,7 @@ export interface FeatureGroup {
 
 /** The hero's small print: one line each, wrapping only between facts. */
 export const HERO_FACTS: readonly (readonly string[])[] = [
-  ["Web app (PWA) for every OS", "Native Android", "Native iOS coming soon"],
+  ["Free during the beta", "Web app for every phone and computer", "Android app", "Installs on iPhone"],
 ];
 
 /** The tiles named under the hero headline, each in its section's colour. */
@@ -64,7 +64,7 @@ export const FEATURE_GROUPS: readonly FeatureGroup[] = [
     name: "Everywhere",
     items: [
       ["Shared household", "everyone sees each change as it happens"],
-      ["Every platform", "a web app (PWA) on any OS, native Android, native iOS coming soon"],
+      ["Every platform", "a web app (PWA) on any OS, native Android, and on iPhone from the Home Screen with notifications"],
       ["Offline", "reads work without a connection, writes sync after"],
       ["Capture", "one + adds anything to any tile, and finds what is already there"],
       ["Share sheet", "a link or a photo from any app"],
@@ -258,12 +258,24 @@ export const ASSISTANT_FACTS: ReadonlyArray<[string, string]> = [
   ["Hosted.", "On the hosted service the Assistant needs the Plus plan. Plus is not on sale yet."],
 ];
 
-export const FAQ: ReadonlyArray<[question: string, answer: string]> = [
-  ["Where is my data?", "On a server you run, in its Postgres database, when you self-host. Nothing leaves it unless you turn on an add-on such as Google Calendar sync."],
-  ["What does it cost?", "Self-hosting is free. Hosted plans come later."],
-  ["Which platforms?", "A web app you can install on any OS as a PWA, and a native Android app. A native iOS app is coming soon."],
+/** The household page's questions: no servers, keys or licences here. */
+export const HOUSEHOLD_FAQ: ReadonlyArray<[question: string, answer: string]> = [
+  ["What does it cost?", "Nothing while Rooftap is in beta. Paid plans come later."],
+  ["Who sees what we add?", "The people in your household. You can keep some things to yourself."],
+  ["How does my partner join?", "They make an account. Then you invite them by email from Settings."],
+  ["Which phones?", "A native Android app, and the web app on any phone or computer. On an iPhone, open the web app in Safari, tap Share, then Add to Home Screen. It then opens like an app and sends notifications (iOS 16.4 or later)."],
   ["Does it work offline?", "The Android app reads without a connection and syncs your changes when it is back online."],
   ["Do I need a Google account?", "No. Google sign-in and Google Calendar sync are optional."],
+  ["Is there an AI assistant?", "Yes. It reads and, with your OK, changes your tasks, calendar, budget, groceries, recipes and lists. On the hosted app it comes with the Plus plan, which is not on sale yet. On your own server it is free."],
+  ["Does the Assistant change things without asking?", "Only where an owner sets a tile to Act. The default is Ask first: each change waits for a tap. A delete always asks."],
+  ["Can I run it on my own server?", "Yes. It is free to self-host, and the data stays in your own database."],
+];
+
+/** The self-host page's questions: where the data is, the licence, the Assistant, the add-ons. */
+export const SELF_HOST_FAQ: ReadonlyArray<[question: string, answer: string]> = [
+  ["Where is my data?", "On the server you run, in its Postgres database. Nothing leaves it unless you turn on an add-on such as Google Calendar sync."],
+  ["What does it cost?", "Self-hosting is free."],
+  ["Which platforms?", "A web app you can install on any OS as a PWA, and a native Android app. Both point at your server. On an iPhone, add the web app to the Home Screen from Safari for notifications (iOS 16.4 or later)."],
   ["What is the licence?", "The Elastic License 2.0. You can read the source, run it and change it for your own household. You cannot offer it to others as a hosted service."],
   ["Can my AI assistant use it?", "Yes. Rooftap has an MCP server. Each key can be read-only, limited to some tools, and set to expire."],
   ["Is the Assistant free?", "On a self-hosted server, yes. You bring a model key or run a local model. On the hosted service the Assistant needs the Plus plan, which is not on sale yet."],
@@ -271,6 +283,7 @@ export const FAQ: ReadonlyArray<[question: string, answer: string]> = [
   ["Does it work with Home Assistant?", "Yes. The Assistant connects to Home Assistant's MCP Server integration with a long-lived token. It sees and controls only the devices you expose to Assist. A self-hosted server can reach Home Assistant on your LAN."],
   ["Where do Shopper prices come from?", "From the sources your server has for its region. An AU server ships with Google Shopping via SerpApi, OpenStreetMap and OzBargain. You can add a price by hand, or write a source."],
 ];
+
 
 /** The hosted web app, and the Android APKs on the public repo's Releases page. */
 export const WEB_APP_URL = "https://homeup.vercel.app";
@@ -293,7 +306,6 @@ export const COMPARE: ReadonlyArray<[job: string, separate: string, homeup: stri
   ["Price tracking", "A price tracker site", "Shopper, with a deal rating and a price history on your server."],
   ["Loyalty cards", "A wallet app", "Rewards, with the stores each card works at and the perks that end soon."],
   ["An AI for the house", "A chatbot with no access", "The Assistant, with your tasks, calendar, budget, list and Home Assistant. In the app or on Telegram."],
-  ["Where the data lives", "Each app's own servers", "One Postgres database, on your server."],
 ];
 
 /** The E-Ink theme on an always-on screen. */

@@ -22,8 +22,7 @@ import {
   type ReminderEvent,
 } from "../_shared/event-reminders.ts";
 import { eventForecastTextFrom, openMeteoEventForecastUrl } from "../_shared/event-forecast.ts";
-
-const FALLBACK_TIMEZONE = "Australia/Sydney";
+import { eventReaders, eventReminderPush, zoneOrFallback } from "../_shared/notify-plans.ts";
 
 /** The event's start hour (0 to 23) on `timeZone`'s wall clock. */
 function localHour(instant: Date, timeZone: string): number {
@@ -63,7 +62,7 @@ Deno.serve(async (req) => {
     const timezoneByUser = new Map<string, string>();
 
     const readers = async (event: UpcomingEvent): Promise<string[]> => {
-      if (event.private) return event.created_by ? [event.created_by] : [];
+      if (event.private) return eventReaders(event, []);
       let members = membersByGroup.get(event.group_id);
       if (!members) {
         const { data: rows, error: membersError } = await admin
@@ -74,7 +73,7 @@ Deno.serve(async (req) => {
         members = (rows ?? []).map((r) => r.user_id as string);
         membersByGroup.set(event.group_id, members);
       }
-      return members;
+      return eventReaders(event, members);
     };
 
     const timezoneOf = async (userId: string): Promise<string> => {
@@ -85,7 +84,7 @@ Deno.serve(async (req) => {
         .select("timezone")
         .eq("user_id", userId)
         .maybeSingle();
-      const tz = (settings?.timezone as string | undefined) ?? FALLBACK_TIMEZONE;
+      const tz = zoneOrFallback(settings?.timezone as string | null | undefined);
       timezoneByUser.set(userId, tz);
       return tz;
     };
@@ -129,14 +128,9 @@ Deno.serve(async (req) => {
         const timeZone = await timezoneOf(userId);
         const daysBefore = dueReminderDays(event, now, timeZone);
         if (daysBefore === null) continue;
-        const { title, body } = eventReminderPayload(event, daysBefore, timeZone);
+        const text = eventReminderPayload(event, daysBefore, timeZone);
         const forecast = await forecastFor(event, timeZone);
-        const result = await sendToUsers(admin, [userId], {
-          title,
-          body: forecast ? `${body}. ${forecast[0].toUpperCase()}${forecast.slice(1)}` : body,
-          url: `/calendar?date=${localDateKey(new Date(event.starts_at), timeZone)}`,
-          tag: `event-${event.id}-${daysBefore}`,
-        });
+        const result = await sendToUsers(admin, [userId], eventReminderPush(event, daysBefore, timeZone, text, forecast));
         sent += result.sent;
         pruned += result.pruned;
       }

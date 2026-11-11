@@ -4,6 +4,8 @@ export const searchModule = defineModule({
   id: 'search',
   label: 'Home Search',
   description: 'Listings, viewings, agents and a map while you look for a place.',
+  feeds: 'Viewings land on the Calendar',
+  startingSets: ['moving', 'everything'],
   iconId: 'layout-dashboard',
   defaultEnabled: false,
   enhances: ['calendar', 'setup'],

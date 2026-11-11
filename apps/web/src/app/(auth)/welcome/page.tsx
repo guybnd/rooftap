@@ -78,7 +78,8 @@ export default function WelcomePage() {
           <FieldGroup>
           <input
             type="text"
-            placeholder="Choose a username or email"
+            placeholder="Your email, or a username"
+            aria-describedby="welcome-identifier-hint"
             required
             value={identifier}
             onChange={(e) => setIdentifier(e.target.value)}
@@ -86,7 +87,7 @@ export default function WelcomePage() {
           />
           <input
             type="text"
-            placeholder="Display name (optional)"
+            placeholder="Your name (optional)"
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
             className={FIELD_IN_GROUP}
@@ -100,6 +101,9 @@ export default function WelcomePage() {
             className={FIELD_IN_GROUP}
           />
           </FieldGroup>
+          <p id="welcome-identifier-hint" className="-mt-2 px-1 text-xs text-muted-foreground">
+            You sign in with this on every device. An email is easier to remember.
+          </p>
 
           {authError && <p role="alert" className="-mt-2 px-1 text-xs text-destructive">{authError}</p>}
 

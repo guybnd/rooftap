@@ -4,6 +4,8 @@ export const moneyInsightsModule = defineModule({
   id: 'money-insights',
   label: 'Money insights',
   description: 'Price rises, subscriptions to rethink and ways to save, on the Costs page.',
+  feeds: 'Spots price rises and subscriptions in Costs',
+  startingSets: ['everything'],
   iconId: 'lightbulb',
   // Lives on the Costs page, so it needs no switch of its own to lock
   // Costs on: with Costs off there is nowhere to show it.

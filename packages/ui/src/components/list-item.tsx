@@ -125,6 +125,10 @@ function isChipChild(node: React.ReactNode): boolean {
   return React.isValidElement(node) && node.type === Pill;
 }
 
+function isTextChild(node: React.ReactNode): node is string | number {
+  return typeof node === 'string' || typeof node === 'number';
+}
+
 function ListItemMeta({ className, children, ...props }: ViewProps) {
   // Bakes a ' · ' separator between meta children instead of relying on a
   // bare flex-wrap gap - two adjacent captions ("1d overdue" "Med") used to
@@ -154,7 +158,17 @@ function ListItemMeta({ className, children, ...props }: ViewProps) {
                 so a long unbroken caption wraps within the row instead of
                 forcing row width (RN Views/Text default to flexShrink 0).
                 Pills are left bare - they're fixed-size by design. */}
-            {isChip ? child : <View className="min-w-0 shrink">{child}</View>}
+            {/* A bare string or number child (`<ListItemMeta>{entry.body}</ListItemMeta>`)
+                gets the meta caption Text: React Native throws "Text strings
+                must be rendered within a <Text> component" for text inside
+                the wrapper View. */}
+            {isChip ? (
+              child
+            ) : (
+              <View className="min-w-0 shrink">
+                {isTextChild(child) ? <Text className="text-caption text-muted-foreground">{child}</Text> : child}
+              </View>
+            )}
           </React.Fragment>
         );
       })}

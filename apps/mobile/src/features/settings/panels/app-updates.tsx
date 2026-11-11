@@ -57,7 +57,7 @@ function WhatsNewHistory() {
   if (view.total === 0) return null;
   return (
     <SettingsPanel icon={Sparkles} title="What's new">
-      <WhatsNewGroups view={view} alwaysHeaders onOpen={(href) => router.push(href as never)} />
+      <WhatsNewGroups view={view} collapsible onOpen={(href) => router.push(href as never)} />
     </SettingsPanel>
   );
 }

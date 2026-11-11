@@ -1,9 +1,12 @@
 "use client";
 
-import { FIELD_IN_GROUP, FieldGroup, FirstRunHeader, OrRule } from "@/components/first-run";
+import { FIELD_IN_GROUP, FieldGroup, FirstRunHeader, LegalLine, OrRule } from "@/components/first-run";
 import { createClient } from "@/lib/supabase/client";
 import { normalizeIdentifier } from '@homeup/core';
+import { useLegalLinks } from "@/lib/hooks/use-legal-links";
 import { safeNextPath, NEXT_PATH_COOKIE } from "@/lib/next-path";
+import { useAuthSettings } from "@/lib/hooks/use-auth-settings";
+import { AuthLink } from "@/components/auth-screen";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useState, useEffect, Suspense } from "react";
 
@@ -24,6 +27,11 @@ function LoginContent() {
   const [authError, setAuthError] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
   const isDevBuild = process.env.NODE_ENV !== "production";
+  // Sign-up and reset links show only when this server allows them.
+  const authSettings = useAuthSettings();
+  const confirmed = searchParams.get("confirmed") === "1";
+  // Terms and Privacy Policy links, when this server has them (lib/legal-links.ts).
+  const legal = useLegalLinks();
 
   useEffect(() => {
     fetch("/api/setup/status")
@@ -98,6 +106,10 @@ function LoginContent() {
       <div className="w-full max-w-sm space-y-6">
         <FirstRunHeader title="Welcome home" lede="Sign in to see your household's day." />
 
+        {confirmed && (
+          <p className="px-1 text-center text-sm text-muted-foreground">Your email is confirmed. Sign in to start.</p>
+        )}
+
         {error === "unauthorized" && (
           <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
             Your account is not authorized to access this app.
@@ -152,6 +164,14 @@ function LoginContent() {
             {authLoading ? "Signing in..." : "Sign in"}
           </button>
         </form>
+
+        {(authSettings?.signupOpen || authSettings?.sendsEmail) && (
+          <div className="flex items-center justify-between px-1">
+            {authSettings.sendsEmail ? <AuthLink href="/forgot-password">Forgot password?</AuthLink> : <span />}
+            {authSettings.signupOpen && <AuthLink href="/signup">Make an account</AuthLink>}
+          </div>
+        )}
+        <LegalLine links={legal} />
 
         {isDevBuild && (
           <div className="pt-8 border-t border-border/50">

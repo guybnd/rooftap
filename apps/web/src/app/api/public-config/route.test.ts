@@ -14,6 +14,10 @@ function resetEnv() {
   delete process.env.HOMEUP_APP_VERSION;
   delete process.env.HOMEUP_APP_RUNTIME;
   delete process.env.APP_DOWNLOAD_URL;
+  delete process.env.VERCEL;
+  delete process.env.ROOFTAP_TERMS_URL;
+  delete process.env.ROOFTAP_PRIVACY_URL;
+  delete process.env.ROOFTAP_LEGAL_LINKS;
 }
 
 describe("GET /api/public-config", () => {
@@ -38,6 +42,7 @@ describe("GET /api/public-config", () => {
       version: null,
       minAppRuntime: MIN_APP_RUNTIME,
       latestApp: null,
+      legal: null,
     });
   });
 
@@ -57,6 +62,7 @@ describe("GET /api/public-config", () => {
       version: null,
       minAppRuntime: MIN_APP_RUNTIME,
       latestApp: null,
+      legal: null,
     });
   });
 
@@ -94,7 +100,7 @@ describe("GET /api/public-config", () => {
     const res = await GET();
     const json = await res.json();
 
-    expect(Object.keys(json).sort()).toEqual(["latestApp", "minAppRuntime", "modules", "schemaVersion", "supabaseAnonKey", "supabaseUrl", "version"]);
+    expect(Object.keys(json).sort()).toEqual(["latestApp", "legal", "minAppRuntime", "modules", "schemaVersion", "supabaseAnonKey", "supabaseUrl", "version"]);
     expect(JSON.stringify(json)).not.toContain("service-role-secret");
     expect(JSON.stringify(json)).not.toContain("hunter2");
   });

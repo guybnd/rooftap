@@ -4,6 +4,7 @@
 // apps/mobile/src/components/first-run.tsx.
 import type { ReactNode } from "react";
 import { RooftapHero } from "@/components/brand/rooftap-mark";
+import { SIGN_IN_LEGAL_COPY, type LegalLinks } from "@homeup/core";
 import { cn } from "@/lib/utils";
 
 /** The mark, a headline and one line under it. */
@@ -35,5 +36,24 @@ export function OrRule({ label }: { label: string }) {
       <span className="text-xs text-muted-foreground">{label}</span>
       <div className="h-px flex-1 bg-border/60" />
     </div>
+  );
+}
+
+/** The Terms and Privacy Policy line under the sign-in buttons, when the server sends links. */
+export function LegalLine({ links }: { links: LegalLinks | null }) {
+  if (!links) return null;
+  const c = SIGN_IN_LEGAL_COPY;
+  return (
+    <p className="px-2 text-center text-xs leading-relaxed text-muted-foreground">
+      {c.lead}{" "}
+      <a href={links.termsUrl} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-foreground">
+        {c.terms}
+      </a>{" "}
+      {c.join}{" "}
+      <a href={links.privacyUrl} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-foreground">
+        {c.privacy}
+      </a>
+      .
+    </p>
   );
 }

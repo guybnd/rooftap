@@ -51,6 +51,7 @@ const ROUTES: Record<string, RouteRule> = {
   "assistant/telegram/webhook": { auth: "signed", module: null, why: "Telegram's secret header; the linked person's household is checked per message" },
   "assistant/usage": { auth: "session", module: "assistant" },
 
+  "account/delete": { auth: "session", module: null, why: "deleting your own account" },
   "auth/bypass": { auth: "public", module: null, why: "test login, 404 in production unless ALLOW_AUTH_BYPASS" },
 
   "calendar/calendars": { auth: "session", module: "google-calendar" },
@@ -86,6 +87,11 @@ const ROUTES: Record<string, RouteRule> = {
   "parse-bins": { auth: "session", module: "bins" },
   "parse-listing": { auth: "session", module: "search" },
   "parse-receipt": { auth: "session", module: "groceries" },
+  "invite/account": {
+    auth: "public",
+    module: null,
+    why: "makes an account for a person who opened a household invite link; the link is the permission, capped per link",
+  },
   "meal-plan/draft": { auth: "session", module: "meals" },
   "parse-recipe": { auth: "session", module: "recipes" },
 

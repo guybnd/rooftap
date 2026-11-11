@@ -205,6 +205,25 @@ export function whatsNewHeadline(view: WhatsNewView): string {
   return `${view.total} new things since you last looked`;
 }
 
+/** A release header's count: "1 change", "24 changes". */
+export function changesLabel(count: number): string {
+  return count === 1 ? '1 change' : `${count} changes`;
+}
+
+/**
+ * The history list opens on the newest release only; older ones start folded
+ * to their header, so a long history renders a handful of rows, not all of it.
+ */
+export function initialOpenGroups(view: WhatsNewView): Set<string> {
+  const first = view.groups[0];
+  return new Set(first ? [whatsNewGroupKey(first)] : []);
+}
+
+/** A group's stable key: its version, or "latest" for changes since the last release. */
+export function whatsNewGroupKey(group: WhatsNewGroup): string {
+  return group.version ?? 'latest';
+}
+
 /** The folded fixes row: "And 4 smaller fixes". */
 export function fixesLabel(count: number): string {
   return count === 1 ? 'And 1 smaller fix' : `And ${count} smaller fixes`;

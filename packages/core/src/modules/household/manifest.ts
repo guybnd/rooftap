@@ -4,6 +4,7 @@ export const householdModule = defineModule({
   id: 'household',
   label: 'Tasks & Reminders',
   description: 'Shared to-dos, chores and reminders with due dates.',
+  feeds: 'To-dos show on Home and the Calendar',
   askStarters: ["Split this week's chores fairly between us", "Remind me to call the plumber on Tuesday"],
   firstSteps: [{ label: 'Plan a move or a party from a template', meta: 'Checklists', href: '/checklists/templates', module: 'checklists' }],
   iconId: 'list-checks',

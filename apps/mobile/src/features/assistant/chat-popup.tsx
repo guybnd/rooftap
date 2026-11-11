@@ -60,6 +60,7 @@ import { ThreadFooter, ThreadMessages } from './thread-body';
 import { devicePosition } from '@/lib/device-position';
 import { HelperMark, RooftapTile } from '@/components/brand/rooftap-mark';
 import { SpectrumOutline } from '@/components/brand/spectrum-outline';
+import { perfMark, perfWatchJs } from '@/lib/perf-log';
 
 const SWIFT_OUT = Easing.bezier(0.16, 1, 0.3, 1);
 const EASE_IN = Easing.bezier(0.42, 0, 1, 1);
@@ -90,10 +91,22 @@ export function AssistantChatPopup() {
   const on = modules.isEnabled('assistant') && !!group?.id;
   const { state, minimize, dismissBack, fresh, remember } = useAssistantPopupState(on);
   const slot = usePopupSlot<PopupContent>();
+  // A chat reached by a hop (the card was already open) leaves the keyboard
+  // down, so the next chip tap hops instead of only closing the keyboard.
+  const wasOpen = React.useRef(false);
+  const landed = React.useRef({ key: state.key, hop: false });
+  if (landed.current.key !== state.key) landed.current = { key: state.key, hop: wasOpen.current };
+  React.useEffect(() => {
+    wasOpen.current = state.open;
+  });
 
   if (!on) return null;
   // The thread is keyed (a new chat starts clean) but the card is not, so
   // hopping between chats swaps what is inside it, with no shrink and grow.
+  // The card's header and body are not keyed either: a hop updates the views
+  // already on screen instead of building them again, which is most of what a
+  // hop cost on a phone. Parts that hold one chat's state (the text box, the
+  // brief, the scroll) reset themselves on chatKey.
   return (
     <>
     <PopupThread
@@ -101,6 +114,7 @@ export function AssistantChatPopup() {
       slotKey={state.key}
       slot={slot}
       open={state.open}
+      hopped={landed.current.hop}
       target={state.target}
       ask={state.ask}
       back={state.back}
@@ -117,6 +131,7 @@ export function AssistantChatPopup() {
 
 function PopupCard({ slot, open, onMinimize }: { slot: PopupSlot<PopupContent>; open: boolean; onMinimize: () => void }) {
   const content = usePopupSlotValue(slot);
+  React.useEffect(() => perfMark('helper:card-shows', String(content?.key)), [content?.key]);
   const idle = useSharedValue(0);
   return (
     <PopupSurface
@@ -125,9 +140,9 @@ function PopupCard({ slot, open, onMinimize }: { slot: PopupSlot<PopupContent>; 
       onMinimize={onMinimize}
       onSwipe={content?.onSwipe}
       scrollY={content?.scrollY ?? idle}
-      header={content ? <React.Fragment key={content.key}>{content.header}</React.Fragment> : null}
+      header={content?.header ?? null}
     >
-      {content ? <React.Fragment key={content.key}>{content.body}</React.Fragment> : null}
+      {content?.body ?? null}
     </PopupSurface>
   );
 }
@@ -136,6 +151,7 @@ function PopupThread({
   slotKey,
   slot,
   open,
+  hopped,
   target,
   ask,
   back,
@@ -148,6 +164,8 @@ function PopupThread({
   slotKey: number;
   slot: PopupSlot<PopupContent>;
   open: boolean;
+  /** Reached by a hop from another chat, with the card already open. */
+  hopped: boolean;
   target: ThreadTarget;
   ask?: string;
   back: 'pill' | 'bubble' | null;
@@ -159,6 +177,7 @@ function PopupThread({
   onConversation: (c: AssistantConversation | null) => void;
 }) {
   const { isOnline } = useDataCache();
+  React.useEffect(() => perfMark('helper:thread-mounted', `${slotKey} ${target.helper ?? 'rooftap'}`), []); // eslint-disable-line react-hooks/exhaustive-deps
   const openRoute = useOpenRoute();
   // The screen behind the chat, so "this" in a question can mean what is open.
   const pathname = usePathname();
@@ -326,8 +345,8 @@ function PopupThread({
         <PopupChats currentId={conversation?.id ?? null} onPick={pick} onAll={allChats} onScrollY={onScrollY} />
       ) : (
         <>
-          <ThreadMessages thread={thread} offline={!isOnline} onScrollY={onScrollY} />
-          <ThreadFooter thread={thread} offline={!isOnline} autoFocus={open && target.id === 'new' && !target.helper && !ask} onFresh={onFresh} band lookingAt={pathname} onListening={setListening} />
+          <ThreadMessages thread={thread} chatKey={slotKey} offline={!isOnline} onScrollY={onScrollY} />
+          <ThreadFooter thread={thread} chatKey={slotKey} offline={!isOnline} autoFocus={open && !hopped && target.id === 'new' && !target.helper && !ask} onFresh={onFresh} band lookingAt={pathname} onListening={setListening} />
         </>
       );
 
@@ -346,8 +365,8 @@ function PopupThread({
  * is on (core chatChoices). The one on show is filled; a tap, or a sideways
  * swipe on the header, opens another where it was left.
  */
-// Where the strip was scrolled. Each chat draws its own header, so a hop
-// mounts a new strip: it starts where the last one was, not back at the start.
+// Where the strip was scrolled, so a strip drawn again (the card reopened)
+// starts where the last one was, not back at the start.
 let stripX = 0;
 /** The strip's inset from the card's sides, clear of the widest spectrum edge (3.5px plus its wobble). */
 const STRIP_INSET = 5;
@@ -355,6 +374,12 @@ const STRIP_INSET = 5;
 function HelperStrip({ choices, current }: { choices: ChatChoice[]; current: string | null }) {
   // The chip tapped lights at once; the chat behind it swaps on the next frame, so the tap never waits on it.
   const [picked, setPicked] = React.useState<string | null | undefined>(undefined);
+  // The strip stays on screen across hops: a new chat clears the pick.
+  const [seen, setSeen] = React.useState(current);
+  if (seen !== current) {
+    setSeen(current);
+    setPicked(undefined);
+  }
   const lit = picked === undefined ? current : picked;
   const ref = React.useRef<ScrollView>(null);
   const width = React.useRef(0);
@@ -370,6 +395,10 @@ function HelperStrip({ choices, current }: { choices: ChatChoice[]; current: str
     if (chip.x - pad < stripX) ref.current?.scrollTo({ x: Math.max(0, chip.x - pad), animated: true });
     else if (chip.x + chip.w + pad > stripX + width.current) ref.current?.scrollTo({ x: chip.x + chip.w + pad - width.current, animated: true });
   };
+  React.useEffect(() => {
+    shown.current = false;
+    reveal();
+  }, [currentKey]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <View style={{ marginHorizontal: STRIP_INSET }} className="overflow-hidden">
     <ScrollView
@@ -403,6 +432,8 @@ function HelperStrip({ choices, current }: { choices: ChatChoice[]; current: str
             onPress={() => {
               if (on) return;
               haptics.select();
+              perfMark('helper:tap', key);
+              perfWatchJs('helper-swap', 3000);
               setPicked(c.helper);
               requestAnimationFrame(() => setTimeout(() => openAssistantPopup(c.helper ? { helper: c.helper } : { plain: true }), 0));
             }}

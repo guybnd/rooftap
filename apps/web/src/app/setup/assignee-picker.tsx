@@ -42,6 +42,31 @@ export function Avatar({
   );
 }
 
+/** Several people's faces, overlapped, up to `max`, then "+N". One id renders a plain Avatar. */
+export function AvatarStack({ ids, profiles, size = 22, max = 3 }: { ids: readonly string[]; profiles: MemberProfiles; size?: number; max?: number }) {
+  if (ids.length === 0) return null;
+  if (ids.length === 1) return <Avatar userId={ids[0]} profiles={profiles} size={size} />;
+  const shown = ids.slice(0, max);
+  const more = ids.length - shown.length;
+  return (
+    <span className="flex shrink-0 items-center" title={ids.map((id) => memberLabel(id, profiles)).join(', ')}>
+      {shown.map((id, i) => (
+        <span key={id} className="rounded-full bg-background p-px" style={{ marginLeft: i === 0 ? 0 : -size * 0.3 }}>
+          <Avatar userId={id} profiles={profiles} size={size} />
+        </span>
+      ))}
+      {more > 0 && (
+        <span
+          className="grid place-items-center rounded-full border border-background bg-muted font-medium text-muted-foreground tabular-nums"
+          style={{ marginLeft: -size * 0.3, width: size + 2, height: size + 2, fontSize: size * 0.4 }}
+        >
+          +{more}
+        </span>
+      )}
+    </span>
+  );
+}
+
 interface AssigneePickerProps {
   value: string | null;
   groupMembers: GroupMember[];
@@ -51,6 +76,8 @@ interface AssigneePickerProps {
    *  gets an accent ring (identity now lives here instead of a whole-row tint). */
   currentUserId?: string | null;
   onChange: (userId: string) => void;
+  /** Everyone the item is for, first = value; more than one shows their faces stacked. A pick sets one person. */
+  people?: readonly string[];
 }
 
 export function AssigneePicker({
@@ -60,6 +87,7 @@ export function AssigneePicker({
   disabled,
   currentUserId,
   onChange,
+  people,
 }: AssigneePickerProps) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -121,7 +149,9 @@ export function AssigneePicker({
         title={name}
         className="flex items-center gap-1.5 rounded-full pl-1 pr-2 py-1 hover:bg-accent transition-colors disabled:opacity-50"
       >
-        {value ? (
+        {people && people.length > 1 ? (
+          <AvatarStack ids={people} profiles={memberProfiles} size={22} max={2} />
+        ) : value ? (
           <span
             className={cn(
               'rounded-full',

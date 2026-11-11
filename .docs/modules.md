@@ -219,7 +219,7 @@ Every gating PR ships table-driven tests that turn each module off in turn and a
 - `module-features.test.ts`: turning each module off disables exactly the features that list it.
 - Per-surface matrices, each module off in turn: hub agenda and hero modules (`hero.test.ts`, web `summary-hero.test.ts`, mobile `hero-modules.test.ts`), calendar copy and suggestions (`calendar-sources.test.ts`), document links, capture categories and the legacy merge (`documents.test.ts`), Costs suggestions (`costs.test.ts`), checklist copy (`checklists.test.ts`), mobile share routing (`share-intent-routing.test.ts`).
 - Write paths: a shopping trip with Costs off writes no cost line (`grocery-sessions.test.ts`); a checklist toggle with Tasks or Costs off skips the task sync or the cost line (`use-checklist-toggle.test.tsx`).
-- Onboarding picker: `modules.test.ts` covers who sees it and the Google Calendar tick; `modules-store.test.ts` covers the save (a row per offered module, rolled back when refused) and `useModulePicker`; web `module-picker.test.tsx` renders it with the defaults ticked and checks Continue, Skip and a refused save.
+- Onboarding picker: `modules.test.ts` covers who sees it and the Google Calendar tick; `modules-store.test.ts` covers the save (a row per offered module, rolled back when refused) and `useModulePicker`; `first-run.test.ts` covers the starting sets; web `module-picker.test.tsx` renders it on Everyday and checks a set, Choose myself, Escape and a refused save.
 - Data sync: `store-modules.test.ts` checks every synced table is mapped and that each module off stops only the tables nothing else uses; web `sync-status.test.tsx` checks the bootstrap skips switched-off modules and starts a module's stores when it comes on.
 - Server: the MCP endpoint answers 404 with `mcp` off and registers only enabled modules' tools (`api/mcp/route.settings.test.ts`), and its task tools drop reminders whose owner is off (`route.isolation.test.ts`); `server-modules.test.ts` covers the shared route guard and `parse-receipt/route.test.ts` one route through it. Notifications and Google Calendar push are covered by `task-modules.test.ts`, which checks the edge functions' rules against core.
 - Smoke pass: web `app/module-links.test.tsx` renders the app shell and the home hub with data in every module, follows every link and button one tap deep, and checks that none leads (via `getModuleIdForPath`, or a `/settings/<module>` link) into a switched-off module, with the base modules, Tasks alone and everything off. With everything on it must reach each module the surface links, so the crawl can't pass by finding nothing. Mobile has no component test runner, so its surfaces rely on the shared core gates and their tests.
@@ -235,7 +235,7 @@ Every gating PR ships table-driven tests that turn each module off in turn and a
 
 **Onboarding:** after a new household is created, one screen lists the modules with the defaults pre-ticked. The user can change them now or later in Settings. Skipping keeps the defaults.
 
-How it works (step 9): a household that has never chosen has no `group_modules` row, because existing households were seeded with rows and any switch writes one (`needsModulePicker` in `modules.ts`). Its owner gets the picker as a full-screen step once the household has loaded: web `components/module-picker.tsx`, mounted in the app shell, and mobile `components/module-picker.tsx`, an overlay in the root layout so a failed save's toast still shows. It waits while the person has a pending invitation, since they may join that household instead of the one created at signup. Continue writes a row for every offered module with the ticks; Skip, Escape on web and Android back write the defaults. Either way the household then has rows, so the picker never comes back. Ticking Google Calendar also ticks Calendar, and Calendar stays locked while Google Calendar is ticked, the same lock as Settings (`withModuleChoice`). A failed Continue reopens the picker with the ticks kept and a toast; a failed Skip stays hidden for the session and asks again on the next launch.
+How it works (step 9): a household that has never chosen has no `group_modules` row, because existing households were seeded with rows and any switch writes one (`needsModulePicker` in `modules.ts`). Its owner gets the picker as a full-screen step once the household has loaded. It leads with three starting sets (core `first-run.ts`): Everyday is the defaults, and Moving house and Everything add the modules whose manifest lists them in `startingSets`. The full list of switches folds under "Choose myself", each tile with its manifest's `feeds` line. "Look around a sample home first" opens the live demo household (`SAMPLE_HOME_URL`), which shows a "Start mine" chip that links back. The picker lives in web `components/module-picker.tsx`, mounted in the app shell, and mobile `components/module-picker.tsx`, an overlay in the root layout so a failed save's toast still shows. It waits while the person has a pending invitation, since they may join that household instead of the one created at signup. The start button writes a row for every offered module with the ticks; Escape on web and Android back write the defaults. Either way the household then has rows, so the picker never comes back. Ticking Google Calendar also ticks Calendar, and Calendar stays locked while Google Calendar is ticked, the same lock as Settings (`withModuleChoice`). A failed save reopens the picker with the ticks kept and a toast; a failed Skip stays hidden for the session and asks again on the next launch.
 
 ## 9. Decisions recorded
 
@@ -313,7 +313,7 @@ So a feature that adds a module or a table must decide how the Assistant reaches
 When you add a tool:
 
 1. Add it to `tools` in the module's manifest, with its kind. `MCP_TOOLS` is built from the manifests. The module gate, the MCP settings list and the Assistant trust setting all follow from that entry.
-2. Repeat the module's privacy rule in the handler. The handlers use the admin client, so row level security does not apply. Examples: private tasks and Setup items, "Just me" loyalty cards, and watches kept from a member.
+2. Read and write household data through `db` from `toolRegistrar` (`apps/web/src/lib/mcp/tool-data.ts`), never through `admin.from()`. The handlers use the admin client, so row level security does not apply. The layer applies each table's privacy rule from `TOOL_TABLES` instead: private tasks and Setup items, "Just me" loyalty cards, and watches kept from a member. A new table gets its line in `TOOL_TABLES`. `tool-data.test.ts` fails a tool file that calls the client itself, and a table whose `private` or `hidden_from` column has no matching rule.
 3. Give a write tool a line in `describeProposal` (`packages/core/src/modules/assistant/assistant-api.ts`) if the generic line does not say clearly what it changes.
 4. Update the table's `reach` in the manifest.
 
@@ -353,7 +353,7 @@ export const binsModule = defineModule({
 
 | Field | What reads it |
 |---|---|
-| `id`, `label`, `description`, `iconId`, `defaultEnabled`, `requires`, `enhances`, `minSchema` | `MODULES` and `ModuleId` in `modules.ts`, so Settings > Tiles, the first-run picker and every module gate. |
+| `id`, `label`, `description`, `feeds`, `startingSets`, `iconId`, `defaultEnabled`, `requires`, `enhances`, `minSchema` | `MODULES` and `ModuleId` in `modules.ts`, so Settings > Tiles, the first-run picker and every module gate. |
 | `section` | `sections` and `getSectionByPath` in `sections.ts`, the section's colour, the phone tab routes (`tabRoutes` adds nav items that are tabs) and both apps' route tests. A module with no screen of its own leaves it out. |
 | `tables` | `TABLE_REACH`. A table with `sync` is a synced group store: `STORE_MODULES` syncs it while one of the listed modules is on, and the web app caches it in IndexedDB. |
 | `tools` | `MCP_TOOLS`. The handlers live in `apps/web/src/lib/mcp/`. |
@@ -397,7 +397,7 @@ It then lists the manifest in `module-manifests.ts`. It also adds the entries a 
 - the core exports in `index.ts` and `data/stores/index.ts`
 - the type check in `schema-check.ts`
 - the edge functions' `module-rules.ts`, because Deno cannot read core
-- the tool handlers in `household-tools.ts`
+- the tool handlers in `apps/web/src/lib/mcp/tools/<id>-tools.ts`, listed in `household-tools.ts`
 - the icon maps of both apps
 - the landing page's module map
 - the search source in `slots/search.ts`, and a fixture row in the search index test

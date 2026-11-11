@@ -20,6 +20,9 @@ const EXPECTED: Record<string, string | null> = {
   login: null,
   callback: null,
   'server-picker': null,
+  // account basics: sign up, and the owner's invite link screen
+  signup: null,
+  invite: null,
 };
 
 const APP_DIR = fileURLToPath(new URL('../app', import.meta.url));

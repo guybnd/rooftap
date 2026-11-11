@@ -15,7 +15,7 @@ const HAS_GOOGLE_SERVICES = existsSync(join(__dirname, 'google-services.json'));
 const config: ExpoConfig = {
   name: IS_DEV ? 'Rooftap Dev' : 'Rooftap',
   slug: 'mobile',
-  version: '1.2.0',
+  version: '1.3.0',
   orientation: 'portrait',
   icon: './assets/images/icon.png',
   scheme: 'mobile',
@@ -73,7 +73,7 @@ const config: ExpoConfig = {
   ...(IS_DEV
     ? {}
     : {
-        runtimeVersion: '57.7',
+        runtimeVersion: '57.8',
         updates: {
           url: 'https://u.expo.dev/4a9e9340-0bd0-451a-bfbf-593a88495d82',
           checkAutomatically: 'ON_LOAD',

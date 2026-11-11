@@ -10,18 +10,13 @@
 // creator of a private one. Modules: nothing is sent with Calendar off.
 import { createAdmin, requireServiceRole, sendToUsers } from "../_shared/send-push.ts";
 import { createModuleLookup } from "../_shared/modules.ts";
-import { MAX_LEAVE_ALERT_MINUTES, leaveAlertMinutes, leavePushDue, leavePushPayload, type TravelEvent } from "../_shared/event-travel.ts";
-import { localDateKey } from "../_shared/event-reminders.ts";
-
-const FALLBACK_TIMEZONE = "Australia/Sydney";
+import { MAX_LEAVE_ALERT_MINUTES, leavePushDue } from "../_shared/event-travel.ts";
+import { eventReaders, leaveDueReaders, leavePush, type LeaveEvent, type LeaveSettings } from "../_shared/notify-plans.ts";
 /** The longest trip worth looking ahead for, plus the longest alert lead time. */
 const MAX_LOOKAHEAD_HOURS = 7;
 
-interface LeaveEvent extends TravelEvent {
-  id: string;
+interface LeaveRow extends LeaveEvent {
   group_id: string;
-  created_by: string | null;
-  private: boolean;
 }
 
 Deno.serve(async (req) => {
@@ -39,7 +34,7 @@ Deno.serve(async (req) => {
       .lte("starts_at", new Date(now.getTime() + MAX_LOOKAHEAD_HOURS * 3_600_000).toISOString());
     if (error) throw error;
     // Anyone's earliest possible alert first: skip events nobody could be due for yet.
-    const candidates = ((data ?? []) as LeaveEvent[]).filter((e) => leavePushDue(e, now, MAX_LEAVE_ALERT_MINUTES, null));
+    const candidates = ((data ?? []) as LeaveRow[]).filter((e) => leavePushDue(e, now, MAX_LEAVE_ALERT_MINUTES, null));
     if (candidates.length === 0) return Response.json({ ok: true, events: 0, sent: 0, pruned: 0 });
 
     const modulesFor = createModuleLookup(admin);
@@ -49,17 +44,16 @@ Deno.serve(async (req) => {
     for (const event of candidates) {
       if (!(await modulesFor(event.group_id)).has("calendar")) continue;
 
-      let readers: string[];
-      if (event.private) {
-        readers = event.created_by ? [event.created_by] : [];
-      } else {
+      let members: string[] = [];
+      if (!event.private) {
         const { data: rows, error: membersError } = await admin
           .from("group_members")
           .select("user_id")
           .eq("group_id", event.group_id);
         if (membersError) throw membersError;
-        readers = (rows ?? []).map((r) => r.user_id as string);
+        members = (rows ?? []).map((r) => r.user_id as string);
       }
+      const readers = eventReaders(event, members);
       if (readers.length === 0) continue;
 
       const [{ data: settings }, { data: notices, error: noticesError }] = await Promise.all([
@@ -67,12 +61,10 @@ Deno.serve(async (req) => {
         admin.from("event_leave_notices").select("user_id, starts_at").eq("event_id", event.id),
       ]);
       if (noticesError) throw noticesError;
-      const settingsOf = new Map((settings ?? []).map((s) => [s.user_id as string, s]));
+      const settingsOf = new Map((settings ?? []).map((s) => [s.user_id as string, s as LeaveSettings]));
       const sentFor = new Map((notices ?? []).map((n) => [n.user_id as string, n.starts_at as string]));
 
-      const due = readers.filter((userId) =>
-        leavePushDue(event, now, leaveAlertMinutes(settingsOf.get(userId)?.leave_alert_minutes as number | null), sentFor.get(userId) ?? null)
-      );
+      const due = leaveDueReaders(event, readers, settingsOf, sentFor, now);
       if (due.length === 0) continue;
       events += 1;
 
@@ -85,14 +77,7 @@ Deno.serve(async (req) => {
       if (markError) throw markError;
 
       for (const userId of due) {
-        const timeZone = (settingsOf.get(userId)?.timezone as string | null) ?? FALLBACK_TIMEZONE;
-        const { title, body } = leavePushPayload(event, timeZone);
-        const result = await sendToUsers(admin, [userId], {
-          title,
-          body,
-          url: `/calendar?date=${localDateKey(new Date(event.starts_at), timeZone)}`,
-          tag: `leave-${event.id}`,
-        });
+        const result = await sendToUsers(admin, [userId], leavePush(event, settingsOf.get(userId)));
         sent += result.sent;
         pruned += result.pruned;
       }

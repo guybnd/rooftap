@@ -20,6 +20,10 @@ describe('emptyFirstSteps', () => {
       expect(ask).toBe('Add milk, eggs and bread to the list');
     }
   });
+  it('never offers an ask that needs the empty module\'s own rows', () => {
+    expect(emptyFirstSteps('documents', on('documents', 'assistant')).ask).toBeNull();
+    expect(emptyFirstSteps('costs', on('costs', 'assistant')).ask).toBeNull();
+  });
   it('is empty for an unknown module', () => {
     expect(emptyFirstSteps('nope', () => true)).toEqual({ steps: [], ask: null });
   });

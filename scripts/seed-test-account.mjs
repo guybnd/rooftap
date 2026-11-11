@@ -5,6 +5,8 @@
 // Usage:
 //   node scripts/seed-test-account.mjs
 // Optional overrides: TEST_EMAIL (default dev@homeup.test), TEST_PASSWORD.
+// Also adds a second member (dev2@homeup.test, "Dev Partner") to the group, so
+// pickers for people (Who, assignees, "Just me") have someone else to show.
 //
 // Idempotent: re-running reuses the existing user/group and skips sample data
 // if the group already has tasks. Never prints the password.
@@ -76,6 +78,31 @@ let groupId;
   }
   const { error: mErr } = await admin.from('group_members').upsert({ group_id: groupId, user_id: userId, role: 'owner' });
   if (mErr) throw mErr;
+}
+
+// ── 2b. Second member ────────────────────────────────────────────────────────
+// Nobody signs in as this user: it exists so the household has two people.
+// Its password is random and never printed. The new-user trigger also gives it
+// a group of its own, which nothing uses.
+const PARTNER_EMAIL = process.env.TEST_PARTNER_EMAIL || 'dev2@homeup.test';
+{
+  const { data, error } = await admin.auth.admin.listUsers({ perPage: 500 });
+  if (error) throw error;
+  let partnerId = data.users.find((u) => u.email === PARTNER_EMAIL)?.id;
+  if (!partnerId) {
+    const { data: created, error: createErr } = await admin.auth.admin.createUser({
+      email: PARTNER_EMAIL,
+      password: randomUUID(),
+      email_confirm: true,
+      user_metadata: { full_name: 'Dev Partner' },
+    });
+    if (createErr) throw createErr;
+    partnerId = created.user.id;
+    console.log(`Created second member ${PARTNER_EMAIL} (${partnerId}).`);
+  }
+  const { error: mErr } = await admin.from('group_members').upsert({ group_id: groupId, user_id: partnerId, role: 'member' });
+  if (mErr) throw mErr;
+  console.log(`${PARTNER_EMAIL} is a member of "${GROUP_NAME}".`);
 }
 
 // ── 3. Sample data (only into an empty group) ────────────────────────────────

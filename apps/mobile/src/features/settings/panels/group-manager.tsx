@@ -14,7 +14,8 @@
 // anatomy (Hearth) rather than web's raw `divide-y` rows.
 import * as React from 'react';
 import { View } from 'react-native';
-import { Check, Mail, Pencil, Plus, Trash2, Users, WifiOff, X } from 'lucide-react-native';
+import { Check, Mail, Pencil, Plus, QrCode, Trash2, Users, WifiOff, X } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
 import {
   Text,
   Button,
@@ -49,6 +50,7 @@ import {
   currencyPickerOptions,
   FOLLOW_REGION_CURRENCY,
   dialog,
+  useModules,
 } from '@homeup/core';
 import { useDataCache } from '@/lib/data-cache';
 import { getCurrentSupabaseClient } from '@/lib/supabase-client';
@@ -56,6 +58,8 @@ import { AcceptInvitationDialog } from './accept-invitation-dialog';
 import { SettingsInset, SettingsLabel, SettingsPanel } from './settings-panel';
 
 export function GroupManager() {
+  const router = useRouter();
+  const modules = useModules();
   const {
     group,
     groupMembers,
@@ -417,9 +421,15 @@ export function GroupManager() {
         {isGroupOwner && (
           <View className="gap-1.5">
             <SettingsLabel>Invite</SettingsLabel>
+            {modules.server('household.invite-links') && (
+              <Button variant="outline" size="lg" className="justify-start" onPress={() => router.push('/invite')}>
+                <QrCode size={16} className="text-foreground" />
+                <Text className="text-sm font-medium text-foreground">Share a link or QR code</Text>
+              </Button>
+            )}
             <View className="flex-row items-center gap-2">
               <Input
-                placeholder="Email address"
+                placeholder="Or invite by email"
                 value={inviteEmail}
                 onChangeText={setInviteEmail}
                 className="h-9 min-w-0 flex-1"

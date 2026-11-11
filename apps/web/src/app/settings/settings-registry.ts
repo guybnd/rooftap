@@ -34,6 +34,7 @@ import { ShopperSettings } from "@/components/shopper-settings";
 import { WhatsNewHistory } from "@/components/whats-new";
 import { VersionSettings } from "@/components/version-settings";
 import { CrashReportsSettings } from "@/components/crash-reports-settings";
+import { DeleteAccountSettings } from "@/components/delete-account-settings";
 
 // Every connector's Settings > Connectors panel by its core id (connectors.ts,
 // .docs/connectors.md). The Connectors menu lists them in registry order, and
@@ -65,7 +66,7 @@ const TAB_PANELS: Record<SettingsTabId, Pick<SettingsTab, "fold" | "panels">> = 
     fold: true,
     panels: [...CONNECTORS.map((c) => CONNECTOR_PANELS[c.panel]), HouseholdAiKeys, AiProvidersSettings, ApiKeysSettings, FeedbackInbox],
   },
-  about: { fold: false, panels: [VersionSettings, WhatsNewHistory, CrashReportsSettings] },
+  about: { fold: false, panels: [VersionSettings, WhatsNewHistory, CrashReportsSettings, DeleteAccountSettings] },
 };
 
 export const settingsTabs: SettingsTab[] = SETTINGS_TABS.map((meta) => ({ ...meta, ...TAB_PANELS[meta.id] }));

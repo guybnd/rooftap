@@ -4,6 +4,8 @@ export const shopperModule = defineModule({
   id: 'shopper',
   label: 'Shopper',
   description: 'Things you want to buy, with price tracking and a deal rating.',
+  feeds: 'Deals and price drops nudge you on Home',
+  startingSets: ['everything'],
   askStarters: ["Watch the price of a robot vacuum for me"],
   iconId: 'shopping-bag',
   defaultEnabled: false,

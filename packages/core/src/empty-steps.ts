@@ -1,8 +1,9 @@
 // The "Try" group on an empty module screen (Hearth §13.9 "Empty screens"):
 // the screen's own add (the screen supplies it), then the module's declared
 // first steps (manifest `firstSteps`), then one of its Ask Rooftap starters
-// while the Assistant is on. Kept out of any module folder because it reads
-// every manifest, like assistant-reach.ts.
+// while the Assistant is on, never one that needs the module's own rows.
+// Kept out of any module folder because it reads every manifest, like
+// assistant-reach.ts.
 import { ALL_MANIFESTS } from './module-manifests';
 import type { ModuleId } from './modules';
 
@@ -34,8 +35,9 @@ export function emptyFirstSteps(moduleId: string, isEnabled: (id: ModuleId) => b
     .filter((s) => isEnabled(s.module as ModuleId));
   const asks = isEnabled('assistant' as ModuleId)
     ? (manifest.askStarters ?? [])
-        .map((d) => (typeof d === 'string' ? { text: d, with: [] as readonly string[] } : d))
-        .filter((d) => d.with.every((id) => isEnabled(id as ModuleId)))
+        .map((d) => (typeof d === 'string' ? { text: d, with: [] as readonly string[], needsData: false } : d))
+        // The screen is empty, so an ask about its own rows has nothing to answer from.
+        .filter((d) => !d.needsData && d.with.every((id) => isEnabled(id as ModuleId)))
     : [];
   return { steps, ask: asks.length > 0 ? asks[localDay(now) % asks.length].text : null };
 }

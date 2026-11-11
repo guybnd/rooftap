@@ -7,7 +7,8 @@
 // this hook.
 import * as React from 'react';
 import * as Notifications from 'expo-notifications';
-import { assistantConversationFromUrl, openAssistantPopup } from '@homeup/core';
+import { assistantConversationFromUrl, openAssistantPopup, snoozeMinutesFromAction } from '@homeup/core';
+import { handleSnoozeResponse } from './notification-snooze';
 import { useOpenRoute } from './tab-routes';
 
 Notifications.setNotificationHandler({
@@ -23,7 +24,9 @@ Notifications.setNotificationHandler({
   }),
 });
 
-function routeFromResponse(openRoute: (href: string) => void, response: Notifications.NotificationResponse) {
+async function routeFromResponse(openRoute: (href: string) => void, response: Notifications.NotificationResponse) {
+  // A snooze button hides the notification for later and opens nothing.
+  if (await handleSnoozeResponse(response).catch(() => true)) return;
   const url = response.notification.request.content.data?.url;
   if (typeof url !== 'string' || !url.startsWith('/')) return;
   // "Rooftap answered" opens the pop-up chat over the current screen, painting
@@ -46,7 +49,7 @@ export function usePushNotificationRouting(): void {
   React.useEffect(() => {
     const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
       handledLaunchResponse.current = true;
-      routeFromResponse((href) => openRouteRef.current(href), response);
+      void routeFromResponse((href) => openRouteRef.current(href), response);
     });
 
     // Cold-start tap: the response that launched the app from a terminated
@@ -57,7 +60,13 @@ export function usePushNotificationRouting(): void {
     Notifications.getLastNotificationResponseAsync().then((response) => {
       if (!response || handledLaunchResponse.current) return;
       handledLaunchResponse.current = true;
-      routeFromResponse((href) => openRouteRef.current(href), response);
+      // A snooze button never opens the app: its background task already
+      // snoozed it, and snoozing again now would push it later still.
+      if (snoozeMinutesFromAction(response.actionIdentifier) !== null) {
+        void Notifications.clearLastNotificationResponseAsync();
+        return;
+      }
+      void routeFromResponse((href) => openRouteRef.current(href), response);
       // The persisted response otherwise survives full app restarts and
       // would re-route every subsequent normal cold launch to this same
       // stale target — clear it once consumed.

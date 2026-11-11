@@ -11,12 +11,21 @@ import { Platform, View } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as SecureStore from 'expo-secure-store';
 import Constants from 'expo-constants';
-import { Bell, BellOff, BellRing } from 'lucide-react-native';
+import { AlarmClock, Bell, BellOff, BellRing } from 'lucide-react-native';
 import { ListItem, ListItemContent, SegmentedControl, Text } from '@homeup/ui';
-import { LEAVE_ALERT_OPTIONS, leaveAlertMinutes, useModules, type ModuleId } from '@homeup/core';
+import {
+  LEAVE_ALERT_OPTIONS,
+  MAX_SNOOZE_BUTTONS,
+  SNOOZE_CHOICES,
+  leaveAlertMinutes,
+  toggleSnoozePick,
+  useModules,
+  type ModuleId,
+} from '@homeup/core';
 import { getCurrentSupabaseClient } from '@/lib/supabase-client';
 import { getStoredServer } from '@/lib/server-config';
 import { useDataCache } from '@/lib/data-cache';
+import { readSnoozePick, saveSnoozePick } from '@/lib/notification-snooze';
 import { ReplyNotificationRows } from './assistant-settings';
 import { SettingsInset, SettingsLabel, SettingsPanel, SettingsSwitchRow } from './settings-panel';
 
@@ -220,6 +229,46 @@ export function NotificationKinds() {
           </SettingsInset>
         </View>
       )}
+    </SettingsPanel>
+  );
+}
+
+/**
+ * The snooze buttons on task and event reminders, for this phone. Up to three:
+ * Android fits no more on a notification. A choice that would make a fourth
+ * stays off until another is turned off.
+ */
+export function SnoozeSettings() {
+  const modules = useModules();
+  const [pick, setPick] = React.useState(readSnoozePick);
+  if (!modules.enabled.has('household') && !modules.enabled.has('calendar')) return null;
+
+  const toggle = (minutes: number) => {
+    const next = toggleSnoozePick(pick, minutes);
+    setPick(next);
+    void saveSnoozePick(next);
+  };
+
+  return (
+    <SettingsPanel
+      icon={AlarmClock}
+      title="Snooze buttons"
+      description="Pick up to three for task and event reminders. Bin night and time to leave get short ones of their own."
+    >
+      <SettingsInset>
+        {SNOOZE_CHOICES.map((choice) => {
+          const on = pick.includes(choice.minutes);
+          return (
+            <SettingsSwitchRow
+              key={choice.minutes}
+              title={choice.label}
+              checked={on}
+              onChange={() => toggle(choice.minutes)}
+              disabled={on ? pick.length === 1 : pick.length >= MAX_SNOOZE_BUTTONS}
+            />
+          );
+        })}
+      </SettingsInset>
     </SettingsPanel>
   );
 }

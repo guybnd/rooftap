@@ -1,3 +1,5 @@
+import type { LegalLinks } from "./legal-links";
+
 export interface PublicConfig {
   supabaseUrl: string;
   supabaseAnonKey: string;
@@ -17,6 +19,11 @@ export interface PublicConfig {
   minAppRuntime?: string | null;
   /** The newest phone release, with its runtime and page; null when there is none to offer. */
   latestApp?: { version: string; runtime: string; url: string } | null;
+  /**
+   * Terms and Privacy Policy links for the sign-in screen (legal-links.ts).
+   * null or absent = show no line. Paths may be relative to the server.
+   */
+  legal?: LegalLinks | null;
 }
 
 // HOUP-69: response-shape guard for GET /api/public-config — the native

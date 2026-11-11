@@ -23,6 +23,7 @@ import {
 } from '@homeup/core';
 import { ChatChanges, SuggestLine } from './chat-changes';
 import { useDataCache } from '@/lib/data-cache';
+import { perfMark } from '@/lib/perf-log';
 
 /** A row that is a fact (a night, an occasion): its line, opening its screen. */
 function InfoLine({ row }: { row: Extract<BriefRow, { kind: 'item' }> }) {
@@ -85,6 +86,8 @@ export function HelperBrief({ helper }: { helper: string }) {
   const { group, currentUserId } = useDataCache();
   const state = useHelperBrief({ helper, groupId: group?.id, currentUserId });
   const def = moduleHelper(helper);
+  const ready = !!state?.brief;
+  React.useEffect(() => perfMark('helper:brief', `${helper} ready=${ready}`), [helper, ready]);
   if (!def) return null;
   const brief = state?.brief;
   const doAll = (section: BriefSection) => {

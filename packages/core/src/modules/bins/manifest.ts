@@ -4,6 +4,8 @@ export const binsModule = defineModule({
   id: 'bins',
   label: 'Bin night',
   description: 'Which bins go out tonight, whose turn it is, and a reminder before bed.',
+  feeds: 'Puts bin night on the Calendar',
+  startingSets: ['everything'],
   askStarters: ["Our bins move to Wednesdays from next week"],
   iconId: 'trash-2',
   defaultEnabled: false,

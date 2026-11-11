@@ -22,10 +22,22 @@ const EXPECTED: Record<string, string | null> = {
   landing: null,
   // the privacy page the landing page links to
   privacy: null,
+  // the Terms page the landing page and sign-in link to
+  terms: null,
+  // the self-host page the landing page links to
+  "self-host": null,
   // (auth) group
   login: null,
   logout: null,
   welcome: null,
+  signup: null,
+  "forgot-password": null,
+  "reset-password": null,
+  // household invite links: the owner's screen and the page a link opens
+  invite: null,
+  join: null,
+  // the public account deletion page (Play Store)
+  "delete-account": null,
   callback: null,
   "calendar-callback": null,
   // MCP sign-in: OAuth discovery and the consent page (lib/mcp-oauth.ts)

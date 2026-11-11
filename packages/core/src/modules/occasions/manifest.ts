@@ -4,6 +4,8 @@ export const occasionsModule = defineModule({
   id: 'occasions',
   label: 'Occasions',
   description: 'Birthdays and other days, gift ideas and wishlists, with surprises kept from the person they are for.',
+  feeds: 'Gift ideas go to Shopper, and gifts to Costs',
+  startingSets: ['everything'],
   askStarters: ["Gift ideas for Mum's birthday under $50"],
   iconId: 'gift',
   defaultEnabled: false,

@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   WHATS_NEW_MAX_ROWS,
   buildWhatsNewView,
+  changesLabel,
   fixesLabel,
+  initialOpenGroups,
   isEntryVisible,
   resolveSeen,
   serializeSeen,
@@ -126,6 +128,24 @@ describe('buildWhatsNewView', () => {
     expect(view.fixes).toEqual([]);
     expect(view.groups[0].entries.map((e) => e.id)).toEqual(['s', 'f']);
   });
+
+  it('opens the history on the newest release only', () => {
+    const view = buildWhatsNewView(
+      [entry('u'), entry('a', { version: '1.3.0' }), entry('b', { version: '1.2.0' })],
+      [
+        { version: '1.3.0', date: '2026-10-14' },
+        { version: '1.2.0', date: '2026-10-01' },
+      ],
+      { maxRows: Infinity, spotlights: false, foldFixes: false }
+    );
+    expect([...initialOpenGroups(view)]).toEqual(['latest']);
+    const released = buildWhatsNewView([entry('a', { version: '1.3.0' }), entry('b', { version: '1.2.0' })], [
+      { version: '1.3.0', date: '2026-10-14' },
+      { version: '1.2.0', date: '2026-10-01' },
+    ]);
+    expect([...initialOpenGroups(released)]).toEqual(['1.3.0']);
+    expect([...initialOpenGroups(buildWhatsNewView([], []))]).toEqual([]);
+  });
 });
 
 describe('copy helpers', () => {
@@ -150,5 +170,7 @@ describe('copy helpers', () => {
     expect(whatsNewHeadline(multi)).toBe('2 releases since you last looked');
     expect(fixesLabel(1)).toBe('And 1 smaller fix');
     expect(fixesLabel(4)).toBe('And 4 smaller fixes');
+    expect(changesLabel(1)).toBe('1 change');
+    expect(changesLabel(24)).toBe('24 changes');
   });
 });

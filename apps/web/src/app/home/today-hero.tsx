@@ -60,6 +60,7 @@ import {
   ListItemTrailing,
 } from '@/components/ui/list-item';
 import { LeadingTile } from '@/components/ui/leading-tile';
+import { AvatarStack } from '../setup/assignee-picker';
 import { sectionIconFor } from '@/lib/section-icons';
 import { iconAndLabelForCode, type WeatherData } from './use-weather';
 import {
@@ -803,7 +804,11 @@ function HeroRow({
         )}
         {item.module && <ModuleRowTrailing moduleId={item.module.id} detail={item.module.detail} />}
         {/* Nobody to show (an occasion, an unattributed event): no avatar, rather than a "U" for unknown. */}
-        {item.assignedTo && <AvatarBubble userId={item.assignedTo} profiles={profiles} size={22} />}
+        {item.assignees && item.assignees.length > 1 ? (
+          <AvatarStack ids={item.assignees} profiles={profiles} size={22} />
+        ) : (
+          item.assignedTo && <AvatarBubble userId={item.assignedTo} profiles={profiles} size={22} />
+        )}
       </ListItemTrailing>
     </ListItem>
   );

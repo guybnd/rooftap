@@ -22,8 +22,8 @@ describe("resolveEnabledModules", () => {
     expect([...on].sort()).toEqual(DEFAULT_ON);
   });
 
-  it("ships the base set on by default: Tasks, Calendar, Checklists, Documents, and Money insights and Meal plan for when Costs or Recipes is on", () => {
-    expect(DEFAULT_ON).toEqual(["calendar", "checklists", "documents", "household", "meals", "money-insights"]);
+  it("ships the everyday set on by default: Tasks, Calendar, Groceries, Recipes with Meal plan, Costs with Money insights, Documents and Checklists", () => {
+    expect(DEFAULT_ON).toEqual(["calendar", "checklists", "costs", "documents", "groceries", "household", "meals", "money-insights", "recipes"]);
   });
 
   it("lets a row override the default in either direction", () => {
@@ -148,10 +148,10 @@ describe("modules and routes", () => {
     }
   });
 
-  it("a new household gets Home plus the four base sections", () => {
+  it("a new household gets Home plus the everyday sections", () => {
     const on = resolveEnabledModules({ available: null, rows: [] });
     expect(getEnabledSections(on).map((s) => s.id).sort()).toEqual(
-      ["calendar", "checklists", "documents", "home", "household"]
+      ["calendar", "checklists", "costs", "documents", "groceries", "home", "household", "recipes"]
     );
   });
 });

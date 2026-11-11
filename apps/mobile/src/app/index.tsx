@@ -4,6 +4,10 @@
 // app, skipping the picker on every later launch (the "does it remember it"
 // requirement).
 //
+// A first launch with no stored server opens sign-in against the official
+// server, which offers "Use my own server" under it. Only a build with no
+// official server opens on the picker.
+//
 // Cold-start fix: decides from the stored session's presence, not from
 // auth.getSession(), which blocks on a token refresh round trip whenever the
 // access token has expired (every launch more than an hour after the last).
@@ -12,7 +16,7 @@
 import * as React from 'react';
 import { Redirect } from 'expo-router';
 import { ScreenBackground } from '@homeup/ui';
-import { getStoredServer } from '@/lib/server-config';
+import { OFFICIAL_SERVER_URL, getStoredServer } from '@/lib/server-config';
 import { getSupabaseClient, hasStoredSession } from '@/lib/supabase-client';
 
 type Destination = '/server-picker' | '/login' | '/home';
@@ -25,7 +29,7 @@ export default function Index() {
     (async () => {
       const server = await getStoredServer();
       if (!server) {
-        if (!cancelled) setDestination('/server-picker');
+        if (!cancelled) setDestination(OFFICIAL_SERVER_URL ? '/login' : '/server-picker');
         return;
       }
       getSupabaseClient(server.config);

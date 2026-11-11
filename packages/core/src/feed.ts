@@ -8,6 +8,12 @@ import { addDaysISO, daysBetweenISO } from './date-utils';
 import { taskOwnerModule, isReminderOwner, reminderOwnerSection } from './task-modules';
 import { compareStrings } from './sort';
 
+/** Whether a feed item is for `userId`: one of its people, or its one person. */
+export function isMine(item: Pick<HeroItem, 'assignedTo' | 'assignees'>, userId: string | null): boolean {
+  if (!userId) return false;
+  return item.assignees && item.assignees.length > 0 ? item.assignees.includes(userId) : item.assignedTo === userId;
+}
+
 /**
  * The feed's day header for a due date. Anything already past collapses into
  * "Earlier" (overdue work reads as one pile, not a list of old dates), the
@@ -321,7 +327,7 @@ export const NO_HERO_FEED_FILTER: HeroFeedFilter = { type: 'all', mineOnly: fals
 export function filterHeroFeed(items: HeroItem[], filter: HeroFeedFilter): HeroItem[] {
   return items.filter((i) => {
     if (filter.type !== 'all' && i.type !== filter.type) return false;
-    if (filter.mineOnly && i.assignedTo !== filter.userId) return false;
+    if (filter.mineOnly && !isMine(i, filter.userId)) return false;
     return true;
   });
 }

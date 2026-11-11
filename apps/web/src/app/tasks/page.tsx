@@ -8,7 +8,7 @@ import { use$ } from '@legendapp/state/react';
 import { syncState } from '@legendapp/state';
 import { useDataCache } from '@/lib/data-cache';
 import { createClient } from '@/lib/supabase/client';
-import { HouseholdTask, Checklist, ChecklistTaskItem, householdTasks$, checklists$, checklistItems$, useReconnectSync, useStoreHelpers, useStoreLoaded, createPendingActionTracker, usePendingIds, createUndoBatchTracker, useModules, isTaskOwnerEnabled, splitUpcomingByWindow, upcomingWindowDays, bucketTasksByDueDate, compareTasksByDueDateTimeOrder, groupTasksByPerson, moveInCountdown, checklistsById, checklistItemsByChecklistId, applyTaskCompletion, type TaskSnooze } from '@homeup/core';
+import { HouseholdTask, Checklist, ChecklistTaskItem, householdTasks$, checklists$, checklistItems$, useReconnectSync, useStoreHelpers, useStoreLoaded, createPendingActionTracker, usePendingIds, createUndoBatchTracker, useModules, isTaskOwnerEnabled, splitUpcomingByWindow, upcomingWindowDays, bucketTasksByDueDate, compareTasksByDueDateTimeOrder, groupTasksByPerson, moveInCountdown, checklistsById, checklistItemsByChecklistId, applyTaskCompletion, isAssignedTo, type TaskSnooze } from '@homeup/core';
 import {
   Plus,
   RotateCw,
@@ -289,7 +289,7 @@ export default function TasksPage() {
 
   // Client-side filter (mine only) — applied for display only.
   const mineFiltered = mineOnly
-    ? tasks.filter((t) => t.assigned_to && t.assigned_to === currentUserId)
+    ? tasks.filter((t) => isAssignedTo(t, currentUserId))
     : tasks;
 
   // Fuzzy search narrows the already-filtered set, then feeds the grouping below

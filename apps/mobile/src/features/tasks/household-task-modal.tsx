@@ -4,10 +4,11 @@
 // apps/web/src/app/tasks/household-task-modal.tsx. The Repeat field
 // (./repeat-field) keeps its Google Calendar style rules.
 import * as React from 'react';
-import { TextInput, View } from 'react-native';
+import { TextInput } from 'react-native';
 import { StickyNote, CalendarDays, Clock, Flag, Repeat } from 'lucide-react-native';
 import {
   Avatar,
+  AvatarStack,
   DueEditor,
   ItemSheet,
   memberLabel,
@@ -24,7 +25,11 @@ import {
   type PersonOption,
 } from '@homeup/ui';
 import {
+  assigneePatch,
+  assigneesOf,
   dueValueLabel,
+  peopleLabel,
+  toggleAssignee,
   itemSheetDrafts,
   itemTitleError,
   matchTitleWords,
@@ -64,7 +69,8 @@ interface Draft {
   dueDate: string;
   dueTime: string;
   priority: Priority;
-  assignedTo: string | null;
+  /** Who it is for, first picked first; [] = anyone. */
+  assignees: string[];
   repeat: TaskRepeatFields;
   notes: string;
 }
@@ -100,7 +106,13 @@ export function HouseholdTaskModal({
   onSave,
   onDelete,
 }: HouseholdTaskModalProps) {
-  const rules = useModules().server('tasks.repeat-rules');
+  const modules = useModules();
+  const rules = modules.server('tasks.repeat-rules');
+  // Several people needs the assignees list; an older server keeps one.
+  const assigneeList = modules.server('household.assignees');
+  const nextPeople = (ids: string[], id: string) =>
+    !id ? [] : assigneeList ? toggleAssignee(ids, id) : ids[0] === id ? ids : [id];
+  const addPerson = (ids: string[], id: string) => (ids.includes(id) ? ids : assigneeList ? [...ids, id] : [id]);
   const today = todayISO();
 
   // The caller remounts this component on `task?.id ?? 'new'`, so the
@@ -113,7 +125,7 @@ export function HouseholdTaskModal({
         dueTime: task.due_time?.slice(0, 5) ?? '',
         priority: (task.priority ?? 'medium') as Priority,
         // An edited task that is Unassigned stays Unassigned.
-        assignedTo: task.assigned_to ?? null,
+        assignees: assigneesOf(task),
         repeat: taskRepeatFields(task),
         notes: task.notes ?? '',
       };
@@ -127,7 +139,7 @@ export function HouseholdTaskModal({
         dueDate: initialDueDate || today,
         dueTime: initialDueTime ?? '',
         priority: 'medium',
-        assignedTo: currentUserId ?? null,
+        assignees: currentUserId ? [currentUserId] : [],
         repeat: { recurrence_days: null },
         notes: '',
       }
@@ -155,7 +167,7 @@ export function HouseholdTaskModal({
       if (w.kind === 'due') {
         next = { ...next, dueDate: w.value, repeat: repeatFollowDue(next.repeat, next.dueDate || null, w.value, today, rules) };
       } else if (w.kind === 'time') next = { ...next, dueTime: w.value, dueDate: next.dueDate || today };
-      else next = { ...next, assignedTo: w.value };
+      else next = { ...next, assignees: addPerson(next.assignees, w.value) };
     }
     return next;
   };
@@ -170,9 +182,9 @@ export function HouseholdTaskModal({
     keepAsText('time');
     setForm((f) => ({ ...f, dueTime, dueDate: view.dueDate }));
   };
-  const pickWho = (assignedTo: string | null) => {
+  const pickWho = (id: string) => {
     keepAsText('who');
-    set({ assignedTo });
+    setForm((f) => ({ ...f, assignees: nextPeople(view.assignees, id) }));
   };
   // A repeat picked while a date word is lit keeps that date.
   const pickRepeat = (repeat: TaskRepeatFields) => setForm((f) => ({ ...f, repeat, dueDate: view.dueDate }));
@@ -199,7 +211,7 @@ export function HouseholdTaskModal({
       due_date,
       due_time,
       priority: f.priority,
-      assigned_to: f.assignedTo,
+      ...assigneePatch(f.assignees, assigneeList),
       ...repeatFields,
       notes: f.notes.trim() || null,
     };
@@ -262,9 +274,12 @@ export function HouseholdTaskModal({
     ],
     [groupMembers, memberProfiles]
   );
-  const whoLabel = view.assignedTo ? personFirstName(memberLabel(view.assignedTo, memberProfiles)) : 'Anyone';
+  const whoLabel = peopleLabel(
+    view.assignees.map((id) => personFirstName(memberLabel(id, memberProfiles))),
+    'Anyone'
+  );
   const whoFace = (size: number) =>
-    view.assignedTo ? <Avatar userId={view.assignedTo} profiles={memberProfiles} size={size} /> : <AnyoneFace size={size} />;
+    view.assignees.length > 0 ? <AvatarStack ids={view.assignees} profiles={memberProfiles} size={size} max={2} /> : <AnyoneFace size={size} />;
 
   const quickFields: ItemSheetQuickField[] = [
     {
@@ -280,10 +295,10 @@ export function HouseholdTaskModal({
       id: 'who',
       label: whoLabel,
       icon: whoFace(18),
-      set: !!view.assignedTo,
+      set: view.assignees.length > 0,
       lit: lit('who'),
       trayLabel: 'Who',
-      editor: <WhoEditor people={people} value={view.assignedTo ?? ''} onChange={(id) => pickWho(id || null)} />,
+      editor: <WhoEditor people={people} selected={view.assignees} many={assigneeList} onChange={pickWho} />,
     },
   ];
 
@@ -323,8 +338,8 @@ export function HouseholdTaskModal({
               <TimeEditor value={view.dueTime} onChange={(dueTime) => pickTime(dueTime)} />
             </PropertyRow>
           )}
-          <PropertyRow id="who" leading={whoFace(28)} label="Who" value={whoLabel} valueSet={!!view.assignedTo}>
-            <WhoEditor people={people} value={view.assignedTo ?? ''} onChange={(id) => pickWho(id || null)} />
+          <PropertyRow id="who" leading={whoFace(28)} label="Who" value={whoLabel} valueSet={view.assignees.length > 0}>
+            <WhoEditor people={people} selected={view.assignees} many={assigneeList} onChange={pickWho} />
           </PropertyRow>
           <PropertyRow
             id="repeat"
@@ -360,16 +375,29 @@ export function HouseholdTaskModal({
   );
 }
 
-/** Who: faces to tap. A pick is final, so the row (or tray) closes. */
-function WhoEditor({ people, value, onChange }: { people: PersonOption[]; value: string; onChange: (id: string) => void }) {
+/**
+ * Who: faces to tap. Each face adds or takes off a person and the row stays
+ * open; Anyone clears and closes. On an older server one pick is final.
+ */
+function WhoEditor({
+  people,
+  selected,
+  many,
+  onChange,
+}: {
+  people: PersonOption[];
+  selected: string[];
+  many: boolean;
+  onChange: (id: string) => void;
+}) {
   const close = useClosePropertyRow();
   return (
     <PeoplePicker
       people={people}
-      value={value}
+      selected={selected}
       onChange={(id) => {
         onChange(id);
-        close();
+        if (!many || !id) close();
       }}
     />
   );

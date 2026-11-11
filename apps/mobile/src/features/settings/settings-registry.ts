@@ -15,7 +15,7 @@ import { AssistantHelpers, AssistantMemories, AssistantSettings } from './panels
 import { AssistantSpending } from './panels/assistant-spending';
 import { AssistantTelegram } from './panels/assistant-telegram';
 import { AssistantHomeAssistant } from './panels/assistant-home-assistant';
-import { NotificationKinds, NotificationsSettings } from './panels/notifications-settings';
+import { NotificationKinds, NotificationsSettings, SnoozeSettings } from './panels/notifications-settings';
 import { AiProvidersSettings } from './panels/ai-providers-settings';
 import { ApiKeysSettings } from './panels/api-keys-settings';
 import { FeedbackInbox } from './panels/feedback-inbox';
@@ -39,7 +39,7 @@ import { CalendarSetup } from './panels/calendar-setup';
 import { AppUpdates } from './panels/app-updates';
 import { CrashReportsSettings } from './panels/crash-reports-settings';
 import { ShopperSettings } from './panels/shopper-settings';
-import { ServerSettings, SignOutRow } from './panels/server-settings';
+import { DeleteAccountRow, ServerSettings, SignOutRow } from './panels/server-settings';
 
 // Every connector's Settings > Connectors panel by its core id (connectors.ts,
 // .docs/connectors.md). The Connectors menu lists them in registry order, and
@@ -63,7 +63,7 @@ export interface SettingsTab {
 const TAB_PANELS: Record<SettingsTabId, Pick<SettingsTab, 'fold' | 'panels'>> = {
   you: {
     fold: true,
-    panels: [AppearanceSettings, MotionSettings, HapticsSettings, NotificationsSettings, NotificationKinds, NavigationSettings, SectionPreferences, PatSettings, McpSettings],
+    panels: [AppearanceSettings, MotionSettings, HapticsSettings, NotificationsSettings, NotificationKinds, SnoozeSettings, NavigationSettings, SectionPreferences, PatSettings, McpSettings],
   },
   house: { fold: false, panels: [GroupManager, UsersManager, HomeProfileSettings] },
   tiles: { fold: false, panels: [ModulesSettings] },
@@ -71,7 +71,7 @@ const TAB_PANELS: Record<SettingsTabId, Pick<SettingsTab, 'fold' | 'panels'>> = 
     fold: true,
     panels: [...CONNECTORS.map((c) => CONNECTOR_PANELS[c.panel]), HouseholdAiKeys, AiProvidersSettings, ApiKeysSettings, FeedbackInbox, ServerSettings],
   },
-  about: { fold: false, panels: [AppUpdates, CrashReportsSettings, SignOutRow] },
+  about: { fold: false, panels: [AppUpdates, CrashReportsSettings, SignOutRow, DeleteAccountRow] },
 };
 
 export const settingsTabs: SettingsTab[] = SETTINGS_TABS.map((meta) => ({ ...meta, ...TAB_PANELS[meta.id] }));

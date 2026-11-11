@@ -4,9 +4,11 @@ export const groceriesModule = defineModule({
   id: 'groceries',
   label: 'Groceries',
   description: 'A shared shopping list with aisles and an item library.',
+  feeds: 'Fills from your recipes, and a shop can become a cost',
+  startingSets: ['everything'],
   askStarters: [{ text: 'Add everything for tacos for 6', with: ['recipes'] }, "Add milk, eggs and bread to the list"],
   iconId: 'shopping-cart',
-  defaultEnabled: false,
+  defaultEnabled: true,
   enhances: ['costs', 'recipes'],
   section: {
     label: 'Groceries',

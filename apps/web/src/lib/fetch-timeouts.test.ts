@@ -21,7 +21,11 @@ const repoRoot = path.resolve(__dirname, "../../../..");
 const BROWSER_ONLY = new Set(["apps/web/src/lib/bins-api.ts"]);
 
 function serverFiles(): string[] {
-  const out = execFileSync("git", ["ls-files", "apps/web/src/app/api", "apps/web/src/lib"], { cwd: repoRoot, encoding: "utf8" });
+  // The Edge Functions too: a hung push or Google call holds a whole cron run.
+  const out = execFileSync("git", ["ls-files", "apps/web/src/app/api", "apps/web/src/lib", "supabase/functions"], {
+    cwd: repoRoot,
+    encoding: "utf8",
+  });
   return out
     .split("\n")
     .filter((f) => /\.(ts|tsx)$/.test(f) && !/\.test\.tsx?$/.test(f) && !BROWSER_ONLY.has(f));

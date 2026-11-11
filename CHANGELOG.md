@@ -8,6 +8,52 @@ Each change people would notice gets a `whats-new/` entry (see `whats-new/README
 
 ## Unreleased
 
+## 1.3.0 (2026-11-11)
+
+This release ships a new APK: snooze task and event reminders straight from the notification. It installs over 1.2.0.
+
+- Sign up, reset a password, delete an account. Make an account with your email, and get a link when you forget your password, where the server allows it. Delete your account in Settings, About. A home that you share stays with the others.
+- The household chat keeps Just me items private. The household chat no longer shows Just me to-dos, events, Setup items or loyalty cards, even your own. Ask about them in your own chat.
+- New households start with the everyday tiles. A new household now starts with Groceries, Recipes, Meal plan and Costs on, next to Tasks, Calendar, Documents and Checklists. Households that already chose their tiles keep them.
+- An easier start for new homes. A new home now starts from a set of tiles in one tap, and can look around a sample home first. Home shows a short list of first steps for the first two weeks.
+- Faster helper switching on the phone. Switching between helpers in the chat now updates the chat in place instead of building it again, so the new helper shows sooner. Switching to Rooftap also no longer opens the keyboard.
+- Invite people with a link or QR code. Share one link or QR code, and the person joins your home. They can make an account on the same page, so they do not need one first.
+- First week helps you set up Rooftap on iPhone. On an iPhone, the First week card on Home shows how to add Rooftap to the Home Screen. Once it is there, the card asks you to turn on notifications.
+- Rooftap on iPhone, from the Home Screen. On an iPhone or iPad, add Rooftap to the Home Screen from Safari. It gets the Rooftap icon and name, and can send you notifications.
+- The phone app opens on sign-in. On a first launch the phone app now opens on sign-in. If you run your own server, tap Use my own server under the form.
+- Quieter empty screens. An empty Groceries list no longer offers to add an aisle. Empty Documents and Costs no longer suggest questions with nothing to answer from.
+- Put several people on a to-do or event. Under Who, tap more than one face to make a to-do or event for several people. Each of them gets the reminders and sees it under Mine, and Home shows all their faces.
+- Snooze a reminder from the notification. Task and event reminders on your phone now have snooze buttons, 1 hour, 1 day and 1 week to start. Pick your own in Settings. Bin night and time to leave get short ones.
+- What's new opens on the latest release. The list of changes in Settings now shows only the newest release. Older releases fold to one line each, so tap one to see what it brought.
+- Swap chats from the chat bubble. Hold the chat bubble still to see your other chats and switch to one, or close the bubble. On a computer, right-click it.
+- Smoother chat on the web. The moving rainbow edge round the chat made the whole chat redraw on every frame. Now only the edge redraws, so switching helpers and scrolling the chat respond much faster in the browser.
+- Choose who an event is for, and when to be reminded. An event can now be for one person in your household. Pick them under Who. Reminders now also offer 2 and 3 days before, and Custom sets any number of days up to 30.
+- Home shows who an event is for. When you pick someone under Who on an event, Home now shows their face on the event row straight away. Before, it showed who added the event.
+- Faster switching between helpers. The helper you tap in the chat now lights up at once, and a long chat opens on its latest messages. Tap Show earlier to see older ones.
+- Fewer false load errors. A short network drop no longer leaves a "Couldn't load your household" bar on the screen. The app tries again on its own first. If it still fails, a small chip at the top says so and no longer covers the date.
+- Move the chat bubble. Drag the chat bubble to move it out of the way. It snaps to the nearer side and stays where you leave it.
+- Settings in colour. The Settings tabs are now five coloured tiles, and each setting has its own coloured icon. Connected is now called Linked.
+- Terms and privacy at sign-in. The sign-in screen now links the Terms and the Privacy Policy of the hosted service. The Privacy page now also covers Assistant chats, bank feeds and where your data is kept.
+- Change notes show in full. On the phone, the list of app changes now shows the short description under each title.
+- Assistant settings in tabs. Assistant settings now open in tabs: General, Helpers, Memories, Spending and Connections. Each helper card shows who sees its chat and a full box for your notes.
+- Answers show your real items. Rooftap now shows things you have, such as your list by aisle, as their real rows. You can tick and edit them in the chat. A helper's summary also stays above your questions.
+- The chat bubble shows when a reply is in. When you leave a chat and it answers, its bubble or Back to chat pill now shows a dot and says who replied. Close the bubble with its small x; holding it no longer makes it vanish.
+- Tidier chat answers and chat picker. Rows in an answer now span the whole chat, so they sit centred like the helper's own rows. When you hold the Rooftap button to pick a chat, the one you will open wears the rainbow outline.
+- Deleted items stay deleted. When you delete something on one device, an older edit from another device that was offline no longer brings it back.
+- Meet the Groceries helper. Tap the Rooftap mark on your shopping list. The helper opens on what this week's dinners still need and the things you usually buy again, and one tap adds each to the list. Then ask it to plan or trim the shop.
+- Helper asks sit above the text box. In a helper chat, Catch me up and the other suggested asks now sit just above the text box. You no longer scroll down past the summary to find them.
+- Smoother helper chats with rows you can swipe. Moving between Rooftap and a helper now swaps the chat in place. The brief uses your list's own rows, so you can swipe one away. The helper also offers new things you can add with one tap.
+- The open helper wears the rainbow. In the row of helpers, the chat you have open now has the same rainbow outline as the chat card, so you can see which one is up.
+- Helpers answer with rows. Helpers now show to-dos, bills and recipes as rows you can tick and open, not as a typed list. The row of helpers keeps its place when you pick one.
+- Each helper has its own mark. A helper chat now shows the Rooftap roof over the helper's own icon, in its colour. You can tell at a glance which helper you are talking to.
+- Helpers open at the top. A helper chat now opens at the top of its summary, not at the bottom. The chat also moves more smoothly when the keyboard opens.
+- Quicker ways into your helpers. Hold the + and slide up to open a helper or Rooftap. In the chat, tap or swipe the row at the top to switch between them. After you open an item from a chat, a Back to chat button takes you back.
+- Four new helpers for money, your week, dinners and gifts. Costs, Tasks, Recipes and Occasions now have their own helper chat. Each one opens on what needs you today, such as bills due, overdue to-dos, open nights or a birthday with no gift yet.
+- Add a recipe without leaving the screen. Recipe in the + menu now opens the form over the screen you are on. Before, the screen behind went blank or you landed on Recipes. After you save, tap Open to see the recipe.
+- Settings in five tabs. Settings now opens on five tabs: You, Home, Tiles, Connected and About. Each setting folds into one short row, so you can find it without scrolling, and a tap opens it.
+- Share a helper chat with your household. In Settings, Assistant, owners can make a helper chat one the whole home shares, so anyone can add to the shop there. Each helper also takes short notes, such as where you shop.
+- Modules are now tiles. Each part of Rooftap is now called a tile. Turn tiles on or off in Settings > Tiles. The people in your household are under Settings > Home.
+
 ## 1.2.0 (2026-11-07)
 
 This release ships a new APK: ask the Assistant by voice with the phone's own speech recognition. It installs over 1.1.1 to 1.1.3.

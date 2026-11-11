@@ -27,6 +27,10 @@ export interface ModuleDef {
   iconId: string;
   /** On for a new household with no `group_modules` row for this module. */
   defaultEnabled: boolean;
+  /** One line on what it does for the other tiles, for the first-run picker. */
+  feeds?: string;
+  /** Starting sets that tick it besides Everyday (first-run.ts). */
+  startingSets?: readonly ('moving' | 'everything')[];
   /** Hard dependencies: can't be on unless these are on. */
   requires?: ModuleId[];
   /** Soft dependencies: cross-module features appear only when both are on. */
@@ -55,6 +59,8 @@ export const MODULES: ModuleDef[] = MODULE_MANIFESTS.map((m) => {
     iconId: m.iconId,
     defaultEnabled: m.defaultEnabled,
   };
+  if ('feeds' in m) def.feeds = m.feeds;
+  if ('startingSets' in m) def.startingSets = m.startingSets;
   if ('requires' in m) def.requires = [...m.requires];
   if ('enhances' in m) def.enhances = [...m.enhances];
   if ('minSchema' in m) def.minSchema = m.minSchema;

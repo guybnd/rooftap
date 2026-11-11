@@ -7,6 +7,7 @@ import type { HouseholdTask } from '../../types';
 import { addDaysISO, daysBetweenISO, dueDayLabel } from '../../date-utils';
 import type { BriefRow, BriefSection, HelperBrief } from '../../module-helpers';
 import { compareTasksByDueDateTimeOrder } from './task-list-view';
+import { isAssignedTo } from '../../assignees';
 
 /** At most this many rows a section; the chat folds the rest under Show all. */
 const WEEK_ROWS = 40;
@@ -35,7 +36,7 @@ export function weekBrief(input: {
   if (today.length) sections.push({ id: 'today', title: 'Today', rows: today.slice(0, WEEK_ROWS).map(row), module: 'household' });
   if (week.length) sections.push({ id: 'week', title: 'Later this week', rows: week.slice(0, WEEK_ROWS).map(row), module: 'household' });
 
-  const mine = input.me ? [...late, ...today].filter((t) => t.assigned_to === input.me).length : 0;
+  const mine = input.me ? [...late, ...today].filter((t) => isAssignedTo(t, input.me)).length : 0;
   const parts: string[] = [];
   if (late.length) parts.push(`${late.length} overdue`);
   parts.push(today.length ? `${today.length} for today` : 'nothing due today');

@@ -33,6 +33,7 @@ import {
   Text,
   AssigneePicker,
   Avatar,
+  AvatarStack,
   ChecklistMeter,
   EditableText,
   EntityComments,
@@ -73,6 +74,7 @@ import {
   type HouseholdTask,
   type ModuleFeatureId,
   type TaskRepeatFields,
+  assigneesOf,
 } from '@homeup/core';
 import { SNOOZE_PRESETS, SnoozeDatePicker, TaskQuickMenu, type QuickMenuMode, type SnoozeDuration } from './task-quick-menu';
 import { sectionIconFor } from '@/lib/section-icons';
@@ -744,12 +746,15 @@ export function HeroTaskRow({
       </ListItemContent>
       <ListItemTrailing>
         {opensElsewhere ? (
-          task.assigned_to ? (
+          assigneesOf(task).length > 1 ? (
+            <AvatarStack ids={assigneesOf(task)} profiles={memberProfiles} size={22} max={2} />
+          ) : task.assigned_to ? (
             <Avatar userId={task.assigned_to} profiles={memberProfiles} size={22} ringed={task.assigned_to === currentUserId} />
           ) : null
         ) : (
           <AssigneePicker
             value={task.assigned_to}
+            people={assigneesOf(task)}
             groupMembers={groupMembers}
             memberProfiles={memberProfiles}
             currentUserId={currentUserId}

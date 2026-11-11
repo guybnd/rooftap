@@ -845,23 +845,30 @@ export function AnyoneFace({ size = 34 }: { size?: number }) {
   );
 }
 
+/**
+ * Faces to tap. With `selected` it picks several people: each face toggles,
+ * and the '' option (Anyone or Everyone) is on while nobody is picked.
+ */
 export function PeoplePicker({
   people,
-  value,
+  value = '',
+  selected,
   onChange,
 }: {
   people: PersonOption[];
-  value: string;
+  value?: string;
+  selected?: readonly string[];
   onChange: (id: string) => void;
 }) {
+  const many = selected !== undefined;
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-3 py-1" accessibilityRole="radiogroup">
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-3 py-1" accessibilityRole={many ? undefined : 'radiogroup'}>
       {people.map((p) => {
-        const on = p.id === value;
+        const on = many ? (p.id ? selected.includes(p.id) : selected.length === 0) : p.id === value;
         return (
           <Pressable
             key={p.id || '_anyone'}
-            accessibilityRole="radio"
+            accessibilityRole={many ? 'checkbox' : 'radio'}
             accessibilityState={{ checked: on }}
             accessibilityLabel={p.name}
             onPress={() => {

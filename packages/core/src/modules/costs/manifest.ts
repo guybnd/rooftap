@@ -6,9 +6,14 @@ export const costsModule = defineModule({
   id: 'costs',
   label: 'Costs & Budget',
   description: 'Bills, recurring costs and a monthly budget.',
-  askStarters: ["Which subscriptions could we cancel?", "Why was last month higher than usual?"],
+  feeds: 'Bills due show on Home and the Calendar',
+  startingSets: ['moving', 'everything'],
+  askStarters: [
+    { text: "Which subscriptions could we cancel?", with: [], needsData: true },
+    { text: "Why was last month higher than usual?", with: [], needsData: true },
+  ],
   iconId: 'wallet',
-  defaultEnabled: false,
+  defaultEnabled: true,
   enhances: ['setup', 'groceries', 'search'],
   section: {
     label: 'Costs & Budget',
