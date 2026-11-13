@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { observable } from '@legendapp/state';
 import {
   createFallbackScheduler,
+  createCatchUp,
   MAX_SERVER_ERROR_ATTEMPTS,
   reconcileDeletedRows,
   whenPullsSettled,
@@ -199,5 +200,50 @@ describe('whenPullsSettled', () => {
     const run = vi.fn();
     whenPullsSettled(observable({ isLoaded: true, isGetting: false }), run);
     expect(run).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Coming back to the app fired a pull and a delete check for every mounted
+// reader of a store, several times over (app active, network events, each
+// channel rejoin). One store now shares one pull per burst.
+describe('createCatchUp', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('runs the first request at once and folds a burst into one trailing pull', () => {
+    vi.useFakeTimers();
+    const state$ = observable({ isLoaded: true, isGetting: false });
+    const pull = vi.fn(() => state$.isGetting.set(true));
+    const request = createCatchUp(state$, pull, 1_000);
+
+    request();
+    expect(pull).toHaveBeenCalledTimes(1);
+    for (let i = 0; i < 50; i++) request();
+    expect(pull).toHaveBeenCalledTimes(1);
+
+    vi.advanceTimersByTime(1_000);
+    // Still waiting for the first pull to land.
+    expect(pull).toHaveBeenCalledTimes(1);
+    state$.isGetting.set(false);
+    expect(pull).toHaveBeenCalledTimes(2);
+  });
+
+  it('waits out the gap even before Legend marks the pull as running', () => {
+    vi.useFakeTimers();
+    const state$ = observable({ isLoaded: true, isGetting: false });
+    const pull = vi.fn();
+    const request = createCatchUp(state$, pull, 1_000);
+
+    request();
+    request();
+    request();
+    expect(pull).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(1_000);
+    expect(pull).toHaveBeenCalledTimes(2);
+
+    vi.advanceTimersByTime(5_000);
+    request();
+    expect(pull).toHaveBeenCalledTimes(3);
   });
 });

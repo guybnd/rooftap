@@ -54,8 +54,15 @@ const nativeStoreEnvironment: StoreEnvironment = {
     return AppState.currentState === 'active';
   },
   subscribeReconnect(sync) {
+    // Only a real offline-to-online change. NetInfo calls a new listener at
+    // once with the current state, and again on every reachability probe or
+    // network type change while still online; a pull on each of those ran on
+    // every screen mount and several times on every return to the app.
+    let wasConnected: boolean | null = null;
     const netSub = NetInfo.addEventListener((state) => {
-      if (state.isConnected) sync();
+      const connected = !!state.isConnected;
+      if (connected && wasConnected === false) sync();
+      wasConnected = connected;
     });
     const onAppStateChange = (nextState: AppStateStatus) => {
       if (nextState === 'active') sync();

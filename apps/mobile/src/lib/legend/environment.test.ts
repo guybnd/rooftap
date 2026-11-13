@@ -147,6 +147,23 @@ describe('nativeStoreEnvironment', () => {
       expect(sync).toHaveBeenCalledTimes(1);
     });
 
+    it('ignores NetInfo events that are not an offline-to-online change', async () => {
+      const { nativeStoreEnvironment } = await import('./environment');
+      const sync = vi.fn();
+      nativeStoreEnvironment.subscribeReconnect(sync);
+
+      // The first call NetInfo makes on subscribe, then reachability updates.
+      fireNetInfo(true);
+      fireNetInfo(true);
+      fireNetInfo(true);
+      expect(sync).not.toHaveBeenCalled();
+
+      fireNetInfo(false);
+      fireNetInfo(true);
+      fireNetInfo(true);
+      expect(sync).toHaveBeenCalledTimes(1);
+    });
+
     it('calls sync() on an AppState transition to active', async () => {
       const { nativeStoreEnvironment } = await import('./environment');
       const sync = vi.fn();

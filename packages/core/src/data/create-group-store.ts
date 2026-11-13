@@ -134,6 +134,50 @@ export function whenPullsSettled(state$: Observable<{ isLoaded?: boolean; isGett
   void when(() => !!state$.isLoaded.get() && !state$.isGetting.get(), run);
 }
 
+// Pulls asked for closer together than this share one pull (see createCatchUp).
+export const CATCH_UP_MIN_GAP_MS = 1_000;
+
+/**
+ * One store's catch-up pull, coalesced. Coming back to the app fires several
+ * triggers at once (the app turning active, the network waking, each realtime
+ * channel dropping and rejoining), and each used to start its own pull and
+ * delete check. Here a request that lands while a pull is still running (or
+ * within CATCH_UP_MIN_GAP_MS of the last one) waits for it, and all such
+ * requests share one trailing pull, so nothing that changed meanwhile is
+ * missed.
+ */
+export function createCatchUp(
+  state$: Observable<{ isLoaded?: boolean; isGetting?: boolean }>,
+  pull: () => void,
+  minGapMs: number = CATCH_UP_MIN_GAP_MS,
+): () => void {
+  let lastPullAt = -Infinity;
+  let queued = false;
+  const run = () => {
+    lastPullAt = Date.now();
+    pull();
+  };
+  return () => {
+    if (queued) return;
+    const busy = !!state$.isGetting.peek() || Date.now() - lastPullAt < minGapMs;
+    if (!busy) {
+      run();
+      return;
+    }
+    queued = true;
+    // Legend's sync() is async, so isGetting may not be set yet right after
+    // a pull starts: wait out the gap first, then for every pull in flight.
+    setTimeout(
+      () =>
+        whenPullsSettled(state$, () => {
+          queued = false;
+          run();
+        }),
+      Math.max(0, minGapMs - (Date.now() - lastPullAt)),
+    );
+  };
+}
+
 function markResetSyncDone(collection: string, groupId: string): void {
   try {
     getStoreEnvironment().keyValue.setItem(`${RESET_SYNC_STORAGE_PREFIX}${collection}:${groupId}`, String(Date.now()));
@@ -496,14 +540,20 @@ function acquireSyncCoordinator(
   let coord = syncCoordinators.get(key);
   if (!coord) {
     const env = getStoreEnvironment();
-    const sync = () => {
+    // Every pull for this store goes through one coalesced catch-up: the
+    // fallback timer, channel failures and rejoins, and coming back to the
+    // app or back online. These used to run once per mounted consumer, so
+    // returning to the app fired a pull and a delete check for every screen,
+    // row and sheet that read the store (often a few hundred requests), all
+    // queued behind the token refresh, and pages waited on them.
+    const sync = createCatchUp(syncState(store$ as Observable), () => {
       void syncState(store$ as Observable).sync();
       // HOUP-243: watermark-independent delete reconciliation — see
       // reconcileDeletedRows above. Runs on the same cadence as the delta
       // pull and on channel-error recovery, so a missed delete is caught
       // within one fallback tick instead of waiting for the 24h full reset.
       void reconcileDeletedRows(env, collection, groupId, store$);
-    };
+    });
     const runResetIfDue = () => {
       if (!dueForResetSync(collection, groupId)) return;
       markResetSyncDone(collection, groupId);
@@ -540,6 +590,8 @@ function acquireSyncCoordinator(
       .subscribe((status: string) => scheduler.onChannelStatus(status));
 
     const unsubscribeForeground = env.subscribeForeground(startTimer, stopTimer);
+    // Back online or back in the app: catch up on what realtime missed.
+    const unsubscribeReconnect = env.subscribeReconnect(sync);
     if (env.isForeground()) startTimer();
 
     coord = {
@@ -547,6 +599,7 @@ function acquireSyncCoordinator(
       stop: () => {
         stopTimer();
         unsubscribeForeground();
+        unsubscribeReconnect();
         void env.supabase.removeChannel(channel);
       },
     };
@@ -575,21 +628,12 @@ function acquireSyncCoordinator(
  *  - **Channel-health watchdog + fallback scheduler**: see
  *    `acquireSyncCoordinator` above — a singleton per (collection, groupId),
  *    ref-counted across every mounted consumer of the same store.
+ *
+ * All three run once per store, not once per caller: the coordinator owns
+ * them, so a screen with many rows that each call this costs nothing extra.
  */
 export function useReconnectSync(store$: Observable<GroupRecord<SyncedRow>>) {
   const meta = storeMeta.get(store$);
-
-  useEffect(() => {
-    const env = getStoreEnvironment();
-    const sync = () => {
-      void syncState(store$ as Observable).sync();
-      // HOUP-243: catch a delete missed while offline as soon as we're back,
-      // instead of waiting on the watermark-gated delta pull (see
-      // reconcileDeletedRows above).
-      if (meta) void reconcileDeletedRows(env, meta.collection, meta.groupId, store$);
-    };
-    return env.subscribeReconnect(sync);
-  }, [store$, meta]);
 
   // Deliberately inert when this store has no meta, i.e. the `empty$`
   // fallback returned for a not-yet-known groupId.
