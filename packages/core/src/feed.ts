@@ -179,7 +179,7 @@ export function pickNowQueue(todayItems: HeroItem[], todayISO: string, max = NOW
   const open = todayItems.filter((i) => !i.done && !(now && heroItemEnded(i, now)));
   const timed = open
     .filter((i) => i.dueTime && (i.dueDate === null || i.dueDate <= todayISO))
-    .sort((a, b) => (a.dueDate ?? '').localeCompare(b.dueDate ?? '') || a.dueTime!.localeCompare(b.dueTime!));
+    .sort((a, b) => (a.dueDate ?? '').localeCompare(b.dueDate ?? '') || compareStrings(a.dueTime, b.dueTime));
   const overdue = open.filter((i) => i.overdue);
   const dueToday = open.filter((i) => i.dueDate === todayISO);
   const queue: HeroItem[] = [];

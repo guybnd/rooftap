@@ -19,6 +19,7 @@ import {
   type CsvTransaction,
 } from './bank-csv';
 import type { BankShareMode } from './up-bank';
+import { compareStrings } from '../../sort';
 
 /** The sharing choices for imported accounts, in the panel's order. */
 export const BANK_IMPORT_SHARE_CHOICES: readonly { mode: BankShareMode; title: string; description: string }[] = [
@@ -62,7 +63,7 @@ export function bankImportPreview(draft: BankImportDraft): BankImportPreview {
     transactions,
     count: transactions.length,
     span: csvDateSpan(transactions),
-    sample: [...transactions].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 3),
+    sample: [...transactions].sort((a, b) => compareStrings(b.date, a.date)).slice(0, 3),
     outCents,
     inCents,
   };

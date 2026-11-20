@@ -4,6 +4,7 @@
 // mobile and the server agree.
 
 import type { CostItem, HouseholdTask } from '../../types';
+import { compareStrings } from '../../sort';
 
 export type ShopperWantStatus = 'watching' | 'idea' | 'bought';
 
@@ -98,7 +99,7 @@ export function dailyLows(snapshots: readonly Pick<ShopperPriceSnapshot, 'captur
     const prev = byDay.get(s.captured_on);
     if (prev === undefined || s.price_cents < prev) byDay.set(s.captured_on, s.price_cents);
   }
-  return Array.from(byDay, ([day, cents]) => ({ day, cents })).sort((a, b) => a.day.localeCompare(b.day));
+  return Array.from(byDay, ([day, cents]) => ({ day, cents })).sort((a, b) => compareStrings(a.day, b.day));
 }
 
 /** Days within `days` of `today` (inclusive), from a sorted daily series. */
@@ -190,7 +191,7 @@ export function sortOffers<T extends Pick<ShopperOffer, 'price_cents' | 'in_stoc
       a.price_cents - b.price_cents ||
       stockRank(a) - stockRank(b) ||
       (a.distance_m ?? Infinity) - (b.distance_m ?? Infinity) ||
-      a.store.localeCompare(b.store),
+      compareStrings(a.store, b.store),
   );
 }
 
@@ -244,7 +245,7 @@ export function isGoodNow(row: ShopperRowSummary): boolean {
 /** Watching list order: good now first, then by name. */
 export function sortWatching(rows: readonly ShopperRowSummary[]): ShopperRowSummary[] {
   return [...rows].sort(
-    (a, b) => Number(isGoodNow(b)) - Number(isGoodNow(a)) || a.want.title.localeCompare(b.want.title),
+    (a, b) => Number(isGoodNow(b)) - Number(isGoodNow(a)) || compareStrings(a.want.title, b.want.title),
   );
 }
 

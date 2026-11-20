@@ -28,6 +28,7 @@ import { type ToolData } from "../tool-data";
 import { binData } from "./bins-tools";
 import { eventRow } from "./calendar-tools";
 import { liveTasks, TASK_BASIC } from "./tasks-tools";
+import { compareStrings } from '@homeup/core';
 
 // get_agenda: what's due across the household in the next days, from every
 // switched-on module, each part under its own table's privacy rule.
@@ -71,7 +72,7 @@ export function agendaTools(ctx: HouseholdToolContext): HouseholdTool[] {
             .gte("starts_at", new Date(Date.now() - 12 * 3600_000).toISOString())
             .lte("starts_at", new Date(Date.now() + (span + 1) * 86_400_000).toISOString()),
         );
-        out.events = events.sort((a, b) => a.starts_at.localeCompare(b.starts_at)).map(eventRow);
+        out.events = events.sort((a, b) => compareStrings(a.starts_at, b.starts_at)).map(eventRow);
       }
       if (cost) {
         out.bills = billsDue(cost.items, cost.links, cost.today, span - 1).map((b) => ({
@@ -160,7 +161,7 @@ export async function agendaExtras(
           const days = rows
             .map((o) => ({ o, day: nextOccasionDay(o, today) }))
             .filter((x): x is { o: Occasion; day: string } => !!x.day && x.day <= last)
-            .sort((a, b) => a.day.localeCompare(b.day));
+            .sort((a, b) => compareStrings(a.day, b.day));
           if (days.length === 0) return;
           out.occasions = days.map(({ o, day }) => ({ id: o.id, title: occasionTitle(o, userId), date: day, kind: o.kind }));
         })

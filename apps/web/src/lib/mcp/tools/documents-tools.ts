@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { addDaysISO, folderBreadcrumb, type Document, type DocumentFolder } from "@homeup/core";
 import { compact, ok, personToday, toolRegistrar, type HouseholdTool, type HouseholdToolContext } from "../tool-kit";
+import { compareStrings } from '@homeup/core';
 
 // Documents: the household's filed papers, found by title, tag or folder.
 // Never the file itself or its details.
@@ -57,7 +58,7 @@ export function documentsTools(ctx: HouseholdToolContext): HouseholdTool[] {
           (d) =>
             !needle || [d.title, d.filename, path(d.folder_id), ...(d.tags ?? [])].some((s) => (s ?? "").toLowerCase().includes(needle)),
         )
-        .sort((a, b) => (until ? (a.expiry_date ?? "").localeCompare(b.expiry_date ?? "") : b.created_at.localeCompare(a.created_at)));
+        .sort((a, b) => (until ? (a.expiry_date ?? "").localeCompare(b.expiry_date ?? "") : compareStrings(b.created_at, a.created_at)));
       return ok({
         total: found.length,
         documents: found.slice(0, limit ?? 20).map((d) =>

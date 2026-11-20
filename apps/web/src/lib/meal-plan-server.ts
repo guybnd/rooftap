@@ -12,6 +12,7 @@ import {
   type RecipeIngredient,
 } from "@homeup/core";
 import { visibleEvents, visibleGroceryItems } from "@/lib/pat";
+import { compareStrings } from '@homeup/core';
 
 // The meal plan as the server reads it, for the assistant's meal tools and
 // Draft my week: the household's recipes, a week of nights, and (while their
@@ -70,7 +71,7 @@ export async function loadMealWeek(
       : Promise.resolve({ data: [] }),
   ]);
 
-  const recipes = ((recipeRes.data ?? []) as Recipe[]).sort((a, b) => a.title.localeCompare(b.title));
+  const recipes = ((recipeRes.data ?? []) as Recipe[]).sort((a, b) => compareStrings(a.title, b.title));
   const recipesById = new Map(recipes.map((r) => [r.id, r]));
   const ingredientsByRecipe = new Map<string, RecipeIngredient[]>();
   for (const ing of ((ingredientRes.data ?? []) as RecipeIngredient[]).sort((a, b) => a.position - b.position)) {

@@ -40,7 +40,7 @@ export function StoreSelect({
     setSaving(true);
     try {
       // Reuse an existing store with the same name if present
-      const existing = stores.find((s) => s.name.toLowerCase() === name.toLowerCase());
+      const existing = stores.find((s) => (s.name ?? '').toLowerCase() === name.toLowerCase());
       if (existing) {
         onChange(existing.id);
         setAdding(false);

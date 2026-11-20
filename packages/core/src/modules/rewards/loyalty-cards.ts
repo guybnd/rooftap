@@ -5,6 +5,7 @@
 
 import qrcode from 'qrcode-generator';
 import type { LoyaltyCard, LoyaltyCardFormat } from '../../types';
+import { compareStrings } from '../../sort';
 
 export const LOYALTY_CARD_FORMATS: { value: LoyaltyCardFormat; label: string }[] = [
   { value: 'code128', label: 'Barcode' },
@@ -65,7 +66,7 @@ export function loyaltyNumberTail(number: string): string {
 export function sortLoyaltyCards(cards: LoyaltyCard[]): LoyaltyCard[] {
   return [...cards].sort(
     (a, b) =>
-      a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) || a.number.localeCompare(b.number),
+      (a.name ?? '').localeCompare(b.name ?? '', undefined, { sensitivity: 'base' }) || compareStrings(a.number, b.number),
   );
 }
 

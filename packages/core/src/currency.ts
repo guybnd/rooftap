@@ -15,6 +15,7 @@ import { useSyncExternalStore } from 'react';
 import type { PickerOption } from './types';
 import { CURRENCY_BY_COUNTRY } from './region/currency-by-country';
 import { DEFAULT_CURRENCY } from './household-currency';
+import { compareStrings } from './sort';
 
 
 // Money reads in the app's English with the currency's own short symbol ("€",
@@ -101,7 +102,7 @@ export function currenciesToOptions(locale?: string): PickerOption[] {
       secondary: code,
       searchText: `${code} ${currencySymbol(code)}`,
     }))
-    .sort((a, b) => a.primary.localeCompare(b.primary));
+    .sort((a, b) => compareStrings(a.primary, b.primary));
 }
 
 /** The currency picker's value for "no explicit pick, follow the region". */

@@ -73,7 +73,7 @@ const config: ExpoConfig = {
   ...(IS_DEV
     ? {}
     : {
-        runtimeVersion: '57.8',
+        runtimeVersion: '57.9',
         updates: {
           url: 'https://u.expo.dev/4a9e9340-0bd0-451a-bfbf-593a88495d82',
           checkAutomatically: 'ON_LOAD',

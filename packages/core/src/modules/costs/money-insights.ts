@@ -10,6 +10,7 @@ import { formatMoney } from '../../money-format';
 import { BILL_CATEGORIES } from './recent-spend';
 import { mergeJointCopies, type BankAccountSummary, type BankTransaction, type CostActual, type CostBankLink } from './up-bank';
 import type { CostCadence, CostCategory, CostItem } from '../../types';
+import { compareStrings } from '../../sort';
 
 const DAY_MS = 86_400_000;
 
@@ -145,7 +146,7 @@ export function billsDue(items: readonly CostItem[], links: readonly CostBankLin
     if (!due || due < today || due > until) continue;
     out.push({ item, due, amountCents: item.amount ?? 0 });
   }
-  return out.sort((a, b) => a.due.getTime() - b.due.getTime() || a.item.name.localeCompare(b.item.name));
+  return out.sort((a, b) => a.due.getTime() - b.due.getTime() || compareStrings(a.item.name, b.item.name));
 }
 
 // ── Nudges ───────────────────────────────────────────────────────────────

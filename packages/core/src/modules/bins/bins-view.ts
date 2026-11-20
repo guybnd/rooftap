@@ -21,6 +21,7 @@ import {
   type BinStreamDraft,
   type ParsedBinSetup,
 } from './bins';
+import { compareStrings } from '../../sort';
 
 /** Short day names for the two-week strip and the collection rows. */
 export const BIN_DAY_LETTERS: readonly string[] = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -72,7 +73,7 @@ export function binStripDays(
 
 /** Changes that still matter (the day, or the day it moved to, is today or later), soonest first. */
 export function comingBinChanges(changes: readonly BinChange[], today: string): BinChange[] {
-  return changes.filter((c) => (c.moved_to ?? c.on_date) >= today).sort((a, b) => a.on_date.localeCompare(b.on_date));
+  return changes.filter((c) => (c.moved_to ?? c.on_date) >= today).sort((a, b) => compareStrings(a.on_date, b.on_date));
 }
 
 /** A change row's title: its date and which bin. */

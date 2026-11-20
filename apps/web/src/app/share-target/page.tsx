@@ -184,7 +184,7 @@ function ShareTargetContent() {
 
       if (data.agent_name) {
         const match = agents.find(
-          (a) => a.name.toLowerCase() === data.agent_name.toLowerCase()
+          (a) => (a.name ?? '').toLowerCase() === data.agent_name.toLowerCase()
         );
         if (match) {
           setAgentId(match.id);

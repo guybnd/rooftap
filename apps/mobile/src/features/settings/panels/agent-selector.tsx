@@ -50,7 +50,7 @@ export function AgentSelector({ value, onChange }: AgentSelectorProps) {
   const [newPhone, setNewPhone] = useState('');
 
   const selected = agents.find((a) => a.id === value) ?? null;
-  const filtered = agents.filter((a) => a.name.toLowerCase().includes(search.toLowerCase()));
+  const filtered = agents.filter((a) => (a.name ?? '').toLowerCase().includes(search.toLowerCase()));
 
   const resetAddForm = () => {
     setAdding(false);

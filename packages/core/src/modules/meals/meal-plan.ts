@@ -12,6 +12,7 @@ import { ingredientMatchKey, matchIngredientToGrocery, norm } from '../recipes/r
 import { withoutStaples } from '../recipes/scan-match';
 import { lookupDefaultShelfLife } from '../groceries/shelf-life-defaults';
 import type { GroceryItem, Recipe, RecipeIngredient } from '../../types';
+import { compareStrings } from '../../sort';
 
 export type MealSlot = 'breakfast' | 'lunch' | 'dinner';
 
@@ -105,7 +106,7 @@ function byDishOrder(a: MealPlanEntry, b: MealPlanEntry): number {
     ROLE_RANK[mealRole(a)] - ROLE_RANK[mealRole(b)] ||
     (a.position ?? 0) - (b.position ?? 0) ||
     (a.created_at ?? '').localeCompare(b.created_at ?? '') ||
-    a.id.localeCompare(b.id)
+    compareStrings(a.id, b.id)
   );
 }
 
@@ -399,7 +400,7 @@ export function weekShopping(input: {
   const seen = new Set<string>();
   const missing: MissingIngredient[] = [];
   let onList = 0;
-  const entries = [...input.entries].filter((e) => !e.deleted && e.date >= input.fromDate && e.recipe_id).sort((a, b) => a.date.localeCompare(b.date));
+  const entries = [...input.entries].filter((e) => !e.deleted && e.date >= input.fromDate && e.recipe_id).sort((a, b) => compareStrings(a.date, b.date));
   for (const entry of entries) {
     const recipe = input.recipesById.get(entry.recipe_id!);
     if (!recipe) continue;

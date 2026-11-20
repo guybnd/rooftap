@@ -123,7 +123,7 @@ export function AppointmentModal({
     }
 
     if (showAgentCapture && agentName.trim()) {
-      const existing = (agents ?? []).find((a) => a.name.toLowerCase() === agentName.trim().toLowerCase());
+      const existing = (agents ?? []).find((a) => (a.name ?? '').toLowerCase() === agentName.trim().toLowerCase());
       const assignAgentId = existing?.id ?? randomUUID();
       if (!existing) {
         onSaveAgent!({

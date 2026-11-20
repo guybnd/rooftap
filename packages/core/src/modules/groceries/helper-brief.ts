@@ -12,6 +12,7 @@ import { resolveItemDefaults, type LibraryOverride } from './item-library';
 import { canonicalizeItemName } from './shelf-life-defaults';
 import { groceryNeededAgainPatch } from '../../home/home-groceries';
 import { buildNeededGroceryItem } from '../recipes/recipes';
+import { compareStrings } from '../../sort';
 
 /** An ingredient a planned dinner needs that is not on the list or in stock. */
 export interface BriefMissing {
@@ -149,7 +150,7 @@ export function briefMissing(input: {
   const last = addDaysISO(input.today, 6);
   const week = input.entries.filter((e) => !e.deleted && e.recipe_id && e.date >= input.today && e.date <= last);
   const firstNight = new Map<string, string>();
-  for (const e of [...week].sort((a, b) => a.date.localeCompare(b.date))) if (!firstNight.has(e.recipe_id!)) firstNight.set(e.recipe_id!, e.date);
+  for (const e of [...week].sort((a, b) => compareStrings(a.date, b.date))) if (!firstNight.has(e.recipe_id!)) firstNight.set(e.recipe_id!, e.date);
   const { missing } = weekShopping({
     entries: week,
     fromDate: input.today,

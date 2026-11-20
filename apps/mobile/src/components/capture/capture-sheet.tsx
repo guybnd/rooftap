@@ -358,19 +358,19 @@ export function CaptureSheet() {
   const handleAddAs = (type: 'task' | 'grocery' | 'cost', name: string) => {
     const norm = name.trim().toLowerCase();
     if (type === 'task') {
-      const existing = tasks.find((t) => t.title.trim().toLowerCase() === norm);
+      const existing = tasks.find((t) => (t.title ?? '').trim().toLowerCase() === norm);
       setEditingTask(existing);
       setNewTaskTitle(existing ? '' : name);
       setActiveModal('todo');
       closeCapture();
     } else if (type === 'grocery') {
-      const existing = groceries.find((g) => g.name.trim().toLowerCase() === norm);
+      const existing = groceries.find((g) => (g.name ?? '').trim().toLowerCase() === norm);
       setEditingGrocery(existing);
       setNewGroceryName(existing ? '' : name);
       setActiveModal('grocery');
       closeCapture();
     } else {
-      const existing = costItemsList.find((c) => c.name.trim().toLowerCase() === norm);
+      const existing = costItemsList.find((c) => (c.name ?? '').trim().toLowerCase() === norm);
       setEditingCost(existing);
       setNewCostName(existing ? '' : name);
       setActiveModal('cost');

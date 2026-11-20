@@ -1,3 +1,4 @@
+import { compareStrings } from '../../sort';
 // Rooftap Assistant: what the household spends, shaped for the usage panel
 // on both apps (HOUP-444). Rows come from `assistant_usage`, one per person,
 // month, feature, model and key; this folds them into totals and the three
@@ -53,7 +54,7 @@ function fold(rows: UsageRecord[], keyOf: (r: UsageRecord) => string, labelOf: (
     slice.tokens += (Number(r.input_tokens) || 0) + (Number(r.output_tokens) || 0);
     slices.set(key, slice);
   }
-  return [...slices.values()].sort((a, b) => b.costMicros - a.costMicros || b.turns - a.turns || a.label.localeCompare(b.label));
+  return [...slices.values()].sort((a, b) => b.costMicros - a.costMicros || b.turns - a.turns || compareStrings(a.label, b.label));
 }
 
 /** Totals and per-person, per-feature and per-model breakdowns, biggest spend first. */

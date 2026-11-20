@@ -310,7 +310,7 @@ const RULES: Rule[] = [
     src: `@([\\p{L}\\d._-]+)`,
     value: (m, o) => {
       const typed = m[1].toLowerCase();
-      const hit = (o.people ?? []).find((p) => p.id && p.name.toLowerCase().startsWith(typed));
+      const hit = (o.people ?? []).find((p) => p.id && (p.name ?? '').toLowerCase().startsWith(typed));
       return hit ? hit.id : null;
     },
   },

@@ -53,6 +53,7 @@ import { WideList } from '@/components/wide-list';
 import { cn } from '@/lib/utils';
 import { FirstSteps } from '@/components/first-steps';
 import { useRows } from '@homeup/core';
+import { compareStrings } from '@homeup/core';
 
 const TABS: { value: ShopperWantStatus; label: string }[] = [
   { value: 'watching', label: 'Watching' },
@@ -123,7 +124,7 @@ export default function ShopperPage() {
     const inTab = rows.filter((r) => r.want.status === tab);
     if (tab === 'watching') return sortWatching(inTab);
     if (tab === 'bought') return inTab.sort((a, b) => (b.want.bought_at ?? '').localeCompare(a.want.bought_at ?? ''));
-    return inTab.sort((a, b) => a.want.title.localeCompare(b.want.title));
+    return inTab.sort((a, b) => compareStrings(a.want.title, b.want.title));
   }, [rows, tab]);
 
   const watching = rows.filter((r) => r.want.status === 'watching');

@@ -15,6 +15,7 @@ import type { AssistantBrain } from "@/lib/assistant/provider";
 import type { ChatMessage, LlmClient, ToolSpec } from "@/lib/assistant/llm";
 import { sourceContext } from "./lookup";
 import { SCOUT_TOOLS, money, type FoundOffer } from "./scout";
+import { compareStrings } from '@homeup/core';
 
 // Scout threads: a follow-up on a Scout run. The model sees the brief, every
 // run's picks and the conversation so far, and either answers in words
@@ -78,7 +79,7 @@ function pickLine(p: ShopperPick): string {
 
 export function followUpSystemPrompt(thread: ScoutThread, group: Pick<Group, "region" | "currency">, currency: string, focus: ShopperPick | null, today = todayISO()): string {
   const latest = scoutLatestRun(thread);
-  const runs = [...thread.runs].sort((a, b) => a.created_at.localeCompare(b.created_at));
+  const runs = [...thread.runs].sort((a, b) => compareStrings(a.created_at, b.created_at));
   const runBlocks = runs.map((run) => {
     const picks = thread.picks.filter((p) => p.search_id === run.id).sort((a, b) => a.rank - b.rank);
     const head = run.id === latest?.id ? "Latest search (the picks the person sees on top)" : "Earlier search";

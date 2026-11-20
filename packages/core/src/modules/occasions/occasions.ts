@@ -12,6 +12,7 @@ import type { CostItem } from '../../types';
 import { addDaysISO, daysBetweenISO } from '../../date-utils';
 import { compareCreatedAt } from '../../sort';
 import { buildShopperWant, type ShopperWant } from '../shopper/shopper';
+import { compareStrings } from '../../sort';
 
 export type OccasionKind = 'birthday' | 'anniversary' | 'holiday' | 'other';
 
@@ -149,10 +150,10 @@ export function sortOccasions<T extends Pick<Occasion, 'date' | 'repeats' | 'tit
   return [...occasions].sort((a, b) => {
     const ka = key(a);
     const kb = key(b);
-    if (ka && kb) return ka.localeCompare(kb) || a.title.localeCompare(b.title);
+    if (ka && kb) return ka.localeCompare(kb) || compareStrings(a.title, b.title);
     if (ka) return -1;
     if (kb) return 1;
-    return b.date.localeCompare(a.date);
+    return compareStrings(b.date, a.date);
   });
 }
 
@@ -171,7 +172,7 @@ export function occasionsOnDay<T extends Pick<Occasion, 'date' | 'repeats' | 'ti
   const [year] = parts(day);
   return occasions
     .filter((o) => isOnCalendar(o) && (o.repeats ? day >= o.date && occasionDayIn(o.date, year) === day : o.date === day))
-    .sort((a, b) => a.title.localeCompare(b.title));
+    .sort((a, b) => compareStrings(a.title, b.title));
 }
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];

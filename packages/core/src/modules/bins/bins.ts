@@ -9,6 +9,7 @@
 // against this file by bins.test.ts) work out the same nights.
 import { addDaysISO, daysBetweenISO, toISODate } from '../../date-utils';
 import type { HeroItem } from '../../hero';
+import { compareStrings } from '../../sort';
 
 export type BinLid = 'red' | 'yellow' | 'green' | 'blue' | 'purple' | 'grey' | 'other';
 export type BinSource = 'manual' | 'council' | 'home-assistant';
@@ -139,7 +140,7 @@ function liveStreams(streams: readonly BinStream[]): BinStream[] {
   return streams
     .filter((s) => !s.deleted)
     .slice()
-    .sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
+    .sort((a, b) => a.sort_order - b.sort_order || compareStrings(a.name, b.name));
 }
 
 /**
@@ -200,7 +201,7 @@ export function binCollections(
   }
 
   for (const day of byDate.values()) day.streams.sort((a, b) => live.indexOf(a) - live.indexOf(b));
-  return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
+  return [...byDate.values()].sort((a, b) => compareStrings(a.date, b.date));
 }
 
 /** The first collection on or after `fromISO`, or null when none is set up. */
@@ -433,7 +434,7 @@ export function binDraftsFrom(
     changes: changes
       .filter((c) => !c.deleted && (c.moved_to ?? c.on_date) >= addDaysISO(todayISO, -1))
       .filter((c) => c.stream_id === null || live.some((s) => s.id === c.stream_id))
-      .sort((a, b) => a.on_date.localeCompare(b.on_date))
+      .sort((a, b) => compareStrings(a.on_date, b.on_date))
       .map((c) => ({ key: c.id, id: c.id, streamKey: c.stream_id, on_date: c.on_date, moved_to: c.moved_to, note: c.note })),
   };
 }
@@ -569,7 +570,7 @@ export function inferBinSetup(collections: readonly { date: string; name: string
   }
   return {
     streams,
-    changes: changes.filter((c) => (c.moved_to ?? c.on_date) >= addDaysISO(todayISO, -1)).sort((a, b) => a.on_date.localeCompare(b.on_date)),
+    changes: changes.filter((c) => (c.moved_to ?? c.on_date) >= addDaysISO(todayISO, -1)).sort((a, b) => compareStrings(a.on_date, b.on_date)),
   };
 }
 

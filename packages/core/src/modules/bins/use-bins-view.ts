@@ -28,6 +28,7 @@ import {
   type HomeAssistantBinsResult,
 } from './bins-view';
 import type { BinsApi } from './use-bins';
+import { compareStrings } from '../../sort';
 
 /** The Bins screen: what the Hero, strip, coming collections and changes show. */
 export function useBinsScreen(bins: BinsApi, currentUserId: string | null | undefined, nameOf: (id: string | null) => string) {
@@ -98,7 +99,7 @@ export function useBinSetup(input: {
   };
 
   const addChange = (c: Omit<BinChangeDraft, 'key'>) =>
-    setChanges((all) => [...all, { ...c, key: key('nc') }].sort((a, b) => a.on_date.localeCompare(b.on_date)));
+    setChanges((all) => [...all, { ...c, key: key('nc') }].sort((a, b) => compareStrings(a.on_date, b.on_date)));
   const removeChange = (k: string) => setChanges((all) => all.filter((x) => x.key !== k));
 
   const pickMethod = (m: BinSetupMethod) => {

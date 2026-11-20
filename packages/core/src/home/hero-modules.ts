@@ -22,6 +22,7 @@ import {
   type WeatherData,
   type WeatherTipKind,
 } from '../weather-tips';
+import { compareStrings } from '../sort';
 
 export type HeroModuleGroup = 'header' | 'day' | 'home' | 'tips' | 'spaces';
 
@@ -225,7 +226,7 @@ export function isCountdownDueSoon(countdown: string): boolean {
 
 /** The soonest not-done timed item today, or null. */
 export function nextUpItem(todayItems: HeroItem[]): HeroItem | null {
-  return todayItems.filter((i) => !i.done && i.dueTime).sort((a, b) => a.dueTime!.localeCompare(b.dueTime!))[0] ?? null;
+  return todayItems.filter((i) => !i.done && i.dueTime).sort((a, b) => compareStrings(a.dueTime, b.dueTime))[0] ?? null;
 }
 
 export interface NowCardTiming {

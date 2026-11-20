@@ -26,6 +26,7 @@ import { formatMoney } from '../../money-format';
 import { costCategoryLabel, costPriceOn, type CostMonth, type CostMonthLine } from '../costs/cost-month';
 import { moneyNudgeCopy, relativeDay, type MoneyNudge } from '../costs/money-insights';
 import type { CostCadence, CostCategory, CostItem } from '../../types';
+import { compareStrings } from '../../sort';
 
 const DAY_MS = 86_400_000;
 
@@ -448,7 +449,7 @@ function subscriptionLines(input: CostInsightsInput, marks: CostInsightMarks, no
     const same = open.filter((s) => re.test(s.name));
     if (same.length >= 2) for (const s of same) s.overlap = label;
   }
-  return out.sort((a, b) => b.monthlyCents - a.monthlyCents || a.name.localeCompare(b.name));
+  return out.sort((a, b) => b.monthlyCents - a.monthlyCents || compareStrings(a.name, b.name));
 }
 
 /** The marks with one more, dropping ones older than 13 months. */

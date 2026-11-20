@@ -19,6 +19,7 @@ import type { CostCadence, CostCategory, CostItem } from '../../types';
 import type { LedgerRow } from './cost-month';
 import type { DaySpend } from './recent-spend';
 import { CATEGORY_META } from './costs';
+import { compareStrings } from '../../sort';
 
 export const UP_API_BASE = 'https://api.up.com.au/api/v1';
 
@@ -560,7 +561,7 @@ export function summariseSpending(
   month: string,
   opts: { recent?: number } = {},
 ): UpSpending {
-  const unique = mergeJointCopies(rows.slice().sort((a, b) => b.occurred_at.localeCompare(a.occurred_at)));
+  const unique = mergeJointCopies(rows.slice().sort((a, b) => compareStrings(b.occurred_at, a.occurred_at)));
 
   let spent = 0;
   let received = 0;
@@ -793,7 +794,7 @@ function toSpendingTransaction(r: BankTransaction): SpendingTransaction {
 /** The payments a viewer can see that are linked to one cost line, newest first. */
 export function linkedPayments(rows: readonly BankTransaction[], costItemId: string, limit = 6): SpendingTransaction[] {
   return uniqueByExternal(
-    rows.slice().sort((a, b) => b.occurred_at.localeCompare(a.occurred_at)),
+    rows.slice().sort((a, b) => compareStrings(b.occurred_at, a.occurred_at)),
   )
     .filter((r) => r.cost_item_id === costItemId && !r.hidden)
     .slice(0, limit)
@@ -805,7 +806,7 @@ export function costBankLinks(
   rows: readonly BankTransaction[],
   rules: readonly { cost_item_id: string; match: string; keep_amount: boolean }[],
 ): CostBankLink[] {
-  const sorted = uniqueByExternal(rows.slice().sort((a, b) => b.occurred_at.localeCompare(a.occurred_at)));
+  const sorted = uniqueByExternal(rows.slice().sort((a, b) => compareStrings(b.occurred_at, a.occurred_at)));
   return rules.map((rule) => {
     const mine = sorted.filter((r) => r.cost_item_id === rule.cost_item_id && !r.hidden);
     const last = mine[0] ?? null;
@@ -834,7 +835,7 @@ export function bankPayees(
 ): BankPayee[] {
   const byMatch = new Map<string, BankPayee>();
   const query = squashVendor(opts.query ?? '');
-  const sorted = uniqueByExternal(rows.slice().sort((a, b) => b.occurred_at.localeCompare(a.occurred_at)));
+  const sorted = uniqueByExternal(rows.slice().sort((a, b) => compareStrings(b.occurred_at, a.occurred_at)));
   for (const r of sorted) {
     if (!isLinkablePayment(r) || r.hidden) continue;
     const suggested = !!opts.category && !!r.category && UP_COST_CATEGORY[r.category] === opts.category;
@@ -861,7 +862,7 @@ export function bankPayees(
     }
   }
   return Array.from(byMatch.values())
-    .sort((a, b) => Number(b.suggested) - Number(a.suggested) || b.count - a.count || b.lastPaidAt.localeCompare(a.lastPaidAt))
+    .sort((a, b) => Number(b.suggested) - Number(a.suggested) || b.count - a.count || compareStrings(b.lastPaidAt, a.lastPaidAt))
     .slice(0, opts.limit ?? 30);
 }
 
@@ -1140,7 +1141,7 @@ export function vendorPlan(payments: readonly { amount_cents: number; occurred_a
   const out = payments
     .filter((p) => p.amount_cents < 0)
     .slice()
-    .sort((a, b) => b.occurred_at.localeCompare(a.occurred_at));
+    .sort((a, b) => compareStrings(b.occurred_at, a.occurred_at));
   if (!out.length) return null;
   const amounts = out.map((p) => p.amount_cents);
   const cadence = out.length > 1 ? regularCadence(out, now) : null;

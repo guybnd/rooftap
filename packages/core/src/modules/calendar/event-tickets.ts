@@ -7,13 +7,14 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Document, DocumentFolder, GroupEvent } from '../../types';
 import { createDocumentFolder, listDocumentFolders } from '../documents/document-folders';
 import { linkDocument, uploadDocument, type DocumentUploadInput } from '../documents/documents';
+import { compareStrings } from '../../sort';
 
 export const EVENT_TICKETS_FOLDER_NAME = 'Event tickets';
 
 /** The household's top-level "Event tickets" folder, matched by name, any case. */
 export function findEventTicketsFolder(folders: readonly DocumentFolder[]): DocumentFolder | null {
   const wanted = EVENT_TICKETS_FOLDER_NAME.toLowerCase();
-  return folders.find((f) => f.parent_id === null && f.name.trim().toLowerCase() === wanted) ?? null;
+  return folders.find((f) => f.parent_id === null && (f.name ?? '').trim().toLowerCase() === wanted) ?? null;
 }
 
 /**
@@ -78,5 +79,5 @@ export function linkableEvents(events: readonly GroupEvent[], viewerId: string |
   return events
     .filter((e) => !e.deleted && (!e.private || e.created_by === viewerId))
     .filter((e) => new Date(e.ends_at ?? e.starts_at).getTime() >= startOfToday)
-    .sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+    .sort((a, b) => compareStrings(a.starts_at, b.starts_at));
 }

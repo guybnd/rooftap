@@ -14,6 +14,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { DocumentFolder } from '../../types';
 import { envRandomUUID } from '../../data/store-environment';
+import { compareStrings } from '../../sort';
 
 export const ROOT_FOLDER_ID = null;
 
@@ -29,7 +30,7 @@ export function foldersInParent(
 ): DocumentFolder[] {
   return folders
     .filter((f) => (f.parent_id ?? null) === parentId)
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort((a, b) => compareStrings(a.name, b.name));
 }
 
 /**
@@ -104,7 +105,7 @@ export function moveTargetsFor(
   const targets = movingFolderId
     ? folders.filter((f) => canMoveFolder(folders, movingFolderId, f.id))
     : folders;
-  return [...targets].sort((a, b) => a.name.localeCompare(b.name));
+  return [...targets].sort((a, b) => compareStrings(a.name, b.name));
 }
 
 /** One destination row in the move sheet: a folder and how deep it sits. */

@@ -33,7 +33,7 @@ export function MultiAgentSelector({ value, onChange }: MultiAgentSelectorProps)
 
   const selectedAgents = agents.filter((a) => value.includes(a.id));
   const unselected = agents.filter(
-    (a) => !value.includes(a.id) && a.name.toLowerCase().includes(search.toLowerCase())
+    (a) => !value.includes(a.id) && (a.name ?? '').toLowerCase().includes(search.toLowerCase())
   );
 
   const handleAdd = (agent: Agent) => {

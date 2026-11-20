@@ -10,6 +10,7 @@ import { formatMoney } from '../../money-format';
 import type { BriefRow, BriefSection, HelperBrief } from '../../module-helpers';
 import { isOneOff, nextOccurrence } from './costs';
 import { soonestCostExpiry } from './cost-dates';
+import { compareStrings } from '../../sort';
 
 /** Bills due within this many days count as this week's. */
 export const MONEY_BRIEF_DAYS = 7;
@@ -34,7 +35,7 @@ export function moneyBrief(input: { items: readonly CostItem[]; today: string })
     if (date > last) continue;
     due.push({ item, date, days: daysBetweenISO(input.today, date) });
   }
-  due.sort((a, b) => a.date.localeCompare(b.date) || b.item.amount - a.item.amount);
+  due.sort((a, b) => compareStrings(a.date, b.date) || b.item.amount - a.item.amount);
   const dueCents = due.reduce((n, b) => n + (b.item.amount || 0), 0);
 
   const ending: { item: CostItem; label: string; days: number }[] = [];

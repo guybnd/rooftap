@@ -42,6 +42,7 @@ import {
   type RewardsTab,
 } from './rewards-view';
 import type { RewardsApi } from './use-rewards';
+import { compareStrings } from '../../sort';
 
 /** The Rewards screen: tab, store search, and what the wallet, matches and perks show. */
 export function useRewardsScreen(rewards: RewardsApi, currentUserId: string | null | undefined) {
@@ -231,7 +232,7 @@ export function useSchemeForm(input: { scheme: RewardScheme; rewards: RewardsApi
   const [pasted, setPasted] = useState('');
 
   const stores = useMemo(
-    () => rewards.partners.filter((p) => p.scheme_id === scheme.id).sort((a, b) => a.name.localeCompare(b.name)),
+    () => rewards.partners.filter((p) => p.scheme_id === scheme.id).sort((a, b) => compareStrings(a.name, b.name)),
     [rewards.partners, scheme.id],
   );
   const perks = useMemo(() => rewards.perks.filter((p) => p.scheme_id === scheme.id).sort(comparePerks), [rewards.perks, scheme.id]);

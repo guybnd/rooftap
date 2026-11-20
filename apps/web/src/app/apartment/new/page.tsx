@@ -256,7 +256,7 @@ function NewApartmentPage() {
 
         for (const pa of parsedAgents) {
           const match = currentAgents.find(
-            (a) => a.name.toLowerCase() === pa.name.toLowerCase()
+            (a) => (a.name ?? '').toLowerCase() === pa.name.toLowerCase()
           );
           if (match) {
             resolvedIds.push(match.id);

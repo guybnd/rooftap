@@ -24,6 +24,7 @@ import { createDraftPacer, type AssistantDraft } from './assistant-stream';
 import { isConversationOpen, wantsAssistantReply, type ConversationKind } from './assistant';
 import { deviceKeyValue } from '../../data/store-environment';
 import { helperShared, isHouseholdThread } from '../../module-helpers';
+import { compareStrings } from '../../sort';
 
 interface CachedThread {
   conversation: AssistantConversation;
@@ -140,7 +141,7 @@ export function cachedConversations(): AssistantConversation[] {
   hydrate();
   const seen = new Map<string, AssistantConversation>();
   for (const entry of threadCache.values()) if (!entry.conversation.archived) seen.set(entry.conversation.id, entry.conversation);
-  return [...seen.values()].sort((a, b) => b.last_active_at.localeCompare(a.last_active_at));
+  return [...seen.values()].sort((a, b) => compareStrings(b.last_active_at, a.last_active_at));
 }
 
 /** Which conversation: an id, `household`, or `new` (with the kind to start). */

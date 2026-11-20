@@ -46,6 +46,7 @@ import {
   type WeekShopping,
 } from './meal-plan';
 import { useRows } from '../../data/use-rows';
+import { compareStrings } from '../../sort';
 
 /** One dish on a night. */
 export interface MealDish {
@@ -135,7 +136,7 @@ export function useMealWeek(input: {
   const groceryItems = useRows(items$);
   const events = useRows(events$, (e) => !(e.private && e.created_by !== currentUserId),);
 
-  const recipes = useMemo(() => [...allRecipes].sort((a, b) => a.title.localeCompare(b.title)), [allRecipes]);
+  const recipes = useMemo(() => [...allRecipes].sort((a, b) => compareStrings(a.title, b.title)), [allRecipes]);
   const recipesById = useMemo(() => new Map(recipes.map((r) => [r.id, r])), [recipes]);
   const ingredientsByRecipe = useMemo(() => {
     const m = new Map<string, RecipeIngredient[]>();

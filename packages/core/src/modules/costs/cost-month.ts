@@ -22,6 +22,7 @@ import { CATEGORY_META, costTargets, isOneOff, EVERYDAY_WEIGHTS } from './costs'
 import { occurrencesIn } from './month-spending';
 import { costCategoryFromUp, squashVendor } from './up-bank';
 import type { CostCategory, CostItem } from '../../types';
+import { compareStrings } from '../../sort';
 
 /** One shop's payments in one month, from a payment source. Built on the server from the rows the viewer may see. */
 export interface LedgerRow {
@@ -70,7 +71,7 @@ export function costPriceOn(item: Pick<CostItem, 'amount' | 'price_changes'>, da
 
 /** A cost's price list with a new price from a date on (replacing one on the same date), oldest first. */
 export function withPriceChange(changes: readonly CostPriceChange[], from: string, amount: number): CostPriceChange[] {
-  return [...changes.filter((c) => c.from !== from), { from, amount }].sort((a, b) => a.from.localeCompare(b.from));
+  return [...changes.filter((c) => c.from !== from), { from, amount }].sort((a, b) => compareStrings(a.from, b.from));
 }
 
 export type CostMonthLineKind =
@@ -283,7 +284,7 @@ export function costMonth(input: CostMonthInput): CostMonth {
     c.paidCents = c.lines.reduce((s, l) => s + l.paidCents, 0);
     c.toComeCents = c.lines.reduce((s, l) => s + l.toComeCents, 0);
     const rank = (l: CostMonthLine) => (l.kind === 'usual' ? 3 : l.kind === 'target' ? 4 : l.paidCents > 0 ? 0 : 1);
-    c.lines.sort((a, b) => rank(a) - rank(b) || b.paidCents + b.toComeCents - (a.paidCents + a.toComeCents) || a.name.localeCompare(b.name));
+    c.lines.sort((a, b) => rank(a) - rank(b) || b.paidCents + b.toComeCents - (a.paidCents + a.toComeCents) || compareStrings(a.name, b.name));
   }
   const income = cats.get(INCOME) ?? null;
   cats.delete(INCOME);

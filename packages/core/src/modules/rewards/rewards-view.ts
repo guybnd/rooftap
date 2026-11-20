@@ -19,6 +19,7 @@ import {
   type RewardScheme,
   type StoreMatch,
 } from './rewards';
+import { compareStrings } from '../../sort';
 
 export type RewardsTab = 'cards' | 'perks';
 export const REWARDS_TABS: { value: RewardsTab; label: string }[] = [
@@ -103,7 +104,7 @@ export function perkListGroups(
   return schemes
     .map((s) => ({ scheme: s, perks: perks.filter((p) => p.scheme_id === s.id && !endingIds.has(p.id)).sort(comparePerks) }))
     .filter((g) => g.perks.length > 0)
-    .sort((a, b) => a.scheme.name.localeCompare(b.scheme.name));
+    .sort((a, b) => compareStrings(a.scheme.name, b.scheme.name));
 }
 
 /** A Perks tab row's meta: the scheme (under "Ending soon"), where it works, and its conditions. */

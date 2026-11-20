@@ -4,6 +4,7 @@ import { auProvider } from "./au";
 import { deProvider } from "./de";
 import { createGenericProvider } from "./generic";
 import { CURRENCY_BY_COUNTRY, currencyForCountry } from "./currency-by-country";
+import { compareStrings } from '../sort';
 
 export const DEFAULT_REGION = "AU";
 
@@ -74,7 +75,7 @@ export function listRegions(locale?: string): RegionOption[] {
       currency: currencyForCountry(id),
       curated: id in curatedProviders,
     }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort((a, b) => compareStrings(a.name, b.name));
 }
 
 /**

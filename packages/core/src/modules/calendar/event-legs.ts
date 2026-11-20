@@ -4,6 +4,7 @@
 // is, and warns when the gap is shorter than the trip.
 import type { GroupEvent } from '../../types';
 import { isTravelMode, travelText, type TravelMode } from './event-travel';
+import { compareStrings } from '../../sort';
 
 /** Events further apart than this across midnight get no leg. */
 export const LEG_MAX_OVERNIGHT_GAP_MINUTES = 4 * 60;
@@ -31,7 +32,7 @@ export function eventTravelLegs(events: readonly GroupEvent[]): EventLeg[] {
   const timed = events
     .filter((e) => !e.deleted && !e.is_all_day && e.location?.trim())
     .slice()
-    .sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+    .sort((a, b) => compareStrings(a.starts_at, b.starts_at));
   const legs: EventLeg[] = [];
   for (let i = 1; i < timed.length; i++) {
     const a = timed[i - 1];

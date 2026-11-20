@@ -570,7 +570,7 @@ const filteredApartments = useMemo(() => filterApartments(apartments, searchQuer
     // If user entered agent details and apartment has no agent, create/assign
     if (agentName.trim() && !selectedAgent) {
       const existingAgent = agents.find(
-        (a) => a.name.toLowerCase() === agentName.trim().toLowerCase()
+        (a) => (a.name ?? '').toLowerCase() === agentName.trim().toLowerCase()
       );
       let assignAgentId: string;
 

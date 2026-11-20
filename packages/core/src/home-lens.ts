@@ -14,6 +14,7 @@ import {
   totalForPeriod,
 } from './modules/costs/costs';
 import { isBill, type MonthTotals } from './modules/costs/money-insights';
+import { compareStrings } from './sort';
 
 /** The shortcuts that open a lens. Setup and countdown keep their plain behaviour. Shopper's (HOUP-434) shows its watched items. */
 export type HomeLensKey = 'budgetPulse' | 'billsDue' | 'shoppingList' | 'shopperWatch';
@@ -167,7 +168,7 @@ export function buildBillsLens(items: CostItem[], now: Date, windowDays = LENS_W
       discountEnding: true,
     });
   }
-  rows.sort((a, b) => a.days - b.days || a.name.localeCompare(b.name));
+  rows.sort((a, b) => a.days - b.days || compareStrings(a.name, b.name));
   const due = rows.filter((r) => !r.discountEnding);
   return { rows, totalCents: due.reduce((sum, r) => sum + (r.cents ?? 0), 0), dueCount: due.length };
 }

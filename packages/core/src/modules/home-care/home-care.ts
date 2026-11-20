@@ -14,6 +14,7 @@
 // Pure helpers only; both apps render from these.
 
 import { addDaysISO, daysBetweenISO } from '../../date-utils';
+import { compareStrings } from '../../sort';
 
 export type CareUnit = 'day' | 'week' | 'month' | 'year';
 
@@ -271,7 +272,7 @@ export function sortByDue(jobs: readonly CareJob[]): CareJob[] {
       if (!b.next_due) return -1;
       return a.next_due < b.next_due ? -1 : 1;
     }
-    return a.title.localeCompare(b.title);
+    return compareStrings(a.title, b.title);
   });
 }
 
@@ -384,7 +385,7 @@ export function careRoomGroups(jobs: readonly CareJob[], todayISO: string): Care
       overdue: list.filter((j) => j.next_due && j.next_due < todayISO).length,
       next: list.find((j) => j.next_due)?.next_due ?? null,
     }))
-    .sort((a, b) => (b.overdue > 0 ? 1 : 0) - (a.overdue > 0 ? 1 : 0) || a.room.localeCompare(b.room));
+    .sort((a, b) => (b.overdue > 0 ? 1 : 0) - (a.overdue > 0 ? 1 : 0) || compareStrings(a.room, b.room));
 }
 
 /** Rooms to offer in the job editor: the household's rooms first, then the usual ones. */

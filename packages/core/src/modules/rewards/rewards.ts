@@ -8,6 +8,7 @@
 
 import type { LoyaltyCard } from '../../types';
 import { daysBetweenISO } from '../../date-utils';
+import { compareStrings } from '../../sort';
 
 export type RewardSchemeKind = 'loyalty' | 'membership' | 'discount' | 'card_perk' | 'other';
 
@@ -226,7 +227,7 @@ const KIND_RANK: Record<RewardPerkKind, number> = { percent: 4, amount: 3, freeb
 
 /** Sort order for "best perk first": percent, then money off, freebies, points; bigger first within a kind. */
 export function comparePerks(a: RewardPerk, b: RewardPerk): number {
-  return KIND_RANK[b.kind] - KIND_RANK[a.kind] || (b.value ?? 0) - (a.value ?? 0) || a.title.localeCompare(b.title);
+  return KIND_RANK[b.kind] - KIND_RANK[a.kind] || (b.value ?? 0) - (a.value ?? 0) || compareStrings(a.title, b.title);
 }
 
 /** Whether a perk still applies on `today` (no end date, or ends today or later). */
@@ -323,7 +324,7 @@ export function cardsForStore(query: string, data: RewardsData, today: string): 
     (a, b) =>
       (a.best && b.best ? comparePerks(a.best, b.best) : a.best ? -1 : b.best ? 1 : 0) ||
       Number(b.cards.length > 0) - Number(a.cards.length > 0) ||
-      a.scheme.name.localeCompare(b.scheme.name),
+      compareStrings(a.scheme.name, b.scheme.name),
   );
 }
 
@@ -354,7 +355,7 @@ export function popularStores(partners: RewardPartner[], limit = 6): string[] {
     else counts.set(p.brand_key, { name: p.name, n: 1 });
   }
   return [...counts.values()]
-    .sort((a, b) => b.n - a.n || a.name.localeCompare(b.name))
+    .sort((a, b) => b.n - a.n || compareStrings(a.name, b.name))
     .slice(0, limit)
     .map((c) => c.name);
 }
@@ -394,9 +395,9 @@ export function cardTitle(card: Pick<LoyaltyCard, 'name'>, scheme: Pick<RewardSc
 /** Cards in wallet order: by scheme name (the card's own name without one), then number. */
 export function walletOrder(cards: LoyaltyCard[], schemes: RewardScheme[]): LoyaltyCard[] {
   const byId = new Map(schemes.map((s) => [s.id, s]));
-  const label = (c: LoyaltyCard) => (c.scheme_id ? byId.get(c.scheme_id)?.name : undefined) ?? c.name;
+  const label = (c: LoyaltyCard) => (c.scheme_id ? byId.get(c.scheme_id)?.name : undefined) ?? c.name ?? '';
   return [...cards].sort(
-    (a, b) => label(a).localeCompare(label(b), undefined, { sensitivity: 'base' }) || a.number.localeCompare(b.number),
+    (a, b) => label(a).localeCompare(label(b), undefined, { sensitivity: 'base' }) || compareStrings(a.number, b.number),
   );
 }
 

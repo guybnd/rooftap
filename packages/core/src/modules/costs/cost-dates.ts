@@ -6,6 +6,7 @@ import type { CostItem } from '../../types';
 import { daysBetweenISO, toISODate } from '../../date-utils';
 import { timeAgo } from '../../relative-time';
 import { isOneOff, nextOccurrence, parseLocalDateOnly } from './costs';
+import { compareStrings } from '../../sort';
 
 export function costDateLabel(d: Date, now: Date = new Date()): string {
   const diff = daysBetweenISO(toISODate(now), toISODate(d));
@@ -32,7 +33,7 @@ export function soonestCostExpiry(
   if (item.end_date) candidates.push({ kind: 'Contract', date: item.end_date });
   if (item.discount_end_date) candidates.push({ kind: 'Discount', date: item.discount_end_date });
   if (candidates.length === 0) return null;
-  candidates.sort((a, b) => a.date.localeCompare(b.date));
+  candidates.sort((a, b) => compareStrings(a.date, b.date));
   const soonest = candidates[0];
   return { ...soonest, days: daysBetweenISO(toISODate(now), soonest.date) };
 }

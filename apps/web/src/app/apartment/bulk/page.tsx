@@ -106,7 +106,7 @@ export default function BulkUploadPage() {
 
         for (const pa of parsedAgents) {
           const match = agents.find(
-            (a) => a.name.toLowerCase() === pa.name.toLowerCase()
+            (a) => (a.name ?? '').toLowerCase() === pa.name.toLowerCase()
           );
           if (match) {
             resolvedAgentIds.push(match.id);

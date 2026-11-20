@@ -10,6 +10,7 @@ import { MCP_TOOLS } from '../../mcp-tools';
 import { getModule, type ModuleId } from '../../modules';
 import { ALL_MANIFESTS } from '../../module-manifests';
 import { isHouseholdThread, moduleHelper } from '../../module-helpers';
+import { compareStrings } from '../../sort';
 
 /** Modules the assistant has tools for, in tool order, that are switched on. */
 export function assistantModules(enabled: ReadonlySet<string>): { id: ModuleId; label: string; readOnly: boolean }[] {
@@ -31,7 +32,7 @@ export interface ConversationGroups {
 
 /** Splits the chat list into the sections the Assistant screen shows. */
 export function groupConversations(conversations: AssistantConversation[], now: Date = new Date()): ConversationGroups {
-  const byRecent = (a: AssistantConversation, b: AssistantConversation) => b.last_active_at.localeCompare(a.last_active_at);
+  const byRecent = (a: AssistantConversation, b: AssistantConversation) => compareStrings(b.last_active_at, a.last_active_at);
   const household = conversations.find((c) => isHouseholdThread(c)) ?? null;
   // Helper chats the household shares sit with the chats.
   const chats = conversations

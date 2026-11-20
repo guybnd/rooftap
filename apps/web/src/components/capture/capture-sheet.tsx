@@ -400,15 +400,15 @@ export function CaptureSheet() {
   const handleAddAs = (type: "task" | "grocery" | "cost", name: string) => {
     const norm = name.trim().toLowerCase();
     if (type === "task") {
-      const existing = tasks.find((t) => t.title.trim().toLowerCase() === norm);
+      const existing = tasks.find((t) => (t.title ?? '').trim().toLowerCase() === norm);
       if (existing) { setEditingTask(existing); setNewTaskTitle(""); setTaskModalOpen(true); closeCapture(); return; }
       openAddTask(name);
     } else if (type === "grocery") {
-      const existing = groceries.find((g) => g.name.trim().toLowerCase() === norm);
+      const existing = groceries.find((g) => (g.name ?? '').trim().toLowerCase() === norm);
       if (existing) { setEditingGrocery(existing); setNewGroceryName(""); setGroceryModalOpen(true); closeCapture(); return; }
       openAddGrocery(name);
     } else {
-      const existing = costItemsList.find((c) => c.name.trim().toLowerCase() === norm);
+      const existing = costItemsList.find((c) => (c.name ?? '').trim().toLowerCase() === norm);
       if (existing) { setEditingCost(existing); setNewCostName(""); setCostModalOpen(true); closeCapture(); return; }
       openAddCost(name);
     }

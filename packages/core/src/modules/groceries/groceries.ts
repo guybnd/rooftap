@@ -2,6 +2,7 @@ import type { GroceryAisle, GroceryCustomAisle, GroceryItem } from '../../types'
 import { buildLibraryMap, resolveItemDefaults, type LibraryOverride } from './item-library';
 import { canonicalizeItemName, lookupDefault } from './shelf-life-defaults';
 import { addDaysISO, daysBetweenISO, todayISO } from "../../date-utils";
+import { compareStrings } from '../../sort';
 // formatMoney is available via the package barrel (money-format.ts) directly —
 // no need to re-export it here too (a duplicate `export *` source would
 // collide in packages/core/src/index.ts).
@@ -349,7 +350,7 @@ function isAisleName(query: string, customAisles?: GroceryCustomAisle[]): boolea
   if (!q) return false;
   return (
     Object.entries(AISLE_META).some(([key, m]) => key !== "other" && (m.label.toLowerCase() === q || m.label.toLowerCase().split(" ")[0] === q)) ||
-    (customAisles ?? []).some((a) => a.name.toLowerCase() === q)
+    (customAisles ?? []).some((a) => (a.name ?? '').toLowerCase() === q)
   );
 }
 
@@ -416,7 +417,7 @@ export function grocerySearchAddOptions(
     })
     .sort((a, b) => {
       const exact = (o: LibraryOverride) => (canonicalizeItemName(o.item_name) === qKey ? 0 : 1);
-      return exact(a) - exact(b) || a.item_name.localeCompare(b.item_name);
+      return exact(a) - exact(b) || compareStrings(a.item_name, b.item_name);
     })
     .slice(0, cap);
 

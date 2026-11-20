@@ -41,7 +41,7 @@ export function resolveParsedAgents(
   let currentAgents = existingAgents;
 
   for (const pa of parsedAgents) {
-    const match = currentAgents.find((a) => a.name.toLowerCase() === pa.name.toLowerCase());
+    const match = currentAgents.find((a) => (a.name ?? '').toLowerCase() === pa.name.toLowerCase());
     if (match) {
       resolvedIds.push(match.id);
       continue;

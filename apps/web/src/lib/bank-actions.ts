@@ -19,6 +19,7 @@ import {
   bankSharing,
   visibleBankTransactions,
 } from "@/lib/up-bank";
+import { compareStrings } from '@homeup/core';
 
 // The changes a person can make to bank data in Rooftap, shared by the app's
 // routes and the assistant's tools so both follow the same rules: only the
@@ -177,7 +178,7 @@ async function previewFor(
         (r) =>
           r.external_id !== t.external_id && r.occurred_at <= t.occurred_at,
       )
-      .sort((a, b) => b.occurred_at.localeCompare(a.occurred_at))
+      .sort((a, b) => compareStrings(b.occurred_at, a.occurred_at))
       .map((r) => r.amount_cents),
   ];
   const estimate = bankAmountsVary(amounts);

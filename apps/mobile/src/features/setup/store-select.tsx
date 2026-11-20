@@ -39,7 +39,7 @@ export function StoreSelect({ groupId, value, stores, onChange, onStoreCreated }
     setSaving(true);
     try {
       // Reuse an existing store with the same name if present (mirrors web).
-      const existing = stores.find((s) => s.name.toLowerCase() === name.toLowerCase());
+      const existing = stores.find((s) => (s.name ?? '').toLowerCase() === name.toLowerCase());
       if (existing) {
         onChange(existing.id);
         setAdding(false);

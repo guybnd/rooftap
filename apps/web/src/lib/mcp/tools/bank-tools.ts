@@ -11,6 +11,7 @@ import {
 } from "@/lib/bank-actions";
 import { fail, ok, toolRegistrar, type HouseholdTool, type HouseholdToolContext } from "../tool-kit";
 import { CATEGORY_CHOICES, costCategoryFrom } from "./costs-tools";
+import { compareStrings } from '@homeup/core';
 
 // Up Bank connector: the caller's Up transactions, and those of household
 // members who share theirs, and the same actions as the Money view. Bank
@@ -80,7 +81,7 @@ export function bankTools(ctx: HouseholdToolContext): HouseholdTool[] {
         if (!had || (had.user_id !== userId && r.user_id === userId)) byPayment.set(r.external_id, r);
       }
       const listed = Array.from(byPayment.values())
-        .sort((a, b) => b.occurred_at.localeCompare(a.occurred_at))
+        .sort((a, b) => compareStrings(b.occurred_at, a.occurred_at))
         .slice(0, limit ?? 30);
       // Totals in the Costs categories: the cost line's when it is filed, else from Up's.
       const lines = new Map((await listCostItems(admin, groupId)).map((i) => [i.id, i]));

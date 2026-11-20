@@ -81,7 +81,7 @@ export function MealNightSheet({
 
   const shown = React.useMemo(() => {
     const q = query.trim().toLowerCase();
-    return q ? recipes.filter((r) => r.title.toLowerCase().includes(q)) : recipes;
+    return q ? recipes.filter((r) => (r.title ?? '').toLowerCase().includes(q)) : recipes;
   }, [recipes, query]);
 
   const pick = (p: MealPick) => {

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { itemLink, type Apartment, type Appointment } from "@homeup/core";
 import { compact, ok, toolRegistrar, type HouseholdTool, type HouseholdToolContext } from "../tool-kit";
+import { compareStrings } from '@homeup/core';
 
 // Home Search: the places the household is looking at, with viewings.
 
@@ -39,7 +40,7 @@ export function searchTools(ctx: HouseholdToolContext): HouseholdTool[] {
               link: itemLink("listing", p.id),
               viewings: viewings
                 .filter((v) => v.apartment_id === p.id)
-                .sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at))
+                .sort((a, b) => compareStrings(a.scheduled_at, b.scheduled_at))
                 .map((v) => compact({ scheduled_at: v.scheduled_at, status: v.status, notes: v.notes })),
             }),
           ),
