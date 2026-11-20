@@ -6,6 +6,7 @@
 // scout-thread.ts); these are the shapes and pure rules both apps share.
 
 import { formatMoney } from '../../money-format';
+import { compareCreatedAt } from '../../sort';
 import { scoutBudgetLabel, type ScoutBrief, type ShopperPick, type ShopperSearch } from './shopper-scout';
 
 /** One message in a Scout thread (shopper_scout_messages). Written by the server only. */
@@ -64,14 +65,14 @@ export type ScoutThreadItem =
  * (it shouldn't happen) goes in by when it started.
  */
 export function scoutTimeline(thread: ScoutThread): ScoutThreadItem[] {
-  const runs = [...thread.runs].sort((a, b) => a.created_at.localeCompare(b.created_at));
+  const runs = [...thread.runs].sort((a, b) => compareCreatedAt(a.created_at, b.created_at));
   const first = runs.find((r) => !r.thread_id) ?? runs[0];
   if (!first) return [];
   const picksFor = (id: string) => thread.picks.filter((p) => p.search_id === id && !p.deleted).sort((a, b) => a.rank - b.rank);
   const runItem = (run: ShopperSearch): ScoutThreadItem => ({ kind: 'run', run, picks: picksFor(run.id), first: run.id === first.id });
 
   const placed = new Set<string>([first.id]);
-  const messages = thread.messages.filter((m) => !m.deleted).sort((a, b) => a.created_at.localeCompare(b.created_at));
+  const messages = thread.messages.filter((m) => !m.deleted).sort((a, b) => compareCreatedAt(a.created_at, b.created_at));
   const named = new Set(messages.map((m) => m.search_id).filter((id): id is string => !!id));
   // Runs nobody started from a message, slotted in by time.
   const loose = runs.filter((r) => r.id !== first.id && !named.has(r.id));
@@ -99,7 +100,7 @@ export function scoutTimeline(thread: ScoutThread): ScoutThreadItem[] {
 
 /** The run whose picks the Hero counts: the newest one that finished with picks, else the newest. */
 export function scoutLatestRun(thread: ScoutThread): ShopperSearch | null {
-  const runs = [...thread.runs].sort((a, b) => b.created_at.localeCompare(a.created_at));
+  const runs = [...thread.runs].sort((a, b) => compareCreatedAt(b.created_at, a.created_at));
   return runs.find((r) => r.status === 'done' && thread.picks.some((p) => p.search_id === r.id && !p.deleted)) ?? runs[0] ?? null;
 }
 

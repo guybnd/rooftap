@@ -6,6 +6,7 @@
 // daily check of everything. An item close to its target or budget is
 // checked daily on any plan, so a good price is not missed.
 import type { EntitlementTier } from '../../entitlements';
+import { compareCreatedAt } from '../../sort';
 import type { ShopperWant } from './shopper';
 
 const HOUR = 60 * 60 * 1000;
@@ -43,7 +44,7 @@ export function autoCheckedWants(
   tier: EntitlementTier,
   billing: 'on' | 'off'
 ): Set<string> {
-  const sorted = [...wants].sort((a, b) => a.created_at.localeCompare(b.created_at));
+  const sorted = [...wants].sort((a, b) => compareCreatedAt(a.created_at, b.created_at));
   const kept = shopperChecksDaily(tier, billing) ? sorted : sorted.slice(0, SHOPPER_FREE_AUTO_CHECKS);
   return new Set(kept.map((w) => w.id));
 }

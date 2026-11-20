@@ -6,3 +6,12 @@
 export function compareStrings(a?: string | null, b?: string | null): number {
   return (a ?? '').localeCompare(b ?? '');
 }
+
+// Oldest-first comparator for row timestamps. A row saved on this device carries
+// a null created_at until the server stamps it (create-group-store rule 5), so a
+// sort on created_at must not call localeCompare on it. An unstamped row is the
+// newest one, so it sorts after every stamped row. Flip the arguments for newest-first.
+export function compareCreatedAt(a?: string | null, b?: string | null): number {
+  if (!a || !b) return (a ? 0 : 1) - (b ? 0 : 1);
+  return a.localeCompare(b);
+}

@@ -11,6 +11,7 @@ import { useSyncExternalStore } from 'react';
 import type { AssistantApi, AssistantConversation } from './modules/assistant/assistant-api';
 import { forgetThread } from './modules/assistant/assistant-thread';
 import type { ShopperSearch } from './modules/shopper/shopper-scout';
+import { compareCreatedAt } from './sort';
 
 /** The toast each app shows: a line with an Undo button, a plain line, and an error. */
 export interface UndoToast {
@@ -199,6 +200,6 @@ export function scoutRunLists(runs: readonly (ShopperSearch | null | undefined)[
     if (deleted) continue;
     shown.push(archived === !!run.archived_at ? run : { ...run, archived_at: archived ? new Date().toISOString() : null });
   }
-  shown.sort((a, b) => b.created_at.localeCompare(a.created_at));
+  shown.sort((a, b) => compareCreatedAt(b.created_at, a.created_at));
   return { recent: shown.filter((r) => !r.archived_at), archived: shown.filter((r) => !!r.archived_at) };
 }

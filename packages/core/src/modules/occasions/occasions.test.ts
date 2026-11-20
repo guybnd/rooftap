@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ideasForOccasion,
   buildGiftIdea,
   buildGiftWant,
   buildOccasion,
@@ -243,5 +244,13 @@ describe('occasions on Home', () => {
     );
     expect(items.map((i) => [i.title, i.dueDate])).toEqual([["Mum's birthday", '2026-11-02']]);
     expect(items[0]).toMatchObject({ type: 'module', dueTime: null, module: { id: 'occasions', href: '/occasions', completable: false } });
+  });
+});
+
+describe('ideasForOccasion', () => {
+  it('does not crash on a just-saved idea the server has not stamped yet, and lists it last', () => {
+    const fresh = { ...idea({ id: 'new' }), created_at: null as unknown as string };
+    const list = ideasForOccasion([fresh, idea({ id: 'old' }), idea({ id: 'other', occasion_id: 'x' })], 'o1');
+    expect(list.map((i) => i.id)).toEqual(['old', 'new']);
   });
 });

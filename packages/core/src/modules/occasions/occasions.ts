@@ -10,6 +10,7 @@
 
 import type { CostItem } from '../../types';
 import { addDaysISO, daysBetweenISO } from '../../date-utils';
+import { compareCreatedAt } from '../../sort';
 import { buildShopperWant, type ShopperWant } from '../shopper/shopper';
 
 export type OccasionKind = 'birthday' | 'anniversary' | 'holiday' | 'other';
@@ -271,7 +272,7 @@ export function ideasForOccasion(ideas: GiftIdea[], occasionId: string): GiftIde
   const rank: Record<GiftIdeaStatus, number> = { booked: 2, bought: 2, watching: 1, idea: 0 };
   return ideas
     .filter((i) => i.occasion_id === occasionId)
-    .sort((a, b) => rank[b.status] - rank[a.status] || a.created_at.localeCompare(b.created_at));
+    .sort((a, b) => rank[b.status] - rank[a.status] || compareCreatedAt(a.created_at, b.created_at));
 }
 
 /** Bought or booked: the money is spent. */
